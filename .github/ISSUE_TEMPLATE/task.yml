@@ -1,0 +1,76 @@
+name: Task
+description: A planned unit of work with acceptance criteria
+labels: ["task"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What is the work, and why does it exist? Link related issues or PRs.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is in, and explicitly what is out.
+      value: |
+        In scope:
+        -
+
+        Out of scope:
+        -
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable, checkable outcomes. One line each.
+      value: |
+        - [ ] Given ..., when ..., then ...
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: dod
+    attributes:
+      label: Definition of done
+      value: |
+        - [ ] Acceptance criteria met
+        - [ ] Tests cover the new behaviour, `uv run pytest` green (coverage gate 70%)
+        - [ ] `uv run ruff check .`, `uv run ruff format --check .`, `uv run mypy` green
+        - [ ] Public API has docstrings and type hints
+        - [ ] README / docs updated if behaviour or CLI flags changed
+        - [ ] Reviewed and merged into `main` with green CI
+    validations:
+      required: true
+  - type: dropdown
+    id: milestone
+    attributes:
+      label: Roadmap milestone
+      options:
+        - "M1 - video to audio to ASR pipeline"
+        - "M2 - static image understanding"
+        - "M3 - image flow across the recording"
+        - "M4 - manim animations"
+        - "Maintenance / none"
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - "High - blocks the milestone"
+        - "Medium - planned"
+        - "Low - nice to have"
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and risks
+      description: Blocking issues, external tools, open questions.
+    validations:
+      required: false
