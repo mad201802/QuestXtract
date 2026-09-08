@@ -150,7 +150,7 @@ CI runs lint, format check and the test suite on Linux, macOS and Windows agains
 - [ ] **M3** — flow-based image understanding across the whole recording
 - [ ] **M4** — [manim](https://github.com/manimCommunity/manim) animations generated from the image flow
 
-Detailed scope in [general_requirements.md](general_requirements.md).
+Detailed scope in [general_requirements.md](docs/general_requirements.md#general-requirements).
 
 ## Contributing
 
