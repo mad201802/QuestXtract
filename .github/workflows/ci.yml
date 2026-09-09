@@ -29,4 +29,12 @@ jobs:
       - run: uv sync --all-extras --dev --python ${{ matrix.python-version }}
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      - run: uv run mypy
       - run: uv run pytest
+
+  ci:
+    if: always()
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - run: ${{ needs.test.result == 'success' }}
