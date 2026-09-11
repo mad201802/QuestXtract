@@ -142,6 +142,8 @@ class LectureResult:
             questions = data["questions"]
             if not isinstance(questions, list):
                 raise TypeError("'questions' must be a list")
+            if any(not isinstance(question, dict) for question in questions):
+                raise TypeError("'questions' must contain objects")
             return cls(
                 lecture=str(data["lecture"]),
                 questions=tuple(Question.from_dict(q) for q in questions),

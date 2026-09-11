@@ -21,7 +21,7 @@ def read_segments(path: str | Path) -> list[TranscriptSegment]:
     """
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, UnicodeError) as exc:
         raise SchemaError(f"{path}: not valid JSON ({exc})") from exc
     segments = data.get("segments") if isinstance(data, dict) else data
     if not isinstance(segments, list):

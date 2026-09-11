@@ -24,4 +24,8 @@ def test_lecture_result_rejects_bad_shapes():
     with pytest.raises(SchemaError):
         LectureResult.from_dict({"lecture": "x", "questions": {}})
     with pytest.raises(SchemaError):
+        LectureResult.from_dict({"lecture": "x", "questions": [None]})
+    with pytest.raises(SchemaError):
+        LectureResult.from_dict({"lecture": "x", "questions": ["not a question"]})
+    with pytest.raises(SchemaError):
         Question.from_dict({"question": "q"})
