@@ -1,23 +1,25 @@
 """QuestXtract: extract spoken questions from lecture recordings."""
 
-from .detect import detect_questions, score_sentence
-from .models import (
-    Question,
-    TranscriptSegment,
-    questions_to_json,
-    read_segments,
-    write_questions,
-)
+from .audio.transcripts import read_segments, segments_to_json, write_segments
+from .detection.questions import detect_questions, score_sentence
+from .models.schemas import LectureResult, Question, SchemaError, TranscriptSegment, Word
+from .output.serialize import read_result, result_to_json, write_result
 
 __version__ = "0.1.0"
 
 __all__ = [
+    "LectureResult",
     "Question",
+    "SchemaError",
     "TranscriptSegment",
+    "Word",
     "__version__",
     "detect_questions",
-    "questions_to_json",
+    "read_result",
     "read_segments",
+    "result_to_json",
     "score_sentence",
-    "write_questions",
+    "segments_to_json",
+    "write_result",
+    "write_segments",
 ]

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 
-from .models import Question, TranscriptSegment
+from ..models.schemas import Question, TranscriptSegment
 
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 
@@ -50,13 +50,13 @@ def score_sentence(sentence: str) -> tuple[float, tuple[str, ...]]:
     reasons: list[str] = []
     if sentence.rstrip().endswith("?"):
         reasons.append("mark")
-    words = re.findall(r"[a-z']+", sentence.lower())
+    words = re.findall(r"\w+", sentence.casefold())
     if words:
         if words[0] in _WH_WORDS:
             reasons.append("wh")
         if words[0] in _AUX_WORDS:
             reasons.append("aux")
-    confidence = min(1.0, sum(_SCORES[r] for r in reasons))
+    confidence = min(1.0, sum((_SCORES[r] for r in reasons), 0.0))
     return confidence, tuple(reasons)
 
 
@@ -86,7 +86,7 @@ def detect_questions(
             if confidence >= threshold:
                 questions.append(
                     Question(
-                        text=sentence,
+                        question=sentence,
                         start=segment.start,
                         end=segment.end,
                         confidence=round(confidence, 2),
