@@ -45,7 +45,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=questxtract --cov-report=term-missing --cov-fail-under=70"
+addopts = "--import-mode=importlib --cov=questxtract --cov-report=term-missing --cov-fail-under=70"
 
 [tool.ruff]
 line-length = 100
