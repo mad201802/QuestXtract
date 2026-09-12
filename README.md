@@ -33,7 +33,7 @@ turns them into study material. It **extracts** questions, it never invents them
 | ❓ **Question detection** | Question sentences found in the transcript, with a confidence score |
 | ⏱️ **Timestamps** | Every question carries its position in the recording |
 | 🖼️ **Blackboard content** | Drawings and animations from the video enrich the audio context |
-| ✏️ **Human in the loop** | Detected questions stay editable before export |
+| ✏️ **Human in the loop** | Exported JSON reads back unchanged, so a separate review UI can edit and re-export |
 | 📦 **JSON export** | Structured, machine-readable output |
 
 Shipped in `0.1`: question detection, timestamps, confidence, JSON export, CLI.
@@ -76,33 +76,45 @@ Output:
 
 ```json
 {
+  "lecture": "transcript.json",
   "questions": [
     {
-      "text": "What is a stable sort?",
+      "id": "b257bd671c04",
+      "question": "What is a stable sort?",
       "start": 0.0,
       "end": 6.0,
       "confidence": 1.0,
+      "source": "audio",
       "reasons": ["mark", "wh"]
     },
     {
-      "text": "Does anyone know why that matters",
+      "id": "5a4ef2d52da5",
+      "question": "Does anyone know why that matters",
       "start": 9.0,
       "end": 12.0,
       "confidence": 0.5,
+      "source": "audio",
       "reasons": ["aux"]
     }
   ]
 }
 ```
 
-`reasons` says which heuristics fired: `mark` (ends in `?`), `wh` (starts with a wh-word),
+`lecture` and `id` identify a question across re-runs and edits (`id` is derived from `start` and
+the question text). `reasons` says which heuristics fired: `mark` (ends in `?`), `wh` (starts with a wh-word),
 `aux` (starts with an auxiliary verb). Useful when reviewing borderline detections — ASR output
 often drops the question mark.
 
 ### Python API
 
 ```python
-from questxtract import TranscriptSegment, detect_questions, read_segments, write_questions
+from questxtract import (
+    LectureResult,
+    TranscriptSegment,
+    detect_questions,
+    read_segments,
+    write_result,
+)
 
 segments = read_segments("transcript.json")
 # ... or build them yourself
@@ -110,9 +122,9 @@ segments = [TranscriptSegment(text="What is a stable sort?", start=0.0, end=6.0)
 
 questions = detect_questions(segments, threshold=0.5)
 for q in questions:
-    print(f"[{q.start:7.2f}s] ({q.confidence:.0%}) {q.text}")
+    print(f"[{q.start:7.2f}s] ({q.confidence:.0%}) {q.question}")
 
-write_questions(questions, "questions.json")
+write_result(LectureResult(lecture="lecture.mp4", questions=tuple(questions)), "questions.json")
 ```
 
 ## Development
@@ -128,15 +140,19 @@ uv run ruff format .       # format
 uv run mypy                # type check
 ```
 
-The package uses a `src/` layout and is built with [uv](https://github.com/astral-sh/uv):
+The package uses a `src/` layout and is built with [uv](https://github.com/astral-sh/uv). See
+[docs/architecture.md](docs/architecture.md) for the full module breakdown:
 
 ```
 src/questxtract/
 ├── __init__.py   public API
-├── models.py     TranscriptSegment, Question, JSON read/write
-├── detect.py     question detection
+├── video/        recording input, audio-track extraction (planned)
+├── audio/        transcription (planned) and transcript JSON I/O
+├── detection/    question detection
+├── models/       Word, TranscriptSegment, Question, LectureResult
+├── output/       result JSON export/import
 └── cli.py        questxtract command
-tests/            pytest suite
+tests/            pytest suite, mirrors src/
 ```
 
 CI runs lint, format check and the test suite on Linux, macOS and Windows against Python 3.10 and

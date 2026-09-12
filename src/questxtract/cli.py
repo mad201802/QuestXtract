@@ -5,10 +5,13 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from . import __version__
-from .detect import detect_questions
-from .models import questions_to_json, read_segments, write_questions
+from .audio.transcripts import read_segments
+from .detection.questions import detect_questions
+from .models.schemas import LectureResult, SchemaError
+from .output.serialize import result_to_json, write_result
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -22,12 +25,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     args = parser.parse_args(argv)
 
-    questions = detect_questions(read_segments(args.transcript), threshold=args.threshold)
+    try:
+        segments = read_segments(args.transcript)
+    except (OSError, SchemaError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    result = LectureResult(
+        lecture=Path(args.transcript).name,
+        questions=tuple(detect_questions(segments, threshold=args.threshold)),
+    )
     if args.output:
-        write_questions(questions, args.output)
-        print(f"{len(questions)} questions -> {args.output}", file=sys.stderr)
+        write_result(result, args.output)
+        print(f"{len(result.questions)} questions -> {args.output}", file=sys.stderr)
     else:
-        print(questions_to_json(questions))
+        print(result_to_json(result))
     return 0
 
 
