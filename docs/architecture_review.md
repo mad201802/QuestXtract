@@ -1,9 +1,16 @@
 # Architecture review — M1 package foundation
 
 Working document for the project report. It records *why* the architecture in
-[architecture.md](architecture.md) looks the way it does: the drivers, the decisions, the
+[pipeline.md](pipeline.md) looks the way it does: the drivers, the decisions, the
 alternatives we rejected, and what an independent review changed. Each section notes which
 report chapter it feeds (numbering follows the TDT4290 compendium's suggested structure).
+
+> **One decision was later reversed.** The M1 foundation shipped a package-per-stage layout
+> (`video/ audio/ detection/ models/ output/`) described in a companion `architecture.md`.
+> `docs/pipeline.md` then superseded both: the stage contract, not the directory, became the
+> unit of ownership and replacement, and `architecture.md` was deleted into pipeline.md
+> sections 13.1, 13.3 and 14. **D1** and **D2** below record that reversal rather than hiding
+> it — the rejected alternative is kept, because the argument is the part worth reporting.
 
 ## 1. Drivers (→ report ch. 4 pre-study, ch. 6 requirements)
 
@@ -31,59 +38,83 @@ We deliberately did *not* optimise for throughput; hour-long lectures are batch 
 
 ```mermaid
 flowchart LR
-    subgraph questxtract
-        V[video/<br>container decoding] --> A[audio/<br>ASR → TranscriptSegment]
-        V -.M2/M3.-> VIS[visual/<br>OCR, board flow]
-        A --> D[detection/<br>Question]
-        D --> X[extraction/<br>answer span]
-        VIS -.enrich.-> X
-        X --> B[builder/<br>MCQ / numeric]
-        B --> O[output/<br>LectureResult JSON]
-        M[(models/<br>schemas)] -. contract .-> A & D & X & B & O
+    subgraph questxtract["STAGES, a list of Context -> Context functions"]
+        I[1 ingest] --> T[2 transcribe]
+        T --> S[3 sentences]
+        S --> G[4 segments]
+        G --> D[6 detect]
+        G -.-> V[5 vision]
+        V -.enrich.-> AV[attach_visual]
+        AV -.-> D
+        D --> AN[7 answer]
+        AN --> SC[8 score]
+        SC -.optional.-> J[9 judge]
+        J --> E[10 export<br>questions.json]
+        M[(models.py<br>Context + schemas)] -. contract .-> T & S & G & D & AN & SC & J
     end
-    O --> UI[Teacher review UI]
-    UI --> O
-    O --> EX[exerplaza upload]
+    E --> UI[Teacher review UI]
+    UI --> E
+    E --> EX[exerplaza upload]
+    E -.-> Q[quiz.json<br>separate generative command]
 ```
 
-Solid arrows exist or are M1 issues; dashed ones are M2+ or planned. `models/` is not a
-stage: it is the typed contract every stage reads and writes.
+Solid arrows are stages that run on every invocation; dashed ones are optional or M2+.
+`models.py` is not a stage: it is the typed contract every stage reads and writes, and
+`Context` is the single value threaded along the whole line. Export is not a stage either —
+it runs on the finished `Context` (pipeline.md 1.3).
 
 ## 3. Decisions and alternatives (→ report ch. 7)
 
 Each entry: what we chose, what else we considered, why, and the cost we accepted.
 
-### D1 — A package per pipeline stage
+### D1 — One module per stage, and a stage contract that is the real seam
 
-*Chose:* `video/ audio/ detection/ models/ output/` (+ planned `visual/ extraction/ builder/`),
-one responsibility each, `pipeline.py` as the only place that knows the order.
+*Chose (revised):* a flat module per stage — `media.py transcribe.py sentences.py segments.py
+vision.py detect.py answer.py score.py llm.py` — each exposing exactly one `@stage`-decorated
+`Context -> Context` function, with `pipeline.py` holding the `STAGES` list, the cache and the
+progress plumbing.
 
-*Alternatives:* (a) keep the flat M0 layout (`models.py`, `detect.py`, `cli.py`); (b) split
-by *feature* (e.g. `quiz/`, `transcript/`) rather than by stage.
+*Alternatives:* (a) **package per stage** (`video/ audio/ detection/ models/ output/`) — what
+M1 actually shipped, and what this reverses; (b) the original flat M0 layout with no stage
+contract at all; (c) split by *feature* (`quiz/`, `transcript/`) rather than by stage.
 
-*Why:* the stages are exactly the units that will be swapped (heuristic → classifier, Whisper
-→ another ASR, OCR engine) and exactly the units the issues are cut along. A flat layout
-would have five people editing the same files; feature packages would cut across the data
-flow and make the M2 "enrich" step live in two places.
+*Why the reversal:* (a) put the boundary in the wrong place. What gets swapped is not a
+directory but a *function*: a different ASR engine, a trained detector, a local OCR pass are
+each one entry in `STAGES`, and a caller who wants one passes `stages=` a different list. Once
+the contract carries that weight, a package per stage is a second, weaker boundary around the
+same thing — five directories, five `__init__.py` files that are only docstrings, and an
+`audio/transcripts.py` whose whole job (persisting the transcript) the runner's cache does
+generically for every stage at once. The ownership argument for (a) survives intact and is
+served just as well by one file per stage: issue owners still edit disjoint files.
 
-*Cost:* more directories than ~200 lines of code strictly needs today; a few `__init__.py`
-files that are only docstrings. We judged the ownership clarity worth it.
+*What (a) got right, and we kept:* stages are the units the issues are cut along; the order
+lives in exactly one place; `models.py` is a contract, not a stage.
 
-### D2 — `video/` is not `audio/`
+*Cost:* a flat `src/questxtract/` with sixteen modules, which will want grouping if the
+package doubles. The `@stage` decorator also has to live in `models.py` rather than
+`pipeline.py`, because `pipeline.py` imports every stage module to build `STAGES` and the
+stage modules need the decorator — an import cycle otherwise (pipeline.md 11.1).
 
-*Chose:* container decoding (mp4 → audio track, later → frames) lives in `video/`; `audio/`
-is speech-to-text only.
+### D2 — ~~`video/` is not `audio/`~~ (superseded by D1)
 
-*Alternative:* issue #5's original sketch put `extraction.py` (mp4 → audio) under `audio/`.
+*Was:* container decoding (mp4 → audio track, later → frames) lives in `video/`; `audio/` is
+speech-to-text only.
 
-*Why:* M2/M3 need frames from the same container. With decoding under `audio/`, the visual
-package would import from `audio/` (a name-inverted dependency) or duplicate mp4 handling.
-This was a review finding (§5), not the first draft.
+*Now:* moot. There are no `video/` and `audio/` packages. `media.py` owns decoding and the
+source hash; `transcribe.py` owns ASR; `vision.py` owns frames. The underlying finding still
+holds and is still honoured — **frame extraction must not sit under the ASR module**, because
+M2/M3 read frames from the same container and would otherwise import the ASR module for it.
+
+*Worth keeping in the report:* this was a review finding against the first draft (§5), and it
+survived a later restructure that discarded the packaging it was expressed in. That is the
+difference between a finding about *dependencies* and one about *directories*.
 
 ### D3 — Frozen, keyword-only dataclasses as the inter-stage contract
 
-*Chose:* `Word`, `TranscriptSegment`, `Question`, `LectureResult` in `models/schemas.py`,
-`frozen=True, kw_only=True`, with `from_dict`/`to_dict` and a single `SchemaError`.
+*Chose:* `Word`, `AsrSegment`, `Transcript`, `Sentence`, `Segment`, `VisualContext`,
+`QuestionCandidate`, `QAPair` in `models.py`, `frozen=True, kw_only=True`, with `from_dict` and
+a single `SchemaError`. `Context` is the one mutable object: the value each stage takes and
+returns.
 
 *Alternatives:* plain dicts; `TypedDict`; pydantic models.
 
@@ -94,47 +125,68 @@ of silent bugs when fields are added (a review finding showed `Question(...)` wi
 arguments would have stored the reasons tuple in the new `source` field without error).
 Validation happens once, at the JSON boundary, and raises one error type the CLI can render.
 
-*Cost:* hand-written `from_dict` per type. Acceptable at four types; revisit if the schema
-grows past ~ten.
+*Cost:* hand-written `from_dict` per type. Acceptable at this size; revisit if the schema
+grows much past ten types. The naming collision the restructure exposed is worth recording:
+pipeline.md calls a run of sentences a `Segment` while the ASR engine calls its own decoding
+chunks segments too. We kept `Segment` for the former and named the latter `AsrSegment`,
+because the sentence-run meaning is the one every downstream consumer uses.
 
-### D4 — `LectureResult` envelope and stable `Question.id`
+### D4 — A fixed-key export envelope and stable ids
 
-*Chose:* the export unit is one recording — `{"lecture", "questions": [...]}` — and each
-question carries an `id` derived from `start` + text.
+*Chose:* the export unit is one recording — `{"schema_version", "source", "config", "stats",
+"questions": [...]}` (pipeline.md 12.1) — every key always present, `null` included. Each
+question carries an `id` derived from its start and text, and cites the content-hash
+`sentence_id`s it came from.
 
-*Alternative:* a bare list of questions (M0 behaviour).
+*Alternative:* a bare list of questions (M0 behaviour); a `{"lecture", "questions"}` envelope
+(the M1 `LectureResult`).
 
 *Why:* the two downstream consumers both need identity: the review UI edits a question and
 re-exports it; the exerplaza integration must *update* the quiz for a video, not create a
-duplicate. Text is the field being edited, so it cannot be the key. Deriving `id` from
-position and text keeps it deterministic across re-runs of the same recording without
-needing a database.
+duplicate. Text is the field being edited, so it cannot be the key. The fixed key set means a
+consumer never has to defensively `.get()` a missing `answer`. Sentence ids being *content
+hashes rather than indices* is what lets a human edit survive a re-transcription (FR5).
 
 *Cost:* an ASR re-run that shifts timestamps or words changes ids. We accept this: ids are
-stable per *transcript*, and the transcript is persisted (D8) precisely so it is not re-run.
+stable per *transcript*, and the transcript is cached (D8) precisely so it is not re-run.
 
-### D5 — Forward-compatible schema: `source`, `words`, reserved fields
+### D5 — Forward-compatible schema: provenance, words, and the fields M2 fills
 
-*Chose:* add `Question.source` (detector provenance) and `TranscriptSegment.words`
-(per-word timestamps) now; document `visual_context`, `topic`, `answer` as reserved.
+*Chose:* per-word timestamps on `Word` from day one; `reasons` on every candidate and pair;
+`VisualContext` and the `QAPair` answer span as real types rather than reserved keys.
 
 *Why:* every one of these is an *additive* change today and a *breaking* change once the
 review UI and exerplaza mapping depend on the JSON. `words` in particular is what
 sentence-accurate timestamps (FR7) need, and asking the ASR stage (#8) for them from day one
 is free; retrofitting is not. We explicitly framed M2 as enrichment — visual understanding
-fills `visual_context` on existing questions rather than emitting a second set — because the
+fills board context on existing questions rather than emitting a second set — because the
 roadmap and the brief say so, and because a second detector would need a merge step nobody
 owns.
+
+*What changed with pipeline.md:* `visual_context` and `answer` stopped being reserved key
+names and became `VisualContext` and `QAPair.answer_*`. The `Question.source` field was
+dropped: with one detector and a `reasons` list that records every rule that fired, provenance
+was already there.
+
+**`reasons` is never dropped.** Every rule that fires, positive or negative, appends a stable
+string. This is what makes review possible, what makes a wrong result debuggable without a
+debugger, and what the judge reads as input.
 
 ### D6 — Where the package ends
 
 *Chose:* inside — everything from decoding to quiz items on disk, *including* the planned
-solution extraction and question builder. Outside — the review UI, exerplaza upload, and the
-evaluation dataset.
+solution extraction (`answer.py`) and the quiz builder (a separate `questxtract quiz` command).
+Outside — the review UI, exerplaza upload, and the evaluation *dataset*. See pipeline.md 14 for
+the boundary as stated to readers of the code.
 
-*Why:* solution extraction needs the transcript segments *after* each question; if it lived
-in the UI, the UI would re-implement pipeline logic. The UI and uploader, by contrast, only
-need the JSON. The evaluation set is test material, not runtime code.
+*Why:* solution extraction needs the sentences *after* each question; if it lived in the UI, the
+UI would re-implement pipeline logic. The UI and uploader, by contrast, only need the JSON. The
+evaluation *dataset* is test material under `tests/data/`; the *harness* that reads it is library
+code (`evaluate.py`), because NFR2 is a CI gate and the threshold sweep needs the pipeline.
+
+*Kept sharp by the code, not only the prose:* generation lives in a separately named command
+writing a separately named file, so "did this text come from the lecture?" is answerable by
+looking at which file it is in.
 
 *Tension to argue in the report:* general_requirements.md says the system "shall not create
 questions on its own, only extract from questions asked", while the brief asks for a builder
@@ -143,8 +195,8 @@ distractors, normalises notation); it never invents a question. Confirm with the
 
 ### D7 — Heuristic detector first, pluggable later
 
-*Chose:* keep the M0 keyword heuristic (`?`, wh-word, auxiliary-verb start) as
-`detection/questions.py`, behind a function signature a classifier can replace.
+*Chose:* keep the M0 keyword heuristic (`?`, wh-word, auxiliary-verb start) as `detect.py`,
+behind the one `Context -> Context` stage entry a classifier can replace.
 
 *Why:* NFR2 sets the bar at ≥ 50 % recall on *our own* labelled set, which does not exist yet
 (#11). Building a classifier before the evaluation set exists would be optimising blind. The
@@ -154,11 +206,21 @@ video-based question generation is context selection on noisy ASR text, not the 
 
 ### D8 — Persist the transcript; never recompute ASR for an edit
 
-*Chose:* `audio/transcripts.py` reads and writes transcript JSON as a first-class artifact.
+*Chose (revised):* one cache, written by the runner, keyed on the recording's content hash and
+on the config values each stage declares in `uses=(...)` — `.questxtract/<hash>/transcribe.json`
+and friends (pipeline.md 11.2). The transcript is one entry in it, not a bespoke module.
 
 *Why:* ASR is the expensive step (minutes per lecture, GPU if available). Edits, re-detection
 with another threshold, and later enrichment must all run from the saved transcript. This is
-also the sustainability argument (§7): compute once.
+also the sustainability argument (§7): compute once. Writing it once in the runner rather than
+per stage means a new expensive stage gets correct caching by naming the config fields it reads.
+
+*The one bug class this leaves:* a stage that gains a config field and forgets to list it in
+`uses` will serve a stale entry. Keep `uses` next to the signature so the two are reviewed
+together. Two related traps the implementation had to close: a run with no source hash must
+skip the cache rather than share an `unknown/` bucket (one recording's results would replay
+into another's), and the judge cannot key on config alone, because its input is the *candidate
+set* (pipeline.md 10.4).
 
 ### D9 — Errors at the boundary, readable at the CLI
 
@@ -183,22 +245,22 @@ capacity we do not have. The import mode choice is small but prevents a known py
 
 | Requirement (general_requirements.md) | Where it lands | Status |
 |---|---|---|
-| FR1 accept `.mp4` | `video/` (#7) | planned |
-| FR2 extract audio track | `video/audio.py` (#7) | planned |
-| FR3 transcribe with ASR | `audio/transcription.py` (#8) → `TranscriptSegment` | planned |
-| FR4 extract drawing/animation from video | `video/frames.py`, `visual/` (M2/M3) | roadmap |
-| FR5 teacher can edit after extraction | package side: JSON round-trip via `read_result`/`write_result`; the editing UI itself is #15, a separate app (D6) | partial — round-trip only |
-| FR6 identify question sentences | `detection/questions.py` (#10) | M0 heuristic |
-| FR7 start timestamp per question | `Question.start`; sentence-accurate once `words` are used | segment-level today |
-| FR8 export JSON | `output/serialize.py`, `LectureResult` (#13) | M0 placeholder |
-| FR9 progress for long recordings | `progress.py` protocol (#14), threaded by `pipeline.py` | planned |
-| FR10 show detection confidence | `Question.confidence` + `reasons` | M0 placeholder |
-| FR11 filter by time/topic | `LectureResult.filter()` (#16); `topic` reserved | planned |
-| NFR1 Python ≥ 3.10, Linux/macOS/Windows | CI matrix, stdlib-only core | done |
-| NFR2 recall ≥ 50 % on labelled set | #11 dataset, #12 evaluation under `tests/` | planned |
+| FR1 accept `.mp4` | `media.py` `ingest` (#7) | hash done, probe stubbed |
+| FR2 extract audio track | none needed — `faster_whisper.audio.decode_audio` reads the container in process (pipeline.md 2.1) | by design |
+| FR3 transcribe with ASR | `transcribe.py` (#8) → `Transcript` | stub |
+| FR4 extract drawing/animation from video | `vision.py` (M2/M3) | roadmap |
+| FR5 teacher can edit after extraction | package side: fixed-key JSON with content-hash sentence ids (`export.py`); the editing UI itself is #15, a separate app (D6) | partial — export only |
+| FR6 identify question sentences | `detect.py` (#10) | keyword heuristic |
+| FR7 start timestamp per question | `QAPair.start`, a slice of the word list — word-accurate by construction, never interpolated (pipeline.md 2.5) | done |
+| FR8 export JSON | `export.py`, pipeline.md 12.1 (#13) | done |
+| FR9 progress for long recordings | `Progress = Callable[[str, float], None]`, emitted once per stage by the runner (#14) | done for stage granularity |
+| FR10 show detection confidence | `QAPair.confidence` + `confidence_label` + `reasons` | done |
+| FR11 filter by time/topic | `Segment` is the topic unit (#16) | segments done, filter planned |
+| NFR1 Python ≥ 3.10, Linux/macOS/Windows | CI matrix; no system binaries, no ffmpeg on PATH | done |
+| NFR2 recall ≥ 50 % on labelled set | #11 dataset under `tests/data/`, `evaluate.py` harness (#12) | stub |
 | NFR3 docstrings, type hints, tests, ≥ 70 % coverage | ruff `D` rules, mypy strict, pytest gate | done |
 | NFR4 tested on every PR | GitHub Actions (#19) | done |
-| Constraint: never invent questions | detector only extracts verbatim sentences; builder formats, never generates (D6) | by design |
+| Constraint: never invent questions | detector extracts verbatim spans; the judge may reject/rescope/rewrite but never add, and is id-validated against its input set; generation is a separate command (pipeline.md 1.4, 12.3) | by design |
 
 ## 5. The review and what it changed (→ report ch. 7, ch. 12 "AI")
 
@@ -212,19 +274,27 @@ What it changed, in order of consequence:
 
 | Finding | Change | Decision affected |
 |---|---|---|
-| Solution extraction and question builder had no home | added as planned stages; `answer` reserved | D6 |
-| Video decoding filed under `audio/` | `video/` package; `audio/` = ASR only | D2 |
-| No identity for edits/upload | `Question.id`, `LectureResult` envelope | D4 |
-| Word timestamps dropped at the ASR boundary | `Word`, `TranscriptSegment.words` | D5 |
-| `source` framed M2 as a second detector | documented as enrichment via `visual_context` | D5 |
+| Solution extraction and question builder had no home | added as stages 7 and a separate `quiz` command | D6 |
+| Video decoding filed under `audio/` | decoding kept out of the ASR module | D2 |
+| No identity for edits/upload | question `id` + content-hash sentence ids | D4 |
+| Word timestamps dropped at the ASR boundary | `Word`, and words as the atomic unit | D5 |
+| `source` framed M2 as a second detector | documented as enrichment of existing questions | D5 |
 | Positional construction would silently misassign a new field | `kw_only=True` | D3 |
 | Malformed transcripts produced tracebacks | `SchemaError` + one-line CLI errors | D9 |
 | Nested test dirs would collide on same-named files | `--import-mode=importlib` | D10 |
-| Transcript I/O lived in `output/`; no way to persist transcripts | `audio/transcripts.py` | D8 |
-| Progress reporting (#14) unplaced | `progress.py` row, stages accept a reporter | — |
+| Transcript I/O lived in `output/`; no way to persist transcripts | the runner's one cache | D8 |
+| Progress reporting (#14) unplaced | `Progress` callable, emitted by the runner per stage | — |
 | Status table said "done" for open issues; README contradicted the non-goals; rename unflagged | doc/README/CHANGELOG corrections | — |
 | Non-ASCII first word skipped by the tokeniser; int confidence at threshold 0 | `\w+` + `casefold()`, float seed | D7 |
-| `output/json.py` shadowed the stdlib module | renamed `serialize.py` | — |
+| `output/json.py` shadowed the stdlib module | renamed, then folded into `export.py` | — |
+
+Two more surfaced while moving the code onto the stage contract, both of which the packaging
+had hidden rather than caused:
+
+| Finding | Change | Decision affected |
+|---|---|---|
+| A cached stage with no source hash shared one `unknown/` bucket, replaying one recording's results into another's | skip the cache when there is no content hash | D8 |
+| `judge` declared `cache="pairs"` but its `uses` header holds only config, so a stale verdict would survive a detection change | judge caches only once keyed on the candidate set (pipeline.md 10.4) | D8 |
 
 The one refuted candidate ("the empty `audio/` package contradicts the no-scaffolding rule")
 is worth mentioning in the report as an example of why verification matters: the rule is about
@@ -250,8 +320,12 @@ exerplaza credentials used by the uploader.
   by schema validation (`SchemaError`); *not* mitigated: integrity or provenance of edits. Fine
   for a local tool; revisit if files travel between users.
 - **Information disclosure** — transcripts leaving the machine. Design choice: ASR runs
-  offline (customer brief: "offline speech-to-text, e.g. Whisper"); nothing in the package
-  makes network calls. The uploader (outside the package) is the only component that will.
+  offline (customer brief: "offline speech-to-text, e.g. Whisper") and never over a hosted
+  transcribe endpoint. The optional LLM layer (pipeline.md 6 and 10) is the one component that
+  *can* leave the machine, and only when the caller configures an endpoint: the default
+  `Config` makes zero outbound calls, and every result the pipeline produces is reachable
+  without one. Pointing `base_url` at a local OpenAI-compatible server keeps even that on the
+  device. The uploader (outside the package) is the only component that always talks out.
 - **Denial of service / resource exhaustion** — hour-long inputs, temp files from decoding.
   #7 owns temp-file cleanup; #14 progress reporting is also the cancellation point.
 - **Elevation of privilege / spoofing** — none inside the package: no accounts, no privileges.
@@ -261,10 +335,17 @@ exerplaza credentials used by the uploader.
 fed to the CLI; (2) a lecturer uploading someone else's lecture; (3) a review UI user injecting
 LaTeX/HTML into a question that exerplaza renders.
 
-*Security requirements to state:* S1 no network access in `questxtract` itself; S2 all
-external JSON validated before use; S3 credentials never stored in the package or the result
-files; S4 temporary media deleted after extraction; S5 test material is public or mock
-lectures only (the brief already promises "no student data").
+*Security requirements to state:* **S1 no network access unless the caller configures an
+endpoint** — the default `Config` makes zero outbound calls, the pipeline produces a complete
+result without one, and ASR is local always (this is the narrowed form; the original blanket
+"no network access in `questxtract` itself" was incompatible with the optional LLM layer the
+design needs for handwriting and board diagrams, and a blanket rule nobody can keep is worse
+than a precise one that holds); S2 all external JSON validated before use; S3 credentials never
+stored in the package or the result files — the API key is read from the environment at call
+time and is not a `Config` field; S4 temporary media deleted after extraction; S5 test material
+is public or mock lectures only (the brief already promises "no student data"); **S6 when an
+endpoint is configured, the user must be able to tell** — the exported `config` block names the
+models used, so a result carries whether it went out.
 
 Suggested exercise for the report: play Microsoft EoP over the figure in §2 with the
 information-flow arrows — the compendium asks for an architecture sketch with flows first.
@@ -274,13 +355,14 @@ information-flow arrows — the compendium asks for an architecture sketch with 
 - **Compute once.** Persisting transcripts (D8) and keeping ASR offline means the expensive
   step runs once per lecture rather than per edit or per threshold change. Worth quantifying
   in the report (minutes of GPU/CPU per hour of lecture × number of re-runs avoided).
-- **Small dependency footprint.** The core is stdlib-only; heavy models (Whisper, OCR) are
-  isolated in `audio/` and `visual/` so a transcript-only user never installs them. The
-  planned facade rule — do not re-export heavy stages from `questxtract/__init__.py` — keeps
-  `import questxtract` cheap.
-- **Software sustainability (maintainability).** Typed contracts, one error type, mirrored
-  tests, and the architecture doc itself are what let the customer build on the code after
-  the semester (a graded criterion).
+- **Small dependency footprint.** The core is stdlib-only; heavy models are isolated in
+  `transcribe.py` and `vision.py`, and the LLM client is an optional `[llm]` extra imported
+  inside the function that needs it, so a transcript-only user never installs any of them.
+  There is no torch anywhere in the base install (pipeline.md 13.2).
+- **Software sustainability (maintainability).** Typed contracts, one error type, one test
+  module per source module, and the pipeline document itself are what let the customer build on
+  the code after the semester (a graded criterion). The document is load-bearing rather than
+  decorative: a test asserts that `STAGES` matches the stage order it specifies.
 - **Diversity dimensions the design touches.** Language: the requirements assume English
   lectures; the tokeniser fix (non-ASCII first words) is a small but real example of an
   assumption that excluded non-native names and fillers. Accessibility: per-word timestamps

@@ -56,7 +56,7 @@ Two consequences that show up repeatedly below:
   1 ingest                    |  validate, probe via PyAV, hash for cache key
                               v
   2 transcribe                |  faster-whisper decodes the container directly
-                              |  (VAD on, word_timestamps on) -> Segment[] + Word[]
+                              |  (VAD on, word_timestamps on) -> Word[] + AsrSegment[]
                               v
   3 sentences                 |  regex split on [.!?], snapped to word boundaries
                               v
@@ -357,8 +357,12 @@ recordings run on demand.
 Five dataclasses plus the visual ones, in `models.py`, and the two that make the pipeline
 pluggable - `Config` and `Context` - in `config.py` and `models.py` respectively (section 11.1).
 
+Every frozen type is `kw_only=True` as well. Keyword-only construction removes a whole class of
+silent bugs when fields are added: positional `Question(...)` calls once stored a reasons tuple in
+a newly added field without error.
+
 ```python
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Word:
     text: str
     start: float
@@ -366,7 +370,28 @@ class Word:
     confidence: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
+class AsrSegment:
+    """A raw ASR decoding chunk. NOT a Segment - that is a run of sentences (3.2)."""
+
+    text: str
+    start: float
+    end: float
+    # the cheapest hallucination detector we have; the eval harness reads these (2.2)
+    avg_logprob: float
+    no_speech_prob: float
+    compression_ratio: float
+
+
+@dataclass(frozen=True, kw_only=True)
+class Transcript:
+    words: tuple[Word, ...]  # the atomic unit, section 2.5
+    asr_segments: tuple[AsrSegment, ...]
+    language: str
+    duration: float
+
+
+@dataclass(frozen=True, kw_only=True)
 class Sentence:
     id: str  # content hash, not an index: ids survive a re-transcription,
     # which is what lets human edits merge back in (FR5)
@@ -378,7 +403,7 @@ class Sentence:
     segment_index: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Segment:
     sentence_start: int
     sentence_end: int
@@ -388,7 +413,7 @@ class Segment:
     visual: tuple[VisualContext, ...] = ()  # board states overlapping this segment
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class VisualContext:
     start: float  # board-state lifetime, NOT a segment's span
     end: float
@@ -399,7 +424,7 @@ class VisualContext:
     confidence: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class QuestionCandidate:
     sentence_id: str
     text: str  # the refined focus, may be a clause of the sentence
@@ -408,7 +433,7 @@ class QuestionCandidate:
     reasons: tuple[str, ...]  # every rule that fired, positive and negative
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class QAPair:
     question: QuestionCandidate
     answer_sentence_ids: tuple[str, ...]  # empty when no answer was found
@@ -435,6 +460,8 @@ class Context:
     pairs: tuple[QAPair, ...] = ()
     stats: dict[str, int] = field(default_factory=dict)
     progress: Progress | None = None  # section 11.3; mid-stage reporting
+    source_hash: str = ""  # set by ingest; the cache key for every later stage
+    duration: float = 0.0
 ```
 
 Three rules:
@@ -884,7 +911,8 @@ Stage = Callable[[Context], Context]
 def stage(name: str, *, cache: str | None = None, uses: tuple[str, ...] = ()) -> ...:
     """Tag a function as a pipeline stage.
 
-    cache: the Context field this stage produces, cached as <field>.json. None = always recompute.
+    cache: the Context field this stage produces, cached as <stage name>.json.
+           None = always recompute.
     uses:  Config field names whose values form the cache header (section 11.2).
     """
 
@@ -958,9 +986,13 @@ earlier stage did not produce, it fails on the spot with an attribute that is `N
 flags or constructed by a library caller. No per-stage config classes and no nesting: a flat
 record is what makes `uses=(...)` a tuple of names rather than a path expression.
 
-> **Decision.** The decorator, `STAGES`, `run()` and `process()` live in `pipeline.py`; `Context`
-> in `models.py`, `Config` in `config.py`. The cache and progress plumbing is written **once, in
-> the runner**, instead of being repeated in every expensive stage.
+> **Decision.** `STAGES`, `run()` and `process()` live in `pipeline.py`; `Context` in `models.py`,
+> `Config` in `config.py`. The cache and progress plumbing is written **once, in the runner**,
+> instead of being repeated in every expensive stage.
+>
+> The `stage` decorator itself sits in `models.py` next to `Stage` and `StageInfo`, and
+> `pipeline.py` re-exports it: the stage modules need it, and `pipeline.py` imports every stage
+> module to build `STAGES`, so defining it there would be an import cycle.
 
 ### 11.2 One cache
 
@@ -978,6 +1010,16 @@ Each entry is written with a small header holding the values of the stage's `use
 and `--from-scratch` bypasses reuse for every stage. Every layer verifies its config, including
 transcription. Sentences, segments, detection, answers and scoring declare no `cache`, so they
 always recompute: caching a 20 ms stage buys nothing and costs an invalidation bug.
+
+**No source hash, no cache.** The directory name *is* the identity of the recording, so a run
+whose `ctx.source_hash` is empty - a caller seeding a transcript directly, say - skips the cache
+entirely rather than sharing one `unknown/` bucket. Otherwise one recording's results replay into
+another's, which is a correctness bug, not a performance one.
+
+**The judge is the exception to the `uses` rule.** Section 10.4 keys its entry on the *candidate
+set* hash, which a config-only header cannot express: caching it on the source hash alone would
+serve a stale verdict after detection changed. Its `cache=` is therefore wired at the same time as
+the candidate-set key, not before.
 
 Because the header is derived from `uses` rather than hand-written per stage, a new stage gets
 correct invalidation by naming the config fields it reads, and a stage that gains a config field
@@ -1077,7 +1119,8 @@ of the extraction pipeline is what keeps requirement 4.5 checkable.
 ```
 src/questxtract/
   __init__.py      public API: process(), run(), STAGES, read/write
-  models.py        Word, Sentence, Segment, VisualContext, QuestionCandidate, QAPair, Context
+  models.py        Word, AsrSegment, Transcript, Sentence, Segment, VisualContext,
+                   QuestionCandidate, QAPair, Context, SchemaError, the @stage decorator
   config.py        one flat frozen Config dataclass, every default
   media.py         av.open probe, source hash
   transcribe.py    faster-whisper, batched
@@ -1089,15 +1132,23 @@ src/questxtract/
   score.py         answer scoring, confidence, dedupe
   llm.py           OpenAI-compatible client, judge pass, vision calls
   evaluate.py      labelled-set metrics
-  pipeline.py      stage decorator, STAGES, run(), cache, progress
+  export.py        questions.json writer and reader (section 12.1)
+  pipeline.py      STAGES, run(), process(), cache, progress
   cli.py           process / eval / quiz subcommands
+
+tests/            flat, one test module per source module, plus conftest.py
 ```
+
+Tests sit flat beside the modules they cover, and pytest runs with `--import-mode=importlib` so
+same-named files never collide as the suite grows. `tests/data/` holds the labelled set
+(section 4.1), not code.
 
 Each of `transcribe.py`, `sentences.py`, `segments.py`, `vision.py`, `detect.py`, `answer.py`,
 `score.py` and the judge half of `llm.py` exposes exactly one `@stage`-decorated
 `Context -> Context` function as its public surface; everything else in the module is private to
-it. That is the modularity claim, and it is checkable: `grep '@stage'` should return the contents
-of `STAGES`, in order.
+it. That is the modularity claim, and it is checkable: `grep '@stage'` over the stage modules
+should return the contents of `STAGES`. `tests/test_pipeline.py` asserts exactly that, so the
+claim cannot quietly stop being true.
 
 ### 13.2 Dependencies
 
@@ -1111,3 +1162,52 @@ of `STAGES`, in order.
 triton, no CUDA wheels, no transformers, no pyannote, no speechbrain, no sentence-transformers,
 no wtpsplit, no openpyxl. The install is a couple of hundred MB, and NFR1's Windows leg stops
 being the hard one.
+
+**Today the base install is stdlib-only**, because stages 1, 2 and 5 are still stubs (13.3). Each
+base dependency arrives with the issue that needs it: `av` and `faster-whisper` with #7 and #8,
+`numpy` with the M2 vision work. `[llm]` already exists, since `llm.py` names it in the error it
+raises when the extra is missing.
+
+### 13.3 Status
+
+What exists behind the stage contract today, and who finishes each piece. "Stub" means the module,
+its name, its signature and its `@stage` registration are real; only the algorithm is owed.
+
+| Module | Stage | State | Owner |
+|---|---|---|---|
+| `models.py`, `config.py`, `pipeline.py` | the contract itself | done | #6 |
+| `media.py` | 1 ingest | source hash done; `av.open()` probe stubbed | #7 |
+| `transcribe.py` | 2 transcribe | stub; callers seed a transcript and run `STAGES[2:]` | #8 |
+| `sentences.py` | 3 sentences | done | — |
+| `segments.py` | 4 segments | done | — |
+| `vision.py` | 5 vision, attach_visual | capture stubbed; the interval join is done | M2/M3 |
+| `detect.py` | 6 detect | keyword heuristic only; 7.1-7.3 owed | #10 |
+| `answer.py` | 7 answer | same-sentence seed only; window and rescue owed | — |
+| `score.py` | 8 score | confidence only; 9.1 answer scoring and 9.3 dedupe owed | — |
+| `llm.py` | 9 judge | stub, no-ops when disabled | — |
+| `export.py` | 10 export | done | #13 |
+| `evaluate.py` | not a stage | stub | #12, needs the labelled set #11 |
+| `cli.py` | not a stage | `process` works; `eval` and `quiz` exit 1 with a one-line error | #17 |
+
+Every stub carries a `ponytail:` comment naming the section it owes, so `grep -rn 'ponytail:' src/`
+is the running list of what this document promises and the code does not yet do.
+
+Milestones, from the README roadmap: **M1** audio end to end (stages 1-4, 6-8), **M2** static board
+understanding, **M3** board flow across the recording, **M4** manim animations from that flow.
+
+---
+
+## 14. Non-goals
+
+Explicit boundaries, so the package does not grow into them by accident.
+
+- **The teacher review/edit UI** ([issue #15](https://github.com/mad201802/QuestXtract/issues/15))
+  is a separate application. This package's part is that its JSON round-trips (section 12.2).
+- **exerplaza.com upload** is likewise a separate consumer of the exported JSON. Nothing in
+  `questxtract` talks to exerplaza directly.
+- **The labelled dataset** ([#11](https://github.com/mad201802/QuestXtract/issues/11)) is test
+  material under `tests/data/`, not an importable subpackage. The *harness* that reads it is
+  `evaluate.py` (section 4), because NFR2 is a CI gate and the threshold sweep is library code.
+- **YouTube URLs** are out of scope: the CLI takes a local file. If URL download is ever added it
+  belongs in `media.py`.
+- **Speaker identification by name** and diarization (section 2.6).

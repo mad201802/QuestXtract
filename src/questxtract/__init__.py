@@ -1,25 +1,45 @@
-"""QuestXtract: extract spoken questions from lecture recordings."""
+"""QuestXtract: extract spoken questions from lecture recordings.
 
-from .audio.transcripts import read_segments, segments_to_json, write_segments
-from .detection.questions import detect_questions, score_sentence
-from .models.schemas import LectureResult, Question, SchemaError, TranscriptSegment, Word
-from .output.serialize import read_result, result_to_json, write_result
+The pipeline is a list of ``Context -> Context`` functions (``STAGES``); ``process()`` runs
+it over one recording. See ``docs/pipeline.md`` for what each stage does and why.
+"""
+
+from .config import Config
+from .export import read_questions, result_to_json, write_questions
+from .models import (
+    AsrSegment,
+    Context,
+    QAPair,
+    QuestionCandidate,
+    SchemaError,
+    Segment,
+    Sentence,
+    Transcript,
+    VisualContext,
+    Word,
+)
+from .pipeline import STAGES, process, run, stage
 
 __version__ = "0.1.0"
 
 __all__ = [
-    "LectureResult",
-    "Question",
+    "STAGES",
+    "AsrSegment",
+    "Config",
+    "Context",
+    "QAPair",
+    "QuestionCandidate",
     "SchemaError",
-    "TranscriptSegment",
+    "Segment",
+    "Sentence",
+    "Transcript",
+    "VisualContext",
     "Word",
     "__version__",
-    "detect_questions",
-    "read_result",
-    "read_segments",
+    "process",
+    "read_questions",
     "result_to_json",
-    "score_sentence",
-    "segments_to_json",
-    "write_result",
-    "write_segments",
+    "run",
+    "stage",
+    "write_questions",
 ]
