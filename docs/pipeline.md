@@ -134,12 +134,12 @@ from faster_whisper import WhisperModel, BatchedInferencePipeline
 
 model = BatchedInferencePipeline(WhisperModel(model_size, compute_type="int8"))
 segments, info = model.transcribe(
-    str(source_path),               # the .mp4 itself; PyAV decodes it
+    str(source_path),  # the .mp4 itself; PyAV decodes it
     beam_size=5,
-    language="en",                  # FR: English lectures (4.2); None to auto-detect
-    vad_filter=True,                # skip silence: fewer hallucinated segments, faster
-    word_timestamps=True,           # the timings everything downstream is built on
-    log_progress=True,              # FR9, for free
+    language="en",  # FR: English lectures (4.2); None to auto-detect
+    vad_filter=True,  # skip silence: fewer hallucinated segments, faster
+    word_timestamps=True,  # the timings everything downstream is built on
+    log_progress=True,  # FR9, for free
     initial_prompt=_PUNCTUATION_PROMPT,
 )
 ```
@@ -365,16 +365,18 @@ class Word:
     end: float
     confidence: float
 
+
 @dataclass(frozen=True)
 class Sentence:
-    id: str                     # content hash, not an index: ids survive a re-transcription,
-                                # which is what lets human edits merge back in (FR5)
+    id: str  # content hash, not an index: ids survive a re-transcription,
+    # which is what lets human edits merge back in (FR5)
     text: str
-    word_start: int             # half-open range into Transcript.words
+    word_start: int  # half-open range into Transcript.words
     word_end: int
     start: float
     end: float
     segment_index: int
+
 
 @dataclass(frozen=True)
 class Segment:
@@ -383,35 +385,38 @@ class Segment:
     start: float
     end: float
     text: str
-    visual: tuple[VisualContext, ...] = ()   # board states overlapping this segment
+    visual: tuple[VisualContext, ...] = ()  # board states overlapping this segment
+
 
 @dataclass(frozen=True)
 class VisualContext:
-    start: float                # board-state lifetime, NOT a segment's span
+    start: float  # board-state lifetime, NOT a segment's span
     end: float
     keyframe_path: str
-    description: str            # what the VLM saw: diagram, derivation, slide
-    text: str                   # transcribed board/slide text
-    latex: str | None           # formulas, when present. manim generation reads this.
+    description: str  # what the VLM saw: diagram, derivation, slide
+    text: str  # transcribed board/slide text
+    latex: str | None  # formulas, when present. manim generation reads this.
     confidence: float
+
 
 @dataclass(frozen=True)
 class QuestionCandidate:
     sentence_id: str
-    text: str                   # the refined focus, may be a clause of the sentence
+    text: str  # the refined focus, may be a clause of the sentence
     score: float
-    question_type: str          # what | why | how | yes_no | definition | other
-    reasons: tuple[str, ...]    # every rule that fired, positive and negative
+    question_type: str  # what | why | how | yes_no | definition | other
+    reasons: tuple[str, ...]  # every rule that fired, positive and negative
+
 
 @dataclass(frozen=True)
 class QAPair:
     question: QuestionCandidate
-    answer_sentence_ids: tuple[str, ...]   # empty when no answer was found
+    answer_sentence_ids: tuple[str, ...]  # empty when no answer was found
     answer_text: str
     confidence: float
-    start: float                # question start, the FR7 timestamp
+    start: float  # question start, the FR7 timestamp
     end: float
-    verdict: str = "unjudged"   # unjudged | keep | revise | reject
+    verdict: str = "unjudged"  # unjudged | keep | revise | reject
     reasons: tuple[str, ...] = ()
 ```
 
@@ -425,11 +430,11 @@ class Context:
     transcript: Transcript | None = None
     sentences: tuple[Sentence, ...] = ()
     segments: tuple[Segment, ...] = ()
-    visual: tuple[VisualContext, ...] = ()      # board states; joined to segments in a later stage
+    visual: tuple[VisualContext, ...] = ()  # board states; joined to segments in a later stage
     candidates: tuple[QuestionCandidate, ...] = ()
     pairs: tuple[QAPair, ...] = ()
     stats: dict[str, int] = field(default_factory=dict)
-    progress: Progress | None = None            # section 11.3; mid-stage reporting
+    progress: Progress | None = None  # section 11.3; mid-stage reporting
 ```
 
 Three rules:
@@ -773,7 +778,7 @@ without a second code path:
 
 ```python
 # server / default
-OpenAI(api_key=os.environ["OPENAI_API_KEY"])              # base_url=None
+OpenAI(api_key=os.environ["OPENAI_API_KEY"])  # base_url=None
 # offline / local device
 OpenAI(api_key="local", base_url="http://localhost:11434/v1")
 ```
@@ -875,6 +880,7 @@ its name and its cache policy:
 ```python
 Stage = Callable[[Context], Context]
 
+
 def stage(name: str, *, cache: str | None = None, uses: tuple[str, ...] = ()) -> ...:
     """Tag a function as a pipeline stage.
 
@@ -882,9 +888,20 @@ def stage(name: str, *, cache: str | None = None, uses: tuple[str, ...] = ()) ->
     uses:  Config field names whose values form the cache header (section 11.2).
     """
 
-@stage("transcribe", cache="transcript",
-       uses=("model_size", "language", "beam_size", "vad_filter", "compute_type",
-             "batch_size", "initial_prompt"))
+
+@stage(
+    "transcribe",
+    cache="transcript",
+    uses=(
+        "model_size",
+        "language",
+        "beam_size",
+        "vad_filter",
+        "compute_type",
+        "batch_size",
+        "initial_prompt",
+    ),
+)
 def transcribe(ctx: Context) -> Context: ...
 ```
 
@@ -892,18 +909,28 @@ def transcribe(ctx: Context) -> Context: ...
 
 ```python
 STAGES: tuple[Stage, ...] = (
-    ingest, transcribe, sentences, segments,
-    vision, attach_visual,
-    detect, answer, score, judge,
+    ingest,
+    transcribe,
+    sentences,
+    segments,
+    vision,
+    attach_visual,
+    detect,
+    answer,
+    score,
+    judge,
 )
 
-def run(ctx: Context, stages: Sequence[Stage] = STAGES,
-        progress: Progress | None = None) -> Context:
+
+def run(
+    ctx: Context, stages: Sequence[Stage] = STAGES, progress: Progress | None = None
+) -> Context:
     for fn in stages:
         if progress:
             progress(fn.stage.name, 0.0)
         ctx = _cached(fn, ctx) if fn.stage.cache else fn(ctx)
     return ctx
+
 
 def process(path, config=None, *, stages=STAGES, progress=None) -> Context: ...
 ```
