@@ -1,0 +1,128 @@
+import json
+
+import pytest
+
+from questxtract import SchemaError, read_questions, write_questions
+from questxtract.cli import main
+from questxtract.export import result_to_dict
+from questxtract.pipeline import STAGES, run
+
+QUESTION_KEYS = {
+    "id",
+    "text",
+    "original_text",
+    "start",
+    "end",
+    "confidence",
+    "confidence_label",
+    "question_type",
+    "answer",
+    "segment_id",
+    "sentence_id",
+    "visual",
+    "verdict",
+    "reasons",
+}
+
+
+@pytest.fixture
+def finished(context):
+    return run(context, STAGES[2:])
+
+
+def test_export_emits_a_fixed_key_set_with_nulls_kept(finished):
+    data = result_to_dict(finished)
+    assert set(data) == {"schema_version", "source", "config", "stats", "questions"}
+    question = data["questions"][0]
+    assert set(question) == QUESTION_KEYS
+    assert question["answer"] is None
+    assert question["visual"] is None
+    assert question["original_text"] is None
+    assert question["verdict"] == "unjudged"
+
+
+def test_export_carries_the_timestamp_and_the_label(finished):
+    question = result_to_dict(finished)["questions"][0]
+    assert question["text"] == "What is a stable sort?"
+    assert question["start"] == 2.2 and question["end"] == 4.0
+    assert question["confidence_label"] in {"high", "medium", "low"}
+    assert question["question_type"] == "what"
+
+
+def test_write_and_read_questions(tmp_path, finished):
+    out = tmp_path / "q.json"
+    write_questions(finished, out)
+    assert read_questions(out) == json.loads(out.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("content", ["not json", '{"questions": null}', "[]"])
+def test_malformed_questions_file_raises_schema_error(tmp_path, content):
+    path = tmp_path / "q.json"
+    path.write_text(content, encoding="utf-8")
+    with pytest.raises(SchemaError):
+        read_questions(path)
+
+
+def _transcript_file(tmp_path):
+    path = tmp_path / "t.json"
+    path.write_text(
+        json.dumps(
+            {
+                "segments": [
+                    {
+                        "text": "Today we cover sorting. What is a stable sort?",
+                        "start": 0.0,
+                        "end": 6.0,
+                    },
+                    {"text": "It keeps equal elements in order.", "start": 6.0, "end": 9.0},
+                    {"text": "Does anyone know why that matters", "start": 9.0, "end": 12.0},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_cli_roundtrip(tmp_path):
+    out = tmp_path / "q.json"
+    assert main(["process", str(_transcript_file(tmp_path)), "-o", str(out)]) == 0
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["schema_version"] == "1.0"
+    # `-t` gates the final confidence (pipeline.md 9.2 min_confidence), not the detection
+    # score: an unanswered aux-only question scores 0.55 * 0.5 = 0.275 and is dropped.
+    assert [q["text"] for q in data["questions"]] == ["What is a stable sort?"]
+    assert data["stats"]["candidates"] == 2
+    assert data["stats"]["sentences"] == 4
+
+
+def test_cli_writes_to_stdout_without_output(tmp_path, capsys):
+    assert main(["process", str(_transcript_file(tmp_path))]) == 0
+    assert json.loads(capsys.readouterr().out)["questions"]
+
+
+def test_cli_threshold_filters(tmp_path, capsys):
+    assert main(["process", str(_transcript_file(tmp_path)), "-t", "0.2"]) == 0
+    assert len(json.loads(capsys.readouterr().out)["questions"]) == 2
+    assert main(["process", str(_transcript_file(tmp_path)), "-t", "0.9"]) == 0
+    assert json.loads(capsys.readouterr().out)["questions"] == []
+
+
+def test_cli_reports_malformed_transcript_readably(tmp_path, capsys):
+    path = tmp_path / "t.json"
+    path.write_text('{"chunks": []}', encoding="utf-8")
+    assert main(["process", str(path)]) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("error: ") and "Traceback" not in err
+
+
+def test_cli_reports_missing_file(tmp_path, capsys):
+    assert main(["process", str(tmp_path / "missing.json")]) == 1
+    assert capsys.readouterr().err.startswith("error: ")
+
+
+def test_unimplemented_subcommands_fail_readably(tmp_path, capsys):
+    assert main(["eval", str(tmp_path)]) == 1
+    assert "#12" in capsys.readouterr().err
+    assert main(["quiz", str(tmp_path / "q.json")]) == 1
+    assert capsys.readouterr().err.startswith("error: ")

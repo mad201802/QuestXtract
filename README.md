@@ -36,8 +36,10 @@ turns them into study material. It **extracts** questions, it never invents them
 | ✏️ **Human in the loop** | Exported JSON reads back unchanged, so a separate review UI can edit and re-export |
 | 📦 **JSON export** | Structured, machine-readable output |
 
-Shipped in `0.1`: question detection, timestamps, confidence, JSON export, CLI.
-The video, ASR and blackboard stages are on the [roadmap](#roadmap).
+Shipped in `0.1`: the ten-stage pipeline contract, sentence and segment rebuilding, question
+detection, timestamps, confidence, JSON export, CLI. The video, ASR and blackboard stages are
+stubs behind that contract — see the [roadmap](#roadmap) and
+[pipeline.md 13.3](docs/pipeline.md#133-status).
 
 ## Install
 
@@ -56,9 +58,12 @@ Requires Python 3.10+ on Linux, macOS or Windows.
 ### CLI
 
 ```bash
-questxtract transcript.json -o questions.json
-questxtract transcript.json --threshold 0.8      # stricter detection, prints to stdout
+questxtract process transcript.json -o questions.json
+questxtract process transcript.json --threshold 0.8   # stricter, prints to stdout
 ```
+
+Until the ASR stage lands the input is a transcript; `process` then runs the pipeline from
+sentence splitting onward.
 
 `transcript.json` is either a list of segments or an object with a `segments` key, which is what
 most ASR engines emit:
@@ -72,59 +77,71 @@ most ASR engines emit:
 }
 ```
 
-Output:
+Output ([docs/pipeline.md](docs/pipeline.md#121-questionsjson) 12.1) — a fixed key set, `null`
+included, so a consumer never has to defensively check for a missing field:
 
 ```json
 {
-  "lecture": "transcript.json",
+  "schema_version": "1.0",
+  "source": { "path": "transcript.json", "duration_seconds": 12.0, "hash": null },
+  "config": { "model_size": "turbo", "language": "en",
+              "judge_model": "gpt-5.6-terra", "vision_model": "gpt-5.6-luna" },
+  "stats": { "sentences": 3, "segments": 1, "candidates": 2, "answered": 0, "emitted": 1 },
   "questions": [
     {
-      "id": "b257bd671c04",
-      "question": "What is a stable sort?",
-      "start": 0.0,
+      "id": "q_ca0d72",
+      "text": "What is a stable sort?",
+      "original_text": null,
+      "start": 2.67,
       "end": 6.0,
-      "confidence": 1.0,
-      "source": "audio",
-      "reasons": ["mark", "wh"]
-    },
-    {
-      "id": "5a4ef2d52da5",
-      "question": "Does anyone know why that matters",
-      "start": 9.0,
-      "end": 12.0,
-      "confidence": 0.5,
-      "source": "audio",
-      "reasons": ["aux"]
+      "confidence": 0.55,
+      "confidence_label": "medium",
+      "question_type": "what",
+      "answer": null,
+      "segment_id": 0,
+      "sentence_id": "s_ca0d72",
+      "visual": null,
+      "verdict": "unjudged",
+      "reasons": ["mark", "wh", "no_answer_found"]
     }
   ]
 }
 ```
 
-`lecture` and `id` identify a question across re-runs and edits (`id` is derived from `start` and
-the question text). `reasons` says which heuristics fired: `mark` (ends in `?`), `wh` (starts with a wh-word),
-`aux` (starts with an auxiliary verb). Useful when reviewing borderline detections — ASR output
-often drops the question mark.
+`id` and `sentence_id` identify a question across re-runs and edits; `sentence_id` is a content
+hash, so it survives a re-transcription. `reasons` says which rules fired: `mark` (ends in `?`),
+`wh` (starts with a wh-word), `aux` (starts with an auxiliary verb). Useful when reviewing
+borderline detections — ASR output often drops the question mark.
+
+`--threshold` gates the final **confidence**, not the raw detection score. An unanswered question
+carries `0.55 x question_score` (pipeline.md 9.2), so it tops out at 0.55 until answer search
+lands.
 
 ### Python API
 
 ```python
-from questxtract import (
-    LectureResult,
-    TranscriptSegment,
-    detect_questions,
-    read_segments,
-    write_result,
+from pathlib import Path
+
+from questxtract import STAGES, Config, Context, Transcript, run, write_questions
+
+ctx = Context(
+    source=Path("lecture.mp4"),
+    config=Config(min_confidence=0.4),
+    transcript=Transcript.from_dict({"segments": [...]}),  # or let stage 2 produce it
 )
+ctx = run(ctx, STAGES[2:])  # skip ingest + transcribe: the transcript is already in hand
 
-segments = read_segments("transcript.json")
-# ... or build them yourself
-segments = [TranscriptSegment(text="What is a stable sort?", start=0.0, end=6.0)]
+for pair in ctx.pairs:
+    print(f"[{pair.start:7.2f}s] ({pair.confidence:.0%}) {pair.question.text}")
 
-questions = detect_questions(segments, threshold=0.5)
-for q in questions:
-    print(f"[{q.start:7.2f}s] ({q.confidence:.0%}) {q.question}")
+write_questions(ctx, "questions.json")
+```
 
-write_result(LectureResult(lecture="lecture.mp4", questions=tuple(questions)), "questions.json")
+The pipeline is a list of `Context -> Context` functions. Passing your own `stages=` list is the
+whole plugin system — swap the detector, drop a stage, add an enrichment step:
+
+```python
+run(ctx, [*STAGES[2:6], my_detector, *STAGES[7:]])
 ```
 
 ## Development
@@ -140,20 +157,29 @@ uv run ruff format .       # format
 uv run mypy                # type check
 ```
 
-The package uses a `src/` layout and is built with [uv](https://github.com/astral-sh/uv). See
-[docs/architecture.md](docs/architecture.md) for the full module breakdown:
+The package uses a `src/` layout and is built with [uv](https://github.com/astral-sh/uv). One
+module per pipeline stage, each exposing a single `@stage`-decorated `Context -> Context`
+function. See [docs/pipeline.md](docs/pipeline.md) for what each one does and why, and
+[docs/architecture_review.md](docs/architecture_review.md) for the decisions behind it:
 
 ```
 src/questxtract/
-├── __init__.py   public API
-├── video/        recording input, audio-track extraction (planned)
-├── audio/        transcription (planned) and transcript JSON I/O
-├── detection/    question detection
-├── models/       Word, TranscriptSegment, Question, LectureResult
-├── output/       result JSON export/import
-└── cli.py        questxtract command
-tests/            pytest suite, mirrors src/
+├── __init__.py   public API: process, run, STAGES, the schemas
+├── models.py     Word, Transcript, Sentence, Segment, QAPair, Context, @stage
+├── config.py     one flat frozen Config, every default
+├── pipeline.py   STAGES, run(), process(), the cache, progress
+├── media.py      1 ingest        ├── detect.py    6 detect
+├── transcribe.py 2 transcribe    ├── answer.py    7 answer
+├── sentences.py  3 sentences     ├── score.py     8 score
+├── segments.py   4 segments      ├── llm.py       9 judge
+├── vision.py     5 vision        ├── export.py   10 export
+├── evaluate.py   labelled-set metrics
+└── cli.py        process / eval / quiz
+tests/            flat, one module per source module
 ```
+
+Which stages are real today and which are stubs: [pipeline.md 13.3](docs/pipeline.md#133-status).
+`grep -rn 'ponytail:' src/` lists every shortcut the code still owes that document.
 
 CI runs lint, format check and the test suite on Linux, macOS and Windows against Python 3.10 and
 3.13 for every pull request. Green CI is required before merging into `main`.

@@ -1,14 +1,49 @@
 import pytest
 
-from questxtract import TranscriptSegment
+from questxtract import Config, Context, Sentence, Transcript, Word
+
+
+def _words(spec: list[tuple[str, float, float]]) -> tuple[Word, ...]:
+    return tuple(Word(text=t, start=s, end=e) for t, s, e in spec)
 
 
 @pytest.fixture
-def segments() -> list[TranscriptSegment]:
-    return [
-        TranscriptSegment(
-            text="Today we cover sorting. What is a stable sort?", start=0.0, end=6.0
+def transcript() -> Transcript:
+    """Three sentences over two ASR chunks, with real word timings."""
+    return Transcript(
+        words=_words(
+            [
+                ("Today", 0.0, 0.5),
+                ("we", 0.5, 0.8),
+                ("cover", 0.8, 1.4),
+                ("sorting.", 1.4, 2.0),
+                ("What", 2.2, 2.6),
+                ("is", 2.6, 2.8),
+                ("a", 2.8, 2.9),
+                ("stable", 2.9, 3.5),
+                ("sort?", 3.5, 4.0),
+                ("It", 6.0, 6.3),
+                ("keeps", 6.3, 6.8),
+                ("equal", 6.8, 7.3),
+                ("elements", 7.3, 8.0),
+                ("in", 8.0, 8.2),
+                ("order.", 8.2, 9.0),
+            ]
         ),
-        TranscriptSegment(text="It keeps equal elements in order.", start=6.0, end=9.0),
-        TranscriptSegment(text="Does anyone know why that matters", start=9.0, end=12.0),
-    ]
+        language="en",
+        duration=9.0,
+    )
+
+
+@pytest.fixture
+def sentences(transcript: Transcript) -> tuple[Sentence, ...]:
+    from questxtract.sentences import split_sentences
+
+    return split_sentences(transcript)
+
+
+@pytest.fixture
+def context(transcript: Transcript) -> Context:
+    from pathlib import Path
+
+    return Context(source=Path("lecture.mp4"), config=Config(), transcript=transcript)
