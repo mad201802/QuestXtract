@@ -36,9 +36,9 @@ turns them into study material. It **extracts** questions, it never invents them
 | ✏️ **Human in the loop** | Exported JSON reads back unchanged, so a separate review UI can edit and re-export |
 | 📦 **JSON export** | Structured, machine-readable output |
 
-Shipped in `0.1`: the ten-stage pipeline contract, sentence and segment rebuilding, question
-detection, timestamps, confidence, JSON export, CLI. The video, ASR and blackboard stages are
-stubs behind that contract — see the [roadmap](#roadmap) and
+Shipped in `0.1`: the ten-stage pipeline contract, MP4 validation and audio extraction, sentence
+and segment rebuilding, question detection, timestamps, confidence, JSON export, CLI. The ASR and
+blackboard stages are stubs behind that contract — see the [roadmap](#roadmap) and
 [pipeline.md 13.3](docs/pipeline.md#133-status).
 
 ## Install
