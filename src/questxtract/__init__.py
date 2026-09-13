@@ -19,6 +19,7 @@ from .models import (
     Word,
 )
 from .pipeline import STAGES, process, run, stage
+from .schema import Question
 
 __version__ = "0.1.0"
 
@@ -28,6 +29,7 @@ __all__ = [
     "Config",
     "Context",
     "QAPair",
+    "Question",
     "QuestionCandidate",
     "SchemaError",
     "Segment",
