@@ -1,7 +1,7 @@
 """QuestXtract: extract spoken questions from lecture recordings.
 
 The pipeline is a list of ``Context -> Context`` functions (``STAGES``); ``process()`` runs
-it over one recording. See ``docs/pipeline.md`` for what each stage does and why.
+it over one recording. See ``docs/architecture.md`` for what each stage does and why.
 """
 
 from .config import Config

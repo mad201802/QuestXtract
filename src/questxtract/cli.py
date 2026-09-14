@@ -44,7 +44,7 @@ def _process(args: argparse.Namespace) -> int:
     ctx = Context(source=Path(args.transcript), config=config, transcript=transcript)
     ctx.duration = transcript.duration
     # Stages 1 and 2 are skipped: the transcript is already in hand. This is the documented
-    # `stages=` seam (pipeline.md 11.1), not a workaround.
+    # `stages=` seam (architecture.md 11.1), not a workaround.
     ctx = run(ctx, STAGES[_AFTER_TRANSCRIBE:])
 
     if args.output:

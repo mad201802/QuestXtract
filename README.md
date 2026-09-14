@@ -39,7 +39,7 @@ turns them into study material. It **extracts** questions, it never invents them
 Shipped in `0.1`: the ten-stage pipeline contract, MP4 validation and audio extraction, sentence
 and segment rebuilding, question detection, timestamps, confidence, JSON export, CLI. The ASR and
 blackboard stages are stubs behind that contract — see the [roadmap](#roadmap) and
-[pipeline.md 13.3](docs/pipeline.md#133-status).
+[architecture.md 13.3](docs/architecture.md#133-status).
 
 ## Install
 
@@ -77,7 +77,7 @@ most ASR engines emit:
 }
 ```
 
-Output ([docs/pipeline.md](docs/pipeline.md#121-questionsjson) 12.1) — a fixed key set, `null`
+Output ([docs/architecture.md](docs/architecture.md#121-questionsjson) 12.1) — a fixed key set, `null`
 included, so a consumer never has to defensively check for a missing field:
 
 ```json
@@ -114,7 +114,7 @@ hash, so it survives a re-transcription. `reasons` says which rules fired: `mark
 borderline detections — ASR output often drops the question mark.
 
 `--threshold` gates the final **confidence**, not the raw detection score. An unanswered question
-carries `0.55 x question_score` (pipeline.md 9.2), so it tops out at 0.55 until answer search
+carries `0.55 x question_score` (architecture.md 9.2), so it tops out at 0.55 until answer search
 lands.
 
 ### Python API
@@ -159,7 +159,7 @@ uv run mypy                # type check
 
 The package uses a `src/` layout and is built with [uv](https://github.com/astral-sh/uv). One
 module per pipeline stage, each exposing a single `@stage`-decorated `Context -> Context`
-function. See [docs/pipeline.md](docs/pipeline.md) for what each one does and why, and
+function. See [docs/architecture.md](docs/architecture.md) for what each one does and why, and
 [docs/architecture_review.md](docs/architecture_review.md) for the decisions behind it:
 
 ```
@@ -178,7 +178,7 @@ src/questxtract/
 tests/            flat, one module per source module
 ```
 
-Which stages are real today and which are stubs: [pipeline.md 13.3](docs/pipeline.md#133-status).
+Which stages are real today and which are stubs: [architecture.md 13.3](docs/architecture.md#133-status).
 `grep -rn 'ponytail:' src/` lists every shortcut the code still owes that document.
 
 CI runs lint, format check and the test suite on Linux, macOS and Windows against Python 3.10 and

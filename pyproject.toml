@@ -22,7 +22,7 @@ classifiers = [
 ]
 requires-python = ">=3.10"
 # Base install is stdlib-only while stages 1, 2 and 5 are stubs; faster-whisper and numpy
-# land with the issues that implement them (docs/pipeline.md 13.2).
+# land with the issues that implement them (docs/architecture.md 13.2).
 dependencies = ["av>=14.0"]
 
 [project.optional-dependencies]
