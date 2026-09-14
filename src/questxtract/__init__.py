@@ -6,6 +6,7 @@ it over one recording. See ``docs/pipeline.md`` for what each stage does and why
 
 from .config import Config
 from .export import read_questions, result_to_json, write_questions
+from .media import MediaError, extract_audio
 from .models import (
     AsrSegment,
     Context,
@@ -28,6 +29,7 @@ __all__ = [
     "AsrSegment",
     "Config",
     "Context",
+    "MediaError",
     "QAPair",
     "Question",
     "QuestionCandidate",
@@ -39,6 +41,7 @@ __all__ = [
     "Word",
     "__version__",
     "process",
+    "extract_audio",
     "read_questions",
     "result_to_json",
     "run",
