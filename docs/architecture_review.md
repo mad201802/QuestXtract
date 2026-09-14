@@ -1,14 +1,14 @@
 # Architecture review — M1 package foundation
 
 Working document for the project report. It records *why* the architecture in
-[pipeline.md](pipeline.md) looks the way it does: the drivers, the decisions, the
+[architecture.md](architecture.md) looks the way it does: the drivers, the decisions, the
 alternatives we rejected, and what an independent review changed. Each section notes which
 report chapter it feeds (numbering follows the TDT4290 compendium's suggested structure).
 
 > **One decision was later reversed.** The M1 foundation shipped a package-per-stage layout
 > (`video/ audio/ detection/ models/ output/`) described in a companion `architecture.md`.
-> `docs/pipeline.md` then superseded both: the stage contract, not the directory, became the
-> unit of ownership and replacement, and `architecture.md` was deleted into pipeline.md
+> `docs/architecture.md` then superseded both: the stage contract, not the directory, became the
+> unit of ownership and replacement, and `architecture.md` was deleted into architecture.md
 > sections 13.1, 13.3 and 14. **D1** and **D2** below record that reversal rather than hiding
 > it — the rejected alternative is kept, because the argument is the part worth reporting.
 
@@ -61,7 +61,7 @@ flowchart LR
 Solid arrows are stages that run on every invocation; dashed ones are optional or M2+.
 `models.py` is not a stage: it is the typed contract every stage reads and writes, and
 `Context` is the single value threaded along the whole line. Export is not a stage either —
-it runs on the finished `Context` (pipeline.md 1.3).
+it runs on the finished `Context` (architecture.md 1.3).
 
 ## 3. Decisions and alternatives (→ report ch. 7)
 
@@ -93,7 +93,7 @@ lives in exactly one place; `models.py` is a contract, not a stage.
 *Cost:* a flat `src/questxtract/` with sixteen modules, which will want grouping if the
 package doubles. The `@stage` decorator also has to live in `models.py` rather than
 `pipeline.py`, because `pipeline.py` imports every stage module to build `STAGES` and the
-stage modules need the decorator — an import cycle otherwise (pipeline.md 11.1).
+stage modules need the decorator — an import cycle otherwise (architecture.md 11.1).
 
 ### D2 — ~~`video/` is not `audio/`~~ (superseded by D1)
 
@@ -127,14 +127,14 @@ Validation happens once, at the JSON boundary, and raises one error type the CLI
 
 *Cost:* hand-written `from_dict` per type. Acceptable at this size; revisit if the schema
 grows much past ten types. The naming collision the restructure exposed is worth recording:
-pipeline.md calls a run of sentences a `Segment` while the ASR engine calls its own decoding
+architecture.md calls a run of sentences a `Segment` while the ASR engine calls its own decoding
 chunks segments too. We kept `Segment` for the former and named the latter `AsrSegment`,
 because the sentence-run meaning is the one every downstream consumer uses.
 
 ### D4 — A fixed-key export envelope and stable ids
 
 *Chose:* the export unit is one recording — `{"schema_version", "source", "config", "stats",
-"questions": [...]}` (pipeline.md 12.1) — every key always present, `null` included. Each
+"questions": [...]}` (architecture.md 12.1) — every key always present, `null` included. Each
 question carries an `id` derived from its start and text, and cites the content-hash
 `sentence_id`s it came from.
 
@@ -163,7 +163,7 @@ fills board context on existing questions rather than emitting a second set — 
 roadmap and the brief say so, and because a second detector would need a merge step nobody
 owns.
 
-*What changed with pipeline.md:* `visual_context` and `answer` stopped being reserved key
+*What changed with architecture.md:* `visual_context` and `answer` stopped being reserved key
 names and became `VisualContext` and `QAPair.answer_*`. The `Question.source` field was
 dropped: with one detector and a `reasons` list that records every rule that fired, provenance
 was already there.
@@ -176,7 +176,7 @@ debugger, and what the judge reads as input.
 
 *Chose:* inside — everything from decoding to quiz items on disk, *including* the planned
 solution extraction (`answer.py`) and the quiz builder (a separate `questxtract quiz` command).
-Outside — the review UI, exerplaza upload, and the evaluation *dataset*. See pipeline.md 14 for
+Outside — the review UI, exerplaza upload, and the evaluation *dataset*. See architecture.md 14 for
 the boundary as stated to readers of the code.
 
 *Why:* solution extraction needs the sentences *after* each question; if it lived in the UI, the
@@ -208,7 +208,7 @@ video-based question generation is context selection on noisy ASR text, not the 
 
 *Chose (revised):* one cache, written by the runner, keyed on the recording's content hash and
 on the config values each stage declares in `uses=(...)` — `.questxtract/<hash>/transcribe.json`
-and friends (pipeline.md 11.2). The transcript is one entry in it, not a bespoke module.
+and friends (architecture.md 11.2). The transcript is one entry in it, not a bespoke module.
 
 *Why:* ASR is the expensive step (minutes per lecture, GPU if available). Edits, re-detection
 with another threshold, and later enrichment must all run from the saved transcript. This is
@@ -220,7 +220,7 @@ per stage means a new expensive stage gets correct caching by naming the config 
 together. Two related traps the implementation had to close: a run with no source hash must
 skip the cache rather than share an `unknown/` bucket (one recording's results would replay
 into another's), and the judge cannot key on config alone, because its input is the *candidate
-set* (pipeline.md 10.4).
+set* (architecture.md 10.4).
 
 ### D9 — Errors at the boundary, readable at the CLI
 
@@ -246,13 +246,13 @@ capacity we do not have. The import mode choice is small but prevents a known py
 | Requirement (general_requirements.md) | Where it lands | Status |
 |---|---|---|
 | FR1 accept `.mp4` | `media.py` `ingest` (#7) | hash done, probe stubbed |
-| FR2 extract audio track | none needed — `faster_whisper.audio.decode_audio` reads the container in process (pipeline.md 2.1) | by design |
+| FR2 extract audio track | none needed — `faster_whisper.audio.decode_audio` reads the container in process (architecture.md 2.1) | by design |
 | FR3 transcribe with ASR | `transcribe.py` (#8) → `Transcript` | stub |
 | FR4 extract drawing/animation from video | `vision.py` (M2/M3) | roadmap |
 | FR5 teacher can edit after extraction | package side: fixed-key JSON with content-hash sentence ids (`export.py`); the editing UI itself is #15, a separate app (D6) | partial — export only |
 | FR6 identify question sentences | `detect.py` (#10) | keyword heuristic |
-| FR7 start timestamp per question | `QAPair.start`, a slice of the word list — word-accurate by construction, never interpolated (pipeline.md 2.5) | done |
-| FR8 export JSON | `export.py`, pipeline.md 12.1 (#13) | done |
+| FR7 start timestamp per question | `QAPair.start`, a slice of the word list — word-accurate by construction, never interpolated (architecture.md 2.5) | done |
+| FR8 export JSON | `export.py`, architecture.md 12.1 (#13) | done |
 | FR9 progress for long recordings | `Progress = Callable[[str, float], None]`, emitted once per stage by the runner (#14) | done for stage granularity |
 | FR10 show detection confidence | `QAPair.confidence` + `confidence_label` + `reasons` | done |
 | FR11 filter by time/topic | `Segment` is the topic unit (#16) | segments done, filter planned |
@@ -260,7 +260,7 @@ capacity we do not have. The import mode choice is small but prevents a known py
 | NFR2 recall ≥ 50 % on labelled set | #11 dataset under `tests/data/`, `evaluate.py` harness (#12) | stub |
 | NFR3 docstrings, type hints, tests, ≥ 70 % coverage | ruff `D` rules, mypy strict, pytest gate | done |
 | NFR4 tested on every PR | GitHub Actions (#19) | done |
-| Constraint: never invent questions | detector extracts verbatim spans; the judge may reject/rescope/rewrite but never add, and is id-validated against its input set; generation is a separate command (pipeline.md 1.4, 12.3) | by design |
+| Constraint: never invent questions | detector extracts verbatim spans; the judge may reject/rescope/rewrite but never add, and is id-validated against its input set; generation is a separate command (architecture.md 1.4, 12.3) | by design |
 
 ## 5. The review and what it changed (→ report ch. 7, ch. 12 "AI")
 
@@ -294,7 +294,7 @@ had hidden rather than caused:
 | Finding | Change | Decision affected |
 |---|---|---|
 | A cached stage with no source hash shared one `unknown/` bucket, replaying one recording's results into another's | skip the cache when there is no content hash | D8 |
-| `judge` declared `cache="pairs"` but its `uses` header holds only config, so a stale verdict would survive a detection change | judge caches only once keyed on the candidate set (pipeline.md 10.4) | D8 |
+| `judge` declared `cache="pairs"` but its `uses` header holds only config, so a stale verdict would survive a detection change | judge caches only once keyed on the candidate set (architecture.md 10.4) | D8 |
 
 The one refuted candidate ("the empty `audio/` package contradicts the no-scaffolding rule")
 is worth mentioning in the report as an example of why verification matters: the rule is about
@@ -321,7 +321,7 @@ exerplaza credentials used by the uploader.
   for a local tool; revisit if files travel between users.
 - **Information disclosure** — transcripts leaving the machine. Design choice: ASR runs
   offline (customer brief: "offline speech-to-text, e.g. Whisper") and never over a hosted
-  transcribe endpoint. The optional LLM layer (pipeline.md 6 and 10) is the one component that
+  transcribe endpoint. The optional LLM layer (architecture.md 6 and 10) is the one component that
   *can* leave the machine, and only when the caller configures an endpoint: the default
   `Config` makes zero outbound calls, and every result the pipeline produces is reachable
   without one. Pointing `base_url` at a local OpenAI-compatible server keeps even that on the
@@ -358,7 +358,7 @@ information-flow arrows — the compendium asks for an architecture sketch with 
 - **Small dependency footprint.** The core is stdlib-only; heavy models are isolated in
   `transcribe.py` and `vision.py`, and the LLM client is an optional `[llm]` extra imported
   inside the function that needs it, so a transcript-only user never installs any of them.
-  There is no torch anywhere in the base install (pipeline.md 13.2).
+  There is no torch anywhere in the base install (architecture.md 13.2).
 - **Software sustainability (maintainability).** Typed contracts, one error type, one test
   module per source module, and the pipeline document itself are what let the customer build on
   the code after the semester (a graded criterion). The document is load-bearing rather than

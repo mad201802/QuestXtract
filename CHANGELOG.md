@@ -3,10 +3,10 @@
 ## Unreleased
 
 The package is restructured around the pipeline described in
-[docs/pipeline.md](docs/pipeline.md), which is now the design of record. The package-per-stage
+[docs/architecture.md](docs/architecture.md), which is now the design of record. The package-per-stage
 layout introduced earlier in this cycle is reversed: the `Context -> Context` stage contract, not
 the directory, is the unit of ownership and replacement. `docs/architecture.md` is deleted, its
-still-current content folded into pipeline.md sections 13.1, 13.3 and 14;
+still-current content folded into architecture.md sections 13.1, 13.3 and 14;
 `docs/architecture_review.md` keeps the decision history and records the reversal in D1 and D2.
 
 ### Changed (breaking)
@@ -18,7 +18,7 @@ still-current content folded into pipeline.md sections 13.1, 13.3 and 14;
 - Schema renamed and widened: `TranscriptSegment` → `AsrSegment` (a raw ASR chunk) plus the new
   `Transcript` that owns the word list; `Question` → `QuestionCandidate` (detection) and `QAPair`
   (a question with its answer span); `LectureResult` → the `questions.json` envelope of
-  pipeline.md 12.1. `Question.text` is `QuestionCandidate.text`; `Question.source` is dropped,
+  architecture.md 12.1. `Question.text` is `QuestionCandidate.text`; `Question.source` is dropped,
   since `reasons` already records what fired.
 - Export format replaced. Was `{"lecture", "questions": [...]}`; now a fixed key set with
   `schema_version`, `source`, `config`, `stats` and richer question objects carrying `answer`,
@@ -30,7 +30,7 @@ still-current content folded into pipeline.md sections 13.1, 13.3 and 14;
 - `detect_questions` is no longer the public entry point; `process()` and `run()` are. The
   heuristic is still there, now over `Sentence` rather than `TranscriptSegment`.
 - CLI takes a subcommand: `questxtract transcript.json` → `questxtract process transcript.json`.
-  `--threshold` now gates the final confidence (pipeline.md 9.2), not the raw detection score.
+  `--threshold` now gates the final confidence (architecture.md 9.2), not the raw detection score.
 
 ### Added
 
@@ -51,7 +51,7 @@ still-current content folded into pipeline.md sections 13.1, 13.3 and 14;
   `evaluate.py` (#12) and the generative stage land.
 - Optional `questxtract[llm]` extra for the judge and vision calls, imported inside the functions
   so the base install stays stdlib-only.
-- `tests/test_pipeline.py` asserts that `STAGES` matches the stage order pipeline.md 1.3
+- `tests/test_pipeline.py` asserts that `STAGES` matches the stage order architecture.md 1.3
   specifies, so the document cannot quietly stop describing the code.
 
 ### Fixed
@@ -59,7 +59,7 @@ still-current content folded into pipeline.md sections 13.1, 13.3 and 14;
 - A cached stage with no source hash wrote into a shared `unknown/` bucket, so one recording's
   results could be replayed into another's. A run without a content hash now skips the cache.
 - `judge` declared a cache keyed only on config, which would have served a stale verdict after
-  detection changed. Its entry is keyed on the candidate set instead (pipeline.md 10.4), and is
+  detection changed. Its entry is keyed on the candidate set instead (architecture.md 10.4), and is
   wired when that key is.
 
 ## Earlier in this cycle
