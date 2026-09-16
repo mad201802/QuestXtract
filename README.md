@@ -43,13 +43,18 @@ blackboard stages are stubs behind that contract — see the [roadmap](#roadmap)
 
 ## Install
 
-Not yet published on PyPI — install straight from GitHub, or from a local clone:
+```bash
+pip install questxtract
+```
+
+Not released on PyPI yet? Install straight from GitHub, or from a local clone for development
+(editable, picks up code changes without reinstalling):
 
 ```bash
 # from GitHub
 pip install git+https://github.com/mad201802/QuestXtract
 
-# from a local checkout (editable, picks up code changes without reinstalling)
+# from a local checkout
 git clone git@github.com:mad201802/QuestXtract.git
 cd QuestXtract
 pip install -e .
@@ -199,6 +204,12 @@ Which stages are real today and which are stubs: [architecture.md 13.3](docs/arc
 
 CI runs lint, format check and the test suite on Linux, macOS and Windows against Python 3.10 and
 3.13 for every pull request. Green CI is required before merging into `main`.
+
+Pushing a `v*.*.*` tag runs [release.yml](.github/workflows/release.yml): it builds the sdist and
+wheel, attaches them to a GitHub Release, and publishes them to PyPI via
+[Trusted Publishing](https://docs.pypi.org/trusted-publishers/) (OIDC — no API token stored in the
+repo). That requires a `pypi` environment on GitHub linked to a trusted publisher configured on the
+`questxtract` PyPI project first.
 
 ## Documentation
 
