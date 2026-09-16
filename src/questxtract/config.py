@@ -22,6 +22,7 @@ class Config:
     """Pipeline settings, with every documented default in one place."""
 
     # --- 2.2 transcription ---
+    asr_backend: str = "faster_whisper"
     model_size: str = "turbo"
     language: str = "en"
     beam_size: int = 5

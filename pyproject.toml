@@ -24,6 +24,7 @@ requires-python = ">=3.10"
 dependencies = [
     "av>=14.0",
     "faster-whisper>=1.2.1",
+    "numpy<2.2",
 ]
 
 [project.optional-dependencies]
@@ -46,7 +47,7 @@ dev = [
     "pytest>=8",
     "pytest-cov>=5",
     "ruff>=0.6",
-    "mypy>=1.11",
+    "mypy>=1.13",
 ]
 
 [tool.pytest.ini_options]
@@ -77,7 +78,3 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["faster_whisper"]
 ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["numpy", "numpy.*"]
-follow_imports = "skip"
