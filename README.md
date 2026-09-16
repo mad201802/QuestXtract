@@ -44,11 +44,11 @@ blackboard stages are stubs behind that contract — see the [roadmap](#roadmap)
 ## Install
 
 ```bash
-# with uv (recommended)
-uv add git+https://github.com/mad201802/QuestXtract
+# from PyPI
+pip install questxtract
 
-# or with pip
-pip install git+https://github.com/mad201802/QuestXtract
+# from a local checkout during development
+pip install -e .
 ```
 
 Requires Python 3.10+ on Linux, macOS or Windows.
