@@ -43,15 +43,31 @@ blackboard stages are stubs behind that contract — see the [roadmap](#roadmap)
 
 ## Install
 
-```bash
-# from PyPI
-pip install questxtract
+Not yet published on PyPI — install straight from GitHub, or from a local clone:
 
-# from a local checkout during development
+```bash
+# from GitHub
+pip install git+https://github.com/mad201802/QuestXtract
+
+# from a local checkout (editable, picks up code changes without reinstalling)
+git clone git@github.com:mad201802/QuestXtract.git
+cd QuestXtract
 pip install -e .
 ```
 
-Requires Python 3.10+ on Linux, macOS or Windows.
+### Dependencies
+
+- **Python 3.10, 3.11, 3.12 or 3.13** on Linux, macOS or Windows — the only supported runtimes
+  (enforced by `requires-python` in [pyproject.toml](pyproject.toml) and checked in CI).
+- **[`av`](https://github.com/PyAV-Org/PyAV) (>=14.0)** — the sole runtime dependency, installed
+  automatically. It ships its own bundled FFmpeg libraries, so no separate system install of
+  FFmpeg is needed for MP4 validation and audio extraction.
+- **`questxtract[llm]`** (optional extra, `pip install "questxtract[llm]"`) — pulls in
+  [`openai`](https://pypi.org/project/openai/) for the judge/answer stages (9) that call an LLM.
+  Everything else runs without it; the base install is otherwise stdlib-only while the ASR and
+  blackboard stages (1, 2, 5) are still stubs (see [Shipped in `0.1`](#features) above).
+- **[`uv`](https://github.com/astral-sh/uv)** — only needed for local development (see below), not
+  for installing or running the package.
 
 ## Quickstart
 
@@ -183,6 +199,16 @@ Which stages are real today and which are stubs: [architecture.md 13.3](docs/arc
 
 CI runs lint, format check and the test suite on Linux, macOS and Windows against Python 3.10 and
 3.13 for every pull request. Green CI is required before merging into `main`.
+
+## Documentation
+
+| File | What's in it |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | The design of record: what each pipeline stage does, the data that flows between them, the `questions.json` schema (section 12), and which stages are real vs. stubbed today (section 13.3). Read this first when changing pipeline behaviour. |
+| [docs/architecture_review.md](docs/architecture_review.md) | Why the architecture looks the way it does — drivers, decisions, rejected alternatives, and a record of the one decision (the package-per-stage layout) that was later reversed. Written for the project report; useful context for *why* before touching *what*. |
+| [docs/general_requirements.md](docs/general_requirements.md) | The project's functional and non-functional requirements, constraints, milestones and acceptance criteria, as agreed with the course/customer. |
+| [docs/external/lecture-qa-extraction.md](docs/external/lecture-qa-extraction.md) | Reference notes on a related third-party pipeline ([matteopogetta/lecture-qa-extraction](https://github.com/matteopogetta/lecture-qa-extraction)) that this project's audio-only stages were adapted from. |
+| [CHANGELOG.md](CHANGELOG.md) | Notable changes per release, including breaking renames to the schema and module layout. |
 
 ## Roadmap
 
