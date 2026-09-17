@@ -36,9 +36,10 @@ turns them into study material. It **extracts** questions, it never invents them
 | ✏️ **Human in the loop** | Exported JSON reads back unchanged, so a separate review UI can edit and re-export |
 | 📦 **JSON export** | Structured, machine-readable output |
 
-Shipped in `0.1`: the ten-stage pipeline contract, MP4 validation and audio extraction, sentence
-and segment rebuilding, question detection, timestamps, confidence, JSON export, CLI. The ASR and
-blackboard stages are stubs behind that contract — see the [roadmap](#roadmap) and
+Shipped in `0.1`: the ten-stage pipeline contract, MP4 validation and audio extraction, ASR
+through a pluggable backend interface (faster-whisper by default), sentence and segment
+rebuilding, question detection, timestamps, confidence, JSON export, CLI. The blackboard/vision
+stage is still a stub behind that contract — see the [roadmap](#roadmap) and
 [architecture.md 13.3](docs/architecture.md#133-status).
 
 ## Install
@@ -62,8 +63,10 @@ questxtract process transcript.json -o questions.json
 questxtract process transcript.json --threshold 0.8   # stricter, prints to stdout
 ```
 
-Until the ASR stage lands the input is a transcript; `process` then runs the pipeline from
-sentence splitting onward.
+The ASR stage is implemented as a pluggable backend (see below), but the CLI's `process`
+command still only accepts a pre-made transcript; wiring it to accept a raw recording
+end-to-end is issue #17. Until then, `process` runs the pipeline from sentence splitting
+onward.
 
 `transcript.json` is either a list of segments or an object with a `segments` key, which is what
 most ASR engines emit:
@@ -143,6 +146,27 @@ whole plugin system — swap the detector, drop a stage, add an enrichment step:
 ```python
 run(ctx, [*STAGES[2:6], my_detector, *STAGES[7:]])
 ```
+
+### Swapping the ASR engine
+
+The ASR engine is a pluggable backend behind `Config.asr_backend`, not a hardcoded import.
+A second engine is one class:
+
+```python
+from questxtract import AsrBackend, Config, register_backend
+
+@register_backend("my_engine")
+class MyBackend:
+    def transcribe(self, source, config):
+        # return raw segments: [{"text": ..., "start": ..., "end": ...}, ...]
+        ...
+
+ctx = Context(source=Path("lecture.mp4"), config=Config(asr_backend="my_engine"))
+```
+
+`faster_whisper` is the default (`Config.asr_backend = "faster_whisper"`), registered the same
+way in `asr.py`.
+
 
 ## Development
 
