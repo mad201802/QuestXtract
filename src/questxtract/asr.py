@@ -105,6 +105,26 @@ def _segment_to_dict(segment: Any) -> dict[str, Any]:
     }
 
 
+#: Loaded models, keyed on the two fields that determine which checkpoint gets loaded
+#: (``model_size``, ``compute_type``) - not the full config, since options like ``language``
+#: or ``beam_size`` are passed per call and never change which model file is read. Process
+#: lifetime only: loading is the expensive part, so every call with the same key reuses it
+#: instead of reading the checkpoint off disk again.
+_MODEL_CACHE: dict[tuple[str, str], Any] = {}
+
+
+def _load_model(model_size: str, compute_type: str) -> Any:
+    """Return the batched model for ``(model_size, compute_type)``, loading it once."""
+    from faster_whisper import BatchedInferencePipeline, WhisperModel  # noqa: PLC0415
+
+    key = (model_size, compute_type)
+    if key not in _MODEL_CACHE:
+        _MODEL_CACHE[key] = BatchedInferencePipeline(
+            WhisperModel(model_size, compute_type=compute_type)
+        )
+    return _MODEL_CACHE[key]
+
+
 @register_backend("faster_whisper")
 class FasterWhisperBackend:
     """The default backend: faster-whisper, batched (pipeline.md 2.2).
@@ -126,16 +146,13 @@ class FasterWhisperBackend:
 
         """
         try:
-            from faster_whisper import BatchedInferencePipeline, WhisperModel  # noqa: PLC0415
+            model = _load_model(config.model_size, config.compute_type)
         except ImportError as exc:  # pragma: no cover - base dependency, should be present
             raise RuntimeError(
                 "faster-whisper is not installed; reinstall questxtract to restore it"
             ) from exc
 
         with extract_audio(source) as audio_path:
-            model = BatchedInferencePipeline(
-                WhisperModel(config.model_size, compute_type=config.compute_type)
-            )
             segments, _info = model.transcribe(
                 str(audio_path),
                 beam_size=config.beam_size,
