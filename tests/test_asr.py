@@ -8,6 +8,7 @@ for correct *registration*, never actually invoked.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -23,8 +24,15 @@ from questxtract.transcribe import transcribe
 class _FakeBackend:
     """A minimal `AsrBackend` for tests: no model, no network, no GPU."""
 
-    def transcribe(self, source: Path, config: Config) -> list[dict[str, Any]]:
+    def transcribe(
+        self,
+        source: Path,
+        config: Config,
+        on_progress: Callable[[float], None] | None = None,
+    ) -> list[dict[str, Any]]:
         del source, config  # unused - the fake ignores both, which the interface permits
+        if on_progress:
+            on_progress(0.5)
         return [{"text": "What is a stable sort?", "start": 0.0, "end": 2.0}]
 
 
@@ -81,6 +89,36 @@ def test_transcribe_stage_uses_the_configured_backend(tmp_path: Path) -> None:
     assert result.transcript.words[0].text == "What"
     assert result.transcript.asr_segments[0].start == 0.0
     assert result.transcript.asr_segments[0].end == 2.0
+
+
+def test_transcribe_stage_forwards_backend_progress_to_ctx_progress(tmp_path: Path) -> None:
+    """Issue #14 AC1/AC4: a slow backend's intra-stage progress reaches ctx.progress,
+    tagged with this stage's name, as real fractions arrive - not just start/done."""
+    register_backend("fake")(_FakeBackend)
+    source = tmp_path / "lecture.mp4"
+    source.touch()
+    config = Config().replace(asr_backend="fake")
+    seen: list[tuple[str, float]] = []
+    ctx = Context(
+        source=source, config=config, progress=lambda name, frac: seen.append((name, frac))
+    )
+
+    transcribe(ctx)
+
+    assert seen == [("transcribe", 0.5)]
+
+
+def test_transcribe_stage_works_without_a_progress_callback(tmp_path: Path) -> None:
+    """Issue #14 AC2: progress reporting is optional and must not break plain calls."""
+    register_backend("fake")(_FakeBackend)
+    source = tmp_path / "lecture.mp4"
+    source.touch()
+    config = Config().replace(asr_backend="fake")
+    ctx = Context(source=source, config=config)  # no progress callback
+
+    result = transcribe(ctx)
+
+    assert isinstance(result.transcript, Transcript)
 
 
 def test_transcribe_stage_rejects_an_unconfigured_backend(tmp_path: Path) -> None:

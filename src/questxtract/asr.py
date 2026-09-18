@@ -36,7 +36,12 @@ class AsrBackend(Protocol):
     including synthesising word timings when a backend gives none.
     """
 
-    def transcribe(self, source: Path, config: Config) -> list[dict[str, Any]]:
+    def transcribe(
+        self,
+        source: Path,
+        config: Config,
+        on_progress: Callable[[float], None] | None = None,
+    ) -> list[dict[str, Any]]:
         """Decode ``source`` and return raw ASR segments.
 
         Each at least::
@@ -46,6 +51,15 @@ class AsrBackend(Protocol):
         A backend may also include a ``"words"`` list per segment
         (``{"word", "start", "end", "probability"}``) when it can produce word-level
         timing; when it cannot, downstream stages synthesise evenly-spaced words instead.
+
+        Args:
+            source: The recording to decode.
+            config: Pipeline settings; a backend reads only the fields it declared.
+            on_progress: Called with a fraction in ``[0, 1)`` as segments complete, when
+                the backend can estimate one (issue #14). Optional: a backend that cannot
+                estimate progress may ignore it. Never called with ``1.0`` - the caller,
+                not the backend, decides when the stage is actually finished.
+
         """
         ...
 
@@ -133,7 +147,12 @@ class FasterWhisperBackend:
     reuses it instead of duplicating that handling here.
     """
 
-    def transcribe(self, source: Path, config: Config) -> list[dict[str, Any]]:
+    def transcribe(
+        self,
+        source: Path,
+        config: Config,
+        on_progress: Callable[[float], None] | None = None,
+    ) -> list[dict[str, Any]]:
         """Decode ``source`` into raw segments using faster-whisper.
 
         Raises:
@@ -151,7 +170,7 @@ class FasterWhisperBackend:
             ) from exc
 
         with extract_audio(source) as audio_path:
-            segments, _info = model.transcribe(
+            segments, info = model.transcribe(
                 str(audio_path),
                 beam_size=config.beam_size,
                 language=config.language,
@@ -160,4 +179,18 @@ class FasterWhisperBackend:
                 batch_size=config.batch_size,
                 initial_prompt=config.initial_prompt,
             )
-            return [_segment_to_dict(s) for s in segments]
+            collected: list[dict[str, Any]] = []
+            for s in segments:
+                collected.append(_segment_to_dict(s))
+                # info.duration is known up front (the container was already probed), so
+                # "seconds of audio decoded so far" is a real fraction, not a fake counter.
+                # Per word rather than per segment: segments (VAD-bounded) vary from a
+                # couple seconds to half a minute, so per-segment progress jumps in
+                # uneven chunks; words are already extracted for the transcript itself,
+                # so this granularity is free.
+                if on_progress and info.duration > 0:
+                    words = s.words or ()
+                    ends = (w.end for w in words) if words else (s.end,)
+                    for end in ends:
+                        on_progress(min(0.99, end / info.duration))
+            return collected
