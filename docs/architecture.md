@@ -175,15 +175,21 @@ decoder layers, roughly 8x faster than `large-v3` at close to `large-v2` quality
 it is usable; on the server it is trivial. `base` for CI smoke tests, `small` if turbo's memory
 footprint turns out to be a problem on a laptop.
 
-> **Decision.** `questxtract/transcribe.py`. Config: `model_size` (`"turbo"`), `language`
-> (`"en"`), `beam_size` (5), `vad_filter` (True), `compute_type` (`"int8"`), `batch_size` (8),
-> `initial_prompt`. Per-segment `avg_logprob`, `no_speech_prob` and `compression_ratio` are kept
-> on the segment: they are the cheapest hallucination detector we have and the eval harness uses
-> them.
+> **Decision.** `questxtract/transcribe.py`. Config: `asr_backend` (`"faster_whisper"`),
+> `model_size` (`"turbo"`), `language` (`"en"`), `beam_size` (5), `vad_filter` (True),
+> `compute_type` (`"int8"`), `batch_size` (8), `initial_prompt`. Per-segment `avg_logprob`,
+> `no_speech_prob` and `compression_ratio` are kept on the segment: they are the cheapest
+> hallucination detector we have and the eval harness uses them.
 >
-> **Swapping the engine.** The ASR *checkpoint* is a config string. The ASR *engine* - a hosted
-> transcribe endpoint, WhisperX, Parakeet - is a second `Context -> Context` function replacing
-> one entry in `STAGES` (section 11.1). No registry, no protocol, no entry-point discovery.
+> **Swapping the engine.** Shipped with issue #8, revised from this section's original plan:
+> the ASR *checkpoint* is still a config string (`model_size`), but the ASR *engine* - a hosted
+> transcribe endpoint, WhisperX, Parakeet - is a class implementing `AsrBackend` (one method,
+> `transcribe(source, config) -> list[dict]`), registered under a name with `@register_backend`
+> in `asr.py` and selected by the `asr_backend` config string above. `resolve_backend` only
+> turns that name into an instance; `transcribe.py` and the rest of the pipeline never import a
+> specific engine. A string registry, not a `STAGES` swap, because the engine is what #14
+> (progress) and #11/#12 (evaluation) need to vary independently of everything else in the
+> stage.
 >
 > **Dev workflow.** No dev machine has a GPU, and `turbo` on CPU runs a 90-minute lecture in
 > roughly the same wall-clock time again. So the cached `transcribe.json` for both reference

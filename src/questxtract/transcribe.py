@@ -1,21 +1,26 @@
-"""Stage 2: faster-whisper decodes the container directly into timed words.
+"""Stage 2: decode the source into timed words through a pluggable ASR backend.
 
-One backend, no abstraction layer over it. Word timestamps are the only source of timing
-in the pipeline (pipeline.md 2.3), so they are requested unconditionally.
+The pipeline no longer imports a specific ASR engine here: this stage resolves
+``config.asr_backend`` through :mod:`questxtract.asr` and converts whatever raw segments
+the backend returns into a :class:`~questxtract.models.Transcript` via
+``Transcript.from_dict``, which already handles word synthesis when a backend gives none.
 
-Swapping the engine is a second ``Context -> Context`` function replacing this entry in
-``STAGES``; swapping the *checkpoint* is a config string.
+Swapping the *engine* is a ``Config.asr_backend`` string plus one ``@register_backend``
+class in ``asr.py`` - no change here. Swapping the *checkpoint* (e.g. a different Whisper
+size) is already a ``Config.model_size`` string, unchanged by this issue.
 """
 
 from __future__ import annotations
 
-from .models import Context, stage
+from .asr import resolve_backend
+from .models import Context, Transcript, stage
 
 
 @stage(
     "transcribe",
     cache="transcript",
     uses=(
+        "asr_backend",
         "model_size",
         "language",
         "beam_size",
@@ -26,15 +31,16 @@ from .models import Context, stage
     ),
 )
 def transcribe(ctx: Context) -> Context:
-    """Decode the source into a :class:`~questxtract.models.Transcript`.
+    """Decode ``ctx.source`` into a :class:`~questxtract.models.Transcript`.
 
     Raises:
-        NotImplementedError: The ASR engine arrives with issue #8. Until then a caller
-            seeds ``ctx.transcript`` from a transcript file and runs ``STAGES[2:]``,
-            which is what the ``stages=`` seam is for (pipeline.md 11.1).
+        ValueError: If ``ctx.config.asr_backend`` names a backend that is not
+            registered (see :func:`questxtract.asr.resolve_backend`).
 
     """
-    # ponytail: faster-whisper + BatchedInferencePipeline per pipeline.md 2.2; issue #8.
-    raise NotImplementedError(
-        "transcribe: ASR lands with issue #8; pass a transcript file to `questxtract process`"
+    backend = resolve_backend(ctx.config.asr_backend)
+    raw_segments = backend.transcribe(ctx.source, ctx.config)
+    ctx.transcript = Transcript.from_dict(
+        {"segments": raw_segments, "language": ctx.config.language}
     )
+    return ctx
