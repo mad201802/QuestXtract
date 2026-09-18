@@ -97,6 +97,8 @@ included, so a consumer never has to defensively check for a missing field:
       "original_text": null,
       "start": 2.67,
       "end": 6.0,
+      "start_hms": "0:02",
+      "end_hms": "0:06",
       "confidence": 0.55,
       "confidence_label": "medium",
       "question_type": "what",

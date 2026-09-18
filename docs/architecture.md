@@ -656,9 +656,10 @@ penalty large enough to kill them also kills real questions:
 
 ### 7.3 Scoring
 
-Additive, clamped to [0, 1]. Empty text, text over `max_question_chars` (220), a declarative-what
-match, a causal declarative, or no interrogative cue of any kind without a `?` all reject
-outright.
+Additive, clamped to [0, 1]. Empty text, text over `max_question_chars` (350 - raised from the
+planned 220 as a quick, untuned experiment against real lecture audio; revisit once #11's
+labelled set exists to tune it against instead of guessing), a declarative-what match, a
+causal declarative, or no interrogative cue of any kind without a `?` all reject outright.
 
 ```
   +0.40  contains '?'
@@ -1072,6 +1073,8 @@ Fixed key set, `null` included, one file:
       "original_text": "so why does a stable sort matter here",
       "start": 1284.2,
       "end": 1288.9,
+      "start_hms": "21:24",
+      "end_hms": "21:28",
       "confidence": 0.82,
       "confidence_label": "high",
       "question_type": "why",
