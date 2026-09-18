@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from . import __version__
@@ -16,6 +16,57 @@ from .models import Context, SchemaError, Transcript
 from .pipeline import STAGES, run
 
 _AFTER_TRANSCRIBE = 2  # stages 1 and 2 are skipped when a transcript is supplied
+
+_BAR_WIDTH = 10
+# Friendlier than the raw stage name; anything not listed falls back to a title-cased
+# version of its name, so a new stage added later still renders something reasonable.
+_STAGE_LABELS = {
+    "ingest": "Extracting audio",
+    "transcribe": "Transcribing",
+    "sentences": "Splitting sentences",
+    "segments": "Grouping segments",
+    "vision": "Reading the board",
+    "attach_visual": "Joining visuals",
+    "detect": "Detecting questions",
+    "answer": "Finding answers",
+    "score": "Scoring",
+    "judge": "Reviewing",
+}
+
+
+def _progress_bar(total: int) -> Callable[[str, float], None]:
+    """Build a ``Progress`` callback that redraws one line per stage on stderr (issue #14).
+
+    Only reacts to a stage name changing (or ``"done"``) or an intermediate fraction from
+    a stage that reports one - it never assumes 1.0 on its own except when a later stage's
+    0.0 call confirms the previous one finished.
+    """
+    index = 0
+    current = ""
+
+    def report(name: str, fraction: float) -> None:
+        nonlocal index, current
+        if name == "done":
+            if current:
+                _draw(index, total, current, 1.0)
+            print(file=sys.stderr)
+            return
+        if name != current:
+            if current:
+                _draw(index, total, current, 1.0)
+                print(file=sys.stderr)
+            index += 1
+            current = name
+        _draw(index, total, name, fraction)
+
+    return report
+
+
+def _draw(index: int, total: int, name: str, fraction: float) -> None:
+    filled = round(max(0.0, min(1.0, fraction)) * _BAR_WIDTH)
+    bar = "█" * filled + "░" * (_BAR_WIDTH - filled)
+    label = _STAGE_LABELS.get(name, name.replace("_", " ").capitalize())
+    print(f"\r[{index}/{total}] {label:<20} {bar} {fraction:>4.0%}", end="", file=sys.stderr)
 
 
 def _load_transcript(path: str) -> Transcript:
@@ -44,8 +95,15 @@ def _process(args: argparse.Namespace) -> int:
     ctx = Context(source=Path(args.transcript), config=config, transcript=transcript)
     ctx.duration = transcript.duration
     # Stages 1 and 2 are skipped: the transcript is already in hand. This is the documented
-    # `stages=` seam (architecture.md 11.1), not a workaround.
-    ctx = run(ctx, STAGES[_AFTER_TRANSCRIBE:])
+    # `stages=` seam (architecture.md 11.1), not a workaround. "Transcribing" therefore never
+    # appears in the bar below until issue #17 lets `process` accept a raw recording.
+    stages = STAGES[_AFTER_TRANSCRIBE:]
+    progress = _progress_bar(len(stages))
+    try:
+        ctx = run(ctx, stages, progress=progress)
+    except Exception:
+        print(file=sys.stderr)  # close the redrawing bar line before the error/traceback
+        raise
 
     if args.output:
         write_questions(ctx, args.output)

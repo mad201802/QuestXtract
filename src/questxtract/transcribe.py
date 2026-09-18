@@ -38,8 +38,13 @@ def transcribe(ctx: Context) -> Context:
             registered (see :func:`questxtract.asr.resolve_backend`).
 
     """
+
+    def report(fraction: float) -> None:
+        if ctx.progress:
+            ctx.progress("transcribe", fraction)
+
     backend = resolve_backend(ctx.config.asr_backend)
-    raw_segments = backend.transcribe(ctx.source, ctx.config)
+    raw_segments = backend.transcribe(ctx.source, ctx.config, on_progress=report)
     ctx.transcript = Transcript.from_dict(
         {"segments": raw_segments, "language": ctx.config.language}
     )

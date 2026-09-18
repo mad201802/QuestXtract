@@ -28,7 +28,7 @@ class Config:
     beam_size: int = 5
     vad_filter: bool = True
     compute_type: str = "int8"
-    batch_size: int = 8
+    batch_size: int = 4
     initial_prompt: str = _PUNCTUATION_PROMPT
 
     # --- 2.4 vision-informed second ASR pass ---
@@ -51,7 +51,7 @@ class Config:
 
     # --- 7 detection ---
     min_question_score: float = 0.45
-    max_question_chars: int = 220
+    max_question_chars: int = 350
 
     # --- 8 answer search ---
     answer_window_sentences: int = 3

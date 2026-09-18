@@ -40,6 +40,21 @@ def result_to_dict(ctx: Context) -> dict[str, Any]:
     }
 
 
+def _format_hms(seconds: float) -> str:
+    """Render ``seconds`` as ``M:SS``, or ``H:MM:SS`` once the recording is an hour long.
+
+    For humans checking a question against the source recording (a YouTube ``&t=`` link,
+    scrubbing a video player); ``start``/``end`` stay the machine-usable seconds this is
+    derived from - filtering (issue #16) and seeking both want the number, not this string.
+    """
+    total = round(seconds)
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
+
+
 def _question(
     pair: QAPair, by_id: dict[str, Sentence], segments: Sequence[Segment]
 ) -> dict[str, Any]:
@@ -52,6 +67,8 @@ def _question(
         "original_text": original if pair.verdict == "revise" else None,
         "start": pair.start,
         "end": pair.end,
+        "start_hms": _format_hms(pair.start),
+        "end_hms": _format_hms(pair.end),
         "confidence": pair.confidence,
         "confidence_label": confidence_label(pair.confidence),
         "question_type": pair.question.question_type,
