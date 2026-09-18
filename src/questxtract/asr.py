@@ -79,8 +79,11 @@ def resolve_backend(name: str) -> AsrBackend:
     try:
         cls = _REGISTRY[name]
     except KeyError as exc:
-        available = ", ".join(sorted(_REGISTRY)) or "(none registered)"
-        raise ValueError(f"unknown ASR backend {name!r}; available: {available}") from exc
+        # _REGISTRY is never empty here: FasterWhisperBackend registers itself at import
+        # time, before any caller could reach this function.
+        raise ValueError(
+            f"unknown ASR backend {name!r}; available: {', '.join(sorted(_REGISTRY))}"
+        ) from exc
     return cls()
 
 
@@ -90,16 +93,11 @@ def _segment_to_dict(segment: Any) -> dict[str, Any]:
         "text": segment.text,
         "start": segment.start,
         "end": segment.end,
-        "avg_logprob": getattr(segment, "avg_logprob", 0.0),
-        "no_speech_prob": getattr(segment, "no_speech_prob", 0.0),
-        "compression_ratio": getattr(segment, "compression_ratio", 0.0),
+        "avg_logprob": segment.avg_logprob,
+        "no_speech_prob": segment.no_speech_prob,
+        "compression_ratio": segment.compression_ratio,
         "words": [
-            {
-                "word": w.word,
-                "start": w.start,
-                "end": w.end,
-                "probability": getattr(w, "probability", 1.0),
-            }
+            {"word": w.word, "start": w.start, "end": w.end, "probability": w.probability}
             for w in (segment.words or [])
         ],
     }
