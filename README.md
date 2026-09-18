@@ -155,11 +155,13 @@ A second engine is one class:
 ```python
 from questxtract import AsrBackend, Config, register_backend
 
+
 @register_backend("my_engine")
 class MyBackend:
     def transcribe(self, source, config):
         # return raw segments: [{"text": ..., "start": ..., "end": ...}, ...]
         ...
+
 
 ctx = Context(source=Path("lecture.mp4"), config=Config(asr_backend="my_engine"))
 ```
