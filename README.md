@@ -63,10 +63,17 @@ questxtract process transcript.json -o questions.json
 questxtract process transcript.json --threshold 0.8   # stricter, prints to stdout
 ```
 
+A live progress bar renders on stderr while it runs, one line per stage.
+
 The ASR stage is implemented as a pluggable backend (see below), but the CLI's `process`
 command still only accepts a pre-made transcript; wiring it to accept a raw recording
 end-to-end is issue #17. Until then, `process` runs the pipeline from sentence splitting
-onward.
+onward. `scripts/` has two standalone entry points that fill that gap for local testing
+against a real recording in the meantime: `transcribe.py` saves a reusable transcript.json,
+and `extract_questions.py` runs the full pipeline over a raw recording in one shot —
+both `uv run python scripts/<name>.py --help`. `scripts/dropped_questions.py` is a third,
+unrelated to that gap: it saves both the questions that clear the confidence threshold and
+the ones the heuristic drops, side by side, for inspecting false negatives.
 
 `transcript.json` is either a list of segments or an object with a `segments` key, which is what
 most ASR engines emit:

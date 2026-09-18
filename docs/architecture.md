@@ -177,7 +177,11 @@ footprint turns out to be a problem on a laptop.
 
 > **Decision.** `questxtract/transcribe.py`. Config: `asr_backend` (`"faster_whisper"`),
 > `model_size` (`"turbo"`), `language` (`"en"`), `beam_size` (5), `vad_filter` (True),
-> `compute_type` (`"int8"`), `batch_size` (8), `initial_prompt`. Per-segment `avg_logprob`,
+> `compute_type` (`"int8"`), `batch_size` (4 - lowered from 8 for issue #14's terminal progress
+> bar: faster-whisper's batched pipeline only yields results once a whole batch finishes, so a
+> smaller batch means more frequent, smaller bursts - measured roughly every 2.5s instead of
+> every 8-9s - at the cost of ~9% more transcription time; worth reverting if a future backend's
+> progress signal stops depending on batch granularity), `initial_prompt`. Per-segment `avg_logprob`,
 > `no_speech_prob` and `compression_ratio` are kept on the segment: they are the cheapest
 > hallucination detector we have and the eval harness uses them.
 >

@@ -8,12 +8,11 @@ reads, so it can be fed straight back in without re-transcribing:
 
     uv run python scripts/transcribe.py lecture.mp4
     uv run questxtract process lecture.transcript.json -o questions.json
-
-Usage: uv run python scripts/transcribe.py <recording.mp4> [output.json]
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -24,13 +23,17 @@ from questxtract.config import Config
 from questxtract.media import MediaError
 
 
-def main(argv: list[str]) -> int:
-    """Transcribe ``argv[0]`` and write the raw segments to ``argv[1]`` (or a default path)."""
-    if not argv:
-        print("usage: transcribe.py <recording.mp4> [output.json]", file=sys.stderr)
-        return 1
-    source = Path(argv[0])
-    out = Path(argv[1]) if len(argv) > 1 else source.with_suffix(".transcript.json")
+def main(argv: list[str] | None = None) -> int:
+    """Transcribe the given recording and write the raw segments to an output path."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("recording", help="an .mp4 recording")
+    parser.add_argument(
+        "output", nargs="?", help="output path (default: <recording>.transcript.json)"
+    )
+    args = parser.parse_args(argv)
+
+    source = Path(args.recording)
+    out = Path(args.output) if args.output else source.with_suffix(".transcript.json")
 
     config = Config()
     report = _progress_bar(1)
@@ -58,4 +61,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1:]))
+    raise SystemExit(main())
