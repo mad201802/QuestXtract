@@ -50,6 +50,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "--import-mode=importlib --cov=questxtract --cov-report=term-missing --cov-fail-under=70"
 
 [tool.ruff]
