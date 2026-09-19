@@ -53,6 +53,9 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   so the base install stays stdlib-only.
 - `tests/test_pipeline.py` asserts that `STAGES` matches the stage order architecture.md 1.3
   specifies, so the document cannot quietly stop describing the code.
+- `AsrBackend`, a pluggable ASR interface (`asr.py`): `register_backend`/`resolve_backend`
+  let `Config.asr_backend` select the engine, so `transcribe.py` never imports a specific
+  one. `FasterWhisperBackend` is the default, reusing `media.extract_audio`.
 
 ### Fixed
 

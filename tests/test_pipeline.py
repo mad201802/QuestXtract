@@ -127,10 +127,3 @@ def test_cache_roundtrips_dataclasses(tmp_path, context):
 
     context.visual = ()
     assert run(context, [captured]).visual == (state,)
-
-
-def test_unimplemented_stages_say_which_issue_owns_them(context):
-    from questxtract.transcribe import transcribe
-
-    with pytest.raises(NotImplementedError, match="#8"):
-        transcribe(context)
