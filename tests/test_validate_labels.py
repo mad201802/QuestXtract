@@ -141,6 +141,8 @@ def test_cli_exit_code_one_when_no_files_found(tmp_path: Path) -> None:
 
 
 def test_cli_directory_finds_labels_files(tmp_path: Path) -> None:
-    _write(tmp_path, "a.labels.jsonl", '{"start": 1.0, "end": 2.0, "text": "x", "kind": "content"}\n')
+    _write(
+        tmp_path, "a.labels.jsonl", '{"start": 1.0, "end": 2.0, "text": "x", "kind": "content"}\n'
+    )
     _write(tmp_path, "not_a_labels_file.txt", "irrelevant")
     assert main([str(tmp_path)]) == 0

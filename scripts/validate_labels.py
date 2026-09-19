@@ -34,6 +34,7 @@ class LabelError:
     message: str
 
     def __str__(self) -> str:
+        """Format as ``path:line: message``, matching a compiler-style error line."""
         return f"{self.path}:{self.line_number}: {self.message}"
 
 
@@ -50,7 +51,9 @@ def _iter_jsonl_files(paths: Sequence[str], *, recursive: bool) -> Iterator[Path
             yield path  # let validate_file report the missing-file error uniformly
 
 
-def validate_line(path: Path, line_number: int, raw_line: str) -> tuple[dict | None, list[LabelError]]:
+def validate_line(
+    path: Path, line_number: int, raw_line: str
+) -> tuple[dict | None, list[LabelError]]:
     """Parse and validate one JSONL line.
 
     Returns the parsed record (or ``None`` if parsing failed) and every error found on it.
@@ -62,7 +65,9 @@ def validate_line(path: Path, line_number: int, raw_line: str) -> tuple[dict | N
         return None, [LabelError(path, line_number, f"not valid JSON ({exc})")]
 
     if not isinstance(record, dict):
-        return None, [LabelError(path, line_number, f"expected an object, got {type(record).__name__}")]
+        return None, [
+            LabelError(path, line_number, f"expected an object, got {type(record).__name__}")
+        ]
 
     for field in ("start", "end", "text", "kind"):
         if field not in record:
@@ -75,7 +80,9 @@ def validate_line(path: Path, line_number: int, raw_line: str) -> tuple[dict | N
             errors.append(LabelError(path, line_number, f"'start' must be >= 0, got {start}"))
         if end <= start:
             errors.append(
-                LabelError(path, line_number, f"'end' ({end}) must be greater than 'start' ({start})")
+                LabelError(
+                    path, line_number, f"'end' ({end}) must be greater than 'start' ({start})"
+                )
             )
     elif "start" in record or "end" in record:
         errors.append(LabelError(path, line_number, "'start' and 'end' must both be numbers"))
@@ -153,9 +160,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run validation over every path given. Returns the process exit code."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="+", help="`.labels.jsonl` files or directories")
-    parser.add_argument(
-        "--recursive", action="store_true", help="search directories recursively"
-    )
+    parser.add_argument("--recursive", action="store_true", help="search directories recursively")
     args = parser.parse_args(argv)
 
     files = list(_iter_jsonl_files(args.paths, recursive=args.recursive))
