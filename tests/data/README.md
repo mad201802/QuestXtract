@@ -33,6 +33,18 @@ data file.
 These are the two calibration recordings the design is built around (architecture.md 1.2) —
 label these first. Additional recordings can be added the same way; add a row here for each.
 
+**Current labelling method for these two:** the pipeline has no working seed detector yet
+(`detect.py`'s stage exists, but there's no tool that runs it standalone over a raw
+transcript). Both recordings were transcribed and labelled by hand instead: a labeller
+watched the video, captured candidate timestamps and text while watching, then classified
+each into a `kind` afterward — see `scripts/scratch_to_labels.py` and the workflow note under
+"Adding a new recording" below. This means, strictly, every entry here was found the way the
+blind slice is meant to be found (exhaustive, unassisted), not via the pre-annotation seed
+workflow the guidelines describe as the default. Entries are still tagged `"split": "seed"` /
+`"split": "blind"` per the guidelines' two-window convention so `blind_slice_recall` has
+something defined to compute over, even though the "seed" entries here weren't seed-assisted
+in the literal sense.
+
 ## Schema
 
 One JSON object per line:
@@ -87,11 +99,18 @@ catches actual labelling mistakes.
 
 1. Pick a public lecture recording (YouTube URL is fine — the video itself is never committed,
    only the labels).
-2. Run the pipeline's seed detector over its transcript to get pre-annotation candidates (or,
-   until that tooling exists, apply the seed rule from the guidelines by hand: `?` OR
-   wh-word-start OR auxiliary-verb-start).
-3. Label every seed hit per `docs/annotation_guidelines.md` section 2-4.
-4. Pick two 10-minute windows, label them from scratch, tag those entries `"split": "blind"`.
-5. Run the validator (above). Fix anything it flags.
+2. Get a transcript with timestamps. Watch (or listen) while jotting candidate timestamp +
+   question text as you go; classify each into a `kind` afterward. See
+   `scripts/scratch_to_labels.py --help` for the plain-text scratch format this converts into
+   JSONL. (Once a standalone seed-detector tool exists over `detect.py`'s rules, that becomes
+   the faster first pass per `docs/annotation_guidelines.md` section 5 — until then, this
+   manual capture-then-classify method is the practical equivalent.)
+3. Label every candidate per `docs/annotation_guidelines.md` section 2-4. In particular, note
+   section 2's rule for habitual confirmation tags ("...right?", "...true?") — some
+   instructors use these constantly; decide once and apply consistently through the whole
+   recording rather than re-deciding per instance.
+4. Pick two 10-minute windows, label them exhaustively (every candidate, not just obvious
+   ones), tag those entries `"split": "blind"` via `scratch_to_labels.py --blind START END`.
+5. Run the validator (below). Fix anything it flags.
 6. Add a row to the table in this file with the recording's slug, title and URL.
 7. Commit the `.labels.jsonl` file and this README's updated table together.
