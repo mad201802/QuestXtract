@@ -36,13 +36,21 @@ Includes the **Socratic case**: the lecturer asks and answers within the same br
 
 ### `rhetorical` — asked for effect, not for an answer
 
-The lecturer is not expecting or wanting a spoken response. Two common shapes:
+The lecturer is not expecting or wanting a spoken response. Three common shapes:
 
 - **Framing rhetoric**, used to introduce a topic: "What happens if we double this? Well..."
 - **Rhetorical confirmation**: "Isn't that interesting?" "Makes sense, right?"
+- **The habitual confirmation tag** — "...right?", "...true?", "...you know?" — tacked onto
+  the end of a declarative sentence. Label `rhetorical`, not a veto and not `check_in`, even
+  when it reads as a bare verbal tic. Some instructors use this constantly (multiple times a
+  minute); apply the same rule every time it occurs rather than re-deciding case by case. The
+  boundary that still matters: label only the tag itself as `rhetorical` when it stands alone
+  or closes an otherwise-declarative sentence. If it closes off a **real content question**
+  ("...so why is this not a field? It's for multiplication, right?"), label the content
+  question as `content` and do not also create a second entry for the trailing tag.
 
-The test: if a student answered out loud, would it derail the lecture rather than fit into
-it? If yes, `rhetorical`.
+For the first two shapes, the test: if a student answered out loud, would it derail the
+lecture rather than fit into it? If yes, `rhetorical`.
 
 ### `check_in` — a classroom-management question, not a content question
 
@@ -72,9 +80,9 @@ treats them as hard rejects (architecture.md 7.2), not low-scored candidates.
 - **A causal clause following a real question.** "...? Because the cache is cold." — this is
   the *answer*, immediately after the question. Label the question itself normally; do not
   also create an entry for the causal clause.
-- **Discourse tags with no real interrogative content.** "...right?" "...you know?" as a
-  verbal tic at the end of a declarative sentence. If in doubt, apply the rhetorical test in
-  section 2.2.
+
+**Note:** habitual confirmation tags ("...right?", "...true?", "...you know?") are **not** a
+veto — they are labelled `rhetorical`. See section 2.
 
 ## 4. Negative sampling (`NOT_QUESTION` equivalent)
 
