@@ -17,6 +17,10 @@ from .config import Config, load_config
 from .evaluate import evaluate, format_report
 from .export import result_to_json, write_questions
 from .models import Context, Stage, Transcript
+from .config import Config
+from .exerplaza import questions_to_exerplaza
+from .export import result_to_json, write_questions
+from .models import Context, SchemaError, Transcript
 from .pipeline import STAGES, run
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
@@ -292,6 +296,24 @@ def _quiz(args: argparse.Namespace) -> int:
     del args
     print("error: quiz is not implemented yet (#79)", file=sys.stderr)
     return 1
+    """Turn reviewed questions.json into a local Exerplaza quiz payload."""
+    try:
+        document = json.loads(Path(args.questions).read_text(encoding="utf-8"))
+        quiz = questions_to_exerplaza(document, include_unjudged=args.include_unjudged)
+    except (OSError, json.JSONDecodeError, SchemaError) as exc:
+        print(f"error: quiz: {exc}", file=sys.stderr)
+        return 1
+
+    output = json.dumps(quiz, indent=2, ensure_ascii=False)
+    if args.output:
+        Path(args.output).write_text(output + "\n", encoding="utf-8")
+        print(
+            f"{len(quiz['quiz']['questions'])} approved questions -> {args.output}",
+            file=sys.stderr,
+        )
+    else:
+        print(output)
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -418,8 +440,14 @@ def build_parser() -> argparse.ArgumentParser:
     quiz = subs.add_parser(
         "quiz", help="generate quiz.json from questions.json (not implemented yet)"
     )
+    quiz = subs.add_parser("quiz", help="export reviewed questions as an Exerplaza quiz")
     quiz.add_argument("questions", help="a questions.json written by `process`")
     quiz.add_argument("-o", "--output", help="write the quiz here")
+    quiz.add_argument(
+        "--include-unjudged",
+        action="store_true",
+        help="include unjudged questions for preview (never required for approved export)",
+    )
     quiz.set_defaults(handler=_quiz)
 
     return parser

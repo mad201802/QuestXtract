@@ -7,6 +7,7 @@ from jsonschema import Draft202012Validator, ValidationError
 
 from questxtract import SchemaError, Transcript, VisualContext, read_questions, write_questions
 from questxtract.cli import main
+from questxtract.exerplaza import questions_to_exerplaza
 from questxtract.export import SCHEMA_PATH, _format_hms, result_to_dict, result_to_json
 from questxtract.pipeline import STAGES, run
 from questxtract.vision import attach_visual

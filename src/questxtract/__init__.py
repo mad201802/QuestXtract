@@ -8,6 +8,12 @@ from importlib.metadata import PackageNotFoundError, version
 
 from .asr import AsrBackend, register_backend, resolve_backend
 from .config import Config
+from .exerplaza import (
+    EXERPLAZA_FORMAT,
+    EXERPLAZA_FORMAT_VERSION,
+    questions_to_exerplaza,
+    read_exerplaza_questions,
+)
 from .export import read_questions, result_to_json, write_questions
 from .filtering import filter_document, filter_questions
 from .media import MediaError, extract_audio
@@ -36,6 +42,8 @@ __all__ = [
     "AsrBackend",
     "AsrSegment",
     "Config",
+    "EXERPLAZA_FORMAT",
+    "EXERPLAZA_FORMAT_VERSION",
     "Context",
     "MediaError",
     "QAPair",
@@ -52,6 +60,8 @@ __all__ = [
     "filter_document",
     "filter_questions",
     "process",
+    "questions_to_exerplaza",
+    "read_exerplaza_questions",
     "read_questions",
     "register_backend",
     "resolve_backend",
