@@ -19,6 +19,28 @@ def test_trailing_run_on_without_punctuation_is_kept(transcript):
     assert [s.text for s in split_sentences(_t(spec))] == ["does anyone know"]
 
 
+def test_abbreviation_does_not_split():
+    spec = [(t, i * 0.3, i * 0.3 + 0.25) for i, t in enumerate("So Dr. Rudin defines it.".split())]
+    assert [s.text for s in split_sentences(_t(spec))] == ["So Dr. Rudin defines it."]
+
+
+def test_single_letter_initial_does_not_split():
+    words = "for all n greater than capital N. we get convergence".split()
+    spec = [(t, i * 0.3, i * 0.3 + 0.25) for i, t in enumerate(words)]
+    assert len(split_sentences(_t(spec))) == 1
+
+
+def test_ellipsis_does_not_split():
+    words = "we take the limit... of the sequence".split()
+    spec = [(t, i * 0.3, i * 0.3 + 0.25) for i, t in enumerate(words)]
+    assert len(split_sentences(_t(spec))) == 1
+
+
+def test_enumerated_number_still_splits():
+    spec = [(t, i * 0.3, i * 0.3 + 0.25) for i, t in enumerate("Step 1. Take the sup.".split())]
+    assert [s.text for s in split_sentences(_t(spec))] == ["Step 1.", "Take the sup."]
+
+
 def test_force_splits_a_long_run_at_the_widest_gap():
     spec = [(f"w{i}", i * 0.1, i * 0.1 + 0.05) for i in range(8)]
     spec[4] = ("w4", 3.0, 3.05)  # a 2.6 s hole after w3

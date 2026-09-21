@@ -13,6 +13,24 @@ from __future__ import annotations
 
 from .models import Context, Sentence, Transcript, Word, stage
 
+#: Words that end in a full stop without ending a sentence. A missed boundary merges two
+#: sentences; a false one leaves a fragment that reads as neither, so the guard is a
+#: suppression list: merging is the safer error for a stage whose job is standalone units.
+_ABBREV = frozenset("dr prof mr mrs ms vs eg ie etc fig cf al approx".split())
+
+
+def _is_terminal(word: Word) -> bool:
+    """Whether this word ends a sentence, rather than an abbreviation or an ellipsis."""
+    text = word.text.rstrip()
+    if text.endswith(("?", "!")):
+        return True
+    if not text.endswith(".") or text.endswith(".."):
+        return False
+    core = text[:-1]
+    if len(core) == 1 and core.isalpha():  # "capital N." - an initial, not a full stop
+        return False
+    return core.lower().replace(".", "") not in _ABBREV
+
 
 def split_sentences(
     transcript: Transcript, *, max_words: int = 60, min_gap: float = 0.6
@@ -40,12 +58,13 @@ def _boundaries(words: tuple[Word, ...]) -> list[tuple[int, int]]:
     r"""Return half-open word ranges, one per sentence, from terminal punctuation.
 
     Equivalent to pipeline.md 3.1's ``(?<=[.!?])\s+`` split followed by snapping the
-    character offsets back to word indices, done in one walk instead of two.
+    character offsets back to word indices, done in one walk instead of two, with the
+    abbreviations and initials that regex cannot tell from a full stop held back.
     """
     spans: list[tuple[int, int]] = []
     start = 0
     for i, word in enumerate(words):
-        if word.text.rstrip().endswith(("?", ".", "!")):
+        if _is_terminal(word):
             spans.append((start, i + 1))
             start = i + 1
     if start < len(words):
