@@ -39,7 +39,6 @@ _AUX_WORDS = frozenset(
         "has",
         "had",
         "any",
-        "if",
     }
 )
 

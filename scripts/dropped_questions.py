@@ -74,16 +74,17 @@ def main(argv: list[str] | None = None) -> int:
     scored = score_pairs(ctx.pairs, min_confidence=0.0)  # score everyone, drop no one here
     kept = tuple(p for p in scored if p.confidence >= config.min_confidence)
     dropped = tuple(p for p in scored if p.confidence < config.min_confidence)
-    ctx.stats["emitted"] = len(kept)
 
     kept_path = Path(args.output)
     dropped_path = _dropped_path(kept_path)
 
     ctx.pairs = kept
+    ctx.stats["emitted"] = len(kept)
     kept_path.write_text(
         json.dumps(result_to_dict(ctx), indent=2, ensure_ascii=False), encoding="utf-8"
     )
     ctx.pairs = dropped
+    ctx.stats["emitted"] = len(dropped)
     dropped_path.write_text(
         json.dumps(result_to_dict(ctx), indent=2, ensure_ascii=False), encoding="utf-8"
     )

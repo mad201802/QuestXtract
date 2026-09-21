@@ -101,7 +101,7 @@ def test_cli_roundtrip(tmp_path):
     out = tmp_path / "q.json"
     assert main(["process", str(_transcript_file(tmp_path)), "-o", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
-    assert data["schema_version"] == "1.0"
+    assert data["schema_version"] == "1.1"
     # `-t` gates the final confidence (pipeline.md 9.2 min_confidence), not the detection
     # score: an unanswered aux-only question scores 0.55 * 0.5 = 0.275 and is dropped.
     assert [q["text"] for q in data["questions"]] == ["What is a stable sort?"]

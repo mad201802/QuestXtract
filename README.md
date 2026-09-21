@@ -92,7 +92,7 @@ included, so a consumer never has to defensively check for a missing field:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "source": { "path": "transcript.json", "duration_seconds": 12.0, "hash": null },
   "config": { "model_size": "turbo", "language": "en",
               "judge_model": "gpt-5.6-terra", "vision_model": "gpt-5.6-luna" },
@@ -104,7 +104,7 @@ included, so a consumer never has to defensively check for a missing field:
       "original_text": null,
       "start": 2.67,
       "end": 6.0,
-      "start_hms": "0:02",
+      "start_hms": "0:03",
       "end_hms": "0:06",
       "confidence": 0.55,
       "confidence_label": "medium",
@@ -167,8 +167,10 @@ from questxtract import AsrBackend, Config, register_backend
 
 @register_backend("my_engine")
 class MyBackend:
-    def transcribe(self, source, config):
+    def transcribe(self, source, config, on_progress=None):
         # return raw segments: [{"text": ..., "start": ..., "end": ...}, ...]
+        # on_progress(fraction) is optional to call, but required in the signature -
+        # accept and ignore it if this engine can't estimate progress.
         ...
 
 

@@ -21,7 +21,7 @@ _BAR_WIDTH = 10
 # Friendlier than the raw stage name; anything not listed falls back to a title-cased
 # version of its name, so a new stage added later still renders something reasonable.
 _STAGE_LABELS = {
-    "ingest": "Extracting audio",
+    "ingest": "Checking recording",
     "transcribe": "Transcribing",
     "sentences": "Splitting sentences",
     "segments": "Grouping segments",

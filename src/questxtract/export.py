@@ -19,7 +19,7 @@ from typing import Any
 from .models import Context, QAPair, SchemaError, Segment, Sentence, VisualContext
 from .score import confidence_label
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"  # 1.0 -> 1.1: added start_hms/end_hms to the fixed question key set
 
 _CONFIG_KEYS = ("model_size", "language", "judge_model", "vision_model")
 
