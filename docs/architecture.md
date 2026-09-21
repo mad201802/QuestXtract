@@ -58,7 +58,8 @@ Two consequences that show up repeatedly below:
   2 transcribe                |  faster-whisper decodes the container directly
                               |  (VAD on, word_timestamps on) -> Word[] + AsrSegment[]
                               v
-  3 sentences                 |  regex split on [.!?], snapped to word boundaries
+  3 sentences                 |  split on terminal [.!?] at word boundaries; run-ons
+                              |  broken at pauses, then capped -> Sentence[]
                               v
   4 segments                  |  gap/duration/length breaks -> Segment[]   (FR11 topic filter)
                               v
@@ -657,8 +658,15 @@ compiler know?"* should yield the clause after the comma, not the whole run-on. 
 conjunction pivot (`, but how ...?`) needing a focus of at least 4 tokens, and a wh-anchored tail
 needing at least 2.
 
-Text *after* the `?` becomes an answer seed and marks the sentence `intra_sentence_qa` - the
-Socratic case where the lecturer asks and immediately answers.
+The **immediately following sentence, at a near-zero gap**, becomes an answer seed and marks the
+pair `intra_sentence_qa` - the Socratic case where the lecturer asks and immediately answers.
+
+This used to read "text *after* the `?`", which contradicted section 3.1: stage 3 splits *at*
+terminal punctuation, so a sentence never holds text after its own `?` and the channel could never
+fire. `answer.same_sentence_seed` still implements the old wording and is dead by construction
+([issue #38](https://github.com/mad201802/QuestXtract/issues/38)). Stage 3 is not what changes -
+detection wants units that read on their own; the seed is redefined in terms of the unit stage 3
+actually produces.
 
 **(b) Implicit cue, no `?`.** The didactic frame that dominates lecture speech: *"the question is
 what happens next"*, *"so let us ask ourselves how this scales"*. Strip the frame, keep the focus.
@@ -721,8 +729,10 @@ accented English loanwords match.
 
 Three channels, composing rather than competing.
 
-**Same-sentence seed.** Text after the `?` in the question's own sentence. Distance 0, gap 0. The
-Socratic case, and the highest-precision answer shape we have.
+**Adjacent seed.** The sentence immediately after the question's own, at a near-zero gap.
+Distance 0. The Socratic case, and the highest-precision answer shape we have. Was specified as
+"text after the `?` in the question's own sentence", which 3.1's splitter makes impossible; see
+7.1(a) and [issue #38](https://github.com/mad201802/QuestXtract/issues/38).
 
 **Forward window.** Walk forward 1 to `answer_window_sentences` (3), emitting the growing
 consecutive span at each distance. At the window edge, append one continuation sentence when the
@@ -1171,7 +1181,7 @@ src/questxtract/
   segments.py      structural segmentation
   vision.py        layout probe, sampling, board states, VLM captioning, attach
   detect.py        question extraction, vetoes, scoring, cue tables
-  answer.py        same-sentence, forward window, far-window rescue
+  answer.py        adjacent seed, forward window, far-window rescue
   score.py         answer scoring, confidence, dedupe
   llm.py           OpenAI-compatible client, judge pass, vision calls
   evaluate.py      labelled-set metrics
@@ -1234,7 +1244,7 @@ its name, its signature and its `@stage` registration are real; only the algorit
 | `segments.py` | 4 segments | done | — |
 | `vision.py` | 5 vision, attach_visual | capture stubbed; the interval join is done | M2/M3 |
 | `detect.py` | 6 detect | keyword heuristic only; 7.1-7.3 owed | #10 |
-| `answer.py` | 7 answer | same-sentence seed only; window and rescue owed | — |
+| `answer.py` | 7 answer | seed only, and dead by construction (#38); window and rescue owed | #38 |
 | `score.py` | 8 score | confidence only; 9.1 answer scoring and 9.3 dedupe owed | — |
 | `llm.py` | 9 judge | stub, no-ops when disabled | — |
 | `export.py` | 10 export | done | #13 |
