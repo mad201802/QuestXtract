@@ -1,0 +1,4 @@
+{"start": 142.0, "end": 145.3, "text": "what is a supremum", "kind": "content", "split": "seed"}
+{"start": 310.5, "end": 312.0, "text": "does that make sense to everyone", "kind": "check_in", "split": "seed"}
+{"start": 604.2, "end": 606.8, "text": "so why should we care about this", "kind": "rhetorical", "split": "seed"}
+{"start": 1802.1, "end": 1805.6, "text": "so the question we should ask is whether this bound is tight", "kind": "content", "split": "blind"}
