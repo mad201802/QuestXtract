@@ -88,7 +88,7 @@ def _render(index: int, total: int, name: str, fraction: float) -> str:
 
 
 def _draw(index: int, total: int, name: str, fraction: float) -> None:
-    print(f"\r{_render(index, total, name, fraction)}", end="", file=sys.stderr)
+    print(f"\r{_render(index, total, name, fraction)}", end="", file=sys.stderr, flush=True)
 
 
 def _load_transcript(path: str) -> Transcript:
