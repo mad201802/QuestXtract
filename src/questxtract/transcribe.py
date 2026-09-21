@@ -44,11 +44,7 @@ def transcribe(ctx: Context) -> Context:
             ctx.progress("transcribe", fraction)
 
     backend = resolve_backend(ctx.config.asr_backend)
-    # Only pass on_progress when someone is actually listening: an older/custom backend
-    # that only accepts (source, config) - the README's own example is one - should still
-    # work when progress reporting isn't in use, rather than crash on the extra keyword.
-    on_progress = report if ctx.progress else None
-    raw_segments = backend.transcribe(ctx.source, ctx.config, on_progress=on_progress)
+    raw_segments = backend.transcribe(ctx.source, ctx.config, on_progress=report)
     ctx.transcript = Transcript.from_dict(
         {"segments": raw_segments, "language": ctx.config.language}
     )

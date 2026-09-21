@@ -145,6 +145,9 @@ class FasterWhisperBackend:
     handing the raw container straight to faster-whisper: ``media.py`` already contains
     working, tested container and stream-selection logic (issue #7), so this backend
     reuses it instead of duplicating that handling here.
+
+    Instances are cheap and stateless; the loaded model is not, and lives in the
+    process-wide ``_MODEL_CACHE`` above, shared by every instance.
     """
 
     def transcribe(
@@ -184,6 +187,9 @@ class FasterWhisperBackend:
                 collected.append(_segment_to_dict(s))
                 # info.duration is known up front (the container was already probed), so
                 # "seconds of audio decoded so far" is a real fraction, not a fake counter.
+                # It is the whole recording, not info.duration_after_vad, so the fraction
+                # tracks position in the lecture and stalls across long silences rather
+                # than tracking work done - the honest number for someone watching a bar.
                 # Per word rather than per segment: segments (VAD-bounded) vary from a
                 # couple seconds to half a minute, so per-segment progress jumps in
                 # uneven chunks; words are already extracted for the transcript itself,

@@ -4,7 +4,7 @@ import pytest
 
 from questxtract import SchemaError, read_questions, write_questions
 from questxtract.cli import main
-from questxtract.export import result_to_dict
+from questxtract.export import _format_hms, result_to_dict
 from questxtract.pipeline import STAGES, run
 
 QUESTION_KEYS = {
@@ -57,8 +57,6 @@ def test_export_carries_the_timestamp_and_the_label(finished):
     [(0, "0:00"), (2.2, "0:02"), (59.6, "1:00"), (90, "1:30"), (3661, "1:01:01")],
 )
 def test_format_hms_switches_to_hours_past_an_hour(seconds, expected):
-    from questxtract.export import _format_hms
-
     assert _format_hms(seconds) == expected
 
 

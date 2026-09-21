@@ -18,6 +18,9 @@ from .pipeline import STAGES, run
 _AFTER_TRANSCRIBE = 2  # stages 1 and 2 are skipped when a transcript is supplied
 
 _BAR_WIDTH = 10
+# A redirected stderr on Windows is cp1252, not the UTF-8 console, and the block glyphs
+# raise UnicodeEncodeError there - a crash in the middle of a real run, over decoration.
+_FULL, _EMPTY = ("█", "░") if "utf" in (sys.stderr.encoding or "").lower() else ("#", "-")
 # Friendlier than the raw stage name; anything not listed falls back to a title-cased
 # version of its name, so a new stage added later still renders something reasonable.
 _STAGE_LABELS = {
@@ -43,30 +46,49 @@ def _progress_bar(total: int) -> Callable[[str, float], None]:
     """
     index = 0
     current = ""
+    last = ""
+
+    def draw(name: str, fraction: float) -> None:
+        """Draw only when the rendered line actually changes.
+
+        The ASR backend reports once per word (asr.py): a 1% step is ~100 words, so the
+        great majority of calls would otherwise reflush a byte-identical line to stderr -
+        thousands of writes per lecture, and as many junk lines in a redirected log.
+        """
+        nonlocal last
+        line = _render(index, total, name, fraction)
+        if line != last:
+            last = line
+            _draw(index, total, name, fraction)
 
     def report(name: str, fraction: float) -> None:
         nonlocal index, current
         if name == "done":
             if current:
-                _draw(index, total, current, 1.0)
+                draw(current, 1.0)
             print(file=sys.stderr)
             return
         if name != current:
             if current:
-                _draw(index, total, current, 1.0)
+                draw(current, 1.0)
                 print(file=sys.stderr)
             index += 1
             current = name
-        _draw(index, total, name, fraction)
+        draw(name, fraction)
 
     return report
 
 
-def _draw(index: int, total: int, name: str, fraction: float) -> None:
+def _render(index: int, total: int, name: str, fraction: float) -> str:
+    """Build one stage's bar line, without the leading carriage return."""
     filled = round(max(0.0, min(1.0, fraction)) * _BAR_WIDTH)
-    bar = "█" * filled + "░" * (_BAR_WIDTH - filled)
+    bar = _FULL * filled + _EMPTY * (_BAR_WIDTH - filled)
     label = _STAGE_LABELS.get(name, name.replace("_", " ").capitalize())
-    print(f"\r[{index}/{total}] {label:<20} {bar} {fraction:>4.0%}", end="", file=sys.stderr)
+    return f"[{index}/{total}] {label:<20} {bar} {fraction:>4.0%}"
+
+
+def _draw(index: int, total: int, name: str, fraction: float) -> None:
+    print(f"\r{_render(index, total, name, fraction)}", end="", file=sys.stderr)
 
 
 def _load_transcript(path: str) -> Transcript:

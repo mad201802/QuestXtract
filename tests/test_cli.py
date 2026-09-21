@@ -16,6 +16,7 @@ import pytest
 
 from questxtract import cli
 from questxtract.cli import main
+from questxtract.pipeline import STAGES
 
 
 def test_draw_renders_fraction_as_filled_blocks(capsys: pytest.CaptureFixture[str]) -> None:
@@ -78,5 +79,6 @@ def test_process_closes_the_bar_line_before_an_error_propagates(
         main(["process", str(_transcript_file(tmp_path))])
 
     err = capsys.readouterr().err
-    assert "[1/8]" in err and "Splitting sentences" in err
+    # `process` skips ingest and transcribe: the transcript is already in hand.
+    assert f"[1/{len(STAGES) - 2}]" in err and "Splitting sentences" in err
     assert err.endswith("\n")

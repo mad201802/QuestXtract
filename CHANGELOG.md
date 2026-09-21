@@ -31,8 +31,23 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   heuristic is still there, now over `Sentence` rather than `TranscriptSegment`.
 - CLI takes a subcommand: `questxtract transcript.json` → `questxtract process transcript.json`.
   `--threshold` now gates the final confidence (architecture.md 9.2), not the raw detection score.
+- `AsrBackend.transcribe` takes a third argument, `on_progress: Callable[[float], None] | None`.
+  An out-of-tree backend must accept it, even if it ignores it. It is called with fractions in
+  `[0, 1)` only: the caller, never the backend, decides when the stage is finished.
+- Export `schema_version` 1.0 → 1.1: every question object carries `start_hms` and `end_hms`
+  alongside `start`/`end`. Added keys only, so a 1.0 consumer still reads a 1.1 file.
+- `Config.max_question_chars` 220 → 350 and `Config.batch_size` 8 → 4 (architecture.md 2.2, 7.3);
+  both are untuned experiments against real lecture audio, revisited once #11's labelled set
+  exists. `batch_size` is part of the transcribe cache key, so the change re-transcribes once.
 
 ### Added
+
+- A terminal progress bar on stderr, one redrawn line per stage, rendered by the CLI from the
+  existing `Progress` callback (#14). The transcribe stage reports inside itself, per decoded
+  word, through the backend's `on_progress`.
+- `scripts/`: `transcribe.py` and `extract_questions.py` run a raw recording end to end until
+  the CLI accepts one (#17); `dropped_questions.py` writes the candidates the threshold dropped
+  next to the ones it kept, for inspecting false negatives.
 
 - The stage contract: `@stage(name, cache=..., uses=...)`, the `STAGES` list, `run(ctx, stages=)`
   and `process()`. Passing a different `stages=` list is the entire plugin system.
