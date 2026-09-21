@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from . import __version__
@@ -16,6 +16,79 @@ from .models import Context, SchemaError, Transcript
 from .pipeline import STAGES, run
 
 _AFTER_TRANSCRIBE = 2  # stages 1 and 2 are skipped when a transcript is supplied
+
+_BAR_WIDTH = 10
+# A redirected stderr on Windows is cp1252, not the UTF-8 console, and the block glyphs
+# raise UnicodeEncodeError there - a crash in the middle of a real run, over decoration.
+_FULL, _EMPTY = ("█", "░") if "utf" in (sys.stderr.encoding or "").lower() else ("#", "-")
+# Friendlier than the raw stage name; anything not listed falls back to a title-cased
+# version of its name, so a new stage added later still renders something reasonable.
+_STAGE_LABELS = {
+    "ingest": "Checking recording",
+    "transcribe": "Transcribing",
+    "sentences": "Splitting sentences",
+    "segments": "Grouping segments",
+    "vision": "Reading the board",
+    "attach_visual": "Joining visuals",
+    "detect": "Detecting questions",
+    "answer": "Finding answers",
+    "score": "Scoring",
+    "judge": "Reviewing",
+}
+
+
+def _progress_bar(total: int) -> Callable[[str, float], None]:
+    """Build a ``Progress`` callback that redraws one line per stage on stderr (issue #14).
+
+    Only reacts to a stage name changing (or ``"done"``) or an intermediate fraction from
+    a stage that reports one - it never assumes 1.0 on its own except when a later stage's
+    0.0 call confirms the previous one finished.
+    """
+    index = 0
+    current = ""
+    last = ""
+
+    def draw(name: str, fraction: float) -> None:
+        """Draw only when the rendered line actually changes.
+
+        The ASR backend reports once per word (asr.py): a 1% step is ~100 words, so the
+        great majority of calls would otherwise reflush a byte-identical line to stderr -
+        thousands of writes per lecture, and as many junk lines in a redirected log.
+        """
+        nonlocal last
+        line = _render(index, total, name, fraction)
+        if line != last:
+            last = line
+            _draw(index, total, name, fraction)
+
+    def report(name: str, fraction: float) -> None:
+        nonlocal index, current
+        if name == "done":
+            if current:
+                draw(current, 1.0)
+            print(file=sys.stderr)
+            return
+        if name != current:
+            if current:
+                draw(current, 1.0)
+                print(file=sys.stderr)
+            index += 1
+            current = name
+        draw(name, fraction)
+
+    return report
+
+
+def _render(index: int, total: int, name: str, fraction: float) -> str:
+    """Build one stage's bar line, without the leading carriage return."""
+    filled = round(max(0.0, min(1.0, fraction)) * _BAR_WIDTH)
+    bar = _FULL * filled + _EMPTY * (_BAR_WIDTH - filled)
+    label = _STAGE_LABELS.get(name, name.replace("_", " ").capitalize())
+    return f"[{index}/{total}] {label:<20} {bar} {fraction:>4.0%}"
+
+
+def _draw(index: int, total: int, name: str, fraction: float) -> None:
+    print(f"\r{_render(index, total, name, fraction)}", end="", file=sys.stderr, flush=True)
 
 
 def _load_transcript(path: str) -> Transcript:
@@ -44,8 +117,15 @@ def _process(args: argparse.Namespace) -> int:
     ctx = Context(source=Path(args.transcript), config=config, transcript=transcript)
     ctx.duration = transcript.duration
     # Stages 1 and 2 are skipped: the transcript is already in hand. This is the documented
-    # `stages=` seam (architecture.md 11.1), not a workaround.
-    ctx = run(ctx, STAGES[_AFTER_TRANSCRIBE:])
+    # `stages=` seam (architecture.md 11.1), not a workaround. "Transcribing" therefore never
+    # appears in the bar below until issue #17 lets `process` accept a raw recording.
+    stages = STAGES[_AFTER_TRANSCRIBE:]
+    progress = _progress_bar(len(stages))
+    try:
+        ctx = run(ctx, stages, progress=progress)
+    except Exception:
+        print(file=sys.stderr)  # close the redrawing bar line before the error/traceback
+        raise
 
     if args.output:
         write_questions(ctx, args.output)

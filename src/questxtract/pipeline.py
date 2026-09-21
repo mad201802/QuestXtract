@@ -132,6 +132,11 @@ def run(
     an earlier stage did not produce fails on the spot with a ``None``.
     """
     progress = progress or ctx.progress
+    # A stage that reports its own intra-stage progress (transcribe.py) reads ctx.progress
+    # directly, not this function's local parameter - keep them in sync so a caller who
+    # passes progress= straight to run() (rather than through process(), which already sets
+    # both) still gets intra-stage updates, not just the stage-boundary 0.0/1.0 calls below.
+    ctx.progress = progress
     for fn in stages:
         info = stage_info(fn)
         if progress:

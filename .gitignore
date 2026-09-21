@@ -1,3 +1,6 @@
+# questxtract's own pipeline cache (config.cache_dir, pipeline.py's _cached())
+.questxtract/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

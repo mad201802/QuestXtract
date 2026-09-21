@@ -90,7 +90,7 @@ def question_type(sentence: str) -> str:
 
 
 def detect_questions(
-    sentences: Sequence[Sentence], *, threshold: float = 0.45, max_chars: int = 220
+    sentences: Sequence[Sentence], *, threshold: float = 0.45, max_chars: int = 350
 ) -> tuple[QuestionCandidate, ...]:
     """Find the question candidates among ``sentences``.
 

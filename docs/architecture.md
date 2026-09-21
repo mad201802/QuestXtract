@@ -139,21 +139,19 @@ segments, info = model.transcribe(
     language="en",  # FR: English lectures (4.2); None to auto-detect
     vad_filter=True,  # skip silence: fewer hallucinated segments, faster
     word_timestamps=True,  # the timings everything downstream is built on
-    log_progress=True,  # FR9, for free
     initial_prompt=_PUNCTUATION_PROMPT,
 )
 ```
 
-Four things here are load-bearing.
+Three things here are load-bearing.
 
 **`vad_filter=True`** is the cheapest quality win available: Whisper hallucinates confidently over
 silence, and a lecture recording is full of it.
 
 **`word_timestamps=True`** is the only source of timing in the pipeline (see 2.3). It also gives
-us per-word confidences for free.
-
-**`log_progress=True`** satisfies FR9 for the only stage long enough to need it, with no progress
-framework of our own.
+us per-word confidences for free - and, since issue #14, is what per-word progress reporting
+(11.3) rides on, not faster-whisper's own `log_progress` flag (that only writes to Python's
+`logging` module, which isn't otherwise observable).
 
 **`initial_prompt`** biases Whisper toward emitting punctuation, including question marks, which
 is the strongest single detection signal we have (+0.40 in the scoring table). It is a weak lever,
@@ -177,7 +175,11 @@ footprint turns out to be a problem on a laptop.
 
 > **Decision.** `questxtract/transcribe.py`. Config: `asr_backend` (`"faster_whisper"`),
 > `model_size` (`"turbo"`), `language` (`"en"`), `beam_size` (5), `vad_filter` (True),
-> `compute_type` (`"int8"`), `batch_size` (8), `initial_prompt`. Per-segment `avg_logprob`,
+> `compute_type` (`"int8"`), `batch_size` (4 - lowered from 8 for issue #14's terminal progress
+> bar: faster-whisper's batched pipeline only yields results once a whole batch finishes, so a
+> smaller batch means more frequent, smaller bursts - measured roughly every 2.5s instead of
+> every 8-9s - at the cost of ~9% more transcription time; worth reverting if a future backend's
+> progress signal stops depending on batch granularity), `initial_prompt`. Per-segment `avg_logprob`,
 > `no_speech_prob` and `compression_ratio` are kept on the segment: they are the cheapest
 > hallucination detector we have and the eval harness uses them.
 >
@@ -656,9 +658,10 @@ penalty large enough to kill them also kills real questions:
 
 ### 7.3 Scoring
 
-Additive, clamped to [0, 1]. Empty text, text over `max_question_chars` (220), a declarative-what
-match, a causal declarative, or no interrogative cue of any kind without a `?` all reject
-outright.
+Additive, clamped to [0, 1]. Empty text, text over `max_question_chars` (350 - raised from the
+planned 220 as a quick, untuned experiment against real lecture audio; revisit once #11's
+labelled set exists to tune it against instead of guessing), a declarative-what match, a
+causal declarative, or no interrogative cue of any kind without a `?` all reject outright.
 
 ```
   +0.40  contains '?'
@@ -1041,11 +1044,14 @@ what lets CI run the eval gate in seconds with no ASR and no network.
 Progress = Callable[[str, float], None]
 ```
 
-Stage name plus fraction complete. The CLI passes a `tqdm` update; the library default is `None`.
-The runner emits one call per stage from the name on the decorator, so a stage added to `STAGES`
-reports progress without doing anything. Long stages call `ctx.progress` again mid-run:
-transcription through faster-whisper's own `log_progress`, vision per board state - the only two
-long enough to need it.
+Stage name plus fraction complete. The CLI renders its own `\r`-redrawn terminal bar from this
+(cli.py, issue #14); the library default is `None`. The runner emits one call per stage from the
+name on the decorator, so a stage added to `STAGES` reports progress without doing anything. Long
+stages call `ctx.progress` again mid-run: transcription reports `word.end / info.duration` as each
+word decodes, capped at 0.99 since the caller - not the backend - decides when a stage is actually
+finished, through an `on_progress` callback every `AsrBackend` accepts (asr.py) rather than
+faster-whisper's own `log_progress` flag. Vision will report per board state once that stage is
+real - the only two stages long enough to need it.
 
 > **Decision.** A callable, not a progress framework, and not a logging handler.
 
@@ -1059,7 +1065,7 @@ Fixed key set, `null` included, one file:
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
   "config": {"model_size": "turbo", "language": "en", "judge_model": "gpt-5.6-terra",
              "vision_model": "gpt-5.6-luna"},
@@ -1072,6 +1078,8 @@ Fixed key set, `null` included, one file:
       "original_text": "so why does a stable sort matter here",
       "start": 1284.2,
       "end": 1288.9,
+      "start_hms": "21:24",
+      "end_hms": "21:29",
       "confidence": 0.82,
       "confidence_label": "high",
       "question_type": "why",

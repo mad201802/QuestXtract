@@ -4,7 +4,7 @@ import pytest
 
 from questxtract import SchemaError, read_questions, write_questions
 from questxtract.cli import main
-from questxtract.export import result_to_dict
+from questxtract.export import _format_hms, result_to_dict
 from questxtract.pipeline import STAGES, run
 
 QUESTION_KEYS = {
@@ -13,6 +13,8 @@ QUESTION_KEYS = {
     "original_text",
     "start",
     "end",
+    "start_hms",
+    "end_hms",
     "confidence",
     "confidence_label",
     "question_type",
@@ -45,8 +47,17 @@ def test_export_carries_the_timestamp_and_the_label(finished):
     question = result_to_dict(finished)["questions"][0]
     assert question["text"] == "What is a stable sort?"
     assert question["start"] == 2.2 and question["end"] == 4.0
+    assert question["start_hms"] == "0:02" and question["end_hms"] == "0:04"
     assert question["confidence_label"] in {"high", "medium", "low"}
     assert question["question_type"] == "what"
+
+
+@pytest.mark.parametrize(
+    ("seconds", "expected"),
+    [(0, "0:00"), (2.2, "0:02"), (59.6, "1:00"), (90, "1:30"), (3661, "1:01:01")],
+)
+def test_format_hms_switches_to_hours_past_an_hour(seconds, expected):
+    assert _format_hms(seconds) == expected
 
 
 def test_write_and_read_questions(tmp_path, finished):
@@ -88,7 +99,7 @@ def test_cli_roundtrip(tmp_path):
     out = tmp_path / "q.json"
     assert main(["process", str(_transcript_file(tmp_path)), "-o", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
-    assert data["schema_version"] == "1.0"
+    assert data["schema_version"] == "1.1"
     # `-t` gates the final confidence (pipeline.md 9.2 min_confidence), not the detection
     # score: an unanswered aux-only question scores 0.55 * 0.5 = 0.275 and is dropped.
     assert [q["text"] for q in data["questions"]] == ["What is a stable sort?"]
