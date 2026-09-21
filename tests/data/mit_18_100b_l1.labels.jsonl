@@ -1,0 +1,13 @@
+{"start": 305.0, "text": "So what does it mean to write something so that is mathematically rigorous?", "kind": "content", "end": 308.0, "split": "seed"}
+{"start": 997.0, "text": "What are the properties that we really have about the rational numbers?", "kind": "content", "end": 1000.0, "split": "blind"}
+{"start": 1046.0, "text": "If you take a quotient like this, you think that this is equal to another quotient, right?", "kind": "rhetorical", "end": 1049.0, "split": "blind"}
+{"start": 1165.0, "text": "Then how do you add two rational numbers together?", "kind": "content", "end": 1168.0, "split": "blind"}
+{"start": 1324.0, "text": "What does it mean to multiply two rational numbers together?", "kind": "content", "end": 1327.0, "split": "seed"}
+{"start": 1621.0, "text": "So how do we do that?", "kind": "rhetorical", "end": 1624.0, "split": "seed"}
+{"start": 2036.0, "text": "What property do these two operations need to have?", "kind": "content", "end": 2039.0, "split": "seed"}
+{"start": 3014.0, "text": "And why is this not a field? It's for multiplication, right?", "kind": "content", "end": 3017.0, "split": "blind"}
+{"start": 3066.0, "text": "So what does it mean that a field is ordered?", "kind": "content", "end": 3069.0, "split": "blind"}
+{"start": 3363.0, "text": "So this here is, how do the ordering interacts with addition?", "kind": "content", "end": 3366.0, "split": "blind"}
+{"start": 3375.0, "text": "And the other thing is, how do it act interacts with multiplication?", "kind": "content", "end": 3378.0, "split": "blind"}
+{"start": 3476.0, "text": "What does it mean that one is less than the other?", "kind": "content", "end": 3479.0, "split": "blind"}
+{"start": 3881.0, "text": "Is that clear?", "kind": "check_in", "end": 3884.0, "split": "seed"}
