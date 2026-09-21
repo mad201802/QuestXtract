@@ -5,8 +5,13 @@ and by silence, so one chunk routinely holds two questions or half of one. Detec
 needs units that read on their own.
 
 We attack the input rather than the output (pipeline.md 3.1): a ``turbo``-sized Whisper
-punctuates well, and a punctuated transcript splits on a regex. Boundaries are snapped to
-word indices, so a sentence's timings are real measurements rather than interpolations.
+punctuates well, and a punctuated transcript splits on its terminal punctuation. One walk
+over the word list asks each word whether it ends a sentence, so the boundaries are word
+indices already and a sentence's timings are real measurements, never interpolations.
+
+Two things that walk cannot see on its own, and what is done about each: a full stop that
+does not end a sentence (``_is_terminal``), and a run the ASR never punctuated at all
+(``_force_split``, then ``_cap``).
 """
 
 from __future__ import annotations
