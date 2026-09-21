@@ -50,9 +50,25 @@ def test_force_splits_a_long_run_at_the_widest_gap():
     assert out[0].text.endswith("w3") and out[1].text.startswith("w4")
 
 
-def test_no_force_split_without_a_wide_enough_gap():
+def test_splits_an_unpunctuated_run_at_a_pause():
+    # Short enough to clear max_words, so only the silence marks the boundary.
+    spec = [(f"w{i}", i * 0.3, i * 0.3 + 0.25) for i in range(10)]
+    spec[5:] = [(f"w{i}", 5.0 + (i - 5) * 0.3, 5.25 + (i - 5) * 0.3) for i in range(5, 10)]
+    out = split_sentences(_t(spec), max_words=60, min_gap=0.6)
+    assert [len(s.text.split()) for s in out] == [5, 5]
+
+
+def test_caps_a_gapless_run_at_max_words():
+    # No gap qualifies, so _cap is the only thing that can break this up.
     spec = [(f"w{i}", i * 0.1, i * 0.1 + 0.05) for i in range(8)]
-    assert len(split_sentences(_t(spec), max_words=5, min_gap=0.6)) == 1
+    out = split_sentences(_t(spec), max_words=5, min_gap=0.6)
+    assert len(out) == 2 and all(len(s.text.split()) <= 5 for s in out)
+
+
+def test_punctuated_sentence_survives_a_long_pause():
+    spec = [(t, i * 0.3, i * 0.3 + 0.25) for i, t in enumerate("we take the limit of it.".split())]
+    spec[3:] = [(t, 6.0 + i * 0.3, 6.25 + i * 0.3) for i, t in enumerate("limit of it.".split())]
+    assert len(split_sentences(_t(spec), max_words=60, min_gap=0.6)) == 1
 
 
 def test_empty_transcript_yields_no_sentences():

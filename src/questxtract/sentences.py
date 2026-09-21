@@ -39,8 +39,9 @@ def split_sentences(
 
     Args:
         transcript: The words to split, in recording order.
-        max_words: A sentence longer than this with no terminal punctuation is force-split.
-        min_gap: Only force-split at a silence gap of at least this many seconds.
+        max_words: Hard cap on a sentence's length. A run-on over it is split even when no
+            silence in it qualifies.
+        min_gap: A silence of at least this many seconds is a boundary inside a run-on.
 
     Returns:
         The sentences, each owning a half-open range into ``transcript.words``.
@@ -75,19 +76,38 @@ def _boundaries(words: tuple[Word, ...]) -> list[tuple[int, int]]:
 def _force_split(
     words: tuple[Word, ...], start: int, end: int, max_words: int, min_gap: float
 ) -> list[tuple[int, int]]:
-    """Split an over-long unpunctuated run at its largest internal gap.
+    """Split a run-on at its silences, then cap whatever is still over-long.
 
-    The one run-on case the regex genuinely cannot see (pipeline.md 3.1).
+    The one case the regex genuinely cannot see (pipeline.md 3.1). A span that both ends
+    in real terminal punctuation and fits in ``max_words`` is a sentence and is left
+    alone - lecturers pause mid-sentence at the board constantly, so silence on its own
+    is not a boundary. Anything else is a run-on the ASR failed to punctuate, and there
+    silence is the best evidence available.
     """
-    if end - start <= max_words:
+    if end - start <= max_words and _is_terminal(words[end - 1]):
         return [(start, end)]
-    gaps = [(words[i + 1].start - words[i].end, i + 1) for i in range(start, end - 1)]
-    widest, cut = max(gaps, default=(0.0, end))
-    if widest < min_gap:
-        return [(start, end)]
-    return _force_split(words, start, cut, max_words, min_gap) + _force_split(
-        words, cut, end, max_words, min_gap
-    )
+    cuts = [i + 1 for i in range(start, end - 1) if words[i + 1].start - words[i].end >= min_gap]
+    bounds = [start, *cuts, end]
+    return [
+        p
+        for lo, hi in zip(bounds, bounds[1:], strict=False)  # pairwise: one shorter by design
+        for p in _cap(words, lo, hi, max_words)
+    ]
+
+
+def _cap(words: tuple[Word, ...], lo: int, hi: int, max_words: int) -> list[tuple[int, int]]:
+    """Halve a run that no pause broke up, at its widest gap, tie-breaking to the middle.
+
+    The last resort for a run-on with no usable silence in it: ``max_words`` is a cap, not
+    a hint. The tie-break is what stops a gapless run degenerating into one-word sentences.
+    """
+    if hi - lo <= max(1, max_words):
+        return [(lo, hi)]
+    mid = (lo + hi) / 2
+    cut = max(
+        (words[i + 1].start - words[i].end, -abs(i + 1 - mid), i + 1) for i in range(lo, hi - 1)
+    )[2]
+    return _cap(words, lo, cut, max_words) + _cap(words, cut, hi, max_words)
 
 
 def _build(words: tuple[Word, ...], lo: int, hi: int) -> Sentence:
