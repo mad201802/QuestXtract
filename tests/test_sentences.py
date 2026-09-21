@@ -1,4 +1,5 @@
 from questxtract import Transcript, Word
+from questxtract.sentences import sentences as sentences_stage
 from questxtract.sentences import split_sentences
 
 
@@ -73,3 +74,13 @@ def test_punctuated_sentence_survives_a_long_pause():
 
 def test_empty_transcript_yields_no_sentences():
     assert split_sentences(Transcript()) == ()
+
+
+def test_stats_count_unpunctuated_sentences(context):
+    # The fixture's three sentences all end in punctuation; append a bare run-on.
+    words = context.transcript.words
+    tail = tuple(Word(text=f"w{i}", start=10.0 + i * 0.3, end=10.25 + i * 0.3) for i in range(4))
+    context.transcript = Transcript(words=words + tail, duration=12.0)
+    out = sentences_stage(context)
+    assert out.stats["sentences"] == 4
+    assert out.stats["sentences_unpunctuated"] == 1

@@ -19,9 +19,9 @@ from .models import Context, Sentence, Transcript, Word, stage
 _ABBREV = frozenset("dr prof mr mrs ms vs eg ie etc fig cf al approx".split())
 
 
-def _is_terminal(word: Word) -> bool:
-    """Whether this word ends a sentence, rather than an abbreviation or an ellipsis."""
-    text = word.text.rstrip()
+def _is_terminal(word: str) -> bool:
+    """Whether this text ends a sentence, rather than an abbreviation or an ellipsis."""
+    text = word.rstrip()
     if text.endswith(("?", "!")):
         return True
     if not text.endswith(".") or text.endswith(".."):
@@ -65,7 +65,7 @@ def _boundaries(words: tuple[Word, ...]) -> list[tuple[int, int]]:
     spans: list[tuple[int, int]] = []
     start = 0
     for i, word in enumerate(words):
-        if _is_terminal(word):
+        if _is_terminal(word.text):
             spans.append((start, i + 1))
             start = i + 1
     if start < len(words):
@@ -84,7 +84,7 @@ def _force_split(
     is not a boundary. Anything else is a run-on the ASR failed to punctuate, and there
     silence is the best evidence available.
     """
-    if end - start <= max_words and _is_terminal(words[end - 1]):
+    if end - start <= max_words and _is_terminal(words[end - 1].text):
         return [(start, end)]
     cuts = [i + 1 for i in range(start, end - 1) if words[i + 1].start - words[i].end >= min_gap]
     bounds = [start, *cuts, end]
@@ -132,4 +132,8 @@ def sentences(ctx: Context) -> Context:
         min_gap=ctx.config.force_split_min_gap_seconds,
     )
     ctx.stats["sentences"] = len(ctx.sentences)
+    # The stage's stated risk (pipeline.md 3.1) is that Whisper stops emitting punctuation.
+    # question_mark_rate polices it properly, but that lives in evaluate.py (#12). Until
+    # then this is the standing proxy: a run that climbs means the regex is guessing.
+    ctx.stats["sentences_unpunctuated"] = sum(1 for s in ctx.sentences if not _is_terminal(s.text))
     return ctx
