@@ -23,7 +23,7 @@ def test_draw_renders_fraction_as_filled_blocks(capsys: pytest.CaptureFixture[st
     cli._draw(1, 3, "score", 0.7)
     err = capsys.readouterr().err
     assert err.startswith("\r[1/3]")
-    assert "█" * 7 + "░" * 3 in err
+    assert cli._FULL * 7 + cli._EMPTY * 3 in err
     assert "70%" in err
 
 
