@@ -96,7 +96,10 @@ included, so a consumer never has to defensively check for a missing field:
   "source": { "path": "transcript.json", "duration_seconds": 12.0, "hash": null },
   "config": { "model_size": "turbo", "language": "en",
               "judge_model": "gpt-5.6-terra", "vision_model": "gpt-5.6-luna" },
-  "stats": { "sentences": 3, "segments": 1, "candidates": 2, "answered": 0, "emitted": 1 },
+  "stats": { "sentences": 3, "sentences_unpunctuated": 0,
+             "segments": 1, "segments_closed_gap": 0,
+             "segments_closed_duration": 0, "segments_closed_chars": 0,
+             "candidates": 2, "answered": 0, "emitted": 1 },
   "questions": [
     {
       "id": "q_ca0d72",

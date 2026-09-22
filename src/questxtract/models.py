@@ -219,6 +219,8 @@ class Segment:
         end: End time in seconds.
         text: The joined text of the run.
         visual: Board states overlapping this segment, filled by ``attach_visual``.
+        close_reason: Which rule ended the run - ``gap``, ``duration``, ``chars``, or
+            ``end`` for the last segment, which nothing closed.
 
     """
 
@@ -228,6 +230,7 @@ class Segment:
     end: float
     text: str
     visual: tuple[VisualContext, ...] = ()
+    close_reason: str = ""
 
 
 @dataclass(frozen=True, kw_only=True)
