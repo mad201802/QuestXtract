@@ -1,7 +1,13 @@
-"""Stage 4: group sentences into segments that hang together topically.
+"""Stage 4: group sentences into segments bounded by silence and by length.
 
-One mode, structural (pipeline.md 3.2). Three consumers: FR11 (filter results by topic or
-time range), the QA scoring's segment-relation term, and the visual join in section 6.5.
+One mode, structural (pipeline.md 3.2). A segment is **not** a topic: nothing here measures
+what a run is about, and the only consumer that works today - the visual join in 6.5 - wants
+a time interval, not a topic. The two that would want topicality, FR11's filter and the QA
+scoring's segment-relation term, are both unbuilt, and neither this stage nor a smarter one
+can move NFR2, since detection reads sentences and never looks at ``segment_index``.
+
+3.2 records what a topical version would cost and why lexical cohesion, not embeddings, is
+the first rung if it is ever wanted.
 """
 
 from __future__ import annotations
@@ -20,8 +26,10 @@ def build_segments(
 ) -> tuple[Segment, ...]:
     """Group consecutive sentences into segments.
 
-    A segment closes on the first of: a silence gap over ``max_gap``, a duration over
-    ``max_duration``, or text over ``max_chars``.
+    A segment closes on the first of: a silence gap over ``max_gap``, or a sentence that
+    would push the run past ``max_duration`` or ``max_chars``. Both length rules measure the
+    run *with* the candidate sentence in it, so a closed segment is inside its budget - the
+    one exception being a single sentence already over it, which nothing here can split.
 
     Returns:
         The segments, each owning a half-open range into ``sentences``.
@@ -29,28 +37,42 @@ def build_segments(
     """
     out: list[Segment] = []
     start = 0
+    chars = 0  # joined length of sentences[start:i], kept as a running total
     for i, sentence in enumerate(sentences):
         if i == start:
+            # A new segment always takes its first sentence, however wide the silence before
+            # it: closing here would emit an empty (start, start) run.
+            chars = len(sentence.text)
             continue
         gap = sentence.start - sentences[i - 1].end
         duration = sentence.end - sentences[start].start
-        chars = sum(len(s.text) + 1 for s in sentences[start:i])
-        if gap > max_gap or duration > max_duration or chars > max_chars:
-            out.append(_build(sentences, start, i))
-            start = i
+        width = chars + 1 + len(sentence.text)  # the +1 is the separator _build joins with
+        if gap > max_gap:
+            reason = "gap"
+        elif duration > max_duration:
+            reason = "duration"
+        elif width > max_chars:
+            reason = "chars"
+        else:
+            chars = width
+            continue
+        out.append(_build(sentences, start, i, reason))
+        start = i
+        chars = len(sentence.text)
     if start < len(sentences):
-        out.append(_build(sentences, start, len(sentences)))
+        out.append(_build(sentences, start, len(sentences), "end"))
     return tuple(out)
 
 
-def _build(sentences: Sequence[Sentence], lo: int, hi: int) -> Segment:
-    """Build a segment over ``sentences[lo:hi]``."""
+def _build(sentences: Sequence[Sentence], lo: int, hi: int, reason: str) -> Segment:
+    """Build a segment over ``sentences[lo:hi]``, recording what closed it."""
     return Segment(
         sentence_start=lo,
         sentence_end=hi,
         start=sentences[lo].start,
         end=sentences[hi - 1].end,
         text=" ".join(s.text for s in sentences[lo:hi]),
+        close_reason=reason,
     )
 
 
@@ -69,6 +91,14 @@ def segments(ctx: Context) -> Context:
             indexed[position] = _with_segment(indexed[position], index)
     ctx.sentences = tuple(indexed)
     ctx.stats["segments"] = len(ctx.segments)
+    # Which rule is doing the cutting. The thresholds below are untuned against a real
+    # recording, and 3.1's force-split now surfaces pauses that used to sit inside one
+    # unpunctuated sentence where this stage could not see them. A gap count that dwarfs the
+    # other two is the signal that segment_max_gap_seconds is too tight for the lecturer.
+    for reason in ("gap", "duration", "chars"):
+        ctx.stats[f"segments_closed_{reason}"] = sum(
+            1 for s in ctx.segments if s.close_reason == reason
+        )
     return ctx
 
 

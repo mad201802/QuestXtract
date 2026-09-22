@@ -58,4 +58,5 @@ def _with_visual(segment: Segment, visual: tuple[VisualContext, ...]) -> Segment
         end=segment.end,
         text=segment.text,
         visual=visual,
+        close_reason=segment.close_reason,
     )

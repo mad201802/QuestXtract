@@ -255,7 +255,7 @@ capacity we do not have. The import mode choice is small but prevents a known py
 | FR8 export JSON | `export.py`, architecture.md 12.1 (#13) | done |
 | FR9 progress for long recordings | `Progress = Callable[[str, float], None]`, emitted once per stage by the runner (#14) | done for stage granularity |
 | FR10 show detection confidence | `QAPair.confidence` + `confidence_label` + `reasons` | done |
-| FR11 filter by time/topic | `Segment` is the topic unit (#16) | segments done, filter planned |
+| FR11 filter by time/topic | time: `QAPair.start`/`end`. topic: `Segment` is a *time* unit, not a topic one (architecture.md 3.2) - the label is still missing (#16) | time filter planned, topic unbacked |
 | NFR1 Python ≥ 3.10, Linux/macOS/Windows | CI matrix; no system binaries, no ffmpeg on PATH | done |
 | NFR2 recall ≥ 50 % on labelled set | #11 dataset under `tests/data/`, `evaluate.py` harness (#12) | stub |
 | NFR3 docstrings, type hints, tests, ≥ 70 % coverage | ruff `D` rules, mypy strict, pytest gate | done |

@@ -9,7 +9,13 @@ def _words(spec: list[tuple[str, float, float]]) -> tuple[Word, ...]:
 
 @pytest.fixture
 def transcript() -> Transcript:
-    """Three sentences over two ASR chunks, with real word timings."""
+    """Three sentences over two ASR chunks, with real word timings.
+
+    The silence between "sort?" (ends 4.0) and "It" (starts 6.0) is exactly
+    ``Config.segment_max_gap_seconds``, and the gap rule is strict, so this fixture is one
+    segment by a hair. Every test that leans on that - here and in test_export, test_detect,
+    test_vision and test_pipeline - would flip if the timings moved. Leave them alone.
+    """
     return Transcript(
         words=_words(
             [
