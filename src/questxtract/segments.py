@@ -20,8 +20,10 @@ def build_segments(
 ) -> tuple[Segment, ...]:
     """Group consecutive sentences into segments.
 
-    A segment closes on the first of: a silence gap over ``max_gap``, a duration over
-    ``max_duration``, or text over ``max_chars``.
+    A segment closes on the first of: a silence gap over ``max_gap``, or a sentence that
+    would push the run past ``max_duration`` or ``max_chars``. Both length rules measure the
+    run *with* the candidate sentence in it, so a closed segment is inside its budget - the
+    one exception being a single sentence already over it, which nothing here can split.
 
     Returns:
         The segments, each owning a half-open range into ``sentences``.
@@ -29,15 +31,22 @@ def build_segments(
     """
     out: list[Segment] = []
     start = 0
+    chars = 0  # joined length of sentences[start:i], kept as a running total
     for i, sentence in enumerate(sentences):
         if i == start:
+            # A new segment always takes its first sentence, however wide the silence before
+            # it: closing here would emit an empty (start, start) run.
+            chars = len(sentence.text)
             continue
         gap = sentence.start - sentences[i - 1].end
         duration = sentence.end - sentences[start].start
-        chars = sum(len(s.text) + 1 for s in sentences[start:i])
-        if gap > max_gap or duration > max_duration or chars > max_chars:
+        width = chars + 1 + len(sentence.text)  # the +1 is the separator _build joins with
+        if gap > max_gap or duration > max_duration or width > max_chars:
             out.append(_build(sentences, start, i))
             start = i
+            chars = len(sentence.text)
+        else:
+            chars = width
     if start < len(sentences):
         out.append(_build(sentences, start, len(sentences)))
     return tuple(out)

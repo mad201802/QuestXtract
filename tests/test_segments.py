@@ -22,6 +22,12 @@ def test_char_budget_closes_a_segment():
     assert len(out) == 2
 
 
+def test_char_budget_closes_before_it_is_blown():
+    runs = [_s("x" * 300, float(i), i + 0.5) for i in range(3)]
+    out = build_segments(runs, max_chars=400)
+    assert [len(s.text) for s in out] == [300, 300, 300]
+
+
 def test_one_segment_when_nothing_breaks(sentences):
     out = build_segments(sentences)
     assert len(out) == 1
