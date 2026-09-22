@@ -210,7 +210,10 @@ class Sentence:
 
 @dataclass(frozen=True, kw_only=True)
 class Segment:
-    """A contiguous run of sentences that hang together topically (pipeline.md 3.2).
+    """A contiguous run of sentences, bounded by silence and by length (pipeline.md 3.2).
+
+    Structural, not topical: nothing measures what the run is about. Distinct from
+    :class:`AsrSegment`, which is the engine's own decoding chunk.
 
     Args:
         sentence_start: Inclusive start index into ``Context.sentences``.

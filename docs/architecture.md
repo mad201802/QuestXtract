@@ -313,17 +313,56 @@ with no reason code to show for it.
 
 ### 3.2 Segments
 
-A segment is a contiguous run of sentences that hang together topically. Three consumers: FR11
-(filter results by topic or time range), the QA scoring's segment-relation term, and the visual
-join in section 6.5.
+A segment is a contiguous run of sentences bounded by silence and by length. **Not a topic** -
+nothing here measures what the run is about, and the code should not be read as if it did.
 
 One mode, structural, closing on the first of:
 
-- silence gap over `segment_max_gap_seconds` (2.0 s)
-- duration over `segment_max_duration_seconds` (90 s)
-- text over `segment_max_chars` (800)
+- silence gap over `segment_max_gap_seconds` (2.0 s), strictly - a pause of exactly the
+  threshold does not break, where 3.1's pause rule is inclusive; each matches its own wording
+- a sentence that would push the run past `segment_max_duration_seconds` (90 s)
+- a sentence that would push it past `segment_max_chars` (800)
+
+Both length rules are measured with the candidate sentence *in*, so a closed segment is inside
+its budget. The exception is a single sentence already over on its own, which this stage cannot
+split - that is 3.1's job, and `max_sentence_words` is what bounds it.
+
+**Why structural is enough, for now.** The three consumers this section used to claim need
+different things, and only one of them needs topicality:
+
+| Consumer | Wants | State |
+|---|---|---|
+| visual join (6.5) | time intervals | works; joins by interval intersection, no topic involved |
+| QA scoring's segment-relation term (9.1) | topical relatedness | not implemented |
+| FR11 filter (#16) | a topic *label*, not a boundary | not implemented; `topic` is `None` in the schema |
+
+A semantic segmenter would improve exactly the two that do not exist yet. It also cannot move
+NFR2: `detect.py` reads `Sentence`, never `segment_index`, so better boundaries change no
+detection number. And the scoring term is worth a second look before it is built - segments are
+cut *on gaps*, so "same segment" largely restates the gap and distance terms already in 9.1's
+table. That collinearity is a property of structural segmentation, not a bug in it.
+
+**If that changes, the first rung is not embeddings.** Classical lexical cohesion - token
+overlap between adjacent windows, TextTiling-style - is stdlib-only and needs no dependency,
+unlike sentence embeddings. Try that before adding weights.
+
+**The granularity this section is papering over.** One 90 s unit is being asked to be three
+things at once: a fine time window for the board join (a board state lives two minutes while the
+lecturer talks about it for six), a coarse topic for FR11 (a lecture has perhaps 5 to 15), and a
+local-relatedness signal for scoring. If FR11's topic filter ships, the answer is a second,
+coarser layer over these, not a retuned threshold on them. Building that layer now would be
+building for consumers that do not exist.
 
 > **Decision.** `questxtract/segments.py`.
+>
+> **Risk, stated plainly:** the three thresholds are guesses. Nothing here has been run against
+> a labelled recording, and 3.1's force-split changed the sentence stream underneath them -
+> splitting run-ons at 0.6 s pauses surfaces silences over 2.0 s that previously sat *inside*
+> one unpunctuated sentence, invisible to this stage. `stats["segments_closed_gap"]`,
+> `["segments_closed_duration"]` and `["segments_closed_chars"]` are the standing proxy: a gap
+> count that dwarfs the other two means `segment_max_gap_seconds` is too tight for the
+> lecturer, and 2.0 s is a short pause for someone writing on a chalkboard. Retune against those
+> counts, not against a guess.
 
 ---
 
