@@ -71,6 +71,9 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
 - `AsrBackend`, a pluggable ASR interface (`asr.py`): `register_backend`/`resolve_backend`
   let `Config.asr_backend` select the engine, so `transcribe.py` never imports a specific
   one. `FasterWhisperBackend` is the default, reusing `media.extract_audio`.
+- `stats["sentences_unpunctuated"]`: the count of sentences that did not end in terminal
+  punctuation. The standing proxy for architecture.md 3.1's punctuation bet until
+  `question_mark_rate` lands with #12. Exported in the `stats` block; no schema change.
 
 ### Fixed
 
@@ -79,6 +82,18 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
 - `judge` declared a cache keyed only on config, which would have served a stale verdict after
   detection changed. Its entry is keyed on the candidate set instead (architecture.md 10.4), and is
   wired when that key is.
+- The sentence splitter treated every word ending in `.` as a sentence end, so abbreviations
+  (`So Dr. Rudin defines it.`), single-letter initials (`greater than capital N.`) and ellipses
+  (`the limit... of the sequence`) each split one sentence into two fragments. `_is_terminal` holds
+  those back; digits still split, so `Step 1.` is unaffected (architecture.md 3.1).
+- `max_sentence_words` was a trigger, not a cap. An unpunctuated run with no silence over
+  `force_split_min_gap_seconds` was returned whole however long it got, and a run *under*
+  `max_sentence_words` was never split even at a multi-second silence. Both lost every question
+  inside the resulting blob, since `detect` vetoes text over `max_question_chars`. A run-on is now
+  split at every qualifying silence and then capped; a correctly punctuated sentence containing a
+  long pause is still one sentence.
+- `Config.force_split_min_gap_seconds` is now the pause threshold generally, not only a
+  force-split one. Same name, same default, wider effect.
 
 ## Earlier in this cycle
 

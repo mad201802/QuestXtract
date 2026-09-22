@@ -58,7 +58,8 @@ Two consequences that show up repeatedly below:
   2 transcribe                |  faster-whisper decodes the container directly
                               |  (VAD on, word_timestamps on) -> Word[] + AsrSegment[]
                               v
-  3 sentences                 |  regex split on [.!?], snapped to word boundaries
+  3 sentences                 |  split on terminal [.!?] at word boundaries; run-ons
+                              |  broken at pauses, then capped -> Sentence[]
                               v
   4 segments                  |  gap/duration/length breaks -> Segment[]   (FR11 topic filter)
                               v
@@ -195,8 +196,10 @@ footprint turns out to be a problem on a laptop.
 >
 > **Dev workflow.** No dev machine has a GPU, and `turbo` on CPU runs a 90-minute lecture in
 > roughly the same wall-clock time again. So the cached `transcribe.json` for both reference
-> recordings is **committed to the repo**. Full ASR runs on the server or overnight; the inner
-> loop for everyone working on sections 3 and 6 to 9 never touches Whisper.
+> recordings **will be committed to the repo** - it is not there yet, and until it is, sections 3
+> and 6 to 9 are developed against synthetic word specs and cannot be measured against real audio.
+> It lands with #11/#12, which are the first things that need it. Full ASR runs on the server or
+> overnight; the inner loop for everyone working on those sections should never touch Whisper.
 
 ### 2.3 Timing: word timestamps, no forced alignment
 
@@ -263,24 +266,50 @@ silence, so one chunk routinely holds two questions or half of one. Detection ne
 read on their own.
 
 We attack the input rather than the output: a `turbo`-sized Whisper punctuates well, and a
-punctuated transcript splits on a regex.
+punctuated transcript splits on its terminal punctuation. Rather than a regex over the joined text
+plus a second pass to snap character offsets back to word indices, one walk over the word list
+asks each word whether it ends a sentence, which is the same split with the snapping built in.
 
-```python
-_SPLIT = re.compile(r"(?<=[.!?])\s+")
-```
+**Not every full stop is a boundary.** `_is_terminal` holds back three cases the plain
+`[.!?]` test gets wrong, all common in lecture ASR:
 
-Boundaries are snapped to word indices by walking the word list and matching cumulative character
-offsets. A sentence that ends up longer than `max_sentence_words` (60) and contains no terminal
-punctuation is force-split at the largest internal word gap, which is the one run-on case the
-regex genuinely cannot see.
+| Case | Example | Why |
+|---|---|---|
+| abbreviation | `So Dr. Rudin defines it.` | a short suppression list; `Step 1.` still splits, digits are not abbreviations |
+| single-letter initial | `for all n greater than capital N.` | the MIT 18.100B regime is nothing but these |
+| ellipsis | `we take the limit... of the sequence` | a trailing-off, not a stop |
+
+It is a suppression list rather than a classifier because the two error directions are not
+symmetric: a missed boundary merges two sentences, which detection still reads, while a false
+boundary leaves two fragments that read as neither. Merging is the safer error for a stage whose
+job is standalone units.
+
+**Run-ons.** A span that both ends in real terminal punctuation and fits in `max_sentence_words`
+(60) is a sentence and is left alone. Anything else is a run-on the ASR failed to punctuate, and is
+split at every silence of at least `force_split_min_gap_seconds` (0.6), then capped: a piece still
+over the limit is halved at its widest gap, ties broken toward the middle, until it fits.
+
+Both halves of that rule are load-bearing. The gate protects the common case - lecturers pause
+mid-sentence at the board constantly, so silence alone must not be a boundary. The cap is what
+makes `max_sentence_words` a cap rather than a hint: without it a gapless run of 200 words stays
+one "sentence", detection vetoes it on `max_question_chars`, and every question inside it is lost
+with no reason code to show for it.
 
 > **Decision.** `questxtract/sentences.py`. Config: `max_sentence_words` (60),
-> `force_split_min_gap_seconds` (0.6).
+> `force_split_min_gap_seconds` (0.6) - which is the pause threshold generally, not only a
+> force-split one.
 >
 > **Risk, stated plainly:** this bets on Whisper emitting question marks, and 2.2 already admits
 > `initial_prompt` decays. The eval harness measures the bet directly via `question_mark_rate`
-> (section 4.3). If it drops, the fix in order of cost is: a better `initial_prompt`, then a
-> larger Whisper model, then a neural splitter as one function behind the same interface.
+> (section 4.3); until #12 lands, the stage's own `stats["sentences_unpunctuated"]` is the standing
+> proxy, and a count that climbs means the splitter is guessing from silence alone. If it drops,
+> the fix in order of cost is: a better `initial_prompt`, then a larger Whisper model, then a
+> neural splitter as one function behind the same interface.
+>
+> **What that third rung actually costs.** Not a dependency - `sat-3l-sm` weights, 428 MB (13.2).
+> Worth re-checking against the measured `question_mark_rate`, not against a guess, because the
+> published advantage of neural segmenters is measured on ASR text with punctuation *and casing*
+> stripped, which is not our input.
 
 ### 3.2 Segments
 
@@ -629,8 +658,15 @@ compiler know?"* should yield the clause after the comma, not the whole run-on. 
 conjunction pivot (`, but how ...?`) needing a focus of at least 4 tokens, and a wh-anchored tail
 needing at least 2.
 
-Text *after* the `?` becomes an answer seed and marks the sentence `intra_sentence_qa` - the
-Socratic case where the lecturer asks and immediately answers.
+The **immediately following sentence, at a near-zero gap**, becomes an answer seed and marks the
+pair `intra_sentence_qa` - the Socratic case where the lecturer asks and immediately answers.
+
+This used to read "text *after* the `?`", which contradicted section 3.1: stage 3 splits *at*
+terminal punctuation, so a sentence never holds text after its own `?` and the channel could never
+fire. `answer.same_sentence_seed` still implements the old wording and is dead by construction
+([issue #38](https://github.com/mad201802/QuestXtract/issues/38)). Stage 3 is not what changes -
+detection wants units that read on their own; the seed is redefined in terms of the unit stage 3
+actually produces.
 
 **(b) Implicit cue, no `?`.** The didactic frame that dominates lecture speech: *"the question is
 what happens next"*, *"so let us ask ourselves how this scales"*. Strip the frame, keep the focus.
@@ -693,8 +729,10 @@ accented English loanwords match.
 
 Three channels, composing rather than competing.
 
-**Same-sentence seed.** Text after the `?` in the question's own sentence. Distance 0, gap 0. The
-Socratic case, and the highest-precision answer shape we have.
+**Adjacent seed.** The sentence immediately after the question's own, at a near-zero gap.
+Distance 0. The Socratic case, and the highest-precision answer shape we have. Was specified as
+"text after the `?` in the question's own sentence", which 3.1's splitter makes impossible; see
+7.1(a) and [issue #38](https://github.com/mad201802/QuestXtract/issues/38).
 
 **Forward window.** Walk forward 1 to `answer_window_sentences` (3), emitting the growing
 consecutive span at each distance. At the window edge, append one continuation sentence when the
@@ -1035,8 +1073,9 @@ correct invalidation by naming the config fields it reads, and a stage that gain
 and forgets to list it is the one bug class this design still has. Keep `uses` next to the
 signature so the two are reviewed together.
 
-`transcribe.json` for both reference recordings is committed to the repo (section 2.2), which is
-what lets CI run the eval gate in seconds with no ASR and no network.
+`transcribe.json` for both reference recordings will be committed to the repo (section 2.2), which
+is what will let CI run the eval gate in seconds with no ASR and no network. It is not committed
+yet; that lands with #11/#12.
 
 ### 11.3 Progress (FR9)
 
@@ -1142,7 +1181,7 @@ src/questxtract/
   segments.py      structural segmentation
   vision.py        layout probe, sampling, board states, VLM captioning, attach
   detect.py        question extraction, vetoes, scoring, cue tables
-  answer.py        same-sentence, forward window, far-window rescue
+  answer.py        adjacent seed, forward window, far-window rescue
   score.py         answer scoring, confidence, dedupe
   llm.py           OpenAI-compatible client, judge pass, vision calls
   evaluate.py      labelled-set metrics
@@ -1174,8 +1213,17 @@ claim cannot quietly stop being true.
 
 **No system binaries.** No ffmpeg, no ffprobe. **No torch**, and therefore no torchvision, no
 triton, no CUDA wheels, no transformers, no pyannote, no speechbrain, no sentence-transformers,
-no wtpsplit, no openpyxl. The install is a couple of hundred MB, and NFR1's Windows leg stops
-being the hard one.
+no openpyxl. The install is a couple of hundred MB, and NFR1's Windows leg stops being the hard
+one.
+
+**`wtpsplit` is not on that list, and this is a correction.** It was, on the assumption that a
+neural splitter (3.1's third rung) means torch. It does not: `wtpsplit-lite` (MIT) runs the same
+SaT models on ONNX with exactly four dependencies - `huggingface-hub`, `numpy`, `onnxruntime` and
+`tokenizers` - **all four of which we already install** transitively through `faster-whisper`. So
+the code cost of that rung is zero new packages. Its real cost is the weights: 428 MB for
+`sat-3l-sm`, against a stage that today costs ~20 ms and nothing on disk. That is the number the
+decision should be re-made against, and it stays deferred until #12 can measure whether it buys
+anything.
 
 **Today the base install is stdlib-only**, because stages 1, 2 and 5 are still stubs (13.3). Each
 base dependency arrives with the issue that needs it: `av` and `faster-whisper` with #7 and #8,
@@ -1196,7 +1244,7 @@ its name, its signature and its `@stage` registration are real; only the algorit
 | `segments.py` | 4 segments | done | — |
 | `vision.py` | 5 vision, attach_visual | capture stubbed; the interval join is done | M2/M3 |
 | `detect.py` | 6 detect | keyword heuristic only; 7.1-7.3 owed | #10 |
-| `answer.py` | 7 answer | same-sentence seed only; window and rescue owed | — |
+| `answer.py` | 7 answer | seed only, and dead by construction (#38); window and rescue owed | #38 |
 | `score.py` | 8 score | confidence only; 9.1 answer scoring and 9.3 dedupe owed | — |
 | `llm.py` | 9 judge | stub, no-ops when disabled | — |
 | `export.py` | 10 export | done | #13 |
