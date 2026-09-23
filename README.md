@@ -75,6 +75,16 @@ both `uv run python scripts/<name>.py --help`. `scripts/dropped_questions.py` is
 unrelated to that gap: it saves both the questions that clear the confidence threshold and
 the ones the heuristic drops, side by side, for inspecting false negatives.
 
+To measure the detector against the labelled reference recordings (NFR2, recall >= 0.50):
+
+```bash
+questxtract eval tests/data/          # table, sweep, missed questions and false positives
+questxtract eval tests/data/ --json   # the same report, machine-readable
+```
+
+Each `tests/data/<name>.labels.jsonl` is scored against the `<name>.transcript.json` next to it;
+[tests/data/README.md](tests/data/README.md) covers how the labels were made.
+
 `transcript.json` is either a list of segments or an object with a `segments` key, which is what
 most ASR engines emit:
 
