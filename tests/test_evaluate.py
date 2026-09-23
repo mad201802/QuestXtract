@@ -103,3 +103,11 @@ def test_cli_eval_prints_table_and_json(tmp_path: Path, capsys: pytest.CaptureFi
     assert "TOTAL" in capsys.readouterr().out
     assert main(["eval", str(tmp_path), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["total"]["recall"] == 1.0
+
+
+def test_nfr2_recall_on_the_reference_recordings() -> None:
+    # NFR2: question detection recall >= 50% on the team's labelled set, at the default
+    # emission threshold. Runs on the committed transcripts, so no ASR and no network.
+    report = evaluate([Path(__file__).parent / "data"])
+    assert set(report["recordings"]) == {"mit_18_100b_l1", "stanford_cs234_l1"}
+    assert report["total"]["recall"] >= 0.5
