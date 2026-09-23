@@ -8,8 +8,9 @@ anything — this file only covers structure and naming, not what a label means.
 
 ```
 tests/data/
-  <recording-name>.labels.jsonl   one file per labelled recording
-  README.md                       this file
+  <recording-name>.labels.jsonl       one file per labelled recording
+  <recording-name>.transcript.json    the ASR transcript the labels are timed against
+  README.md                           this file
 ```
 
 One JSONL file per recording. File stem should be a short, stable slug for the recording, e.g.:
@@ -29,6 +30,14 @@ data file.
 |---|---|---|---|
 | `mit_18_100b_l1` | MIT 18.100B Real Analysis, Lecture 1 | https://www.youtube.com/watch?v=BWvjy0a1Ffg | chalkboard, few audible questions |
 | `stanford_cs234_l1` | Stanford CS234 RL, Lecture 1 (2024) | https://www.youtube.com/watch?v=WsvFL-LjA6U | slides + classroom, students off-mic |
+
+**Transcripts.** `<slug>.transcript.json` is `scripts/transcribe.py`'s output with the default
+config (faster-whisper `turbo`, punctuation prompt), trimmed to what the pipeline reads: per ASR
+chunk `text`/`start`/`end` and per word `word`/`start`/`end`. Committed so `evaluate.py` runs
+in CI without an ASR run. Re-transcribing changes the word clock, so a new transcript means
+re-snapping the labels (`scratch_to_labels.py --transcript`). Provenance: the MIT recording is
+MIT OpenCourseWare, CC BY-NC-SA 4.0; the CS234 recording is Stanford Online's public YouTube
+upload. Both transcripts are kept here for non-commercial evaluation only.
 
 These are the two calibration recordings the design is built around (architecture.md 1.2) —
 label these first. Additional recordings can be added the same way; add a row here for each.
