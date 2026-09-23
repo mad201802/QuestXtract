@@ -72,9 +72,28 @@ _TYPES = {
     "whom": "what",
 }
 
-# ponytail: keyword heuristic. pipeline.md 7.1-7.3 specifies the cue tables, the vetoes and
-# the full additive scoring table; they land with issue #10 once the labelled set (#11) exists.
-_SCORES = {"mark": 0.6, "wh": 0.5, "aux": 0.5}
+# A sentence, or its closing clause, made only of these is a confirmation tag: "Okay?",
+# "True, you see?", "..., right?". Labelled rhetorical (annotation_guidelines.md 2).
+_TAG_WORDS = frozenset({"okay", "ok", "right", "true", "yes", "yeah", "correct", "you", "see"})
+
+# Classroom management, not content: labelled check_in or procedural. Matched as substrings
+# of the lower-cased sentence.
+# ponytail: English phrase list grown from the labelled recordings; the judge (stage 9) is
+# the real content filter, this only keeps the obvious ones out of the candidate list.
+_CHECK_INS = (
+    "make sense",
+    "are we together",
+    "is that clear",
+    "you see the point",
+    "any questions",
+    "any other questions",
+    "who here",
+    "want to share",
+    "want to tell me",
+    "your name",
+)
+
+_SCORES = {"mark": 0.6, "wh": 0.5, "aux": 0.5, "tag": -0.4, "check_in": -0.4}
 
 
 def score_sentence(sentence: str) -> tuple[float, tuple[str, ...]]:
@@ -92,7 +111,12 @@ def score_sentence(sentence: str) -> tuple[float, tuple[str, ...]]:
         reasons.append("wh")
     if any(h in _AUX_WORDS for h in heads):
         reasons.append("aux")
-    score = min(1.0, sum((_SCORES[r] for r in reasons), 0.0))
+    if _is_tag(sentence):
+        reasons.append("tag")
+    folded = sentence.casefold()
+    if any(phrase in folded for phrase in _CHECK_INS):
+        reasons.append("check_in")
+    score = min(1.0, max(0.0, sum((_SCORES[r] for r in reasons), 0.0)))
     return score, tuple(reasons)
 
 
@@ -108,6 +132,20 @@ def question_type(sentence: str) -> str:
 def _words(text: str) -> list[str]:
     """Lower-cased words, contractions kept whole so "don't" is one token."""
     return re.findall(r"\w+(?:'\w+)?", text.casefold().replace("\u2019", "'"))
+
+
+def _is_tag(sentence: str) -> bool:
+    """Whether ``sentence`` is, or ends in, a confirmation tag rather than a question.
+
+    A tag after a real question ("Why is it not a field, right?") does not count: the
+    question's own head wins.
+    """
+    if not sentence.rstrip().endswith("?"):
+        return False
+    tail = _words(sentence.rsplit(",", 1)[-1])
+    if not tail or not set(tail) <= _TAG_WORDS:
+        return False
+    return not any(h in _WH_WORDS or h in _AUX_WORDS for h in _heads(sentence.rsplit(",", 1)[0]))
 
 
 def _heads(sentence: str) -> tuple[str, ...]:

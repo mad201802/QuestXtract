@@ -78,4 +78,28 @@ def test_negated_auxiliaries_open_questions():
 
 
 def test_any_is_not_an_auxiliary():
-    assert score_sentence("Any other questions?")[1] == ("mark",)
+    assert "aux" not in score_sentence("Any other questions?")[1]
+
+
+def test_confirmation_tags_fall_below_the_gate():
+    for tag in ("Okay?", "True, you see?", "It's for multiplication, right?"):
+        score, reasons = score_sentence(tag)
+        assert "tag" in reasons and score < 0.45, tag
+
+
+def test_a_tag_after_a_real_question_does_not_count():
+    assert score_sentence("And why is this not a field, right?") == (1.0, ("mark", "wh"))
+    assert "tag" not in score_sentence("Is it right?")[1]
+
+
+def test_check_ins_score_below_content_questions():
+    check_in, reasons = score_sentence("Is that clear?")
+    content, _ = score_sentence("Is the state Markov?")
+    assert "check_in" in reasons and check_in < content
+    # Still a candidate, but its unanswered confidence (0.55 x score) stays under 0.40.
+    assert 0.45 <= check_in and 0.55 * check_in < 0.40
+
+
+def test_classroom_management_is_a_check_in():
+    for text in ("Does someone want to tell me what they are?", "Could you say your name?"):
+        assert "check_in" in score_sentence(text)[1], text
