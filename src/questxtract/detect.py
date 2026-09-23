@@ -77,15 +77,16 @@ _TYPES = {
 _TAG_WORDS = frozenset({"okay", "ok", "right", "true", "yes", "yeah", "correct", "you", "see"})
 
 # Classroom management, not content: labelled check_in or procedural. Matched as whole words
-# of the lower-cased sentence. The comprehension checks only count when they close the
-# sentence: "Does that make sense?" is a check-in, "Why does it make sense to sort first?" is
-# a content question.
+# of the lower-cased sentence, trailing vocatives allowed ("How much are we together, people,
+# on this?"). The comprehension checks do not count when content follows them: "Does that
+# make sense?" is a check-in, "Why does it make sense to sort first?" is a question.
 # ponytail: English phrase list grown from the labelled recordings; the judge (stage 9) is
 # the real content filter, this only keeps the obvious ones out of the candidate list.
 _CHECK_INS = re.compile(
-    r"\b(?:make|makes) sense(?: to (?:everyone|everybody|you(?: guys| all)?))?\W*$"
-    r"|\b(?:are we together|is that clear|you see the point)\W*$"
-    r"|\b(?:any (?:other )?questions|who here|want to share|want to tell me|your name)\b"
+    r"\bmakes? sense\b(?! to (?!everyone\b|everybody\b|you\b)| of\b| for\b| in\b| here\b)"
+    r"|\bis that clear\b(?! (?:why|what|how|that|whether|if|when|where)\b)"
+    r"|\b(?:are we together|you see the point|any (?:other )?questions|who here|want to share"
+    r"|want to tell me|your name)\b"
 )
 
 # A head word without a '?' stays under the 0.45 gate: on the reference recordings every such

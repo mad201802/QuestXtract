@@ -752,8 +752,8 @@ Additive, clamped to [0, 1]:
                    "Okay?", "True, you see?", "..., right?" - unless what precedes the tag
                    has its own interrogative head ("Why is this not a field, right?")
   -0.40  check_in  classroom management: "who here", "want to tell me", "your name", ...,
-                   and "is that clear", "make sense" only when they close the sentence
-                   ("Why does it make sense to ...?" is content)
+                   and "is that clear", "make sense" unless content follows them
+                   ("Why does it make sense to ...?" is a question)
 ```
 
 Gate: `min_question_score` (0.45). What that does with the unanswered confidence of 9.2

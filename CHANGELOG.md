@@ -92,7 +92,7 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   check-ins ("Is that clear?") above them. New reasons `tag` and `check_in` (-0.40 each) keep
   tags out of the candidates and check-ins out of the emitted questions.
   Check-in phrases match whole words, and the comprehension checks ("make sense", "is that
-  clear") only when they close the sentence, so a content question that contains one is kept.
+  clear") not when content follows them, so a content question that contains one is kept.
 - A wh- or aux-head without a `?` passed the detection gate on its own; on three lectures all 35
   such candidates were statements ("What I mean is ..."). Head weights are 0.4 (was 0.5), under
   the gate alone, 1.0 with the `?`. Emitted questions are unaffected, the candidate count drops.

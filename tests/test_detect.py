@@ -102,8 +102,14 @@ def test_a_trailing_clause_does_not_override_an_interrogative_opener():
     assert question_type("The derivative is 2x, what do you get?") == "what"
 
 
-def test_comprehension_checks_only_count_at_the_end():
-    for text in ("Does that make sense?", "Makes sense to everyone?", "Is that clear?"):
+def test_comprehension_checks_do_not_swallow_content_questions():
+    for text in (
+        "Does that make sense?",
+        "Makes sense to everyone?",
+        "Is that clear?",
+        "How much are we together, people, on this?",
+        "Does this plot make sense, people?",
+    ):
         assert "check_in" in score_sentence(text)[1], text
     assert score_sentence("Why does it make sense to sort first?") == (1.0, ("mark", "wh"))
     assert score_sentence("Is that clear why the limit exists?") == (1.0, ("mark", "aux"))
