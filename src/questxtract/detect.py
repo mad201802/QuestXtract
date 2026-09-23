@@ -93,7 +93,11 @@ _CHECK_INS = (
     "your name",
 )
 
-_SCORES = {"mark": 0.6, "wh": 0.5, "aux": 0.5, "tag": -0.4, "check_in": -0.4}
+# A head word without a '?' stays under the 0.45 gate: on the reference recordings every such
+# sentence was a statement ("What I mean is ...", "So when we ...").
+# ponytail: recovering a question the ASR left unpunctuated needs a second, independent gate
+# (a local answer slot, architecture.md 7.1c); add it when a labelled question is lost to it.
+_SCORES = {"mark": 0.6, "wh": 0.4, "aux": 0.4, "tag": -0.4, "check_in": -0.4}
 
 
 def score_sentence(sentence: str) -> tuple[float, tuple[str, ...]]:

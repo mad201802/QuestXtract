@@ -1,22 +1,12 @@
 from questxtract.detect import detect_questions, question_type, score_sentence
 
 
-def test_detects_marked_and_unmarked_questions(sentences):
-    extra = list(sentences) + [
-        type(sentences[0])(
-            text="Does anyone know why that matters",
-            word_start=15,
-            word_end=20,
-            start=9.0,
-            end=12.0,
-        )
-    ]
-    found = detect_questions(extra)
-    assert [c.text for c in found] == [
-        "What is a stable sort?",
-        "Does anyone know why that matters",
-    ]
-    assert found[1].score < found[0].score
+def test_an_unmarked_head_word_is_not_a_candidate(sentences):
+    unmarked = type(sentences[0])(
+        text="Does anyone know why that matters", word_start=15, word_end=20, start=9.0, end=12.0
+    )
+    assert [c.text for c in detect_questions([*sentences, unmarked])] == ["What is a stable sort?"]
+    assert score_sentence(unmarked.text) == (0.4, ("aux",))
 
 
 def test_statements_are_not_questions(sentences):
@@ -27,8 +17,8 @@ def test_threshold_filters_low_scores(sentences):
     unmarked = type(sentences[0])(
         text="Does anyone know why that matters", word_start=15, word_end=20, start=9.0, end=12.0
     )
-    assert len(detect_questions([*sentences, unmarked], threshold=0.45)) == 2
-    assert [c.text for c in detect_questions([*sentences, unmarked], threshold=0.6)] == [
+    assert len(detect_questions([*sentences, unmarked], threshold=0.3)) == 2
+    assert [c.text for c in detect_questions([*sentences, unmarked], threshold=0.45)] == [
         "What is a stable sort?"
     ]
     assert detect_questions([*sentences, unmarked], threshold=1.1) == ()
