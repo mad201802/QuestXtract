@@ -76,21 +76,16 @@ _TYPES = {
 # "True, you see?", "..., right?". Labelled rhetorical (annotation_guidelines.md 2).
 _TAG_WORDS = frozenset({"okay", "ok", "right", "true", "yes", "yeah", "correct", "you", "see"})
 
-# Classroom management, not content: labelled check_in or procedural. Matched as substrings
-# of the lower-cased sentence.
+# Classroom management, not content: labelled check_in or procedural. Matched as whole words
+# of the lower-cased sentence. The comprehension checks only count when they close the
+# sentence: "Does that make sense?" is a check-in, "Why does it make sense to sort first?" is
+# a content question.
 # ponytail: English phrase list grown from the labelled recordings; the judge (stage 9) is
 # the real content filter, this only keeps the obvious ones out of the candidate list.
-_CHECK_INS = (
-    "make sense",
-    "are we together",
-    "is that clear",
-    "you see the point",
-    "any questions",
-    "any other questions",
-    "who here",
-    "want to share",
-    "want to tell me",
-    "your name",
+_CHECK_INS = re.compile(
+    r"\b(?:make|makes) sense(?: to (?:everyone|everybody|you(?: guys| all)?))?\W*$"
+    r"|\b(?:are we together|is that clear|you see the point)\W*$"
+    r"|\b(?:any (?:other )?questions|who here|want to share|want to tell me|your name)\b"
 )
 
 # A head word without a '?' stays under the 0.45 gate: on the reference recordings every such
@@ -117,20 +112,20 @@ def score_sentence(sentence: str) -> tuple[float, tuple[str, ...]]:
         reasons.append("aux")
     if _is_tag(sentence):
         reasons.append("tag")
-    folded = sentence.casefold()
-    if any(phrase in folded for phrase in _CHECK_INS):
+    if _CHECK_INS.search(sentence.casefold().replace("\u2019", "'")):
         reasons.append("check_in")
     score = min(1.0, max(0.0, sum((_SCORES[r] for r in reasons), 0.0)))
-    return score, tuple(reasons)
+    return round(score, 2), tuple(reasons)
 
 
 def question_type(sentence: str) -> str:
     """Classify a question by its head word."""
-    heads = _heads(sentence)
-    for head in heads:
+    for head in _heads(sentence):
         if head in _TYPES:
             return _TYPES[head]
-    return "yes_no" if any(h in _AUX_WORDS for h in heads) else "other"
+        if head in _AUX_WORDS:
+            return "yes_no"
+    return "other"
 
 
 def _words(text: str) -> list[str]:
@@ -155,21 +150,29 @@ def _is_tag(sentence: str) -> bool:
 def _heads(sentence: str) -> tuple[str, ...]:
     """Return the words a question in ``sentence`` can open with, past discourse markers.
 
-    For a sentence ending in ``?`` the last comma clause counts too, since ASR runs a
-    preamble into the question: "If you have the data, does that mean ...?". Without the
-    ``?`` it does not, or every ", which is ..." would read as a wh-question.
+    For a sentence ending in ``?`` whose opener is not interrogative, the last comma clause
+    counts too, since ASR runs a preamble into the question: "If you have the data, does
+    that mean ...?". Without the ``?`` it does not, or every ", which is ..." would read as a
+    wh-question; nor after an interrogative opener, where the last clause is part of the
+    question: "Is it a function from X to Y, where X is compact?" is yes/no.
     """
-    clauses = [sentence]
-    if sentence.rstrip().endswith("?"):
-        clauses.append(sentence.rsplit(",", 1)[-1])
     heads: list[str] = []
-    for clause in clauses:
-        words = _words(clause)
-        while words and words[0] in _DISCOURSE_MARKERS:
-            words.pop(0)
-        if words and words[0] not in heads:
-            heads.append(words[0])
+    opener = _opener(sentence)
+    if opener:
+        heads.append(opener)
+    if sentence.rstrip().endswith("?") and opener not in _WH_WORDS | _AUX_WORDS:
+        last = _opener(sentence.rsplit(",", 1)[-1])
+        if last and last not in heads:
+            heads.append(last)
     return tuple(heads)
+
+
+def _opener(clause: str) -> str:
+    """Return the first word of ``clause`` past discourse markers, or ``""``."""
+    words = _words(clause)
+    while words and words[0] in _DISCOURSE_MARKERS:
+        words.pop(0)
+    return words[0] if words else ""
 
 
 def detect_questions(

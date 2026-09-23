@@ -93,3 +93,25 @@ def test_check_ins_score_below_content_questions():
 def test_classroom_management_is_a_check_in():
     for text in ("Does someone want to tell me what they are?", "Could you say your name?"):
         assert "check_in" in score_sentence(text)[1], text
+
+
+def test_a_trailing_clause_does_not_override_an_interrogative_opener():
+    text = "Is it a function from X to Y, where X is compact?"
+    assert score_sentence(text) == (1.0, ("mark", "aux"))
+    assert question_type(text) == "yes_no"
+    assert question_type("The derivative is 2x, what do you get?") == "what"
+
+
+def test_comprehension_checks_only_count_at_the_end():
+    for text in ("Does that make sense?", "Makes sense to everyone?", "Is that clear?"):
+        assert "check_in" in score_sentence(text)[1], text
+    assert score_sentence("Why does it make sense to sort first?") == (1.0, ("mark", "wh"))
+    assert score_sentence("Is that clear why the limit exists?") == (1.0, ("mark", "aux"))
+
+
+def test_check_in_phrases_match_whole_words():
+    assert "check_in" not in score_sentence("Is your namespace global?")[1]
+
+
+def test_scores_are_rounded():
+    assert score_sentence("Okay?") == (0.2, ("mark", "tag"))
