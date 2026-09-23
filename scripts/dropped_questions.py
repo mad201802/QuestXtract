@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Save both the questions that cleared the confidence threshold and the dropped ones.
 
-`questxtract process` (and extract_questions.py) only ever write the survivors;
-score.py's threshold filter silently drops the rest. This runs the same pipeline
-with `min_confidence` set to 0.0 so score() drops nobody, then splits its output by
-the real threshold - writing one file per side, in the same schema as a normal
-questions.json.
+`questxtract process` only ever writes the survivors; score.py's threshold filter
+silently drops the rest. This runs the same pipeline with `min_confidence` set to 0.0
+so score() drops nobody, then splits its output by the real threshold - writing one
+file per side, in the same schema as a normal questions.json.
 
 Usage: uv run python scripts/dropped_questions.py <transcript.json> [-o out.json] [-t threshold]
 Writes <out.json> (kept, default questions.json) and a sibling <out>.dropped.json.
+Make the transcript first with `questxtract transcribe lecture.mp4`.
 """
 
 from __future__ import annotations

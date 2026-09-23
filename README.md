@@ -59,24 +59,28 @@ Requires Python 3.10+ on Linux, macOS or Windows.
 ### CLI
 
 ```bash
-questxtract process transcript.json -o questions.json
-questxtract process transcript.json --threshold 0.8   # stricter, prints to stdout
+questxtract process lecture.mp4                # video -> lecture.questions.json
+questxtract transcribe lecture.mp4             # transcription only -> lecture.transcript.json
+questxtract process lecture.transcript.json    # questions from an existing transcript
 ```
 
-A live progress bar renders on stderr while it runs, one line per stage.
+The input decides how much runs: an `.mp4` goes through every stage, while a `.json` transcript
+skips transcription. A live progress bar renders on stderr, one line per stage. Transcripts are
+cached, so running `process` again on the same recording with another threshold takes seconds.
 
-The ASR stage is implemented as a pluggable backend (see below), but the CLI's `process`
-command still only accepts a pre-made transcript; wiring it to accept a raw recording
-end-to-end is issue #17. Until then, `process` runs the pipeline from sentence splitting
-onward. `scripts/` has two standalone entry points that fill that gap for local testing
-against a real recording in the meantime: `transcribe.py` saves a reusable transcript.json,
-and `extract_questions.py` runs the full pipeline over a raw recording in one shot —
-both `uv run python scripts/<name>.py --help`. `scripts/dropped_questions.py` is a third,
-unrelated to that gap: it saves both the questions that clear the confidence threshold and
-the ones the heuristic drops, side by side, for inspecting false negatives.
+| Option | Default | |
+|---|---|---|
+| `-o`, `--output PATH` | next to the input | where to write; `-o -` prints to the terminal |
+| `-t`, `--threshold 0-1` | `0.4` | minimum confidence to keep a question (`process` only) |
+| `-m`, `--model NAME` | `turbo` | Whisper model size: `tiny`, `base`, `small`, `medium`, `large-v3`, `turbo` |
+| `--from-scratch` | off | ignore the cache and recompute everything |
 
-`transcript.json` is either a list of segments or an object with a `segments` key, which is what
-most ASR engines emit:
+Every option, the cache, error messages and recipes: [docs/cli.md](docs/cli.md).
+`scripts/dropped_questions.py` saves the questions the threshold dropped next to the ones it
+kept, for inspecting false negatives.
+
+`process` also takes a transcript made by any other ASR engine: a list of segments, or an object
+with a `segments` key, which is what most engines emit:
 
 ```json
 {
@@ -214,7 +218,7 @@ src/questxtract/
 ├── segments.py   4 segments      ├── llm.py       9 judge
 ├── vision.py     5 vision        ├── export.py   10 export
 ├── evaluate.py   labelled-set metrics
-└── cli.py        process / eval / quiz
+└── cli.py        process / transcribe / eval / quiz
 tests/            flat, one module per source module
 ```
 

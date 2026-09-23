@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -158,6 +158,18 @@ class Transcript:
             language=str(data.get("language", "en")),
             duration=duration,
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise to plain JSON types, in the shape :meth:`from_dict` reads back unchanged.
+
+        Lists, not ``asdict``'s tuples: ``from_dict`` rejects a segments value that is not a list.
+        """
+        return {
+            "words": [asdict(w) for w in self.words],
+            "asr_segments": [asdict(s) for s in self.asr_segments],
+            "language": self.language,
+            "duration": self.duration,
+        }
 
 
 def _chunk_words(raw: dict[str, Any], chunk: AsrSegment) -> tuple[Word, ...]:

@@ -31,6 +31,8 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   heuristic is still there, now over `Sentence` rather than `TranscriptSegment`.
 - CLI takes a subcommand: `questxtract transcript.json` → `questxtract process transcript.json`.
   `--threshold` now gates the final confidence (architecture.md 9.2), not the raw detection score.
+- `questxtract process` writes to a file next to its input (`lecture.questions.json`) instead of
+  stdout. Pass `-o -` for the old behaviour.
 - `AsrBackend.transcribe` takes a third argument, `on_progress: Callable[[float], None] | None`.
   An out-of-tree backend must accept it, even if it ignores it. It is called with fractions in
   `[0, 1)` only: the caller, never the backend, decides when the stage is finished.
@@ -45,9 +47,14 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
 - A terminal progress bar on stderr, one redrawn line per stage, rendered by the CLI from the
   existing `Progress` callback (#14). The transcribe stage reports inside itself, per decoded
   word, through the backend's `on_progress`.
-- `scripts/`: `transcribe.py` and `extract_questions.py` run a raw recording end to end until
-  the CLI accepts one (#17); `dropped_questions.py` writes the candidates the threshold dropped
-  next to the ones it kept, for inspecting false negatives.
+- `questxtract process lecture.mp4` runs every stage on a recording; a `.json` input still skips
+  transcription (#17). `questxtract transcribe lecture.mp4` writes the transcript only, sharing
+  the transcribe cache with `process`. `-m/--model` picks the Whisper model. Bad inputs fail
+  with one `error:` line before anything slow runs; Ctrl+C exits 130. Documented in
+  [docs/cli.md](docs/cli.md).
+- `Transcript.to_dict()`, the inverse of `from_dict`.
+- `scripts/dropped_questions.py` writes the candidates the threshold dropped next to the ones it
+  kept, for inspecting false negatives.
 
 - The stage contract: `@stage(name, cache=..., uses=...)`, the `STAGES` list, `run(ctx, stages=)`
   and `process()`. Passing a different `stages=` list is the entire plugin system.
