@@ -688,77 +688,107 @@ Purely lexical and orthographic. No classifier, no prosody. The rules are inspec
 decision leaves a reason code, which is what makes both the review workflow and the LLM judge's
 job possible.
 
+**Why rules, not a model.** Deciding whether a sentence is interrogative is the easy half and is
+lexical: in meeting speech, lexico-syntactic features carry question detection and pitch only
+adds to them (Boakye, Favre, Hakkani-Tür, ASRU 2009). Deciding whether it is a *content*
+question is the hard half, and trained models do not solve it either: a teacher-question
+detector trained on classroom ASR reaches weighted F1 0.59 (Blanchard et al., SIGDIAL 2016), and
+rhetorical questions are identified at F1 0.54 only once the neighbouring utterances are
+features (Bhattasali et al., ACL 2015). With 42 labels there is nothing to train on anyway. So
+the rules do the lexical half and keep the known noise out; the content call is the judge's
+(section 10), which sees the context those papers found necessary.
+
 ### 7.1 Extraction
 
-For each sentence, in cascade:
+One candidate per sentence (3.1), scored in 7.3.
 
-**(a) Contains `?`.** Split off the preamble: *"I was reading this last night, but how does the
-compiler know?"* should yield the clause after the comma, not the whole run-on. Two patterns: a
-conjunction pivot (`, but how ...?`) needing a focus of at least 4 tokens, and a wh-anchored tail
-needing at least 2.
+**The interrogative head.** A question's first word is rarely the sentence's first word in
+lecture speech: *"So what does it mean ...?"*, *"Now, what is the challenge ...?"*. The head is
+the first word past leading discourse markers (`so`, `and`, `but`, `now`, `then`, `okay`, ...),
+and for a sentence ending in `?` also the first word of its last comma clause, because ASR runs
+the preamble into the question: *"If you have the data, does that mean ...?"*. Without the `?`
+the clause rule stays off, or every *", which is ..."* would read as a wh-question. Contractions
+stay whole, so negated auxiliaries (*"Don't we ...?"*) open questions.
 
-The **immediately following sentence, at a near-zero gap**, becomes an answer seed and marks the
-pair `intra_sentence_qa` - the Socratic case where the lecturer asks and immediately answers.
+**The answer seed.** Specified as "text *after* the `?`", which contradicts section 3.1: stage 3
+splits *at* terminal punctuation, so a sentence never holds text after its own `?`.
+`answer.same_sentence_seed` still implements the old wording and is dead by construction
+([issue #38](https://github.com/mad201802/QuestXtract/issues/38)); the seed is to be redefined as
+the immediately following sentence at a near-zero gap.
 
-This used to read "text *after* the `?`", which contradicted section 3.1: stage 3 splits *at*
-terminal punctuation, so a sentence never holds text after its own `?` and the channel could never
-fire. `answer.same_sentence_seed` still implements the old wording and is dead by construction
-([issue #38](https://github.com/mad201802/QuestXtract/issues/38)). Stage 3 is not what changes -
-detection wants units that read on their own; the seed is redefined in terms of the unit stage 3
-actually produces.
+**Not implemented, and why.** Two paths from the original design have no labelled failure
+behind them yet:
 
-**(b) Implicit cue, no `?`.** The didactic frame that dominates lecture speech: *"the question is
-what happens next"*, *"so let us ask ourselves how this scales"*. Strip the frame, keep the focus.
+- *Implicit cue, no `?`* (*"the question is whether ..."*). Expected to be the primary path on
+  CS234, where students are off-mic. Measured, it is not: the lecturer's restatement reaches
+  the ASR with its `?` (*"So the question was, ... is if you have good demonstration ...?"*),
+  and the off-mic student questions are not in the transcript at all, so no text rule reaches
+  them.
+- *Missing `?` recovery* (an interrogative head **and** a local answer slot). Whisper `turbo`
+  with the punctuation prompt marked every labelled content question that is in the transcript;
+  the 35 `?`-less head-word sentences on the three measured recordings were all statements.
 
-**This is the primary path on classroom recordings, not a supplement.** On CS234 the students are
-off-mic; what reaches the microphone is the lecturer restating the question before answering it.
-Every student question we recover on that recording comes through (b). Weight the effort here
-accordingly, and measure (b) separately in the eval breakdown.
-
-**(c) Missing question mark.** ASR drops terminal punctuation, and `vad_filter` plus the
-punctuation prompt reduce this but do not eliminate it. Recovery needs two independent gates: an
-interrogative head or cue in the text, **and** a plausible local answer slot (an answer seed, or a
-next sentence within 3.5 s).
+Either lands when a labelled question is lost to it.
 
 ### 7.2 Vetoes
 
-Two error modes dominate, and both get a hard veto rather than a score penalty, because a
-penalty large enough to kill them also kills real questions:
+Hard rejects, before scoring: empty text, and text over `max_question_chars` (350 - raised from
+the planned 220 as a quick, untuned experiment against real lecture audio).
 
-- **Declarative "what".** `that's what ...`, `what it means is ...`, `what we call ...`, `what
-  happens is ...` are statements. Veto when there is no `?`.
-- **Causal clause after a question.** *"...? Because the cache is cold."* is an answer, not a
-  question. Veto a `?`-less sentence matching a causal pattern when the previous sentence held a
-  question within 12 seconds.
+The two vetoes of the original design both only fire on sentences *without* a `?` -
+declarative "what" (*"what we call ..."*) and a causal clause after a question (*"Because the
+cache is cold."*). A head word alone now stays under the gate (7.3), which rejects both shapes
+without a pattern list, so neither is implemented.
 
 ### 7.3 Scoring
 
-Additive, clamped to [0, 1]. Empty text, text over `max_question_chars` (350 - raised from the
-planned 220 as a quick, untuned experiment against real lecture audio; revisit once #11's
-labelled set exists to tune it against instead of guessing), a declarative-what match, a
-causal declarative, or no interrogative cue of any kind without a `?` all reject outright.
+Additive, clamped to [0, 1]:
 
 ```
-  +0.40  contains '?'
-  +0.12  starts with an interrogative word
-  +min(0.36, sum of matched question cue weights)
-  +min(0.30, sum of matched didactic cue weights)
-  +0.18  direct definition request ("can you explain ...")
-  +0.10  implicit question cue
-  +0.08  3 <= token_count <= 24            (-0.25 if token_count < 2)
-  +0.05  overlapping board state shares content tokens   (0 when vision is off)
-  -0.18  no '?' and no interrogative head
-  -0.28  rhetorical check-in ("can you hear me", "does that make sense")
-  -0.42  rhetorical poll ("one or two?", "show of hands")
-  -0.26  procedural request ("can you pass me the marker")
-  -0.30  declarative tag question ("..., right?")
-  -0.22  fragment question
+  +0.60  mark      ends in '?'
+  +0.40  wh        interrogative head is a wh-word
+  +0.40  aux       interrogative head is an auxiliary, negated ones included
+  -0.40  tag       the sentence, or its closing clause, is only a confirmation tag:
+                   "Okay?", "True, you see?", "..., right?" - unless what precedes the tag
+                   has its own interrogative head ("Why is this not a field, right?")
+  -0.40  check_in  classroom management: "is that clear", "make sense", "who here",
+                   "want to tell me", "your name", ...
 ```
 
-Gate: `min_question_score` (0.45), itself swept by the eval harness rather than assumed.
+Gate: `min_question_score` (0.45). What that does with the unanswered confidence of 9.2
+(`0.55 x score`, emission gate 0.40):
 
-Rules are English-only (requirement 4.2). Rule text is NFKD-folded to ASCII in one line so
-accented English loanwords match.
+| Sentence | Score | Candidate | Emitted |
+|---|---|---|---|
+| `?` and a head | 1.00 | yes | yes, 0.55 |
+| `?` only | 0.60 | yes | no, 0.33 |
+| check-in with `?` and a head | 0.60 | yes, reason kept | no, 0.33 |
+| tag | 0.20 | no | no |
+| head, no `?` | 0.40 | no | no |
+
+The tag and check-in lists are English (requirement 4.2), grown from the labelled recordings
+rather than written up front, and deliberately short: they only keep the obvious noise out of
+the judge's input. Tags follow the annotation guidelines, which label them `rhetorical`: a
+penalty with a reason code, not a veto.
+
+**Measured.** Both reference recordings, transcribed with the default config, plus one 11-minute
+lecture from the customer's own course (no labels; tag-heavy). A label counts as found when an
+emitted question overlaps it after padding the label by 5 s, because the hand-timed labels sit
+3 to 55 s off the ASR clock; that padding is a stopgap for #12, not the harness's rule (4.2).
+
+| Recording | Before: content found / emitted / candidates | After |
+|---|---|---|
+| MIT 18.100B L1 | 2 of 10 / 10 / 39 | 7 of 10 / 29 / 30 |
+| Stanford CS234 L1 | 5 of 17 / 19 / 67 | 9 of 17 / 40 / 52 |
+| customer lecture | - / 8 / 25 | - / 10 / 12 |
+
+"Before" lost most questions to the head-word rule: *"So what ...?"* scored 0.60 on the mark
+alone and fell under the emission gate. Of the 11 still missed: 4 are student questions asked
+off-mic, 1 was never transcribed, 2 are detected but sit more than 5 s from their label,
+and 4 were spoken or transcribed as statements (*"So this here is how the ordering interacts
+with addition"*). None is reachable by a text rule on this transcript. Precision is not
+measured here: outside the blind slices the labels are not exhaustive, so an unlabelled
+emission is not necessarily wrong - most are real lecturer questions.
 
 > **Decision.** `questxtract/detect.py`, cue tables inline as module constants.
 

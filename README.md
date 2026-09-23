@@ -99,7 +99,7 @@ included, so a consumer never has to defensively check for a missing field:
   "stats": { "sentences": 3, "sentences_unpunctuated": 0,
              "segments": 1, "segments_closed_gap": 0,
              "segments_closed_duration": 0, "segments_closed_chars": 0,
-             "candidates": 2, "answered": 0, "emitted": 1 },
+             "candidates": 1, "answered": 0, "emitted": 1 },
   "questions": [
     {
       "id": "q_ca0d72",
@@ -125,8 +125,10 @@ included, so a consumer never has to defensively check for a missing field:
 
 `id` and `sentence_id` identify a question across re-runs and edits; `sentence_id` is a content
 hash, so it survives a re-transcription. `reasons` says which rules fired: `mark` (ends in `?`),
-`wh` (starts with a wh-word), `aux` (starts with an auxiliary verb). Useful when reviewing
-borderline detections — ASR output often drops the question mark.
+`wh` / `aux` (the question opens with a wh-word / an auxiliary verb, past fillers like "so" or
+"now"), `tag` (only a confirmation tag like "okay?" or "..., right?") and `check_in` (classroom
+management like "is that clear?"). The last two lower the score; architecture.md 7.3 has the
+table. Useful when reviewing borderline detections, e.g. with `scripts/dropped_questions.py`.
 
 `--threshold` gates the final **confidence**, not the raw detection score. An unanswered question
 carries `0.55 x question_score` (architecture.md 9.2), so it tops out at 0.55 until answer search
