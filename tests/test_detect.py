@@ -40,7 +40,7 @@ def test_over_long_sentences_are_rejected(sentences):
 
 def test_non_ascii_first_word_is_not_skipped():
     assert score_sentence("Кто is here") == (0.0, ())
-    assert score_sentence("Äh, is that right") == (0.0, ())
+    assert score_sentence("Äh is that right") == (0.0, ())
 
 
 def test_score_is_always_a_float():
@@ -55,3 +55,27 @@ def test_question_type_from_the_head_word():
     assert question_type("Is it stable?") == "yes_no"
     assert question_type("...") == "other"
     assert question_type("Sorting matters") == "other"
+
+
+def test_head_word_found_past_discourse_markers():
+    assert score_sentence("So what does it mean that a field is ordered?")[1] == ("mark", "wh")
+    assert score_sentence("And then, how do you add them?")[1] == ("mark", "wh")
+    assert score_sentence("Now is the state Markov?")[1] == ("mark", "aux")
+    assert question_type("So why is this popular?") == "why"
+
+
+def test_head_word_found_in_the_last_clause_of_a_question():
+    reasons = score_sentence("If you have the data, does that mean it is better?")[1]
+    assert reasons == ("mark", "aux")
+    assert question_type("For AlphaTensor, is that fast?") == "yes_no"
+    # Without the question mark a trailing clause is a relative clause, not a question.
+    assert score_sentence("We take the limit, which is zero.") == (0.0, ())
+
+
+def test_negated_auxiliaries_open_questions():
+    assert score_sentence("Don't we have a different state space?")[1] == ("mark", "aux")
+    assert score_sentence("Doesn’t the assumption make it harder?")[1] == ("mark", "aux")
+
+
+def test_any_is_not_an_auxiliary():
+    assert score_sentence("Any other questions?")[1] == ("mark",)

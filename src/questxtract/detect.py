@@ -38,8 +38,26 @@ _AUX_WORDS = frozenset(
         "have",
         "has",
         "had",
-        "any",
+        "isn't",
+        "aren't",
+        "wasn't",
+        "weren't",
+        "don't",
+        "doesn't",
+        "didn't",
+        "can't",
+        "couldn't",
+        "won't",
+        "wouldn't",
+        "shouldn't",
+        "haven't",
+        "hasn't",
     }
+)
+# Openers that sit in front of a question without being part of it: "So what ...?",
+# "And then how ...?".
+_DISCOURSE_MARKERS = frozenset(
+    {"so", "and", "but", "or", "now", "then", "well", "okay", "ok", "alright", "also", "anyway"}
 )
 
 _TYPES = {
@@ -69,24 +87,47 @@ def score_sentence(sentence: str) -> tuple[float, tuple[str, ...]]:
     reasons: list[str] = []
     if sentence.rstrip().endswith("?"):
         reasons.append("mark")
-    words = re.findall(r"\w+", sentence.casefold())
-    if words:
-        if words[0] in _WH_WORDS:
-            reasons.append("wh")
-        if words[0] in _AUX_WORDS:
-            reasons.append("aux")
+    heads = _heads(sentence)
+    if any(h in _WH_WORDS for h in heads):
+        reasons.append("wh")
+    if any(h in _AUX_WORDS for h in heads):
+        reasons.append("aux")
     score = min(1.0, sum((_SCORES[r] for r in reasons), 0.0))
     return score, tuple(reasons)
 
 
 def question_type(sentence: str) -> str:
     """Classify a question by its head word."""
-    words = re.findall(r"\w+", sentence.casefold())
-    if not words:
-        return "other"
-    if words[0] in _TYPES:
-        return _TYPES[words[0]]
-    return "yes_no" if words[0] in _AUX_WORDS else "other"
+    heads = _heads(sentence)
+    for head in heads:
+        if head in _TYPES:
+            return _TYPES[head]
+    return "yes_no" if any(h in _AUX_WORDS for h in heads) else "other"
+
+
+def _words(text: str) -> list[str]:
+    """Lower-cased words, contractions kept whole so "don't" is one token."""
+    return re.findall(r"\w+(?:'\w+)?", text.casefold().replace("\u2019", "'"))
+
+
+def _heads(sentence: str) -> tuple[str, ...]:
+    """Return the words a question in ``sentence`` can open with, past discourse markers.
+
+    For a sentence ending in ``?`` the last comma clause counts too, since ASR runs a
+    preamble into the question: "If you have the data, does that mean ...?". Without the
+    ``?`` it does not, or every ", which is ..." would read as a wh-question.
+    """
+    clauses = [sentence]
+    if sentence.rstrip().endswith("?"):
+        clauses.append(sentence.rsplit(",", 1)[-1])
+    heads: list[str] = []
+    for clause in clauses:
+        words = _words(clause)
+        while words and words[0] in _DISCOURSE_MARKERS:
+            words.pop(0)
+        if words and words[0] not in heads:
+            heads.append(words[0])
+    return tuple(heads)
 
 
 def detect_questions(
