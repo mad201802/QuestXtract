@@ -10,7 +10,7 @@ from pathlib import Path
 
 from . import __version__
 from .config import Config
-from .evaluate import evaluate
+from .evaluate import evaluate, format_report
 from .export import result_to_json, write_questions
 from .models import Context, SchemaError, Transcript
 from .pipeline import STAGES, run
@@ -139,10 +139,10 @@ def _eval(args: argparse.Namespace) -> int:
     """Score the pipeline against the labelled set."""
     try:
         report = evaluate(args.paths)
-    except NotImplementedError as exc:
+    except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    print(json.dumps(report, indent=2) if args.json else report)
+    print(json.dumps(report, indent=2) if args.json else format_report(report))
     return 0
 
 
@@ -171,7 +171,9 @@ def build_parser() -> argparse.ArgumentParser:
     process.set_defaults(handler=_process)
 
     evaluation = subs.add_parser("eval", help="score against the labelled set")
-    evaluation.add_argument("paths", nargs="+", help="directories holding *.labels.jsonl")
+    evaluation.add_argument(
+        "paths", nargs="+", help="*.labels.jsonl files, or directories holding them"
+    )
     evaluation.add_argument("--json", action="store_true", help="machine-readable, for CI")
     evaluation.set_defaults(handler=_eval)
 
