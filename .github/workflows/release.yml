@@ -1,12 +1,16 @@
 name: Release
 
+# Push a tag `vX.Y.Z` matching `version` in pyproject.toml, with a `## X.Y.Z` section in
+# CHANGELOG.md, and this builds the package, publishes it to PyPI and creates the GitHub Release
+# with that CHANGELOG section as its notes. See README "Releasing".
+
 on:
   push:
     tags:
       - "v*.*.*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -16,7 +20,54 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
+      # Fails the release before anything is built if the tag, pyproject.toml and CHANGELOG.md
+      # disagree.
+      - run: python3 scripts/release_notes.py "${{ github.ref_name }}" -o release-notes.md
+      - run: uv sync --all-extras --dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run pytest
       - run: uv build
-      - run: gh release create "${{ github.ref_name }}" dist/* --title "${{ github.ref_name }}" --generate-notes
+      - run: uvx twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: |
+            dist/
+            release-notes.md
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/questxtract/
+    permissions:
+      id-token: write # lets `uv publish` use PyPI trusted publishing if no token is set
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+      - uses: astral-sh/setup-uv@v5
+      - run: uv publish dist/*
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+      - run: >
+          gh release create "${{ github.ref_name }}" dist/*
+          --repo "${{ github.repository }}"
+          --title "${{ github.ref_name }}"
+          --notes-file release-notes.md
         env:
           GH_TOKEN: ${{ github.token }}
