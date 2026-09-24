@@ -42,6 +42,7 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
 
 ### Added
 
+- Automatic releases (#45): pushing a tag `vX.Y.Z` publishes the package to PyPI and creates the GitHub Release with the matching CHANGELOG section as notes. `scripts/release_notes.py` fails the release first if the tag, `pyproject.toml` and `CHANGELOG.md` disagree.
 - A terminal progress bar on stderr, one redrawn line per stage, rendered by the CLI from the
   existing `Progress` callback (#14). The transcribe stage reports inside itself, per decoded
   word, through the backend's `on_progress`.
