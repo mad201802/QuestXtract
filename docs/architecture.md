@@ -30,23 +30,25 @@ output: unreliable sentence boundaries, unreliable punctuation, no speaker label
 So the pipeline spends most of its effort on two things: rebuilding timed sentence structure
 before detection, and rejecting false positives after it.
 
-### 1.2 The two reference recordings
+### 1.2 The reference recordings
 
-The design is calibrated against two deliberately opposite lectures. Neither is grading material;
-both are what we develop and measure against.
+The design is calibrated against deliberately different lectures. None is grading material;
+all are what we develop and measure against.
 
 | Recording | Regime | What it stresses |
 |---|---|---|
 | [MIT 18.100B Real Analysis, L1](https://www.youtube.com/watch?v=BWvjy0a1Ffg) | chalk, sliding blackboards, dense LaTeX math, **camera pans and zooms to follow the lecturer**, few audible student questions | vision, LaTeX, manim, ASR on math jargon |
-| [Stanford CS234 RL, L1 2024](https://www.youtube.com/watch?v=WsvFL-LjA6U) | projected slides plus classroom, students asking questions **off-mic**, ~80 minutes | question detection, lecturer-repeats-question, echo pairs |
+| [TTK4225, 2026-09-14, P03·12 — impulse responses and BIBO stability](https://www.youtube.com/watch?v=ufmTACqiE78) | digital tablet notes (OneNote/PDF sheet), single instructor, control-theory derivations with heavy Socratic back-and-forth | question detection on implicit-cue and self-answered questions, ASR on control-theory notation |
+| [TTK4225, 2026-09-15, P03·14 — sinusoidal fidelity](https://www.youtube.com/watch?v=IQa2TSykWdc) | digital tablet notes (OneNote/PDF sheet), same course, frequent student Q&A | echo pairs (student question + instructor restatement), habitual confirmation-tag handling ("...right?"/"...true?") |
 
 Two consequences that show up repeatedly below:
 
 - **There is no single video layout.** Merged single-camera, separate speaker plus screenshare,
-  blackboard-only, picture-in-picture. Section 6 uses a VLM layout probe rather than a classifier.
-- **On CS234 the students are inaudible.** What *is* in the audio is the lecturer repeating the
-  question - "so the question is whether...". That makes the implicit-cue path (section 7.1b) the
-  **primary** detection path on classroom recordings, not a nice-to-have.
+  blackboard-only, digital tablet notes, picture-in-picture. Section 6 uses a VLM layout probe
+  rather than a classifier.
+- **The TTK4225 instructor uses a habitual confirmation tag** ("...right?"/"...true?") very
+  frequently across both recordings — see `docs/annotation_guidelines.md` section 2 for how this is labelled
+  consistently rather than case by case.
 
 ### 1.3 Stage order
 
@@ -251,8 +253,8 @@ a partition, so no provenance validator is needed.
 
 Speaker identification by name is out of scope (requirements, 1. Purpose & Scope) and a single
 main speaker is assumed (4.2). There is no diarization, no speaker attribution and no acoustic
-speaker check. On CS234 the students are off-mic, so there is frequently no second voice on the
-recording to diarize in the first place - the lecturer's repetition of the question is the signal,
+speaker check. In a classroom recording the students are often off-mic, so there is frequently no
+second voice on the recording to diarize in the first place - the lecturer's repetition of the question is the signal,
 and that is a lexical problem, not an acoustic one.
 
 ---
@@ -720,7 +722,7 @@ the immediately following sentence at a near-zero gap.
 behind them yet:
 
 - *Implicit cue, no `?`* (*"the question is whether ..."*). Expected to be the primary path on
-  CS234, where students are off-mic. Measured, it is not: the lecturer's restatement reaches
+  classroom recordings where students are off-mic. Measured, it is not: the lecturer's restatement reaches
   the ASR with its `?` (*"So the question was, ... is if you have good demonstration ...?"*),
   and the off-mic student questions are not in the transcript at all, so no text rule reaches
   them.
@@ -772,7 +774,7 @@ rather than written up front, and deliberately short: they only keep the obvious
 the judge's input. Tags follow the annotation guidelines, which label them `rhetorical`: a
 penalty with a reason code, not a veto.
 
-**Measured.** Both reference recordings, transcribed with the default config, plus one 11-minute
+**Measured.** The MIT reference recording, transcribed with the default config, plus one 11-minute
 lecture from the customer's own course (no labels; tag-heavy). A label counts as found when an
 emitted question overlaps it after padding the label by 5 s, because the hand-timed labels sit
 3 to 55 s off the ASR clock; that padding is a stopgap for #12, not the harness's rule (4.2).
@@ -780,13 +782,12 @@ emitted question overlaps it after padding the label by 5 s, because the hand-ti
 | Recording | Before: content found / emitted / candidates | After |
 |---|---|---|
 | MIT 18.100B L1 | 2 of 10 / 10 / 39 | 7 of 10 / 29 / 30 |
-| Stanford CS234 L1 | 5 of 17 / 19 / 67 | 9 of 17 / 40 / 52 |
 | customer lecture | - / 8 / 25 | - / 10 / 12 |
 
 "Before" lost most questions to the head-word rule: *"So what ...?"* scored 0.60 on the mark
-alone and fell under the emission gate. Of the 11 still missed: 4 are student questions asked
-off-mic, 1 was never transcribed, 2 are detected but sit more than 5 s from their label,
-and 4 were spoken or transcribed as statements (*"So this here is how the ordering interacts
+alone and fell under the emission gate. The ones still missed were questions never
+transcribed, detections sitting more than 5 s from their label, and questions spoken or
+transcribed as statements (*"So this here is how the ordering interacts
 with addition"*). None is reachable by a text rule on this transcript. Precision is not
 measured here: outside the blind slices the labels are not exhaustive, so an unlabelled
 emission is not necessarily wrong - most are real lecturer questions.
@@ -826,8 +827,8 @@ needs a signal score of 0.28; distance over 12 needs 2 keywords.
 
 There is **no speaker constraint on pairing**, and not only because we have no speaker layer:
 lectures are full of self-answered questions, and requiring a speaker change would delete the
-single most common QA shape in the corpus - which on CS234 is *the entire shape*, since the
-lecturer both repeats and answers the student's question.
+single most common QA shape in the corpus - which with off-mic students is *the entire shape*,
+since the lecturer both repeats and answers the student's question.
 
 > **Decision.** `questxtract/answer.py`. Three functions called in sequence behind the one
 > `answer` stage entry (section 11.1): swapping the whole search replaces that entry, swapping one
@@ -897,7 +898,7 @@ overlap(A, B) = |tokens(A) & tokens(B)| / min(|tokens(A)|, |tokens(B)|)
 
 Two passes, both only over candidates starting within 90 seconds of each other:
 
-- **Echo pairs.** A student asks and the lecturer restates - on CS234 this is the *normal* case,
+- **Echo pairs.** A student asks and the lecturer restates - with off-mic students this is the *normal* case,
   not an edge case, and both directions get emitted. Detected by answer overlap >= 0.45 plus one
   cross pairing (left question vs right answer) >= 0.55. Keep whichever question echoes the other
   less.
