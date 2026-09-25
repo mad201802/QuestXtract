@@ -158,7 +158,9 @@ measuring the seed, not the system — and that is a data problem, not a detecto
 
 ## 8. Worked example
 
-Source: MIT 18.100B Real Analysis, Lecture 1.
+Source: MIT 18.100B Real Analysis, Lecture 1. The other reference recordings are TTK4225,
+2026-09-14 (P03·12) and 2026-09-15 (P03·14) — see `tests/data/README.md` for the full titles
+and URLs.
 
 ```jsonl
 {"start": 142.0, "end": 145.3, "text": "what is a supremum", "kind": "content", "split": "seed"}
@@ -170,6 +172,19 @@ Source: MIT 18.100B Real Analysis, Lecture 1.
 The fourth entry has no `?` and no wh-word start — the seed detector would never have proposed
 it. It only exists because the 1800-1900s window fell inside a blind slice and was labelled
 from scratch.
+
+**Note on the TTK4225 instructor's habitual tag.** Both TTK4225 recordings use "...right?"/
+"...true?" very frequently as a confirmation tag. Per section 2, every instance is labelled
+`rhetorical` unless it trails a real content question, in which case only the content question
+gets an entry:
+
+```jsonl
+{"start": 1185.51, "end": 1187.79, "text": "This area here is going to be infinite, true?", "kind": "rhetorical", "split": "blind"}
+{"start": 3014.0, "end": 3017.0, "text": "and why is this not a field? it's for multiplication, right?", "kind": "content", "split": "blind"}
+```
+
+Both TTK4225 files apply this to every standalone tag and every tag closing a statement; see
+`tests/data/README.md`'s TTK4225 conventions for the related framing and poll rules.
 
 ## 9. Disagreements
 

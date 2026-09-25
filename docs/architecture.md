@@ -30,19 +30,25 @@ output: unreliable sentence boundaries, unreliable punctuation, no speaker label
 So the pipeline spends most of its effort on two things: rebuilding timed sentence structure
 before detection, and rejecting false positives after it.
 
-### 1.2 The reference recording
+### 1.2 The reference recordings
 
-The design is calibrated against one committed lecture. It is not grading material; it is what
-we develop and measure against.
+The design is calibrated against deliberately different lectures. None is grading material;
+all are what we develop and measure against.
 
 | Recording | Regime | What it stresses |
 |---|---|---|
 | [MIT 18.100B Real Analysis, L1](https://www.youtube.com/watch?v=BWvjy0a1Ffg) | chalk, sliding blackboards, dense LaTeX math, **camera pans and zooms to follow the lecturer**, few audible student questions | vision, LaTeX, manim, ASR on math jargon |
+| [TTK4225, 2026-09-14, P03·12 — impulse responses and BIBO stability](https://www.youtube.com/watch?v=ufmTACqiE78) | digital tablet notes (OneNote/PDF sheet), single instructor, control-theory derivations with heavy Socratic back-and-forth | question detection on implicit-cue and self-answered questions, ASR on control-theory notation |
+| [TTK4225, 2026-09-15, P03·14 — sinusoidal fidelity](https://www.youtube.com/watch?v=IQa2TSykWdc) | digital tablet notes (OneNote/PDF sheet), same course, frequent student Q&A | echo pairs (student question + instructor restatement), habitual confirmation-tag handling ("...right?"/"...true?") |
 
 Two consequences that show up repeatedly below:
 
 - **There is no single video layout.** Merged single-camera, separate speaker plus screenshare,
-  blackboard-only, picture-in-picture. Section 6 uses a VLM layout probe rather than a classifier.
+  blackboard-only, digital tablet notes, picture-in-picture. Section 6 uses a VLM layout probe
+  rather than a classifier.
+- **The TTK4225 instructor uses a habitual confirmation tag** ("...right?"/"...true?") very
+  frequently across both recordings — see `docs/annotation_guidelines.md` section 2 for how this is labelled
+  consistently rather than case by case.
 - **In a classroom the students are often inaudible.** What *is* in the audio is the lecturer
   repeating the question - "so the question is whether...". That makes the implicit-cue path
   (section 7.1b) a detection path on classroom recordings, not a nice-to-have.
@@ -404,8 +410,8 @@ seed workflow above stays the cheap path for longer recordings. Exhaustive label
 makes precision measurable: an unlabelled prediction is a real false positive. The ground truth
 is the transcript, not the audio - a question the ASR never transcribed (an off-mic student)
 is not labelled, because no text rule can reach it; `tests/data/README.md` lists the
-ones dropped for that reason. The labels were LLM-drafted from the transcript and are pending
-human review.
+ones dropped for that reason. The MIT labels were LLM-drafted from the transcript and are
+pending human review.
 
 ### 4.2 Matching and metrics
 
@@ -749,8 +755,9 @@ behind them yet:
   with the punctuation prompt marked every labelled content question that is in the transcript;
   the 35 `?`-less head-word sentences on the measured recordings were all statements.
 
-Either lands when a labelled question is lost to it; on the reference recording the harness
-(7.3) shows none. The rules are follow-up work, not part of #12.
+Either lands when a labelled question is lost to it; on the reference recordings the harness
+(7.3) shows one, the `?`-less cut-off *"Can this one be..."*. The rules are follow-up work, not
+part of #12.
 
 ### 7.2 Vetoes
 
@@ -798,22 +805,36 @@ penalty with a reason code, not a veto.
 
 | Recording | Content labels | TP | FP | FN | Recall | Precision | F1 |
 |---|---|---|---|---|---|---|---|
-| MIT 18.100B L1 | 28 | 28 | 1 | 0 | **1.00** | 0.97 | 0.98 |
+| MIT 18.100B L1 | 28 | 28 | 1 | 0 | 1.00 | 0.97 | 0.98 |
+| TTK4225 2026-09-14 | 39 | 33 | 21 | 6 | 0.85 | 0.61 | 0.71 |
+| TTK4225 2026-09-15 | 60 | 52 | 42 | 8 | 0.87 | 0.55 | 0.68 |
+| **Pooled** | 127 | 113 | 64 | 14 | **0.89** | 0.64 | 0.74 |
 
-NFR2 holds with room. `question_mark_rate` is 1.00: Whisper `turbo` with the punctuation prompt
-put a `?` on every labelled content question, so 3.1's bet holds on this recording. The sweep is
-flat from 0 to 0.30 (recall 1.00, precision 0.93) and from 0.35 to 0.55 (1.00 / 0.97), and empty
-above 0.55, the unanswered ceiling of 9.2: the gate only ever separates `?`-with-head (1.00) from
-`?`-only (0.60) sentences.
+NFR2 holds with room. `question_mark_rate` is 0.99: Whisper `turbo` with the punctuation prompt
+put a `?` on every labelled content question but one, a cut-off *"Can this one be..."*, so 3.1's
+bet holds on these three. The sweep is flat from 0 to 0.30 (recall 0.99, precision 0.53) and
+from 0.35 to 0.55 (0.89 / 0.64), and empty above 0.55, the unanswered ceiling of 9.2: the gate
+only ever separates `?`-with-head (1.00) from `?`-only (0.60) sentences.
 
-*Missed: none.*
+*Missed (14, all TTK4225).* Thirteen have their `?` but no head where 7.1 looks for one, so they
+score 0.33 and fall under the gate. Six put the wh-word at the end as an answer slot - *"And
+this is going to be what?"*, *"The integral of this violet here is going to be what?"*. Three
+carry the head in an earlier comma clause than the last - *"The area of an exponential in time,
+this area here, is it finite, infinite, or you do not know?"*. Two open on a preposition that 7.1's head
+search does not skip (*"For which age are we guaranteed ...?"*), and two were merged by 3.1 with a preceding
+fragment (*"Unit step function, u. Is it absolutely integrable?"*, *"Find z. How do you find
+z?"*). The fourteenth is the `?`-less cut-off above. An end-slot *what* is the obvious next rule.
 
-*False positives (1).* It hits a `rhetorical` label, concept-free framing (*"So how do we do
-that?"*). It is not reachable by a lexical rule without also losing content questions of the
-same shape; content vs rhetorical is the judge's call (1.4), as designed.
+*False positives (64).* 43 hit `check_in` labels, nearly all this lecturer's own check-in forms
+(*"Do you see it, people?"*, *"How much are we together, people?"*, *"Are they clear?"*) that the
+check-in list, grown from the earlier recordings, does not yet hold. 18 hit `rhetorical` ones:
+concept-free framing (*"So how do we do that?"*, *"What does it mean?"*) and rhetorical
+confirmations (*"Doesn't it go like this?"*). 3 hit `procedural` ones (*"Shall we already watch
+the video of the kid?"*, *"Am I recording?"*). None hit an unlabelled sentence.
 
-The confirmation tags the lecturer uses (*"..., right?"*) and the check-ins (*"Is that
-clear?"*) all stay out, so the tag and check-in penalties do their job.
+The confirmation tags (MIT's *"..., right?"*, TTK4225's *"True?"* and *"Okay?"*, several a
+minute) all stay out: none of the 64 is a tag, so the tag penalty does its job. Growing the
+check-in list with the TTK4225 forms is the cheapest precision win left.
 
 > **Decision.** `questxtract/detect.py`, cue tables inline as module constants.
 
