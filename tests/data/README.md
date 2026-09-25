@@ -38,19 +38,23 @@ Additional recordings can be added the same way; add a row here for each.
 
 **Transcripts.** `<slug>.transcript.json` is `scripts/transcribe.py`'s output with the default
 config (faster-whisper `turbo`, punctuation prompt), trimmed to what the pipeline reads: per ASR
-chunk `text`/`start`/`end` and per word `word`/`start`/`end`. Re-transcribing changes the word
-clock, so a new transcript means re-snapping the labels. The MIT recording is MIT
-OpenCourseWare, CC BY-NC-SA 4.0; its transcript is kept here for non-commercial evaluation only.
+chunk `text`/`start`/`end` and per word `word`/`start`/`end`. Committed so `evaluate.py` runs
+in CI without an ASR run. Re-transcribing changes the word clock, so a new transcript means
+re-snapping the labels (`scratch_to_labels.py --transcript`). Provenance: the MIT recording is
+MIT OpenCourseWare, CC BY-NC-SA 4.0; its transcript is kept here for non-commercial evaluation
+only.
 
 **Labelling method** (issue #12, replacing the hand-timed first pass of #11). The full
 transcript of each recording was read sentence by sentence, with no seed detector, and every
 question-shaped utterance got a `kind` per the guidelines, including `?`-less ones. Each entry's
 `text` quotes the transcript verbatim, trimmed to the question, one sentence per entry, and
-`start`/`end` are snapped to its first and last word, so labels and predictions share one clock.
-Because the whole recording is labelled from scratch, every entry is `"split": "blind"`.
+`start`/`end` are snapped to its first and last word by `scratch_to_labels.py --transcript`, so
+labels and predictions share one clock. Because the whole recording is labelled from scratch,
+every entry is `"split": "blind"`.
 
-**The ground truth is the transcript, not the audio.** A question that never reached the
-transcript cannot be found by any text rule, so it is not labelled.
+The MIT labels were drafted by an LLM (Claude) from the transcript text and are pending human
+review against the audio; until that review is recorded here, treat their content-vs-rhetorical
+calls as provisional.
 
 **TTK4225 conventions.** The instructor uses a habitual confirmation tag ("True?", "Okay?",
 "...right?") several times a minute. Per `docs/annotation_guidelines.md` section 2, every
@@ -63,6 +67,20 @@ that did get a `?` ("One, two, three, four?") are `check_in`.
 
 Totals: MIT 34 entries (28 content), TTK4225 2026-09-14 114 entries (39 content),
 TTK4225 2026-09-15 166 entries (60 content).
+
+**The ground truth is the transcript, not the audio.** A question that never reached the
+transcript cannot be found by any text rule, so it is not labelled. Entries of the #11
+hand-labelled pass that are therefore gone:
+
+| Recording | Old label | Why dropped |
+|---|---|---|
+| MIT | 1046 s "...this is equal to another quotient, right?" (rhetorical) | transcribed as a statement, no tag |
+| MIT | 3363 s "...how do the ordering interacts with addition?" (content) | transcribed as a statement: "this here is how the ordering interacts with addition" |
+| MIT | 3375 s "...how do it act interacts with multiplication?" (content) | same sentence, same reason |
+
+Every other old label is in the new files, re-timed. The #11 TTK4225 labels were hand-timed
+up to several minutes off: 2026-09-14's "Is h of t absolutely integrable?", noted at 424 s, is
+spoken at 712 s.
 
 ## Schema
 
@@ -118,12 +136,10 @@ catches actual labelling mistakes.
 
 1. Pick a public lecture recording (YouTube URL is fine — the video itself is never committed,
    only the labels).
-2. Get a transcript with timestamps. Either watch while jotting candidate timestamp + question
-   text, or work from a full auto-caption transcript and extract candidates directly; classify
-   each into a `kind` afterward. See `scripts/scratch_to_labels.py --help` for the plain-text
-   scratch format this converts into JSONL. (Once a standalone seed-detector tool exists over
-   `detect.py`'s rules, that becomes the faster first pass per `docs/annotation_guidelines.md`
-   section 5 — until then, either manual method above is the practical equivalent.)
+2. Transcribe it (`scripts/transcribe.py`), trim it like the committed ones and save it as
+   `<slug>.transcript.json`. Read the transcript and note each question-shaped utterance as
+   `start | verbatim transcript quote | kind` (`scripts/scratch_to_labels.py --help`); pass
+   `--transcript` so the times come from the transcript's words, not from typing.
 3. Label every candidate per `docs/annotation_guidelines.md` section 2-4. In particular, note
    section 2's rule for habitual confirmation tags ("...right?", "...true?") — some
    instructors use these constantly; decide once and apply consistently through the whole

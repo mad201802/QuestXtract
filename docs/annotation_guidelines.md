@@ -49,6 +49,11 @@ The lecturer is not expecting or wanting a spoken response. Three common shapes:
   ("...so why is this not a field? It's for multiplication, right?"), label the content
   question as `content` and do not also create a second entry for the trailing tag.
 
+A framing question that only announces the next step and names no concept of its own ("So how
+do we do that?", "So why is this popular?") is rhetorical; one that asks about a concept a student
+should be able to answer afterwards ("What is a field?", "How does a Markov chain work?") is
+`content`, even when the lecturer answers it straight away.
+
 For the first two shapes, the test: if a student answered out loud, would it derail the
 lecture rather than fit into it? If yes, `rhetorical`.
 
@@ -68,6 +73,13 @@ though a real answer is expected, because the answer is not itself instructional
 > "Can you pass me the marker?"
 > "Is this thing recording?"
 > "Can you turn the lights down?"
+
+Includes managing the exchange with a student rather than its content: asking for a name
+("Could you say your name first, please?"), calling on someone ("Yeah?"), and **clarification
+echoes** - the lecturer repeating a fragment of a student's question back to check it ("Okay,
+optimization and what?", "It's faster, but within some error?"). A full restatement of the
+student's question ("So the question was, ..., can that be better than reinforcement
+learning?") is not an echo: label it `content`.
 
 ## 3. Vetoes — things that look like questions and are not
 

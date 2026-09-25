@@ -198,10 +198,10 @@ footprint turns out to be a problem on a laptop.
 >
 > **Dev workflow.** No dev machine has a GPU, and `turbo` on CPU runs a 90-minute lecture in
 > roughly the same wall-clock time again. So the cached `transcribe.json` for both reference
-> recordings **will be committed to the repo** - it is not there yet, and until it is, sections 3
-> and 6 to 9 are developed against synthetic word specs and cannot be measured against real audio.
-> It lands with #11/#12, which are the first things that need it. Full ASR runs on the server or
-> overnight; the inner loop for everyone working on those sections should never touch Whisper.
+> recordings is committed as `tests/data/<slug>.transcript.json` (#12), trimmed to the words and
+> chunk spans the pipeline reads; the quality metrics above are dropped there, since nothing
+> downstream of stage 2 reads them yet. Full ASR runs on the server or overnight; the inner loop
+> for everyone working on sections 3 and 6 to 9 should never touch Whisper.
 
 ### 2.3 Timing: word timestamps, no forced alignment
 
@@ -303,8 +303,9 @@ with no reason code to show for it.
 >
 > **Risk, stated plainly:** this bets on Whisper emitting question marks, and 2.2 already admits
 > `initial_prompt` decays. The eval harness measures the bet directly via `question_mark_rate`
-> (section 4.3); until #12 lands, the stage's own `stats["sentences_unpunctuated"]` is the standing
-> proxy, and a count that climbs means the splitter is guessing from silence alone. If it drops,
+> (section 4.3; 0.93 on the reference recordings, 7.3); between labelled runs, the stage's own
+> `stats["sentences_unpunctuated"]` is the standing proxy, and a count that climbs means the
+> splitter is guessing from silence alone. If it drops,
 > the fix in order of cost is: a better `initial_prompt`, then a larger Whisper model, then a
 > neural splitter as one function behind the same interface.
 >
@@ -381,11 +382,16 @@ One JSONL file per labelled recording, `tests/data/<name>.labels.jsonl`:
 {"start": 1284.2, "end": 1288.9, "text": "why does a stable sort matter here", "kind": "content"}
 ```
 
+next to the transcript it is timed against, `tests/data/<name>.transcript.json`. A label's `text`
+quotes that transcript and its `start`/`end` are snapped to the quoted words
+(`scripts/scratch_to_labels.py --transcript`), so labels and predictions share one clock. The
+first, hand-timed pass (#11) sat 3 to 55 s off it, which no overlap rule survives.
+
 `kind` is `content` (a real question we want), `rhetorical`, `check_in` or `procedural`. Labelling
 the negatives is what lets us measure the thing that is actually hard - the false positive rate -
 rather than only recall.
 
-Two properties of the set matter:
+Two properties of the set matter (the committed set is labelled differently, see below):
 
 - **Pre-annotated.** Labellers correct a high-recall detector dump (`?` OR wh-head OR aux-head, no
   scoring, no vetoes) instead of scrubbing 80 minutes of video. Roughly 5x faster.
@@ -393,13 +399,25 @@ Two properties of the set matter:
   seed. Pre-annotation cannot surface what the detector never proposed, so without a blind slice
   the recall number measures the seed, not the system.
 
-Coverage: both reference recordings, ~30-60 `content` questions, negatives labelled too.
+Coverage: both reference recordings, 53 `content` questions, 95 entries in all.
+
+**What the committed set actually is.** Both transcripts were labelled exhaustively, sentence by
+sentence, with no seed, so every entry is `blind` and `blind_slice_recall` equals recall; the
+seed workflow above stays the cheap path for longer recordings. Exhaustive labelling is what
+makes precision measurable: an unlabelled prediction is a real false positive. The ground truth
+is the transcript, not the audio - a question the ASR never transcribed (an off-mic
+student) is not labelled, because no text rule can reach it; `tests/data/README.md` lists the
+ones dropped for that reason. The MIT labels were LLM-drafted from the transcript and are
+pending human review.
 
 ### 4.2 Matching and metrics
 
 A prediction matches a label when their time ranges overlap and the overlap covers at least half
 the shorter range. Time-based matching, not text matching, because ASR text will differ from what
-a human typed and we are not evaluating the ASR here.
+a human typed and we are not evaluating the ASR here. Overlap is measured against the shorter
+span, not as IoU, because a prediction is a whole sentence that may carry a long preamble
+around a short labelled question. Matching is one-to-one, highest overlap first: otherwise one
+run-on sentence satisfies two labels, or two predictions both count as hits on one.
 
 ```
 recall    = matched_content_labels / content_labels        <- NFR2 gate, >= 0.50
@@ -421,9 +439,15 @@ questxtract eval tests/data/            # all labelled recordings, table to stdo
 questxtract eval tests/data/ --json     # machine-readable, for CI
 ```
 
-CI runs it against one short recording with the cached transcription artifacts committed to the
-repo (section 2.2), so the gate costs seconds and needs no ASR run and no network. Full-length
-recordings run on demand.
+What is scored is the pipeline's output: stages 3 onward over the committed transcript, with
+`min_confidence` at 0 so every detection candidate comes back, then gated at the default for the
+headline. The sweep over the gate therefore covers both ends: at 0 it scores every candidate,
+at 0.40 what a user gets. The text report lists every missed content question and every false
+positive with the label kind it hit; `--json` carries the same lists.
+
+CI runs it through pytest (`tests/test_evaluate.py`), which asserts pooled recall >= 0.50 over
+both reference recordings. Both run in well under a second, so there is no separate short
+recording.
 
 > **Decision.** `questxtract/evaluate.py`. The report includes a threshold sweep over
 > `min_confidence`, so the NFR2 tradeoff is visible rather than assumed.
@@ -723,14 +747,16 @@ behind them yet:
 
 - *Implicit cue, no `?`* (*"the question is whether ..."*). Expected to be the primary path on
   classroom recordings where students are off-mic. Measured, it is not: the lecturer's restatement reaches
-  the ASR with its `?` (*"So the question was, ... is if you have good demonstration ...?"*),
-  and the off-mic student questions are not in the transcript at all, so no text rule reaches
+  the ASR with its `?`, and the off-mic student questions are not in the transcript at all, so no text rule reaches
   them.
 - *Missing `?` recovery* (an interrogative head **and** a local answer slot). Whisper `turbo`
   with the punctuation prompt marked every labelled content question that is in the transcript;
   the 35 `?`-less head-word sentences on the three measured recordings were all statements.
 
-Either lands when a labelled question is lost to it.
+Either lands when a labelled question is lost to it. The harness (7.3) shows neither costing much on the
+current set: the one `?`-less content label, a cut-off *"Can this one be..."*, is its only
+failure of either kind. The measurements above were
+taken against the hand-timed #11 labels; the rules are follow-up work, not part of #12.
 
 ### 7.2 Vetoes
 
@@ -774,23 +800,40 @@ rather than written up front, and deliberately short: they only keep the obvious
 the judge's input. Tags follow the annotation guidelines, which label them `rhetorical`: a
 penalty with a reason code, not a veto.
 
-**Measured.** The MIT reference recording, transcribed with the default config, plus one 11-minute
-lecture from the customer's own course (no labels; tag-heavy). A label counts as found when an
-emitted question overlaps it after padding the label by 5 s, because the hand-timed labels sit
-3 to 55 s off the ASR clock; that padding is a stopgap for #12, not the harness's rule (4.2).
+**Measured** with the harness (section 4), default config, `questxtract eval tests/data/`:
 
-| Recording | Before: content found / emitted / candidates | After |
-|---|---|---|
-| MIT 18.100B L1 | 2 of 10 / 10 / 39 | 7 of 10 / 29 / 30 |
-| customer lecture | - / 8 / 25 | - / 10 / 12 |
+| Recording | Content labels | TP | FP | FN | Recall | Precision | F1 |
+|---|---|---|---|---|---|---|---|
+| MIT 18.100B L1 | 28 | 28 | 1 | 0 | 1.00 | 0.97 | 0.98 |
+| TTK4225 2026-09-14 | 39 | 33 | 21 | 6 | 0.85 | 0.61 | 0.71 |
+| TTK4225 2026-09-15 | 60 | 52 | 42 | 8 | 0.87 | 0.55 | 0.68 |
+| **Pooled** | 127 | 113 | 64 | 14 | **0.89** | 0.64 | 0.74 |
 
-"Before" lost most questions to the head-word rule: *"So what ...?"* scored 0.60 on the mark
-alone and fell under the emission gate. The ones still missed were questions never
-transcribed, detections sitting more than 5 s from their label, and questions spoken or
-transcribed as statements (*"So this here is how the ordering interacts
-with addition"*). None is reachable by a text rule on this transcript. Precision is not
-measured here: outside the blind slices the labels are not exhaustive, so an unlabelled
-emission is not necessarily wrong - most are real lecturer questions.
+NFR2 holds with room. `question_mark_rate` is 0.99: Whisper `turbo` with the punctuation prompt
+put a `?` on every labelled content question but one, a cut-off *"Can this one be..."*, so 3.1's
+bet holds on these three. The sweep is flat from 0 to 0.30 (recall 0.99, precision 0.53) and
+from 0.35 to 0.55 (0.89 / 0.64), and empty above 0.55, the unanswered ceiling of 9.2: the gate
+only ever separates `?`-with-head (1.00) from `?`-only (0.60) sentences.
+
+*Missed (14, all TTK4225).* Thirteen have their `?` but no head where 7.1 looks for one, so they
+score 0.33 and fall under the gate. Six put the wh-word at the end as an answer slot - *"And
+this is going to be what?"*, *"The integral of this violet here is going to be what?"*. Three
+carry the head in an earlier comma clause than the last - *"The area of an exponential in time,
+this area here, is it finite, infinite, or you do not know?"*. Two open on a preposition that 7.1's head
+search does not skip (*"For which age are we guaranteed ...?"*), and two were merged by 3.1 with a preceding
+fragment (*"Unit step function, u. Is it absolutely integrable?"*, *"Find z. How do you find
+z?"*). The fourteenth is the `?`-less cut-off above. An end-slot *what* is the obvious next rule.
+
+*False positives (64).* 43 hit `check_in` labels, nearly all this lecturer's own check-in forms
+(*"Do you see it, people?"*, *"How much are we together, people?"*, *"Are they clear?"*) that the
+check-in list, grown from the earlier recordings, does not yet hold. 18 hit `rhetorical` ones:
+concept-free framing (*"So how do we do that?"*, *"What does it mean?"*) and rhetorical
+confirmations (*"Doesn't it go like this?"*). 3 hit `procedural` ones (*"Shall we already watch
+the video of the kid?"*, *"Am I recording?"*). None hit an unlabelled sentence.
+
+The confirmation tags (MIT's *"..., right?"*, TTK4225's *"True?"* and *"Okay?"*, several a
+minute) all stay out: none of the 64 is a tag, so the tag penalty does its job. Growing the
+check-in list with the TTK4225 forms is the cheapest precision win left.
 
 > **Decision.** `questxtract/detect.py`, cue tables inline as module constants.
 
@@ -1144,9 +1187,8 @@ correct invalidation by naming the config fields it reads, and a stage that gain
 and forgets to list it is the one bug class this design still has. Keep `uses` next to the
 signature so the two are reviewed together.
 
-`transcribe.json` for both reference recordings will be committed to the repo (section 2.2), which
-is what will let CI run the eval gate in seconds with no ASR and no network. It is not committed
-yet; that lands with #11/#12.
+The transcripts of both reference recordings are committed next to their labels (section 2.2),
+which is what lets CI run the eval gate in seconds with no ASR and no network.
 
 ### 11.3 Progress (FR9)
 
@@ -1319,8 +1361,8 @@ its name, its signature and its `@stage` registration are real; only the algorit
 | `score.py` | 8 score | confidence only; 9.1 answer scoring and 9.3 dedupe owed | — |
 | `llm.py` | 9 judge | stub, no-ops when disabled | — |
 | `export.py` | 10 export | done | #13 |
-| `evaluate.py` | not a stage | stub | #12, needs the labelled set #11 |
-| `cli.py` | not a stage | `process` works; `eval` and `quiz` exit 1 with a one-line error | #17 |
+| `evaluate.py` | not a stage | done; NFR2 gated in pytest | #12 |
+| `cli.py` | not a stage | `process` and `eval` work; `quiz` exits 1 with a one-line error | #17 |
 
 Every stub carries a `ponytail:` comment naming the section it owes, so `grep -rn 'ponytail:' src/`
 is the running list of what this document promises and the code does not yet do.

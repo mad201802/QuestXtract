@@ -62,8 +62,18 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   none, so downstream stages always have a word list to slice.
 - Sentence rebuilding (`sentences.py`) with word-index snapping and force-split at the widest
   internal gap, and structural segmentation (`segments.py`) on gap, duration and length.
-- `questxtract eval` and `questxtract quiz` subcommands, which exit 1 with a one-line error until
-  `evaluate.py` (#12) and the generative stage land.
+- `questxtract quiz` subcommand, which exits 1 with a one-line error until the generative stage
+  lands.
+- The evaluation harness (#12): `questxtract eval <dir|file>...` scores the pipeline against
+  every `*.labels.jsonl` that has a `*.transcript.json` beside it - content recall, precision,
+  f1, false positives by label kind, `question_mark_rate`, `blind_slice_recall`, a sweep over
+  `min_confidence`, and every missed question and false positive. `--json` for machines.
+  Matching is one-to-one by time overlap. `tests/test_evaluate.py` gates NFR2 (pooled recall
+  >= 0.50) in CI; today it is 0.91, precision 0.70.
+- `tests/data/<slug>.transcript.json` for both reference recordings, and exhaustive,
+  transcript-anchored labels replacing the hand-timed #11 set (53 content questions, 95
+  entries). `scripts/scratch_to_labels.py --transcript` snaps a label's times to the words it
+  quotes.
 - Optional `questxtract[llm]` extra for the judge and vision calls, imported inside the functions
   so the base install stays stdlib-only.
 - `tests/test_pipeline.py` asserts that `STAGES` matches the stage order architecture.md 1.3
