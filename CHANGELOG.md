@@ -69,9 +69,9 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   f1, false positives by label kind, `question_mark_rate`, `blind_slice_recall`, a sweep over
   `min_confidence`, and every missed question and false positive. `--json` for machines.
   Matching is one-to-one by time overlap. `tests/test_evaluate.py` gates NFR2 (pooled recall
-  >= 0.50) in CI; today it is 0.91, precision 0.70.
-- `tests/data/<slug>.transcript.json` for both reference recordings, and exhaustive,
-  transcript-anchored labels replacing the hand-timed #11 set (53 content questions, 95
+  >= 0.50) in CI; today it is 0.89, precision 0.64.
+- `tests/data/<slug>.transcript.json` for the reference recordings, and exhaustive,
+  transcript-anchored labels replacing the hand-timed #11 set (127 content questions, 314
   entries). `scripts/scratch_to_labels.py --transcript` snaps a label's times to the words it
   quotes.
 - Optional `questxtract[llm]` extra for the judge and vision calls, imported inside the functions

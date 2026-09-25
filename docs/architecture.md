@@ -49,6 +49,9 @@ Two consequences that show up repeatedly below:
 - **The TTK4225 instructor uses a habitual confirmation tag** ("...right?"/"...true?") very
   frequently across both recordings — see `docs/annotation_guidelines.md` section 2 for how this is labelled
   consistently rather than case by case.
+- **In a classroom the students are often inaudible.** What *is* in the audio is the lecturer
+  repeating the question - "so the question is whether...". That makes the implicit-cue path
+  (section 7.1b) a detection path on classroom recordings, not a nice-to-have.
 
 ### 1.3 Stage order
 
@@ -197,8 +200,8 @@ footprint turns out to be a problem on a laptop.
 > stage.
 >
 > **Dev workflow.** No dev machine has a GPU, and `turbo` on CPU runs a 90-minute lecture in
-> roughly the same wall-clock time again. So the cached `transcribe.json` for both reference
-> recordings is committed as `tests/data/<slug>.transcript.json` (#12), trimmed to the words and
+> roughly the same wall-clock time again. So the cached `transcribe.json` for the reference
+> recording is committed as `tests/data/<slug>.transcript.json` (#12), trimmed to the words and
 > chunk spans the pipeline reads; the quality metrics above are dropped there, since nothing
 > downstream of stage 2 reads them yet. Full ASR runs on the server or overnight; the inner loop
 > for everyone working on sections 3 and 6 to 9 should never touch Whisper.
@@ -253,8 +256,8 @@ a partition, so no provenance validator is needed.
 
 Speaker identification by name is out of scope (requirements, 1. Purpose & Scope) and a single
 main speaker is assumed (4.2). There is no diarization, no speaker attribution and no acoustic
-speaker check. In a classroom recording the students are often off-mic, so there is frequently no
-second voice on the recording to diarize in the first place - the lecturer's repetition of the question is the signal,
+speaker check. In a classroom the students are often off-mic, so there is frequently no second
+voice on the recording to diarize in the first place - the lecturer's repetition of the question is the signal,
 and that is a lexical problem, not an acoustic one.
 
 ---
@@ -303,7 +306,7 @@ with no reason code to show for it.
 >
 > **Risk, stated plainly:** this bets on Whisper emitting question marks, and 2.2 already admits
 > `initial_prompt` decays. The eval harness measures the bet directly via `question_mark_rate`
-> (section 4.3; 0.93 on the reference recordings, 7.3); between labelled runs, the stage's own
+> (section 4.3; 1.00 on the reference recording, 7.3); between labelled runs, the stage's own
 > `stats["sentences_unpunctuated"]` is the standing proxy, and a count that climbs means the
 > splitter is guessing from silence alone. If it drops,
 > the fix in order of cost is: a better `initial_prompt`, then a larger Whisper model, then a
@@ -399,14 +402,14 @@ Two properties of the set matter (the committed set is labelled differently, see
   seed. Pre-annotation cannot surface what the detector never proposed, so without a blind slice
   the recall number measures the seed, not the system.
 
-Coverage: both reference recordings, 53 `content` questions, 95 entries in all.
+Coverage: the reference recording, 28 `content` questions, 34 entries in all.
 
-**What the committed set actually is.** Both transcripts were labelled exhaustively, sentence by
+**What the committed set actually is.** The transcript was labelled exhaustively, sentence by
 sentence, with no seed, so every entry is `blind` and `blind_slice_recall` equals recall; the
 seed workflow above stays the cheap path for longer recordings. Exhaustive labelling is what
 makes precision measurable: an unlabelled prediction is a real false positive. The ground truth
-is the transcript, not the audio - a question the ASR never transcribed (an off-mic
-student) is not labelled, because no text rule can reach it; `tests/data/README.md` lists the
+is the transcript, not the audio - a question the ASR never transcribed (an off-mic student)
+is not labelled, because no text rule can reach it; `tests/data/README.md` lists the
 ones dropped for that reason. The MIT labels were LLM-drafted from the transcript and are
 pending human review.
 
@@ -446,7 +449,7 @@ at 0.40 what a user gets. The text report lists every missed content question an
 positive with the label kind it hit; `--json` carries the same lists.
 
 CI runs it through pytest (`tests/test_evaluate.py`), which asserts pooled recall >= 0.50 over
-both reference recordings. Both run in well under a second, so there is no separate short
+the reference recording. It runs in well under a second, so there is no separate short
 recording.
 
 > **Decision.** `questxtract/evaluate.py`. The report includes a threshold sweep over
@@ -597,7 +600,7 @@ Two different worlds hide under "read the board":
 | slides, screencast, beamer | essentially nothing | near-duplicate frame dedupe, then OCR |
 | chalkboard, whiteboard, handwriting | everything | see below |
 
-FR4 says "animation/drawing" and one of the two reference recordings is MIT chalk, so we are in
+FR4 says "animation/drawing" and the reference recording is MIT chalk, so we are in
 regime 2 and must also survive regime 1.
 
 Tesseract, PaddleOCR and EasyOCR are printed-text models. On chalk they are close to useless, and
@@ -745,18 +748,16 @@ the immediately following sentence at a near-zero gap.
 **Not implemented, and why.** Two paths from the original design have no labelled failure
 behind them yet:
 
-- *Implicit cue, no `?`* (*"the question is whether ..."*). Expected to be the primary path on
-  classroom recordings where students are off-mic. Measured, it is not: the lecturer's restatement reaches
-  the ASR with its `?`, and the off-mic student questions are not in the transcript at all, so no text rule reaches
-  them.
+- *Implicit cue, no `?`* (*"the question is whether ..."*). Expected on classroom recordings
+  where students are off-mic. A lecturer's restatement usually reaches the ASR with its `?`,
+  and an off-mic student question is not in the transcript at all, so no text rule reaches it.
 - *Missing `?` recovery* (an interrogative head **and** a local answer slot). Whisper `turbo`
   with the punctuation prompt marked every labelled content question that is in the transcript;
-  the 35 `?`-less head-word sentences on the three measured recordings were all statements.
+  the 35 `?`-less head-word sentences on the measured recordings were all statements.
 
-Either lands when a labelled question is lost to it. The harness (7.3) shows neither costing much on the
-current set: the one `?`-less content label, a cut-off *"Can this one be..."*, is its only
-failure of either kind. The measurements above were
-taken against the hand-timed #11 labels; the rules are follow-up work, not part of #12.
+Either lands when a labelled question is lost to it; on the reference recordings the harness
+(7.3) shows one, the `?`-less cut-off *"Can this one be..."*. The rules are follow-up work, not
+part of #12.
 
 ### 7.2 Vetoes
 
@@ -941,8 +942,8 @@ overlap(A, B) = |tokens(A) & tokens(B)| / min(|tokens(A)|, |tokens(B)|)
 
 Two passes, both only over candidates starting within 90 seconds of each other:
 
-- **Echo pairs.** A student asks and the lecturer restates - with off-mic students this is the *normal* case,
-  not an edge case, and both directions get emitted. Detected by answer overlap >= 0.45 plus one
+- **Echo pairs.** A student asks and the lecturer restates - with off-mic students this is the
+  *normal* case, not an edge case, and both directions get emitted. Detected by answer overlap >= 0.45 plus one
   cross pairing (left question vs right answer) >= 0.55. Keep whichever question echoes the other
   less.
 - **Near duplicates.** Question overlap >= 0.72 with answer overlap >= 0.50, or question overlap
@@ -1187,7 +1188,7 @@ correct invalidation by naming the config fields it reads, and a stage that gain
 and forgets to list it is the one bug class this design still has. Keep `uses` next to the
 signature so the two are reviewed together.
 
-The transcripts of both reference recordings are committed next to their labels (section 2.2),
+The reference recording's transcript is committed next to its labels (section 2.2),
 which is what lets CI run the eval gate in seconds with no ASR and no network.
 
 ### 11.3 Progress (FR9)

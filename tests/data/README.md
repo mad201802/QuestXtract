@@ -40,9 +40,14 @@ Additional recordings can be added the same way; add a row here for each.
 config (faster-whisper `turbo`, punctuation prompt), trimmed to what the pipeline reads: per ASR
 chunk `text`/`start`/`end` and per word `word`/`start`/`end`. Committed so `evaluate.py` runs
 in CI without an ASR run. Re-transcribing changes the word clock, so a new transcript means
-re-snapping the labels (`scratch_to_labels.py --transcript`). Provenance: the MIT recording is
-MIT OpenCourseWare, CC BY-NC-SA 4.0; its transcript is kept here for non-commercial evaluation
-only.
+re-snapping the labels (`scratch_to_labels.py --transcript`).
+
+**License.** Transcripts and labels are derived from the recording, so they carry its license,
+not the repository's MIT license: the MIT recording is MIT OpenCourseWare, and
+`mit_18_100b_l1.*` are CC BY-NC-SA 4.0 (attribution: MIT OpenCourseWare, 18.100B Real
+Analysis). The TTK4225 recordings are the lecturer's own, and `ttk4225_*` are committed with
+the lecturer's (Damiano's) permission. Only commit a transcript of a recording whose license
+allows redistributing derivatives; a public YouTube upload alone does not.
 
 **Labelling method** (issue #12, replacing the hand-timed first pass of #11). The full
 transcript of each recording was read sentence by sentence, with no seed detector, and every
