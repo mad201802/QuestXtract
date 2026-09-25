@@ -17,7 +17,6 @@ One JSONL file per recording. File stem should be a short, stable slug for the r
 
 ```
 tests/data/mit_18_100b_l1.labels.jsonl
-tests/data/stanford_cs234_l1.labels.jsonl
 ```
 
 Record the source recording's title, uploader, and URL in a comment-style first line is not
@@ -29,20 +28,23 @@ data file.
 | Slug | Recording | URL | Regime |
 |---|---|---|---|
 | `mit_18_100b_l1` | MIT 18.100B Real Analysis, Lecture 1 | https://www.youtube.com/watch?v=BWvjy0a1Ffg | chalkboard, few audible questions |
-| `stanford_cs234_l1` | Stanford CS234 RL, Lecture 1 (2024) | https://www.youtube.com/watch?v=WsvFL-LjA6U | slides + classroom, students off-mic |
 
 **Transcripts.** `<slug>.transcript.json` is `scripts/transcribe.py`'s output with the default
 config (faster-whisper `turbo`, punctuation prompt), trimmed to what the pipeline reads: per ASR
 chunk `text`/`start`/`end` and per word `word`/`start`/`end`. Committed so `evaluate.py` runs
 in CI without an ASR run. Re-transcribing changes the word clock, so a new transcript means
-re-snapping the labels (`scratch_to_labels.py --transcript`). Provenance: the MIT recording is
-MIT OpenCourseWare, CC BY-NC-SA 4.0; the CS234 recording is Stanford Online's public YouTube
-upload. Both transcripts are kept here for non-commercial evaluation only.
+re-snapping the labels (`scratch_to_labels.py --transcript`).
 
-These are the two calibration recordings the design is built around (architecture.md 1.2) —
-label these first. Additional recordings can be added the same way; add a row here for each.
+**License.** Transcripts and labels are derived from the recording, so they carry its license,
+not the repository's MIT license: the MIT recording is MIT OpenCourseWare, and
+`mit_18_100b_l1.*` are CC BY-NC-SA 4.0 (attribution: MIT OpenCourseWare, 18.100B Real
+Analysis). Only commit a transcript of a recording whose license allows redistributing
+derivatives; a public YouTube upload alone does not.
 
-**Current labelling method for these two** (issue #12, replacing the hand-timed first pass
+This is the calibration recording the design is built around (architecture.md 1.2). Additional
+recordings can be added the same way; add a row here for each.
+
+**Current labelling method** (issue #12, replacing the hand-timed first pass
 of #11). The full transcript of each recording was read sentence by sentence, with no seed
 detector, and every question-shaped utterance got a `kind` per the guidelines, including
 `?`-less ones. Each entry's `text` quotes the transcript verbatim, trimmed to the question, and
@@ -54,7 +56,7 @@ The labels were drafted by an LLM (Claude) from the transcript text and are pend
 review against the audio; until that review is recorded here, treat content-vs-rhetorical calls
 as provisional.
 
-Totals: MIT 34 entries (28 content), CS234 61 entries (25 content).
+Totals: MIT 34 entries (28 content).
 
 **The ground truth is the transcript, not the audio.** A question that never reached the
 transcript cannot be found by any text rule, so it is not labelled. Entries of the #11
@@ -65,13 +67,8 @@ hand-labelled pass that are therefore gone:
 | MIT | 1046 s "...this is equal to another quotient, right?" (rhetorical) | transcribed as a statement, no tag |
 | MIT | 3363 s "...how do the ordering interacts with addition?" (content) | transcribed as a statement: "this here is how the ordering interacts with addition" |
 | MIT | 3375 s "...how do it act interacts with multiplication?" (content) | same sentence, same reason |
-| CS234 | 1558 s "What do you mean by input demonstrations of good policy?" (content) | student off-mic, not in the transcript |
-| CS234 | 1607 s "What do you exactly mean by optimization here?" (content) | student off-mic; only the lecturer's "Okay, optimization and what?" is transcribed (labelled procedural) |
-| CS234 | 1643 s "Why don't supervised and unsupervised learning have that thing?" (content) | student off-mic; only the echo "Have the optimization?" is transcribed (labelled procedural) |
 
-Relabelled: CS234 "It's faster, but within some error?" rhetorical -> procedural (a clarification
-echo, see the guidelines' section 2). Every other old label is in the new files, re-timed; the
-largest shift was "Any other questions on the logistics?" at 3401 s, which is at 2426 s.
+Every other old label is in the new file, re-timed.
 
 ## Schema
 

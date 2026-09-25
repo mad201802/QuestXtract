@@ -77,9 +77,9 @@ though a real answer is expected, because the answer is not itself instructional
 Includes managing the exchange with a student rather than its content: asking for a name
 ("Could you say your name first, please?"), calling on someone ("Yeah?"), and **clarification
 echoes** - the lecturer repeating a fragment of a student's question back to check it ("Okay,
-optimization and what?", "It's faster, but within some error?"). A full restatement of the
-student's question ("So the question was, ..., can that be better than reinforcement
-learning?") is not an echo: label it `content`.
+sorting and what?", "It's faster, but only on average?"). A full restatement of the
+student's question ("So the question was, ..., does that still hold for negative
+numbers?") is not an echo: label it `content`.
 
 ## 3. Vetoes — things that look like questions and are not
 

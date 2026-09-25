@@ -69,9 +69,9 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   f1, false positives by label kind, `question_mark_rate`, `blind_slice_recall`, a sweep over
   `min_confidence`, and every missed question and false positive. `--json` for machines.
   Matching is one-to-one by time overlap. `tests/test_evaluate.py` gates NFR2 (pooled recall
-  >= 0.50) in CI; today it is 0.91, precision 0.70.
-- `tests/data/<slug>.transcript.json` for both reference recordings, and exhaustive,
-  transcript-anchored labels replacing the hand-timed #11 set (53 content questions, 95
+  >= 0.50) in CI; today it is 1.00, precision 0.97.
+- `tests/data/<slug>.transcript.json` for the reference recording, and exhaustive,
+  transcript-anchored labels replacing the hand-timed #11 set (28 content questions, 34
   entries). `scripts/scratch_to_labels.py --transcript` snaps a label's times to the words it
   quotes.
 - Optional `questxtract[llm]` extra for the judge and vision calls, imported inside the functions
@@ -96,8 +96,8 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   and "If you have the data, does that mean ...?" scored on the `?` alone (0.60), which the
   unanswered confidence (0.55 x score) put under the 0.40 emission gate. The head is now found
   past discourse markers and, for a `?` sentence, in its last comma clause; negated auxiliaries
-  count and `any` no longer does. On the reference recordings content questions found went from
-  2/10 to 7/10 (MIT 18.100B) and 5/17 to 9/17 (CS234), architecture.md 7.3.
+  count and `any` no longer does. On the reference recording content questions found went from
+  2/10 to 7/10 (MIT 18.100B), architecture.md 7.3.
 - Confirmation tags ("Okay?", "True, you see?", "..., right?") scored like real questions, and
   check-ins ("Is that clear?") above them. New reasons `tag` and `check_in` (-0.40 each) keep
   tags out of the candidates and check-ins out of the emitted questions.

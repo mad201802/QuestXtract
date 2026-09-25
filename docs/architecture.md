@@ -30,23 +30,22 @@ output: unreliable sentence boundaries, unreliable punctuation, no speaker label
 So the pipeline spends most of its effort on two things: rebuilding timed sentence structure
 before detection, and rejecting false positives after it.
 
-### 1.2 The two reference recordings
+### 1.2 The reference recording
 
-The design is calibrated against two deliberately opposite lectures. Neither is grading material;
-both are what we develop and measure against.
+The design is calibrated against one committed lecture. It is not grading material; it is what
+we develop and measure against.
 
 | Recording | Regime | What it stresses |
 |---|---|---|
 | [MIT 18.100B Real Analysis, L1](https://www.youtube.com/watch?v=BWvjy0a1Ffg) | chalk, sliding blackboards, dense LaTeX math, **camera pans and zooms to follow the lecturer**, few audible student questions | vision, LaTeX, manim, ASR on math jargon |
-| [Stanford CS234 RL, L1 2024](https://www.youtube.com/watch?v=WsvFL-LjA6U) | projected slides plus classroom, students asking questions **off-mic**, ~80 minutes | question detection, lecturer-repeats-question, echo pairs |
 
 Two consequences that show up repeatedly below:
 
 - **There is no single video layout.** Merged single-camera, separate speaker plus screenshare,
   blackboard-only, picture-in-picture. Section 6 uses a VLM layout probe rather than a classifier.
-- **On CS234 the students are inaudible.** What *is* in the audio is the lecturer repeating the
-  question - "so the question is whether...". That makes the implicit-cue path (section 7.1b) the
-  **primary** detection path on classroom recordings, not a nice-to-have.
+- **In a classroom the students are often inaudible.** What *is* in the audio is the lecturer
+  repeating the question - "so the question is whether...". That makes the implicit-cue path
+  (section 7.1b) a detection path on classroom recordings, not a nice-to-have.
 
 ### 1.3 Stage order
 
@@ -195,8 +194,8 @@ footprint turns out to be a problem on a laptop.
 > stage.
 >
 > **Dev workflow.** No dev machine has a GPU, and `turbo` on CPU runs a 90-minute lecture in
-> roughly the same wall-clock time again. So the cached `transcribe.json` for both reference
-> recordings is committed as `tests/data/<slug>.transcript.json` (#12), trimmed to the words and
+> roughly the same wall-clock time again. So the cached `transcribe.json` for the reference
+> recording is committed as `tests/data/<slug>.transcript.json` (#12), trimmed to the words and
 > chunk spans the pipeline reads; the quality metrics above are dropped there, since nothing
 > downstream of stage 2 reads them yet. Full ASR runs on the server or overnight; the inner loop
 > for everyone working on sections 3 and 6 to 9 should never touch Whisper.
@@ -251,8 +250,8 @@ a partition, so no provenance validator is needed.
 
 Speaker identification by name is out of scope (requirements, 1. Purpose & Scope) and a single
 main speaker is assumed (4.2). There is no diarization, no speaker attribution and no acoustic
-speaker check. On CS234 the students are off-mic, so there is frequently no second voice on the
-recording to diarize in the first place - the lecturer's repetition of the question is the signal,
+speaker check. In a classroom the students are often off-mic, so there is frequently no second
+voice on the recording to diarize in the first place - the lecturer's repetition of the question is the signal,
 and that is a lexical problem, not an acoustic one.
 
 ---
@@ -301,7 +300,7 @@ with no reason code to show for it.
 >
 > **Risk, stated plainly:** this bets on Whisper emitting question marks, and 2.2 already admits
 > `initial_prompt` decays. The eval harness measures the bet directly via `question_mark_rate`
-> (section 4.3; 0.93 on the reference recordings, 7.3); between labelled runs, the stage's own
+> (section 4.3; 1.00 on the reference recording, 7.3); between labelled runs, the stage's own
 > `stats["sentences_unpunctuated"]` is the standing proxy, and a count that climbs means the
 > splitter is guessing from silence alone. If it drops,
 > the fix in order of cost is: a better `initial_prompt`, then a larger Whisper model, then a
@@ -397,14 +396,14 @@ Two properties of the set matter (the committed set is labelled differently, see
   seed. Pre-annotation cannot surface what the detector never proposed, so without a blind slice
   the recall number measures the seed, not the system.
 
-Coverage: both reference recordings, 53 `content` questions, 95 entries in all.
+Coverage: the reference recording, 28 `content` questions, 34 entries in all.
 
-**What the committed set actually is.** Both transcripts were labelled exhaustively, sentence by
+**What the committed set actually is.** The transcript was labelled exhaustively, sentence by
 sentence, with no seed, so every entry is `blind` and `blind_slice_recall` equals recall; the
 seed workflow above stays the cheap path for longer recordings. Exhaustive labelling is what
 makes precision measurable: an unlabelled prediction is a real false positive. The ground truth
-is the transcript, not the audio - a question the ASR never transcribed (CS234's off-mic
-students) is not labelled, because no text rule can reach it; `tests/data/README.md` lists the
+is the transcript, not the audio - a question the ASR never transcribed (an off-mic student)
+is not labelled, because no text rule can reach it; `tests/data/README.md` lists the
 ones dropped for that reason. The labels were LLM-drafted from the transcript and are pending
 human review.
 
@@ -444,7 +443,7 @@ at 0.40 what a user gets. The text report lists every missed content question an
 positive with the label kind it hit; `--json` carries the same lists.
 
 CI runs it through pytest (`tests/test_evaluate.py`), which asserts pooled recall >= 0.50 over
-both reference recordings. Both run in well under a second, so there is no separate short
+the reference recording. It runs in well under a second, so there is no separate short
 recording.
 
 > **Decision.** `questxtract/evaluate.py`. The report includes a threshold sweep over
@@ -595,7 +594,7 @@ Two different worlds hide under "read the board":
 | slides, screencast, beamer | essentially nothing | near-duplicate frame dedupe, then OCR |
 | chalkboard, whiteboard, handwriting | everything | see below |
 
-FR4 says "animation/drawing" and one of the two reference recordings is MIT chalk, so we are in
+FR4 says "animation/drawing" and the reference recording is MIT chalk, so we are in
 regime 2 and must also survive regime 1.
 
 Tesseract, PaddleOCR and EasyOCR are printed-text models. On chalk they are close to useless, and
@@ -743,19 +742,15 @@ the immediately following sentence at a near-zero gap.
 **Not implemented, and why.** Two paths from the original design have no labelled failure
 behind them yet:
 
-- *Implicit cue, no `?`* (*"the question is whether ..."*). Expected to be the primary path on
-  CS234, where students are off-mic. Measured, it is not: the lecturer's restatement reaches
-  the ASR with its `?` (*"So the question was, ... is if you have good demonstration ...?"*),
-  and the off-mic student questions are not in the transcript at all, so no text rule reaches
-  them.
+- *Implicit cue, no `?`* (*"the question is whether ..."*). Expected on classroom recordings
+  where students are off-mic. A lecturer's restatement usually reaches the ASR with its `?`,
+  and an off-mic student question is not in the transcript at all, so no text rule reaches it.
 - *Missing `?` recovery* (an interrogative head **and** a local answer slot). Whisper `turbo`
   with the punctuation prompt marked every labelled content question that is in the transcript;
-  the 35 `?`-less head-word sentences on the three measured recordings were all statements.
+  the 35 `?`-less head-word sentences on the measured recordings were all statements.
 
-Either lands when a labelled question is lost to it. The harness (7.3) now shows both: on
-CS234 two student questions reached the transcript as statements and two lecturer cues have no
-`?` (*"And so the question is how do you use that experience ..."*). The measurements above were
-taken against the hand-timed #11 labels; the rules are follow-up work, not part of #12.
+Either lands when a labelled question is lost to it; on the reference recording the harness
+(7.3) shows none. The rules are follow-up work, not part of #12.
 
 ### 7.2 Vetoes
 
@@ -803,38 +798,22 @@ penalty with a reason code, not a veto.
 
 | Recording | Content labels | TP | FP | FN | Recall | Precision | F1 |
 |---|---|---|---|---|---|---|---|
-| MIT 18.100B L1 | 28 | 28 | 1 | 0 | 1.00 | 0.97 | 0.98 |
-| Stanford CS234 L1 | 25 | 20 | 20 | 5 | 0.80 | 0.50 | 0.61 |
-| **Pooled** | 53 | 48 | 21 | 5 | **0.91** | 0.70 | 0.79 |
+| MIT 18.100B L1 | 28 | 28 | 1 | 0 | **1.00** | 0.97 | 0.98 |
 
-NFR2 holds with room. `question_mark_rate` is 0.93: Whisper `turbo` with the punctuation prompt
-put a `?` on every labelled content question on MIT and on 21 of 25 on CS234, so 3.1's bet holds
-on these two. The sweep is flat from 0 to 0.30 (recall 0.93, precision 0.60) and from 0.35 to
-0.55 (0.91 / 0.70), and empty above 0.55, the unanswered ceiling of 9.2: the gate only ever
-separates `?`-with-head (1.00) from `?`-only (0.60) sentences.
+NFR2 holds with room. `question_mark_rate` is 1.00: Whisper `turbo` with the punctuation prompt
+put a `?` on every labelled content question, so 3.1's bet holds on this recording. The sweep is
+flat from 0 to 0.30 (recall 1.00, precision 0.93) and from 0.35 to 0.55 (1.00 / 0.97), and empty
+above 0.55, the unanswered ceiling of 9.2: the gate only ever separates `?`-with-head (1.00) from
+`?`-only (0.60) sentences.
 
-*Missed (5, all CS234).* Four are students audible on the mic whose question the ASR wrote as a
-statement - *"So just to be clear, imitation learning then isn't like a separate technique."*,
-*"So it doesn't mean that if we apply ... it might actually hinder ..."* - or the lecturer's
-`?`-less implicit cue (*"And so the question is how do you use that experience ..."*, *"given
-what I've told you ..., what might happen in this case."*). They are 7.1's two unimplemented
-paths, now with labelled failures behind them. The fifth, *"My question is that doesn't a Markov
-assumption make this ... harder?"*, has its `?` but no head past the opener *"My question is
-that"*, so it scores 0.60 and falls under the gate.
+*Missed: none.*
 
-*False positives (21).* 15 hit `rhetorical` labels: concept-free framing (*"So what did it do?"*,
-*"So how do we do that?"*), illustrative strings (*"How do you know why you got into Stanford?"*)
-and hypotheticals (*"Could we learn an algorithm that would be better ...?"*). 5 hit `procedural`
-ones - clarification echoes (*"Have the optimization?"*), logistics (*"Do you have a time frame
-for when the problem sessions will be held?"*) and *"Yeah, can you say anything?"*. 1 hit nothing:
-the declarative-what veto 7.2 dropped, *"What I mean by a dynamics model here ... is what happens
-to the state of the student after a question is given?"*. None of the 21 is reachable by a
-lexical rule without also losing content questions of the same shape; content vs rhetorical is
-the judge's call (1.4), as designed.
+*False positives (1).* It hits a `rhetorical` label, concept-free framing (*"So how do we do
+that?"*). It is not reachable by a lexical rule without also losing content questions of the
+same shape; content vs rhetorical is the judge's call (1.4), as designed.
 
-The confirmation tags the MIT lecturer uses (*"..., right?"*) and the check-ins (*"Is that
-clear?"*, *"Any other questions on the logistics?"*) all stay out, so the tag and check-in
-penalties do their job.
+The confirmation tags the lecturer uses (*"..., right?"*) and the check-ins (*"Is that
+clear?"*) all stay out, so the tag and check-in penalties do their job.
 
 > **Decision.** `questxtract/detect.py`, cue tables inline as module constants.
 
@@ -871,8 +850,8 @@ needs a signal score of 0.28; distance over 12 needs 2 keywords.
 
 There is **no speaker constraint on pairing**, and not only because we have no speaker layer:
 lectures are full of self-answered questions, and requiring a speaker change would delete the
-single most common QA shape in the corpus - which on CS234 is *the entire shape*, since the
-lecturer both repeats and answers the student's question.
+single most common QA shape in the corpus - which with off-mic students is *the entire shape*,
+since the lecturer both repeats and answers the student's question.
 
 > **Decision.** `questxtract/answer.py`. Three functions called in sequence behind the one
 > `answer` stage entry (section 11.1): swapping the whole search replaces that entry, swapping one
@@ -942,8 +921,8 @@ overlap(A, B) = |tokens(A) & tokens(B)| / min(|tokens(A)|, |tokens(B)|)
 
 Two passes, both only over candidates starting within 90 seconds of each other:
 
-- **Echo pairs.** A student asks and the lecturer restates - on CS234 this is the *normal* case,
-  not an edge case, and both directions get emitted. Detected by answer overlap >= 0.45 plus one
+- **Echo pairs.** A student asks and the lecturer restates - with off-mic students this is the
+  *normal* case, not an edge case, and both directions get emitted. Detected by answer overlap >= 0.45 plus one
   cross pairing (left question vs right answer) >= 0.55. Keep whichever question echoes the other
   less.
 - **Near duplicates.** Question overlap >= 0.72 with answer overlap >= 0.50, or question overlap
@@ -1188,7 +1167,7 @@ correct invalidation by naming the config fields it reads, and a stage that gain
 and forgets to list it is the one bug class this design still has. Keep `uses` next to the
 signature so the two are reviewed together.
 
-The transcripts of both reference recordings are committed next to their labels (section 2.2),
+The reference recording's transcript is committed next to its labels (section 2.2),
 which is what lets CI run the eval gate in seconds with no ASR and no network.
 
 ### 11.3 Progress (FR9)
