@@ -190,16 +190,19 @@ it is the model's own confidence.
 
 ### Exerplaza quiz export
 
-After reviewing `questions.json`, export the questions marked with `"verdict": "keep"`:
+After reviewing `questions.json`, export the questions marked with `"verdict": "keep"` or
+`"verdict": "revise"`:
 
 ```bash
-questxtract quiz questions.json -o exerplaza-quiz.json
+questxtract quiz questions.json --video-id VIDEO_ID -o exerplaza-quiz.json
 ```
 
 This creates one quiz for the source video and maps each approved question to a versioned,
 credential-free Exerplaza exchange payload containing its stable ID, text, optional answer,
 question type, confidence and timestamp. Questions marked `unjudged` can be included for a
-pre-review preview with `--include-unjudged`; `revise` and `reject` questions are never exported.
+pre-review preview with `--include-unjudged`; `reject` questions are never exported.
+`--video-id` is required unless `questions.json` contains a stable source hash; it prevents
+collisions caused by relying on local filenames.
 The university API and authentication details are not available yet, so this command writes a
 portable JSON hand-off rather than making a network request. The mapping is isolated in
 `questxtract.exerplaza` so the eventual API adapter can be added without changing extraction or

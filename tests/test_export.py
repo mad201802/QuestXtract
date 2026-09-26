@@ -409,3 +409,74 @@ def test_cli_accepts_the_threshold_bounds(tmp_path, validator, threshold):
     out = tmp_path / "q.json"
     assert main(["process", str(_transcript_file(tmp_path)), "-t", threshold, "-o", str(out)]) == 0
     validator.validate(read_questions(out))
+    assert capsys.readouterr().err.startswith("error: quiz: ")
+
+
+def test_exerplaza_mapping_exports_only_approved_questions(finished):
+    document = result_to_dict(finished)
+    document["questions"][0]["verdict"] = "keep"
+    document["questions"].append(
+        {**document["questions"][0], "id": "q-rejected", "verdict": "reject"}
+    )
+    payload = questions_to_exerplaza(document, video_id="video-123")
+
+    assert payload["format"] == "exerplaza"
+    assert payload["format_version"] == "0.1"
+    assert payload["quiz"]["id"] == "video-123"
+    assert len(payload["quiz"]["questions"]) == 1
+    exported = payload["quiz"]["questions"][0]
+    assert exported["id"] == document["questions"][0]["id"]
+    assert exported["question"] == "What is a stable sort?"
+    assert exported["answer"] is None
+    assert exported["timestamp"] == {"start": 2.2, "end": 4.0}
+
+
+def test_exerplaza_mapping_exports_revised_questions(finished):
+    document = result_to_dict(finished)
+    document["questions"][0]["verdict"] = "revise"
+    document["questions"][0]["text"] = "What is a stable sorting algorithm?"
+
+    payload = questions_to_exerplaza(document, video_id="video-123")
+
+    assert payload["quiz"]["questions"][0]["question"] == "What is a stable sorting algorithm?"
+
+
+def test_cli_quiz_writes_exerplaza_payload(tmp_path, finished, capsys):
+    source = tmp_path / "questions.json"
+    output = tmp_path / "quiz.json"
+    document = result_to_dict(finished)
+    document["questions"][0]["verdict"] = "keep"
+    source.write_text(json.dumps(document), encoding="utf-8")
+
+    assert main(["quiz", str(source), "--video-id", "video-123", "-o", str(output)]) == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert len(payload["quiz"]["questions"]) == 1
+    assert "approved questions" in capsys.readouterr().err
+
+
+def test_exerplaza_preview_can_include_unjudged_questions(finished):
+    document = result_to_dict(finished)
+    payload = questions_to_exerplaza(document, video_id="video-123", include_unjudged=True)
+    assert len(payload["quiz"]["questions"]) == 1
+
+
+def test_cli_quiz_reports_output_write_errors(tmp_path, finished, capsys):
+    source = tmp_path / "questions.json"
+    document = result_to_dict(finished)
+    document["questions"][0]["verdict"] = "keep"
+    source.write_text(json.dumps(document), encoding="utf-8")
+
+    assert (
+        main(
+            [
+                "quiz",
+                str(source),
+                "--video-id",
+                "video-123",
+                "-o",
+                str(tmp_path / "missing" / "quiz.json"),
+            ]
+        )
+        == 1
+    )
+    assert capsys.readouterr().err.startswith("error: quiz: ")

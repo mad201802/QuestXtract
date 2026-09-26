@@ -299,14 +299,19 @@ def _quiz(args: argparse.Namespace) -> int:
     """Turn reviewed questions.json into a local Exerplaza quiz payload."""
     try:
         document = json.loads(Path(args.questions).read_text(encoding="utf-8"))
-        quiz = questions_to_exerplaza(document, include_unjudged=args.include_unjudged)
+        quiz = questions_to_exerplaza(
+            document,
+            video_id=args.video_id,
+            include_unjudged=args.include_unjudged,
+        )
+        output = json.dumps(quiz, indent=2, ensure_ascii=False)
+        if args.output:
+            Path(args.output).write_text(output + "\n", encoding="utf-8")
     except (OSError, json.JSONDecodeError, SchemaError) as exc:
         print(f"error: quiz: {exc}", file=sys.stderr)
         return 1
 
-    output = json.dumps(quiz, indent=2, ensure_ascii=False)
     if args.output:
-        Path(args.output).write_text(output + "\n", encoding="utf-8")
         print(
             f"{len(quiz['quiz']['questions'])} approved questions -> {args.output}",
             file=sys.stderr,
@@ -442,6 +447,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     quiz = subs.add_parser("quiz", help="export reviewed questions as an Exerplaza quiz")
     quiz.add_argument("questions", help="a questions.json written by `process`")
+    quiz.add_argument("--video-id", help="stable Exerplaza/video identifier")
     quiz.add_argument("-o", "--output", help="write the quiz here")
     quiz.add_argument(
         "--include-unjudged",
