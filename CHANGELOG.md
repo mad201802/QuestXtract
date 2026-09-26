@@ -83,6 +83,11 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
 
 ### Fixed
 
+- The same-sentence answer seed never fired: it looked for text after the `?` in the question's
+  own sentence, and stage 3 splits at the `?` (#38). It is now the adjacent seed, the next
+  sentence across at most `answer_seed_max_gap_seconds` (1.0 s), not itself a question, and never
+  for tags or check-ins. Reason code `intra_sentence_qa` is now `adjacent_seed`; an answered
+  question's confidence rises from 0.55 x score to 1.0 x score.
 - Question detection only looked at a sentence's first word, so "So what ...?", "Then how ...?"
   and "If you have the data, does that mean ...?" scored on the `?` alone (0.60), which the
   unanswered confidence (0.55 x score) put under the 0.40 emission gate. The head is now found
