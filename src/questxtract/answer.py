@@ -64,7 +64,7 @@ def pair_answers(
                 confidence=0.0,  # stage 8 fills this in
                 start=sentence.start,
                 end=sentence.end,
-                reasons=("adjacent_seed",) if seed else ("no_answer_found",),
+                reasons=("intra_sentence_qa",) if seed else ("no_answer_found",),
             )
         )
     return tuple(out)

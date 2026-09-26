@@ -20,7 +20,7 @@ def test_the_socratic_answer_is_seeded():
     (pair,) = pair_answers(detect_questions(sentences), sentences)
     assert pair.answer_text == "One that keeps equal elements in order."
     assert pair.answer_sentence_ids == (sentences[2].id,)
-    assert pair.reasons == ("adjacent_seed",)
+    assert pair.reasons == ("intra_sentence_qa",)
     assert (pair.start, pair.end) == (2.2, 4.0)  # the question's timestamps, not the answer's
 
 

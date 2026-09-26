@@ -713,8 +713,10 @@ stay whole, so negated auxiliaries (*"Don't we ...?"*) open questions.
 **The answer seed.** Specified as "text *after* the `?`", which contradicts section 3.1: stage 3
 splits *at* terminal punctuation, so a sentence never holds text after its own `?`.
 It is redefined as the immediately following sentence, taken when the silence before it is at
-most `answer_seed_max_gap_seconds` (1.0 s, unmeasured) and it is not itself a question; tags and
-check-ins get no seed ([issue #38](https://github.com/mad201802/QuestXtract/issues/38)).
+most `answer_seed_max_gap_seconds` (1.0 s) and it is not itself a question; tags and check-ins
+get no seed ([issue #38](https://github.com/mad201802/QuestXtract/issues/38)). Measured on the
+three reference recordings: about 4 in 5 seeds of labelled content questions are real answers up
+to 1.0 s, falling to about half beyond it.
 
 **Not implemented, and why.** Two paths from the original design have no labelled failure
 behind them yet:
