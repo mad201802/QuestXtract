@@ -59,6 +59,31 @@ _AUX_WORDS = frozenset(
 _DISCOURSE_MARKERS = frozenset(
     {"so", "and", "but", "or", "now", "then", "well", "okay", "ok", "alright", "also", "anyway"}
 )
+# Multi-word openers that announce a question without being part of it: "My question is
+# that doesn't ...?". Only phrases that are preambles by construction, longest first so an
+# optional trailing "that"/"if" is taken with its phrase.
+_PREAMBLES = tuple(
+    sorted(
+        (
+            tuple(p.split())
+            for p in (
+                "my question is",
+                "my question is that",
+                "the question is",
+                "the question is that",
+                "the question was",
+                "i'd like to ask",
+                "i would like to ask",
+                "i was wondering",
+                "i was wondering if",
+                "i was wondering whether",
+                "i'm wondering",
+            )
+        ),
+        key=len,
+        reverse=True,
+    )
+)
 
 _TYPES = {
     "what": "what",
@@ -169,10 +194,16 @@ def _heads(sentence: str) -> tuple[str, ...]:
 
 
 def _opener(clause: str) -> str:
-    """Return the first word of ``clause`` past discourse markers, or ``""``."""
+    """Return the first word of ``clause`` past discourse markers and preambles, or ``""``."""
     words = _words(clause)
-    while words and words[0] in _DISCOURSE_MARKERS:
-        words.pop(0)
+    while words:
+        if words[0] in _DISCOURSE_MARKERS:
+            words = words[1:]
+            continue
+        preamble = next((p for p in _PREAMBLES if tuple(words[: len(p)]) == p), None)
+        if preamble is None:
+            break
+        words = words[len(preamble) :]
     return words[0] if words else ""
 
 
