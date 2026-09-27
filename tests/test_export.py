@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from questxtract import SchemaError, read_questions, write_questions
+from questxtract import SchemaError, Transcript, VisualContext, read_questions, write_questions
 from questxtract.cli import main
 from questxtract.export import _format_hms, result_to_dict
 from questxtract.pipeline import STAGES, run
@@ -19,13 +19,20 @@ QUESTION_KEYS = {
     "confidence",
     "confidence_label",
     "question_type",
+    "source",
     "answer",
     "segment_id",
     "sentence_id",
-    "visual",
+    "visual_ids",
     "verdict",
     "reasons",
+    "review",
 }
+
+BOARDS = (
+    VisualContext(start=0.0, end=5.0, keyframe_path="frames/1.jpg", description="stable sort"),
+    VisualContext(start=5.0, end=20.0, keyframe_path="frames/2.jpg", latex=r"O(n \log n)"),
+)
 
 
 @pytest.fixture
@@ -35,13 +42,24 @@ def finished(context):
 
 def test_export_emits_a_fixed_key_set_with_nulls_kept(finished):
     data = result_to_dict(finished)
-    assert set(data) == {"schema_version", "source", "config", "stats", "questions"}
+    assert set(data) == {
+        "schema_version",
+        "source",
+        "config",
+        "stats",
+        "segments",
+        "visuals",
+        "questions",
+    }
+    assert data["config"]["min_confidence"] == finished.config.min_confidence
     question = data["questions"][0]
     assert set(question) == QUESTION_KEYS
     assert question["answer"] is None
-    assert question["visual"] is None
+    assert question["visual_ids"] == []
     assert question["original_text"] is None
     assert question["verdict"] == "unjudged"
+    assert question["source"] == "audio"
+    assert question["review"] == {"status": "pending", "text": None, "note": None, "metadata": {}}
 
 
 def test_export_carries_the_timestamp_and_the_label(finished):
@@ -51,6 +69,30 @@ def test_export_carries_the_timestamp_and_the_label(finished):
     assert question["start_hms"] == "0:02" and question["end_hms"] == "0:04"
     assert question["confidence_label"] in {"high", "medium", "low"}
     assert question["question_type"] == "what"
+
+
+def test_questions_point_into_the_exported_segments(finished):
+    data = result_to_dict(finished)
+    segment = data["segments"][data["questions"][0]["segment_id"]]
+    assert segment == {"id": 0, "start": 0.0, "end": 9.0, "topic": None, "visual_ids": []}
+
+
+def test_a_question_without_a_known_segment_points_at_none(finished):
+    pair = finished.pairs[0]
+    orphan = dataclasses.replace(pair.question, sentence_id="s_gone")
+    finished.pairs = (dataclasses.replace(pair, question=orphan),)
+    question = result_to_dict(finished)["questions"][0]
+    assert question["segment_id"] is None and question["visual_ids"] == []
+
+
+def test_board_states_are_listed_once_and_referenced_by_id(context):
+    context.visual = BOARDS
+    data = result_to_dict(run(context, STAGES[2:]))
+    ids = [board.id for board in BOARDS]
+    assert [v["id"] for v in data["visuals"]] == ids
+    assert data["visuals"][1]["latex"] == r"O(n \log n)"
+    assert data["segments"][0]["visual_ids"] == ids
+    assert data["questions"][0]["visual_ids"] == ids  # every overlapping state, not the first
 
 
 def _answered_by_last_sentence(ctx):
@@ -70,6 +112,22 @@ def test_an_answer_carries_the_span_of_its_own_sentences(finished):
     assert question["answer"]["sentence_ids"] == [later.id]
 
 
+def test_a_recording_with_no_questions_still_exports_the_full_envelope(context, tmp_path):
+    """#13 AC5: no questions is a valid result, not an error or an empty file."""
+    context.transcript = Transcript.from_dict(
+        {
+            "segments": [
+                {"text": "Today we cover sorting. It keeps order.", "start": 0.0, "end": 5.0}
+            ]
+        }
+    )
+    out = tmp_path / "q.json"
+    write_questions(run(context, STAGES[2:]), out)
+    data = read_questions(out)
+    assert data["questions"] == [] and data["stats"]["emitted"] == 0
+    assert data["segments"]  # the lecture is still described
+
+
 @pytest.mark.parametrize(
     ("seconds", "expected"),
     [(0, "0:00"), (2.2, "0:02"), (59.6, "1:00"), (90, "1:30"), (3661, "1:01:01")],
@@ -84,7 +142,22 @@ def test_write_and_read_questions(tmp_path, finished):
     assert read_questions(out) == json.loads(out.read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("content", ["not json", '{"questions": null}', "[]"])
+def test_read_questions_accepts_a_newer_minor_and_refuses_another_major(tmp_path, finished):
+    out = tmp_path / "q.json"
+    data = result_to_dict(finished)
+    data["schema_version"] = "2.7"
+    out.write_text(json.dumps(data), encoding="utf-8")
+    assert read_questions(out)["schema_version"] == "2.7"
+    data["schema_version"] = "1.1"
+    out.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(SchemaError, match="reads 2.x"):
+        read_questions(out)
+
+
+@pytest.mark.parametrize(
+    "content",
+    ["not json", '{"questions": null}', "[]", '{"schema_version": "2.0", "questions": []}'],
+)
 def test_malformed_questions_file_raises_schema_error(tmp_path, content):
     path = tmp_path / "q.json"
     path.write_text(content, encoding="utf-8")
@@ -117,7 +190,7 @@ def test_cli_roundtrip(tmp_path):
     out = tmp_path / "q.json"
     assert main(["process", str(_transcript_file(tmp_path)), "-o", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
-    assert data["schema_version"] == "1.1"
+    assert data["schema_version"] == "2.0"
     # An aux head without a '?' scores 0.4, under the 0.45 detection gate, so it is never a
     # candidate (architecture.md 7.3).
     assert [q["text"] for q in data["questions"]] == ["What is a stable sort?"]

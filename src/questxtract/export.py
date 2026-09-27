@@ -1,12 +1,12 @@
-"""Writing and reading ``questions.json`` (pipeline.md 12.1).
+"""Writing and reading ``questions.json`` (architecture.md 12).
 
 Export is not a stage: it runs on the finished ``Context``.
 
 One rule governs the shape: **do not drop ``None`` on serialisation.** A fixed key set is
 emitted, always, ``null`` included, so consumers never have to defensively ``.get()`` a
-missing ``answer_text``. The format is also the edit surface (FR5): the editor lives in a
-wrapper around this package, and re-running the pipeline merges human edits back by id,
-which is why sentence ids are content hashes rather than indices.
+missing ``answer``. Segments and board states are listed once and referenced by id. The
+format is also the edit surface (FR5): ``review`` is the one block people own, and a re-run
+merges it back by question id (#15).
 """
 
 from __future__ import annotations
@@ -19,9 +19,10 @@ from typing import Any
 from .models import Context, QAPair, SchemaError, Segment, Sentence, VisualContext
 from .score import confidence_label
 
-SCHEMA_VERSION = "1.1"  # 1.0 -> 1.1: added start_hms/end_hms to the fixed question key set
+SCHEMA_VERSION = "2.0"
 
-_CONFIG_KEYS = ("model_size", "language", "judge_model", "vision_model")
+_CONFIG_KEYS = ("model_size", "language", "min_confidence", "judge_model", "vision_model")
+_SOURCE = "audio"  # questions are only read from speech until the vision milestones (M2/M3)
 
 
 def result_to_dict(ctx: Context) -> dict[str, Any]:
@@ -36,6 +37,8 @@ def result_to_dict(ctx: Context) -> dict[str, Any]:
         },
         "config": {key: getattr(ctx.config, key) for key in _CONFIG_KEYS},
         "stats": dict(ctx.stats),
+        "segments": [_segment(index, segment) for index, segment in enumerate(ctx.segments)],
+        "visuals": [_visual(state) for state in ctx.visual],
         "questions": [_question(pair, by_id, ctx.segments) for pair in ctx.pairs],
     }
 
@@ -55,12 +58,38 @@ def _format_hms(seconds: float) -> str:
     return f"{minutes}:{secs:02d}"
 
 
+def _segment(index: int, segment: Segment) -> dict[str, Any]:
+    """One segment: its span and the board states joined to it, not its text."""
+    return {
+        "id": index,
+        "start": segment.start,
+        "end": segment.end,
+        "topic": None,  # reserved for topic filtering (#16, FR11); no topics exist yet
+        "visual_ids": [state.id for state in segment.visual],
+    }
+
+
+def _visual(state: VisualContext) -> dict[str, Any]:
+    """One board state, listed once however many questions point at it."""
+    return {
+        "id": state.id,
+        "start": state.start,
+        "end": state.end,
+        "keyframe_path": state.keyframe_path,
+        "description": state.description,
+        "text": state.text,
+        "latex": state.latex,
+        "confidence": state.confidence,
+    }
+
+
 def _question(
     pair: QAPair, by_id: dict[str, Sentence], segments: Sequence[Segment]
 ) -> dict[str, Any]:
     """One question object, with every documented key present."""
     sentence = by_id.get(pair.question.sentence_id)
     original = sentence.text if sentence and sentence.text != pair.question.text else None
+    segment = _segment_of(sentence, segments)
     return {
         "id": pair.id,
         "text": pair.question.text,
@@ -72,13 +101,22 @@ def _question(
         "confidence": pair.confidence,
         "confidence_label": confidence_label(pair.confidence),
         "question_type": pair.question.question_type,
+        "source": _SOURCE,
         "answer": _answer(pair, by_id),
-        "segment_id": sentence.segment_index if sentence else None,
+        "segment_id": segment,
         "sentence_id": pair.question.sentence_id,
-        "visual": _visual(sentence, segments),
+        "visual_ids": [] if segment is None else [s.id for s in segments[segment].visual],
         "verdict": pair.verdict,
         "reasons": list(pair.question.reasons) + list(pair.reasons),
+        "review": {"status": "pending", "text": None, "note": None, "metadata": {}},
     }
+
+
+def _segment_of(sentence: Sentence | None, segments: Sequence[Segment]) -> int | None:
+    """Return the index of the sentence's segment, or ``None`` when it has none."""
+    if sentence is None or not 0 <= sentence.segment_index < len(segments):
+        return None
+    return sentence.segment_index
 
 
 def _answer(pair: QAPair, by_id: dict[str, Sentence]) -> dict[str, Any] | None:
@@ -91,28 +129,6 @@ def _answer(pair: QAPair, by_id: dict[str, Sentence]) -> dict[str, Any] | None:
         "start": min(s.start for s in covered),
         "end": max(s.end for s in covered),
         "sentence_ids": list(pair.answer_sentence_ids),
-    }
-
-
-def _visual(sentence: Sentence | None, segments: Sequence[Segment]) -> dict[str, Any] | None:
-    """Return the board state overlapping this question, or ``None`` when vision was off.
-
-    The join lives on :class:`~questxtract.models.Segment` (pipeline.md 5); the export
-    surfaces the first state overlapping the question's own segment.
-    """
-    if sentence is None or not 0 <= sentence.segment_index < len(segments):
-        return None
-    states = segments[sentence.segment_index].visual
-    if not states:
-        return None
-    state: VisualContext = states[0]
-    return {
-        "start": state.start,
-        "end": state.end,
-        "keyframe_path": state.keyframe_path,
-        "description": state.description,
-        "text": state.text,
-        "latex": state.latex,
     }
 
 
@@ -133,13 +149,24 @@ def read_questions(path: str | Path) -> dict[str, Any]:
     finished run, not a snapshot of one, so it does not round-trip into a runnable context.
 
     Raises:
-        SchemaError: If the file is not JSON or does not match the exported schema.
+        SchemaError: If the file is not JSON, was written by another major schema version,
+            or lacks the ``segments``, ``visuals`` or ``questions`` list.
 
     """
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeError) as exc:
         raise SchemaError(f"{path}: not valid JSON ({exc})") from exc
-    if not isinstance(data, dict) or not isinstance(data.get("questions"), list):
-        raise SchemaError(f"{path}: expected an object with a 'questions' list")
+    if not isinstance(data, dict):
+        raise SchemaError(f"{path}: expected a JSON object")
+    version = str(data.get("schema_version", ""))
+    major = SCHEMA_VERSION.split(".")[0]
+    if version.split(".")[0] != major:
+        raise SchemaError(
+            f"{path}: schema version {version or 'missing'}, but this questxtract reads "
+            f"{major}.x; re-run `questxtract process` to regenerate it"
+        )
+    for key in ("segments", "visuals", "questions"):
+        if not isinstance(data.get(key), list):
+            raise SchemaError(f"{path}: expected a '{key}' list")
     return data
