@@ -24,6 +24,7 @@ from .models import (
     Word,
 )
 from .pipeline import STAGES, process, run, stage
+from .qti import AssessmentItem, AssessmentOption, AssessmentTest, QtiExportError, export_qti
 from .schema import Question
 
 try:
@@ -35,6 +36,9 @@ __all__ = [
     "STAGES",
     "AsrBackend",
     "AsrSegment",
+    "AssessmentItem",
+    "AssessmentOption",
+    "AssessmentTest",
     "Config",
     "Context",
     "MediaError",
@@ -42,6 +46,7 @@ __all__ = [
     "Question",
     "QuestionCandidate",
     "SchemaError",
+    "QtiExportError",
     "Segment",
     "Sentence",
     "Transcript",
@@ -49,6 +54,7 @@ __all__ = [
     "Word",
     "__version__",
     "extract_audio",
+    "export_qti",
     "filter_document",
     "filter_questions",
     "process",

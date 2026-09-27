@@ -18,6 +18,7 @@ from .evaluate import evaluate, format_report
 from .export import result_to_json
 from .models import Context, Stage, Transcript
 from .pipeline import STAGES, run
+from .qti import QtiExportError, export_qti
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
 
@@ -285,6 +286,17 @@ def _quiz(args: argparse.Namespace) -> int:
     return 1
 
 
+def _qti(args: argparse.Namespace) -> int:
+    """Export approved questions to a QTI 3.0 package."""
+    try:
+        export_qti(args.questions, args.output, include_unjudged=args.include_unjudged)
+    except (OSError, QtiExportError) as exc:
+        print(f"error: qti: {exc}", file=sys.stderr)
+        return 1
+    print(f"QTI package -> {args.output}", file=sys.stderr)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser."""
     defaults = Config()
@@ -404,6 +416,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluation.add_argument("--json", action="store_true", help="machine-readable, for CI")
     evaluation.set_defaults(handler=_eval)
+
+    qti = subs.add_parser("qti", help="export approved questions.json as a QTI 3.0 package")
+    qti.add_argument("questions", help="a questions.json written by `process`")
+    qti.add_argument("-o", "--output", required=True, help="output QTI .zip package")
+    qti.add_argument(
+        "--include-unjudged",
+        action="store_true",
+        help="also export questions whose verdict is unjudged",
+    )
+    qti.set_defaults(handler=_qti)
 
     quiz = subs.add_parser(
         "quiz", help="generate quiz.json from questions.json (not implemented yet)"
