@@ -236,6 +236,24 @@ Which stages are real today and which are stubs: [architecture.md 13.3](docs/arc
 CI runs lint, format check and the test suite on Linux, macOS and Windows against Python 3.10 and
 3.13 for every pull request. Green CI is required before merging into `main`.
 
+## Releasing
+
+Releases are cut from `main` by pushing a version tag; [release.yml](.github/workflows/release.yml) does the rest.
+
+1. Bump `version` in `pyproject.toml` and rename `## Unreleased` in `CHANGELOG.md` to that version,
+   e.g. `## 0.2.0`. Merge this into `main`.
+2. Tag the merge commit and push the tag:
+
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+
+The workflow checks that the tag matches `pyproject.toml` and that `CHANGELOG.md` has a section for it, runs lint, mypy and the tests, builds the sdist and wheel, uploads them to PyPI, and creates the GitHub Release with that CHANGELOG section as its notes. Nothing is published if any step before the upload fails. Check a tag locally first with `python3 scripts/release_notes.py v0.2.0`.
+
+Publishing needs a PyPI API token scoped to `questxtract`, stored as the `PYPI_API_TOKEN` secret of the repository's `pypi` environment. Alternatively, register this workflow as a [trusted publisher](https://docs.pypi.org/trusted-publishers/) on PyPI and leave the
+secret unset.
+
 ## Roadmap
 
 - [x] **M0** — installable package, question detection over transcripts, JSON export, CI
