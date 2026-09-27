@@ -803,7 +803,7 @@ rather than written up front, and deliberately short: they only keep the obvious
 the judge's input. Tags follow the annotation guidelines, which label them `rhetorical`: a
 penalty with a reason code, not a veto.
 
-**Measured** with the harness (section 4), default config, `questxtract eval tests/data/`:
+**Measured at #12** with the harness (section 4), default config, `questxtract eval tests/data/`:
 
 | Recording | Content labels | TP | FP | FN | Recall | Precision | F1 |
 |---|---|---|---|---|---|---|---|
@@ -836,7 +836,22 @@ the video of the kid?"*, *"Am I recording?"*). None hit an unlabelled sentence.
 
 The confirmation tags (MIT's *"..., right?"*, TTK4225's *"True?"* and *"Okay?"*, several a
 minute) all stay out: none of the 64 is a tag, so the tag penalty does its job. Growing the
-check-in list with the TTK4225 forms is the cheapest precision win left.
+check-in list with the TTK4225 forms is the cheapest precision win left
+([#70](https://github.com/mad201802/QuestXtract/issues/70)).
+
+*After the answer seed (#38).* An answered question now carries its full score, so confidence is
+graded and the sweep is no longer empty above 0.55:
+
+| Recording | Content labels | TP | FP | FN | Recall | Precision | F1 |
+|---|---|---|---|---|---|---|---|
+| MIT 18.100B L1 | 28 | 28 | 1 | 0 | 1.00 | 0.97 | 0.98 |
+| TTK4225 2026-09-14 | 39 | 34 | 26 | 5 | 0.87 | 0.57 | 0.69 |
+| TTK4225 2026-09-15 | 60 | 59 | 49 | 1 | 0.98 | 0.55 | 0.70 |
+| **Pooled** | 127 | 121 | 76 | 6 | **0.95** | 0.61 | 0.75 |
+
+The sweep holds 0.95 / 0.61 from 0.35 to 0.55, then 0.49 / 0.62 at 0.60 and 0.42 / 0.68 from
+0.65 up. Eight more content questions pass the gate; so do eleven more check-ins, whose next
+sentence the seed takes as an answer because they are missing from the check-in list (#70).
 
 > **Decision.** `questxtract/detect.py`, cue tables inline as module constants.
 
