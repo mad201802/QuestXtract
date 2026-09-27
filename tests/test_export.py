@@ -100,10 +100,10 @@ def test_cli_roundtrip(tmp_path):
     assert main(["process", str(_transcript_file(tmp_path)), "-o", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
     assert data["schema_version"] == "1.1"
-    # `-t` gates the final confidence (pipeline.md 9.2 min_confidence), not the detection
-    # score: an unanswered aux-only question scores 0.55 * 0.5 = 0.275 and is dropped.
+    # An aux head without a '?' scores 0.4, under the 0.45 detection gate, so it is never a
+    # candidate (architecture.md 7.3).
     assert [q["text"] for q in data["questions"]] == ["What is a stable sort?"]
-    assert data["stats"]["candidates"] == 2
+    assert data["stats"]["candidates"] == 1
     assert data["stats"]["sentences"] == 4
 
 
@@ -114,7 +114,7 @@ def test_cli_writes_to_stdout_with_a_dash_output(tmp_path, capsys):
 
 def test_cli_threshold_filters(tmp_path, capsys):
     assert main(["process", str(_transcript_file(tmp_path)), "-t", "0.2", "-o", "-"]) == 0
-    assert len(json.loads(capsys.readouterr().out)["questions"]) == 2
+    assert len(json.loads(capsys.readouterr().out)["questions"]) == 1
     assert main(["process", str(_transcript_file(tmp_path)), "-t", "0.9", "-o", "-"]) == 0
     assert json.loads(capsys.readouterr().out)["questions"] == []
 

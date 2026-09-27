@@ -44,6 +44,7 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
 
 ### Added
 
+- Automatic releases (#45): pushing a tag `vX.Y.Z` publishes the package to PyPI and creates the GitHub Release with the matching CHANGELOG section as notes. `scripts/release_notes.py` fails the release first if the tag, `pyproject.toml` and `CHANGELOG.md` disagree.
 - A terminal progress bar on stderr, one redrawn line per stage, rendered by the CLI from the
   existing `Progress` callback (#14). The transcribe stage reports inside itself, per decoded
   word, through the backend's `on_progress`.
@@ -89,6 +90,20 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
 
 ### Fixed
 
+- Question detection only looked at a sentence's first word, so "So what ...?", "Then how ...?"
+  and "If you have the data, does that mean ...?" scored on the `?` alone (0.60), which the
+  unanswered confidence (0.55 x score) put under the 0.40 emission gate. The head is now found
+  past discourse markers and, for a `?` sentence, in its last comma clause; negated auxiliaries
+  count and `any` no longer does. On the reference recordings content questions found went from
+  2/10 to 7/10 (MIT 18.100B) and 5/17 to 9/17 (CS234), architecture.md 7.3.
+- Confirmation tags ("Okay?", "True, you see?", "..., right?") scored like real questions, and
+  check-ins ("Is that clear?") above them. New reasons `tag` and `check_in` (-0.40 each) keep
+  tags out of the candidates and check-ins out of the emitted questions.
+  Check-in phrases match whole words, and the comprehension checks ("make sense", "is that
+  clear") not when content follows them, so a content question that contains one is kept.
+- A wh- or aux-head without a `?` passed the detection gate on its own; on three lectures all 35
+  such candidates were statements ("What I mean is ..."). Head weights are 0.4 (was 0.5), under
+  the gate alone, 1.0 with the `?`. Emitted questions are unaffected, the candidate count drops.
 - A cached stage with no source hash wrote into a shared `unknown/` bucket, so one recording's
   results could be replayed into another's. A run without a content hash now skips the cache.
 - `judge` declared a cache keyed only on config, which would have served a stale verdict after

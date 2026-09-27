@@ -38,8 +38,26 @@ _AUX_WORDS = frozenset(
         "have",
         "has",
         "had",
-        "any",
+        "isn't",
+        "aren't",
+        "wasn't",
+        "weren't",
+        "don't",
+        "doesn't",
+        "didn't",
+        "can't",
+        "couldn't",
+        "won't",
+        "wouldn't",
+        "shouldn't",
+        "haven't",
+        "hasn't",
     }
+)
+# Openers that sit in front of a question without being part of it: "So what ...?",
+# "And then how ...?".
+_DISCOURSE_MARKERS = frozenset(
+    {"so", "and", "but", "or", "now", "then", "well", "okay", "ok", "alright", "also", "anyway"}
 )
 
 _TYPES = {
@@ -54,9 +72,28 @@ _TYPES = {
     "whom": "what",
 }
 
-# ponytail: keyword heuristic. pipeline.md 7.1-7.3 specifies the cue tables, the vetoes and
-# the full additive scoring table; they land with issue #10 once the labelled set (#11) exists.
-_SCORES = {"mark": 0.6, "wh": 0.5, "aux": 0.5}
+# A sentence, or its closing clause, made only of these is a confirmation tag: "Okay?",
+# "True, you see?", "..., right?". Labelled rhetorical (annotation_guidelines.md 2).
+_TAG_WORDS = frozenset({"okay", "ok", "right", "true", "yes", "yeah", "correct", "you", "see"})
+
+# Classroom management, not content: labelled check_in or procedural. Matched as whole words
+# of the lower-cased sentence, trailing vocatives allowed ("How much are we together, people,
+# on this?"). The comprehension checks do not count when content follows them: "Does that
+# make sense?" is a check-in, "Why does it make sense to sort first?" is a question.
+# ponytail: English phrase list grown from the labelled recordings; the judge (stage 9) is
+# the real content filter, this only keeps the obvious ones out of the candidate list.
+_CHECK_INS = re.compile(
+    r"\bmakes? sense\b(?! to (?!everyone\b|everybody\b|you\b)| of\b| for\b| in\b| here\b)"
+    r"|\bis that clear\b(?! (?:why|what|how|that|whether|if|when|where)\b)"
+    r"|\b(?:are we together|you see the point|any (?:other )?questions|who here|want to share"
+    r"|want to tell me|your name)\b"
+)
+
+# A head word without a '?' stays under the 0.45 gate: on the reference recordings every such
+# sentence was a statement ("What I mean is ...", "So when we ...").
+# ponytail: recovering a question the ASR left unpunctuated needs a second, independent gate
+# (a local answer slot, architecture.md 7.1c); add it when a labelled question is lost to it.
+_SCORES = {"mark": 0.6, "wh": 0.4, "aux": 0.4, "tag": -0.4, "check_in": -0.4}
 
 
 def score_sentence(sentence: str) -> tuple[float, tuple[str, ...]]:
@@ -69,24 +106,74 @@ def score_sentence(sentence: str) -> tuple[float, tuple[str, ...]]:
     reasons: list[str] = []
     if sentence.rstrip().endswith("?"):
         reasons.append("mark")
-    words = re.findall(r"\w+", sentence.casefold())
-    if words:
-        if words[0] in _WH_WORDS:
-            reasons.append("wh")
-        if words[0] in _AUX_WORDS:
-            reasons.append("aux")
-    score = min(1.0, sum((_SCORES[r] for r in reasons), 0.0))
-    return score, tuple(reasons)
+    heads = _heads(sentence)
+    if any(h in _WH_WORDS for h in heads):
+        reasons.append("wh")
+    if any(h in _AUX_WORDS for h in heads):
+        reasons.append("aux")
+    if _is_tag(sentence):
+        reasons.append("tag")
+    if _CHECK_INS.search(sentence.casefold().replace("\u2019", "'")):
+        reasons.append("check_in")
+    score = min(1.0, max(0.0, sum((_SCORES[r] for r in reasons), 0.0)))
+    return round(score, 2), tuple(reasons)
 
 
 def question_type(sentence: str) -> str:
     """Classify a question by its head word."""
-    words = re.findall(r"\w+", sentence.casefold())
-    if not words:
-        return "other"
-    if words[0] in _TYPES:
-        return _TYPES[words[0]]
-    return "yes_no" if words[0] in _AUX_WORDS else "other"
+    for head in _heads(sentence):
+        if head in _TYPES:
+            return _TYPES[head]
+        if head in _AUX_WORDS:
+            return "yes_no"
+    return "other"
+
+
+def _words(text: str) -> list[str]:
+    """Lower-cased words, contractions kept whole so "don't" is one token."""
+    return re.findall(r"\w+(?:'\w+)?", text.casefold().replace("\u2019", "'"))
+
+
+def _is_tag(sentence: str) -> bool:
+    """Whether ``sentence`` is, or ends in, a confirmation tag rather than a question.
+
+    A tag after a real question ("Why is it not a field, right?") does not count: the
+    question's own head wins.
+    """
+    if not sentence.rstrip().endswith("?"):
+        return False
+    tail = _words(sentence.rsplit(",", 1)[-1])
+    if not tail or not set(tail) <= _TAG_WORDS:
+        return False
+    return not any(h in _WH_WORDS or h in _AUX_WORDS for h in _heads(sentence.rsplit(",", 1)[0]))
+
+
+def _heads(sentence: str) -> tuple[str, ...]:
+    """Return the words a question in ``sentence`` can open with, past discourse markers.
+
+    For a sentence ending in ``?`` whose opener is not interrogative, the last comma clause
+    counts too, since ASR runs a preamble into the question: "If you have the data, does
+    that mean ...?". Without the ``?`` it does not, or every ", which is ..." would read as a
+    wh-question; nor after an interrogative opener, where the last clause is part of the
+    question: "Is it a function from X to Y, where X is compact?" is yes/no.
+    """
+    heads: list[str] = []
+    opener = _opener(sentence)
+    if opener:
+        heads.append(opener)
+    if sentence.rstrip().endswith("?") and opener not in _WH_WORDS | _AUX_WORDS:
+        last = _opener(sentence.rsplit(",", 1)[-1])
+        if last and last not in heads:
+            heads.append(last)
+    return tuple(heads)
+
+
+def _opener(clause: str) -> str:
+    """Return the first word of ``clause`` past discourse markers, or ``""``."""
+    words = _words(clause)
+    while words and words[0] in _DISCOURSE_MARKERS:
+        words.pop(0)
+    return words[0] if words else ""
 
 
 def detect_questions(

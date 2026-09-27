@@ -103,7 +103,7 @@ included, so a consumer never has to defensively check for a missing field:
   "stats": { "sentences": 3, "sentences_unpunctuated": 0,
              "segments": 1, "segments_closed_gap": 0,
              "segments_closed_duration": 0, "segments_closed_chars": 0,
-             "candidates": 2, "answered": 0, "emitted": 1 },
+             "candidates": 1, "answered": 0, "emitted": 1 },
   "questions": [
     {
       "id": "q_ca0d72",
@@ -129,8 +129,10 @@ included, so a consumer never has to defensively check for a missing field:
 
 `id` and `sentence_id` identify a question across re-runs and edits; `sentence_id` is a content
 hash, so it survives a re-transcription. `reasons` says which rules fired: `mark` (ends in `?`),
-`wh` (starts with a wh-word), `aux` (starts with an auxiliary verb). Useful when reviewing
-borderline detections — ASR output often drops the question mark.
+`wh` / `aux` (the question opens with a wh-word / an auxiliary verb, past fillers like "so" or
+"now"), `tag` (only a confirmation tag like "okay?" or "..., right?") and `check_in` (classroom
+management like "is that clear?"). The last two lower the score; architecture.md 7.3 has the
+table. Useful when reviewing borderline detections, e.g. with `scripts/dropped_questions.py`.
 
 `--threshold` gates the final **confidence**, not the raw detection score. An unanswered question
 carries `0.55 x question_score` (architecture.md 9.2), so it tops out at 0.55 until answer search
@@ -227,6 +229,24 @@ Which stages are real today and which are stubs: [architecture.md 13.3](docs/arc
 
 CI runs lint, format check and the test suite on Linux, macOS and Windows against Python 3.10 and
 3.13 for every pull request. Green CI is required before merging into `main`.
+
+## Releasing
+
+Releases are cut from `main` by pushing a version tag; [release.yml](.github/workflows/release.yml) does the rest.
+
+1. Bump `version` in `pyproject.toml` and rename `## Unreleased` in `CHANGELOG.md` to that version,
+   e.g. `## 0.2.0`. Merge this into `main`.
+2. Tag the merge commit and push the tag:
+
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+
+The workflow checks that the tag matches `pyproject.toml` and that `CHANGELOG.md` has a section for it, runs lint, mypy and the tests, builds the sdist and wheel, uploads them to PyPI, and creates the GitHub Release with that CHANGELOG section as its notes. Nothing is published if any step before the upload fails. Check a tag locally first with `python3 scripts/release_notes.py v0.2.0`.
+
+Publishing needs a PyPI API token scoped to `questxtract`, stored as the `PYPI_API_TOKEN` secret of the repository's `pypi` environment. Alternatively, register this workflow as a [trusted publisher](https://docs.pypi.org/trusted-publishers/) on PyPI and leave the
+secret unset.
 
 ## Roadmap
 
