@@ -2,9 +2,10 @@
 
 One mode, structural (pipeline.md 3.2). A segment is **not** a topic: nothing here measures
 what a run is about, and the only consumer that works today - the visual join in 6.5 - wants
-a time interval, not a topic. The two that would want topicality, FR11's filter and the QA
-scoring's segment-relation term, are both unbuilt, and neither this stage nor a smarter one
-can move NFR2, since detection reads sentences and never looks at ``segment_index``.
+a time interval, not a topic. The one that would want topicality, FR11's filter, is unbuilt
+(the QA scoring's segment-relation term was dropped, 9.1), and neither this stage nor a
+smarter one can move NFR2, since detection reads sentences and never looks at
+``segment_index``.
 
 3.2 records what a topical version would cost and why lexical cohesion, not embeddings, is
 the first rung if it is ever wanted.
