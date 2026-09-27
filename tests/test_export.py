@@ -1,3 +1,4 @@
+import dataclasses
 import json
 
 import pytest
@@ -50,6 +51,23 @@ def test_export_carries_the_timestamp_and_the_label(finished):
     assert question["start_hms"] == "0:02" and question["end_hms"] == "0:04"
     assert question["confidence_label"] in {"high", "medium", "low"}
     assert question["question_type"] == "what"
+
+
+def _answered_by_last_sentence(ctx):
+    """Give the first question an answer spanning the transcript's last sentence."""
+    later = ctx.sentences[-1]
+    ctx.pairs = (
+        dataclasses.replace(ctx.pairs[0], answer_text=later.text, answer_sentence_ids=(later.id,)),
+    )
+    return later
+
+
+def test_an_answer_carries_the_span_of_its_own_sentences(finished):
+    later = _answered_by_last_sentence(finished)
+    question = result_to_dict(finished)["questions"][0]
+    assert (question["start"], question["end"]) == (2.2, 4.0)
+    assert (question["answer"]["start"], question["answer"]["end"]) == (later.start, later.end)
+    assert question["answer"]["sentence_ids"] == [later.id]
 
 
 @pytest.mark.parametrize(

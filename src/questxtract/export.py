@@ -72,7 +72,7 @@ def _question(
         "confidence": pair.confidence,
         "confidence_label": confidence_label(pair.confidence),
         "question_type": pair.question.question_type,
-        "answer": _answer(pair),
+        "answer": _answer(pair, by_id),
         "segment_id": sentence.segment_index if sentence else None,
         "sentence_id": pair.question.sentence_id,
         "visual": _visual(sentence, segments),
@@ -81,14 +81,15 @@ def _question(
     }
 
 
-def _answer(pair: QAPair) -> dict[str, Any] | None:
-    """Return the answer object, or ``None`` when no answer was found."""
+def _answer(pair: QAPair, by_id: dict[str, Sentence]) -> dict[str, Any] | None:
+    """Return the answer with the span of its own sentences, or ``None`` when none was found."""
     if not pair.answer_text:
         return None
+    covered = [by_id[sentence_id] for sentence_id in pair.answer_sentence_ids]
     return {
         "text": pair.answer_text,
-        "start": pair.start,
-        "end": pair.end,
+        "start": min(s.start for s in covered),
+        "end": max(s.end for s in covered),
         "sentence_ids": list(pair.answer_sentence_ids),
     }
 
