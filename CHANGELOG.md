@@ -63,8 +63,18 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   none, so downstream stages always have a word list to slice.
 - Sentence rebuilding (`sentences.py`) with word-index snapping and force-split at the widest
   internal gap, and structural segmentation (`segments.py`) on gap, duration and length.
-- `questxtract eval` and `questxtract quiz` subcommands, which exit 1 with a one-line error until
-  `evaluate.py` (#12) and the generative stage land.
+- `questxtract quiz` subcommand, which exits 1 with a one-line error until the generative stage
+  lands.
+- The evaluation harness (#12): `questxtract eval <dir|file>...` scores the pipeline against
+  every `*.labels.jsonl` that has a `*.transcript.json` beside it - content recall, precision,
+  f1, false positives by label kind, `question_mark_rate`, `blind_slice_recall`, a sweep over
+  `min_confidence`, and every missed question and false positive. `--json` for machines.
+  Matching is one-to-one by time overlap. `tests/test_evaluate.py` gates NFR2 (pooled recall
+  >= 0.50) in CI; today it is 0.89, precision 0.64.
+- `tests/data/<slug>.transcript.json` for the reference recordings, and exhaustive,
+  transcript-anchored labels replacing the hand-timed #11 set (127 content questions, 314
+  entries). `scripts/scratch_to_labels.py --transcript` snaps a label's times to the words it
+  quotes.
 - Optional `questxtract[llm]` extra for the judge and vision calls, imported inside the functions
   so the base install stays stdlib-only.
 - `tests/test_pipeline.py` asserts that `STAGES` matches the stage order architecture.md 1.3
@@ -80,6 +90,10 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   against a real recording and 3.1's force-split changed the sentence stream underneath them;
   this is what says which rule is actually doing the cutting. Exported in the `stats` block;
   no schema change.
+- Reference recordings (#33): two TTK4225 lectures (2026-09-14 P03·12, 2026-09-15 P03·14)
+  join MIT 18.100B, each labelled from its committed transcript per
+  `docs/annotation_guidelines.md` (114 and 166 entries, every one blind). Ground truth for the
+  NFR2 recall gate in `evaluate.py` (#12).
 
 ### Fixed
 
@@ -88,7 +102,7 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   unanswered confidence (0.55 x score) put under the 0.40 emission gate. The head is now found
   past discourse markers and, for a `?` sentence, in its last comma clause; negated auxiliaries
   count and `any` no longer does. On the reference recordings content questions found went from
-  2/10 to 7/10 (MIT 18.100B) and 5/17 to 9/17 (CS234), architecture.md 7.3.
+  2/10 to 7/10 (MIT 18.100B), architecture.md 7.3.
 - Confirmation tags ("Okay?", "True, you see?", "..., right?") scored like real questions, and
   check-ins ("Is that clear?") above them. New reasons `tag` and `check_in` (-0.40 each) keep
   tags out of the candidates and check-ins out of the emitted questions.
