@@ -2,11 +2,13 @@ import dataclasses
 import json
 
 import pytest
+from jsonschema import Draft202012Validator, ValidationError
 
 from questxtract import SchemaError, Transcript, VisualContext, read_questions, write_questions
 from questxtract.cli import main
-from questxtract.export import _format_hms, result_to_dict
+from questxtract.export import SCHEMA_PATH, _format_hms, result_to_dict
 from questxtract.pipeline import STAGES, run
+from questxtract.vision import attach_visual
 
 QUESTION_KEYS = {
     "id",
@@ -126,6 +128,31 @@ def test_a_recording_with_no_questions_still_exports_the_full_envelope(context, 
     data = read_questions(out)
     assert data["questions"] == [] and data["stats"]["emitted"] == 0
     assert data["segments"]  # the lecture is still described
+
+
+@pytest.fixture
+def validator():
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema)
+
+
+def test_every_export_shape_matches_the_published_schema(finished, validator):
+    """#13 AC2 as a CI check: plain, with an answer and board states, and empty."""
+    validator.validate(result_to_dict(finished))
+    finished.visual = BOARDS
+    finished = attach_visual(finished)
+    _answered_by_last_sentence(finished)
+    validator.validate(result_to_dict(finished))
+    finished.pairs = ()
+    validator.validate(result_to_dict(finished))
+
+
+def test_the_schema_rejects_what_the_format_does_not_allow(finished, validator):
+    data = result_to_dict(finished)
+    data["questions"][0]["review"]["status"] = "maybe"
+    with pytest.raises(ValidationError):
+        validator.validate(data)
 
 
 @pytest.mark.parametrize(

@@ -6,7 +6,7 @@ One rule governs the shape: **do not drop ``None`` on serialisation.** A fixed k
 emitted, always, ``null`` included, so consumers never have to defensively ``.get()`` a
 missing ``answer``. Segments and board states are listed once and referenced by id. The
 format is also the edit surface (FR5): ``review`` is the one block people own, and a re-run
-merges it back by question id (#15).
+merges it back by question id (#15). Formal description: ``questions.schema.json``.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from .models import Context, QAPair, SchemaError, Segment, Sentence, VisualConte
 from .score import confidence_label
 
 SCHEMA_VERSION = "2.0"
+SCHEMA_PATH = Path(__file__).with_name("questions.schema.json")
 
 _CONFIG_KEYS = ("model_size", "language", "min_confidence", "judge_model", "vision_model")
 _SOURCE = "audio"  # questions are only read from speech until the vision milestones (M2/M3)
