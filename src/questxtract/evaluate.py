@@ -46,7 +46,8 @@ def overlaps(prediction: Span, label: Span, *, minimum: float = _MIN_OVERLAP) ->
 
     They match when the overlap covers at least ``minimum`` of the shorter of the two.
     """
-    return overlap_ratio(prediction, label) >= minimum
+    ratio = overlap_ratio(prediction, label)
+    return ratio > 0.0 and ratio >= minimum
 
 
 def match(predictions: Sequence[Span], labels: Sequence[Span]) -> dict[int, int]:
