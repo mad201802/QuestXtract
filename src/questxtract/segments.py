@@ -91,10 +91,9 @@ def segments(ctx: Context) -> Context:
             indexed[position] = _with_segment(indexed[position], index)
     ctx.sentences = tuple(indexed)
     ctx.stats["segments"] = len(ctx.segments)
-    # Which rule is doing the cutting. The thresholds below are untuned against a real
-    # recording, and 3.1's force-split now surfaces pauses that used to sit inside one
-    # unpunctuated sentence where this stage could not see them. A gap count that dwarfs the
-    # other two is the signal that segment_max_gap_seconds is too tight for the lecturer.
+    # Which rule is doing the cutting. On the labelled recordings a pause closes 95-98% of
+    # segments and the length caps are rare backstops (3.2, #41); caps closing more than a
+    # few is the sign a new recording does not fit those thresholds.
     for reason in ("gap", "duration", "chars"):
         ctx.stats[f"segments_closed_{reason}"] = sum(
             1 for s in ctx.segments if s.close_reason == reason

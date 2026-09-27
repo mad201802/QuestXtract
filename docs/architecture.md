@@ -353,16 +353,32 @@ local-relatedness signal for scoring. If FR11's topic filter ships, the answer i
 coarser layer over these, not a retuned threshold on them. Building that layer now would be
 building for consumers that do not exist.
 
-> **Decision.** `questxtract/segments.py`.
+> **Decision.** `questxtract/segments.py`. Thresholds kept at 2.0 s, 90 s and 800 characters,
+> measured against the three transcribed recordings of #12 (`mit_18_100b_l1`,
+> `ttk4225_2026_09_14`, `ttk4225_2026_09_15`): `build_segments` over each one's sentences at
+> the current 3.1 config, force-split included, varying only `segment_max_gap_seconds`
+> ([#41](https://github.com/mad201802/QuestXtract/issues/41)).
 >
-> **Risk, stated plainly:** the three thresholds are guesses. Nothing here has been run against
-> a labelled recording, and 3.1's force-split changed the sentence stream underneath them -
-> splitting run-ons at 0.6 s pauses surfaces silences over 2.0 s that previously sat *inside*
-> one unpunctuated sentence, invisible to this stage. `stats["segments_closed_gap"]`,
-> `["segments_closed_duration"]` and `["segments_closed_chars"]` are the standing proxy: a gap
-> count that dwarfs the other two means `segment_max_gap_seconds` is too tight for the
-> lecturer, and 2.0 s is a short pause for someone writing on a chalkboard. Retune against those
-> counts, not against a guess.
+> | `segment_max_gap_seconds` | 2 s | 3 s | 4 s | 6 s | 8 s |
+> |---|---|---|---|---|---|
+> | segments closed by a pause (%) | 96 / 98 / 95 | 81 / 91 / 75 | 74 / 81 / 64 | 48 / 66 / 45 | 36 / 50 / 35 |
+> | median segment (s) | 22 / 15 / 16 | 28 / 24 / 38 | 40 / 29 / 46 | 65 / 49 / 59 | 75 / 64 / 61 |
+>
+> At 2.0 s that is 123 / 66 / 86 segments, closed by gap 117 / 64 / 81, by duration 3 / 0 / 0
+> and by chars 2 / 1 / 4; the longest is 85 s.
+>
+> The gap count does dwarf the other two, which this note used to read as "too tight". Measured,
+> it reads the other way: a looser threshold finds no second, natural boundary. It hands the
+> cutting to the length caps, which close at an arbitrary 90 s or 800 characters, mid-thought,
+> and by 6 s they close about half of all segments. At 2.0 s the caps are the rare backstops
+> they were meant to be. The one working consumer, the visual join (6.5), wants short
+> intervals, and 15 to 22 s is well inside a board state's lifetime. A coarser unit for FR11 is
+> still the second layer argued for above, not a looser threshold here. The chalkboard worry is
+> real - writing pauses do end segments - but it costs nothing until a consumer needs segments
+> to mean something.
+>
+> `stats["segments_closed_gap" | "_duration" | "_chars"]` stay as the check on a new recording:
+> length caps closing more than a few segments is the sign it does not fit these numbers.
 
 ---
 
