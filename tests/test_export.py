@@ -94,7 +94,24 @@ def test_board_states_are_listed_once_and_referenced_by_id(context):
     assert [v["id"] for v in data["visuals"]] == ids
     assert data["visuals"][1]["latex"] == r"O(n \log n)"
     assert data["segments"][0]["visual_ids"] == ids
-    assert data["questions"][0]["visual_ids"] == ids  # every overlapping state, not the first
+    # The question (2.2-4.0 s) was asked while only the first board was up.
+    assert data["questions"][0]["visual_ids"] == [BOARDS[0].id]
+
+
+def test_a_question_points_at_the_board_on_screen_not_its_whole_segment(context):
+    early = VisualContext(start=0.0, end=2.0, description="agenda")
+    current = VisualContext(start=2.0, end=20.0, description="stable sort")
+    context.visual = (early, current)
+    data = result_to_dict(run(context, STAGES[2:]))
+    assert data["segments"][0]["visual_ids"] == [early.id, current.id]
+    assert data["questions"][0]["visual_ids"] == [current.id]
+
+
+def test_a_question_with_no_board_on_screen_falls_back_to_its_segments(context):
+    later = VisualContext(start=6.0, end=9.0, description="written after the question")
+    context.visual = (later,)
+    data = result_to_dict(run(context, STAGES[2:]))
+    assert data["questions"][0]["visual_ids"] == [later.id]
 
 
 def _answered_by_last_sentence(ctx):

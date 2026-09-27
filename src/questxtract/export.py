@@ -18,6 +18,7 @@ from typing import Any
 
 from .models import Context, QAPair, SchemaError, Segment, Sentence, VisualContext
 from .score import confidence_label
+from .vision import overlapping
 
 SCHEMA_VERSION = "2.0"
 SCHEMA_PATH = Path(__file__).with_name("questions.schema.json")
@@ -106,11 +107,24 @@ def _question(
         "answer": _answer(pair, by_id),
         "segment_id": segment,
         "sentence_id": pair.question.sentence_id,
-        "visual_ids": [] if segment is None else [s.id for s in segments[segment].visual],
+        "visual_ids": _visual_ids(pair, segment, segments),
         "verdict": pair.verdict,
         "reasons": list(pair.question.reasons) + list(pair.reasons),
         "review": {"status": "pending", "text": None, "note": None, "metadata": {}},
     }
+
+
+def _visual_ids(pair: QAPair, segment: int | None, segments: Sequence[Segment]) -> list[str]:
+    """Return the ids of the board states on screen while the question was asked.
+
+    A segment runs up to 90 s, so its board states can postdate the question (#40). Falls
+    back to every state of the segment when none overlaps the question itself; empty when
+    vision is off or the question has no segment.
+    """
+    if segment is None:
+        return []
+    states = segments[segment].visual
+    return [s.id for s in overlapping(states, pair.start, pair.end) or states]
 
 
 def _segment_of(sentence: Sentence | None, segments: Sequence[Segment]) -> int | None:

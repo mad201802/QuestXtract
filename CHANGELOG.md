@@ -91,6 +91,9 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
 
 ### Fixed
 
+- A question's `visual_ids` list the board states on screen while it was asked, falling back to
+  every state of its segment when none was. They listed the whole segment's, so a question could
+  point at a board written up to 90 s later (#40).
 - An answer's `start`/`end` in `questions.json` span its own sentences; they repeated the
   question's span (#13).
 - Question detection only looked at a sentence's first word, so "So what ...?", "Then how ...?"
