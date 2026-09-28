@@ -1232,16 +1232,33 @@ real - the only two stages long enough to need it.
 
 ### 12.1 questions.json
 
-Fixed key set, `null` included, one file:
+Schema 2.0: a fixed key set, `null` included, in one file. The formal description is
+[`questions.schema.json`](../src/questxtract/questions.schema.json), which ships inside the
+package; the tests validate every export shape against it. One entry of each list shown:
 
 ```json
 {
-  "schema_version": "1.1",
+  "schema_version": "2.0",
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
-  "config": {"model_size": "turbo", "language": "en", "judge_model": "gpt-5.6-terra",
-             "vision_model": "gpt-5.6-luna"},
+  "config": {"model_size": "turbo", "language": "en", "min_confidence": 0.4,
+             "judge_model": "gpt-5.6-terra", "vision_model": "gpt-5.6-luna"},
   "stats": {"sentences": 1840, "board_states": 34, "candidates": 61,
             "emitted": 38, "judged": 38, "rejected": 23},
+  "segments": [
+    {"id": 37, "start": 1262.0, "end": 1340.5, "topic": null, "visual_ids": ["v_4c1e09"]}
+  ],
+  "visuals": [
+    {
+      "id": "v_4c1e09",
+      "start": 1240.0,
+      "end": 1402.5,
+      "keyframe_path": ".questxtract/9f2a.../frames/1388.jpg",
+      "description": "two-column comparison of stable and unstable sort passes",
+      "text": "stable: (3,a) (3,b) preserved",
+      "latex": null,
+      "confidence": 0.9
+    }
+  ],
   "questions": [
     {
       "id": "q_0007",
@@ -1254,6 +1271,7 @@ Fixed key set, `null` included, one file:
       "confidence": 0.82,
       "confidence_label": "high",
       "question_type": "why",
+      "source": "audio",
       "answer": {
         "text": "Because the second pass preserves the order of the first.",
         "start": 1291.0,
@@ -1262,32 +1280,55 @@ Fixed key set, `null` included, one file:
       },
       "segment_id": 37,
       "sentence_id": "s_1b88c0",
-      "visual": {
-        "start": 1240.0,
-        "end": 1402.5,
-        "keyframe_path": ".questxtract/9f2a.../frames/1388.jpg",
-        "description": "two-column comparison of stable and unstable sort passes",
-        "text": "stable: (3,a) (3,b) preserved",
-        "latex": null
-      },
+      "visual_ids": ["v_4c1e09"],
       "verdict": "revise",
-      "reasons": ["mark", "wh", "answer_cue", "visual_overlap", "judge_revised"]
+      "reasons": ["mark", "wh", "answer_cue", "visual_overlap", "judge_revised"],
+      "review": {"status": "pending", "text": null, "note": null, "metadata": {}}
     }
   ]
 }
 ```
 
-`original_text` is present whenever the judge revised, `null` otherwise. `answer` is `null` when
-no answer was found. `visual` is `null` when vision was off or nothing overlapped.
+**Shared things are listed once and referenced by id.** `segments` and `visuals` (board states,
+section 6.4) are top-level lists; a question points into them with `segment_id` and
+`visual_ids`, so a board state that ten questions discuss is written once. This is the shape the
+vision milestones grow into without a breaking change: M3's board timeline is the `visuals` list
+in time order, and M4's animations become one more top-level list pointing at visual ids.
+
+- `visual_ids` holds every board state joined to the question's segment; empty when vision is
+  off. `segment_id` is `null` when the question's sentence belongs to no segment.
+- `answer` is `null` when no answer was found. Its `start`/`end` span its own sentences
+  (`sentence_ids`), not the question.
+- `original_text` is present whenever the judge revised, `null` otherwise.
+- `source` says what the question was read from. Only `audio` is produced until M2/M3;
+  `visual` and `combined` are reserved.
+- `topic` on a segment is reserved for topic filtering (#16) and `null` until topics exist.
+- `config.min_confidence` is the threshold the file was cut at.
+
+**Versioning.** `schema_version` is `MAJOR.MINOR`. A minor version only adds keys, so a reader
+must ignore keys it does not know; a major version moves or removes something, and
+`read_questions` refuses a file of another major version. 1.x to 2.0 moved the board state out of
+each question (`visual` became the top-level `visuals` plus `visual_ids`) and added `segments`,
+`source`, `review` and `config.min_confidence`.
 
 Two consumers, two exporters: this file and the eval harness.
 
 ### 12.2 Editing (FR5)
 
 The output JSON is the edit surface, and the editor lives in the wrapper, not in this package.
-The format above is designed so an editor is a thin layer over it, and so that re-running the
-pipeline can merge human edits back by question id - which is why sentence ids are content
-hashes (section 5) rather than indices.
+Each question carries one block that belongs to people, `review`. The pipeline writes its
+defaults and never reads or overwrites it; everything else in the file is regenerated on every
+run.
+
+| `review` field | Meaning |
+|---|---|
+| `status` | `pending` (untouched), `accepted`, `deleted`, or `false_positive` (not a question at all) |
+| `text` | The edited question text; `null` while unedited. The question's own `text` stays the original. |
+| `note` | Free text from the reviewer. |
+| `metadata` | Any extra key-value data, such as a topic tag or a quiz difficulty. |
+
+Merging edits after a re-run (#15) is therefore copying `review` across by question id, which is
+why question and sentence ids are content hashes (section 5) rather than indices.
 
 ### 12.3 quiz.json (generative, separate)
 

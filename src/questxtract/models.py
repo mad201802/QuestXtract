@@ -262,6 +262,12 @@ class VisualContext:
     latex: str | None = None
     confidence: float = 0.0
 
+    @property
+    def id(self) -> str:
+        """Stable identifier from the lifetime and keyframe; a new caption keeps it."""
+        key = f"{self.start:.3f}|{self.end:.3f}|{self.keyframe_path}"
+        return f"v_{hashlib.sha1(key.encode()).hexdigest()[:6]}"
+
 
 @dataclass(frozen=True, kw_only=True)
 class QuestionCandidate:
