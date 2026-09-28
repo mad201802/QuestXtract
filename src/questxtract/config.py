@@ -54,6 +54,7 @@ class Config:
     max_question_chars: int = 350
 
     # --- 8 answer search ---
+    answer_seed_max_gap_seconds: float = 1.0
     answer_window_sentences: int = 3
     deferred_min_question_score: float = 0.62
     deferred_window_sentences: int = 28
