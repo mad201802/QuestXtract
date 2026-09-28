@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "questions.json",
+  "description": "The questions asked in one recording, as exported by questxtract. Schema 2.x: a minor version only adds keys, so readers must ignore keys they do not know. Documented in docs/architecture.md section 12.",
+  "type": "object",
+  "required": ["schema_version", "source", "config", "stats", "segments", "visuals", "questions"],
+  "properties": {
+    "schema_version": {"type": "string", "pattern": "^2\\.[0-9]+$"},
+    "source": {
+      "type": "object",
+      "required": ["path", "duration_seconds", "hash"],
+      "properties": {
+        "path": {"type": "string", "description": "The recording, or the transcript when stages 1-2 were skipped."},
+        "duration_seconds": {"type": ["number", "null"], "minimum": 0},
+        "hash": {"type": ["string", "null"], "description": "Content hash of the recording; null for a transcript input."}
+      }
+    },
+    "config": {
+      "type": "object",
+      "required": ["model_size", "language", "min_confidence", "judge_model", "vision_model"],
+      "properties": {
+        "model_size": {"type": "string"},
+        "language": {"type": "string"},
+        "min_confidence": {"$ref": "#/$defs/fraction", "description": "The threshold this file was cut at."},
+        "judge_model": {"type": "string"},
+        "vision_model": {"type": "string"}
+      }
+    },
+    "stats": {"type": "object", "additionalProperties": {"type": "integer"}},
+    "segments": {"type": "array", "items": {"$ref": "#/$defs/segment"}},
+    "visuals": {"type": "array", "items": {"$ref": "#/$defs/visual"}},
+    "questions": {"type": "array", "items": {"$ref": "#/$defs/question"}}
+  },
+  "$defs": {
+    "seconds": {"type": "number", "minimum": 0},
+    "fraction": {"type": "number", "minimum": 0, "maximum": 1},
+    "hms": {"type": "string", "pattern": "^[0-9]+:[0-9]{2}(:[0-9]{2})?$"},
+    "visual_ids": {"type": "array", "items": {"type": "string", "pattern": "^v_"}},
+    "segment": {
+      "type": "object",
+      "required": ["id", "start", "end", "topic", "visual_ids"],
+      "properties": {
+        "id": {"type": "integer", "minimum": 0},
+        "start": {"$ref": "#/$defs/seconds"},
+        "end": {"$ref": "#/$defs/seconds"},
+        "topic": {"type": ["string", "null"], "description": "Reserved for topic filtering (#16); null until topics exist."},
+        "visual_ids": {"$ref": "#/$defs/visual_ids"}
+      }
+    },
+    "visual": {
+      "type": "object",
+      "description": "One board state (architecture.md 6.4).",
+      "required": ["id", "start", "end", "keyframe_path", "description", "text", "latex", "confidence"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^v_"},
+        "start": {"$ref": "#/$defs/seconds"},
+        "end": {"$ref": "#/$defs/seconds"},
+        "keyframe_path": {"type": "string"},
+        "description": {"type": "string"},
+        "text": {"type": "string"},
+        "latex": {"type": ["string", "null"]},
+        "confidence": {"$ref": "#/$defs/fraction"}
+      }
+    },
+    "answer": {
+      "type": ["object", "null"],
+      "required": ["text", "start", "end", "sentence_ids"],
+      "properties": {
+        "text": {"type": "string"},
+        "start": {"$ref": "#/$defs/seconds"},
+        "end": {"$ref": "#/$defs/seconds"},
+        "sentence_ids": {"type": "array", "items": {"type": "string", "pattern": "^s_"}, "minItems": 1}
+      }
+    },
+    "review": {
+      "type": "object",
+      "description": "Owned by people: the pipeline writes the defaults and never overwrites edits.",
+      "required": ["status", "text", "note", "metadata"],
+      "properties": {
+        "status": {"enum": ["pending", "accepted", "deleted", "false_positive"]},
+        "text": {"type": ["string", "null"], "description": "The edited question text; null when unedited."},
+        "note": {"type": ["string", "null"]},
+        "metadata": {"type": "object"}
+      }
+    },
+    "question": {
+      "type": "object",
+      "required": [
+        "id", "text", "original_text", "start", "end", "start_hms", "end_hms", "confidence",
+        "confidence_label", "question_type", "source", "answer", "segment_id", "sentence_id",
+        "visual_ids", "verdict", "reasons", "review"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^q_"},
+        "text": {"type": "string", "minLength": 1},
+        "original_text": {"type": ["string", "null"]},
+        "start": {"$ref": "#/$defs/seconds"},
+        "end": {"$ref": "#/$defs/seconds"},
+        "start_hms": {"$ref": "#/$defs/hms"},
+        "end_hms": {"$ref": "#/$defs/hms"},
+        "confidence": {"$ref": "#/$defs/fraction"},
+        "confidence_label": {"enum": ["high", "medium", "low"]},
+        "question_type": {"type": "string"},
+        "source": {"enum": ["audio", "visual", "combined"]},
+        "answer": {"$ref": "#/$defs/answer"},
+        "segment_id": {"type": ["integer", "null"], "minimum": 0},
+        "sentence_id": {"type": "string", "pattern": "^s_"},
+        "visual_ids": {"$ref": "#/$defs/visual_ids"},
+        "verdict": {"enum": ["unjudged", "keep", "revise", "reject"]},
+        "reasons": {"type": "array", "items": {"type": "string"}},
+        "review": {"$ref": "#/$defs/review"}
+      }
+    }
+  }
+}

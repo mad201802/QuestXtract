@@ -36,12 +36,20 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   `[0, 1)` only: the caller, never the backend, decides when the stage is finished.
 - Export `schema_version` 1.0 → 1.1: every question object carries `start_hms` and `end_hms`
   alongside `start`/`end`. Added keys only, so a 1.0 consumer still reads a 1.1 file.
+- Export `schema_version` 1.1 → 2.0 (#13). Board states move out of each question into a
+  top-level `visuals` list, referenced by `visual_ids` (every overlapping state, not only the
+  first). A top-level `segments` list (id, span, a reserved `topic`, `visual_ids`) makes
+  `segment_id` resolvable. Every question gains `source` and a `review` block that belongs to
+  people; `config` gains `min_confidence`. `read_questions` refuses another major version.
 - `Config.max_question_chars` 220 → 350 and `Config.batch_size` 8 → 4 (architecture.md 2.2, 7.3);
   both are untuned experiments against real lecture audio, revisited once #11's labelled set
   exists. `batch_size` is part of the transcribe cache key, so the change re-transcribes once.
 
 ### Added
 
+- `questions.schema.json`, the formal JSON Schema of `questions.json` 2.x, ships inside the
+  package; the tests validate every export shape against it (#13). `VisualContext.id` gives a
+  board state a stable id derived from its lifetime and keyframe.
 - Automatic releases (#45): pushing a tag `vX.Y.Z` publishes the package to PyPI and creates the GitHub Release with the matching CHANGELOG section as notes. `scripts/release_notes.py` fails the release first if the tag, `pyproject.toml` and `CHANGELOG.md` disagree.
 - A terminal progress bar on stderr, one redrawn line per stage, rendered by the CLI from the
   existing `Progress` callback (#14). The transcribe stage reports inside itself, per decoded
@@ -97,6 +105,8 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
 
 ### Fixed
 
+- An answer's `start`/`end` in `questions.json` span its own sentences; they repeated the
+  question's span (#13).
 - Question detection only looked at a sentence's first word, so "So what ...?", "Then how ...?"
   and "If you have the data, does that mean ...?" scored on the `?` alone (0.60), which the
   unanswered confidence (0.55 x score) put under the 0.40 emission gate. The head is now found

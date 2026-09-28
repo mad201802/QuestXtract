@@ -49,6 +49,7 @@ dev = [
     "pytest-cov>=5",
     "ruff>=0.6",
     "mypy>=1.13",
+    "jsonschema>=4",
 ]
 
 [tool.pytest.ini_options]
