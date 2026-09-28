@@ -339,36 +339,52 @@ different things, and only one of them needs topicality:
 | Consumer | Wants | State |
 |---|---|---|
 | visual join (6.5) | time intervals | works; joins by interval intersection, no topic involved |
-| QA scoring's segment-relation term (9.1) | topical relatedness | not implemented |
+| QA scoring's segment-relation term (9.1) | topical relatedness | dropped before it was built |
 | FR11 filter (#16) | a topic *label*, not a boundary | time filter done (`filtering.py`); topic is an experimental `topic=` hook that warns, since `topic` is `null` in the schema |
 
 A semantic segmenter would improve exactly the two that do not exist yet. It also cannot move
 NFR2: `detect.py` reads `Sentence`, never `segment_index`, so better boundaries change no
-detection number. And the scoring term is worth a second look before it is built - segments are
-cut *on gaps*, so "same segment" largely restates the gap and distance terms already in 9.1's
-table. That collinearity is a property of structural segmentation, not a bug in it.
+detection number. The scoring term is dropped (9.1): segments are cut *on gaps*, so "same
+segment" restates the gap and distance terms already in 9.1's table. That collinearity is a
+property of structural segmentation, not a bug in it.
 
 **If that changes, the first rung is not embeddings.** Classical lexical cohesion - token
 overlap between adjacent windows, TextTiling-style - is stdlib-only and needs no dependency,
 unlike sentence embeddings. Try that before adding weights.
 
-**The granularity this section is papering over.** One 90 s unit is being asked to be three
+**The granularity this section is papering over.** One 90 s unit is being asked to be two
 things at once: a fine time window for the board join (a board state lives two minutes while the
-lecturer talks about it for six), a coarse topic for FR11 (a lecture has perhaps 5 to 15), and a
-local-relatedness signal for scoring. If FR11's topic filter ships, the answer is a second,
-coarser layer over these, not a retuned threshold on them. Building that layer now would be
-building for consumers that do not exist.
+lecturer talks about it for six) and a coarse topic for FR11 (a lecture has perhaps 5 to 15).
+The third it used to be asked for, a local-relatedness signal for scoring, is dropped (9.1). If
+FR11's topic filter ships, the answer is a second, coarser layer over these, not a retuned
+threshold on them. Building that layer now would be building for consumers that do not exist.
 
-> **Decision.** `questxtract/segments.py`.
+> **Decision.** `questxtract/segments.py`. Thresholds kept at 2.0 s, 90 s and 800 characters,
+> measured against the three transcribed recordings of #12 (`mit_18_100b_l1`,
+> `ttk4225_2026_09_14`, `ttk4225_2026_09_15`): `build_segments` over each one's sentences at
+> the current 3.1 config, force-split included, varying only `segment_max_gap_seconds`
+> ([#41](https://github.com/mad201802/QuestXtract/issues/41)).
 >
-> **Risk, stated plainly:** the three thresholds are guesses. Nothing here has been run against
-> a labelled recording, and 3.1's force-split changed the sentence stream underneath them -
-> splitting run-ons at 0.6 s pauses surfaces silences over 2.0 s that previously sat *inside*
-> one unpunctuated sentence, invisible to this stage. `stats["segments_closed_gap"]`,
-> `["segments_closed_duration"]` and `["segments_closed_chars"]` are the standing proxy: a gap
-> count that dwarfs the other two means `segment_max_gap_seconds` is too tight for the
-> lecturer, and 2.0 s is a short pause for someone writing on a chalkboard. Retune against those
-> counts, not against a guess.
+> | `segment_max_gap_seconds` | 2 s | 3 s | 4 s | 6 s | 8 s |
+> |---|---|---|---|---|---|
+> | segments closed by a pause (%) | 96 / 98 / 95 | 81 / 91 / 75 | 74 / 81 / 64 | 48 / 66 / 45 | 36 / 50 / 35 |
+> | median segment (s) | 22 / 15 / 16 | 28 / 24 / 38 | 40 / 29 / 46 | 65 / 49 / 59 | 75 / 64 / 61 |
+>
+> At 2.0 s that is 123 / 66 / 86 segments, closed by gap 117 / 64 / 81, by duration 3 / 0 / 0
+> and by chars 2 / 1 / 4; the longest is 85 s.
+>
+> The gap count does dwarf the other two, which this note used to read as "too tight". Measured,
+> it reads the other way: a looser threshold finds no second, natural boundary. It hands the
+> cutting to the length caps, which close at an arbitrary 90 s or 800 characters, mid-thought,
+> and by 6 s they close about half of all segments. At 2.0 s the caps are the rare backstops
+> they were meant to be. The one working consumer, the visual join (6.5), wants short
+> intervals, and 15 to 22 s is well inside a board state's lifetime. A coarser unit for FR11 is
+> still the second layer argued for above, not a looser threshold here. The chalkboard worry is
+> real - writing pauses do end segments - but it costs nothing until a consumer needs segments
+> to mean something.
+>
+> `stats["segments_closed_gap" | "_duration" | "_chars"]` stay as the check on a new recording:
+> length caps closing more than a few segments is the sign it does not fit these numbers.
 
 ---
 
@@ -910,7 +926,6 @@ Additive, and every term is recorded in `reasons`, so a final score decomposes a
 Proximity      +0.18 base
                +0.28 / +0.20 / +0.12 / +0.06   distance 0 / 1 / 2 / beyond
                +0.12 / +0.06 / -0.08           gap < 4 s / < 10 s / beyond
-               +0.10 / +0.05 / -0.05           same / adjacent / distant segment
 
 Lexical        +up to 0.30  answer cue rules ("the answer is", "because", "so")
                +up to 0.15  shared content tokens
@@ -933,6 +948,22 @@ Quality gate   -0.34        answer is a poll or backchannel
 
 Answer text is trimmed before scoring: a meta opening ("that's a good question"), a trailing tag
 ("..., right?"), and an interior check-in clause all come off.
+
+**No segment-relation term** ([#42](https://github.com/mad201802/QuestXtract/issues/42)). The
+table once carried `+0.10 / +0.05 / -0.05` for same / adjacent / distant segment. It is dropped
+before it was built, on 3.2's measurement:
+
+- It double-counts proximity. A pause closes 95 to 98 % of segments, so "same segment" means "no
+  pause over 2 s", which the gap term already prices and the distance term prices again.
+- A pause after a question is not a signal of its own. The sentence after a labelled content
+  question follows a pause over 2 s 29 / 18 / 13 % of the time, against 27 / 19 / 15 % after
+  any sentence.
+- The conditional variant, scoring only boundaries a length cap closed, would fire at 2 to 5 %
+  of boundaries, and those are the arbitrary cuts.
+- As a tie-break it decides nothing: the forward window's candidates already differ in
+  distance.
+
+If segments ever become topical (3.2), the term would carry a signal of its own; reopen it then.
 
 ### 9.2 Confidence
 
