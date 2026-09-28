@@ -4,6 +4,8 @@ The pipeline is a list of ``Context -> Context`` functions (``STAGES``); ``proce
 it over one recording. See ``docs/architecture.md`` for what each stage does and why.
 """
 
+from importlib.metadata import PackageNotFoundError, version
+
 from .asr import AsrBackend, register_backend, resolve_backend
 from .config import Config
 from .export import read_questions, result_to_json, write_questions
@@ -24,7 +26,10 @@ from .models import (
 from .pipeline import STAGES, process, run, stage
 from .schema import Question
 
-__version__ = "0.1.0"
+try:
+    __version__ = version("questxtract")  # from pyproject.toml via the installed metadata
+except PackageNotFoundError:  # a source tree that was never installed
+    __version__ = "0+unknown"
 
 __all__ = [
     "STAGES",

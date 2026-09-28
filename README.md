@@ -46,11 +46,13 @@ stage is still a stub behind that contract — see the [roadmap](#roadmap) and
 
 ```bash
 # with uv (recommended)
-uv add git+https://github.com/mad201802/QuestXtract
+uv add git+https://github.com/mad201802/QuestXtract@v0.1.0
 
 # or with pip
-pip install git+https://github.com/mad201802/QuestXtract
+pip install git+https://github.com/mad201802/QuestXtract@v0.1.0
 ```
+
+Drop the `@v0.1.0` for the latest `main`. Releases: [GitHub Releases](https://github.com/mad201802/QuestXtract/releases).
 
 Requires Python 3.10+ on Linux, macOS or Windows.
 
@@ -290,10 +292,9 @@ Releases are cut from `main` by pushing a version tag; [release.yml](.github/wor
    git push origin v0.2.0
    ```
 
-The workflow checks that the tag matches `pyproject.toml` and that `CHANGELOG.md` has a section for it, runs lint, mypy and the tests, builds the sdist and wheel, uploads them to PyPI, and creates the GitHub Release with that CHANGELOG section as its notes. Nothing is published if any step before the upload fails. Check a tag locally first with `python3 scripts/release_notes.py v0.2.0`.
+The workflow checks that the tag matches `pyproject.toml` and that `CHANGELOG.md` has a section for it, runs lint, mypy and the tests, builds the sdist and wheel, and creates the GitHub Release with that CHANGELOG section as its notes and the built files attached. Nothing is released if any of those steps fails. Check a tag locally first with `python3 scripts/release_notes.py v0.2.0`.
 
-Publishing needs a PyPI API token scoped to `questxtract`, stored as the `PYPI_API_TOKEN` secret of the repository's `pypi` environment. Alternatively, register this workflow as a [trusted publisher](https://docs.pypi.org/trusted-publishers/) on PyPI and leave the
-secret unset.
+PyPI publishing is off until the repository variable `PUBLISH_TO_PYPI` is set to `true` (Settings, Secrets and variables, Actions, Variables). It then needs a PyPI API token scoped to `questxtract`, stored as the `PYPI_API_TOKEN` secret of the repository's `pypi` environment, or this workflow registered as a [trusted publisher](https://docs.pypi.org/trusted-publishers/) on PyPI with the secret unset. A failed upload stops the GitHub Release.
 
 ## Roadmap
 
