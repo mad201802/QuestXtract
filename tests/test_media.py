@@ -1,34 +1,9 @@
 import wave
 
-import av
 import pytest
 
 import questxtract.media as media_module
 from questxtract.media import _HASH_BYTES, MediaError, extract_audio, ingest, source_hash
-
-
-def _make_mp4(path, *, audio=True):
-    with av.open(str(path), mode="w", format="mp4") as container:
-        if audio:
-            stream = container.add_stream("aac", rate=8000)
-            stream.layout = "mono"
-            frame = av.AudioFrame(format="s16", layout="mono", samples=800)
-            frame.sample_rate = 8000
-            frame.planes[0].update(b"\0" * frame.planes[0].buffer_size)
-            for packet in stream.encode(frame):
-                container.mux(packet)
-            for packet in stream.encode():
-                container.mux(packet)
-        else:
-            stream = container.add_stream("mpeg4", rate=1)
-            stream.width = 16
-            stream.height = 16
-            stream.pix_fmt = "yuv420p"
-            frame = av.VideoFrame(16, 16, "yuv420p")
-            for packet in stream.encode(frame):
-                container.mux(packet)
-            for packet in stream.encode():
-                container.mux(packet)
 
 
 def test_hash_is_stable_and_content_sensitive(tmp_path):
@@ -82,18 +57,18 @@ def test_ingest_rejects_an_invalid_mp4(tmp_path, context):
     assert context.source_hash == source_hash(media)
 
 
-def test_ingest_records_duration_for_a_valid_mp4(tmp_path, context):
+def test_ingest_records_duration_for_a_valid_mp4(tmp_path, context, make_mp4):
     media = tmp_path / "lecture.mp4"
-    _make_mp4(media)
+    make_mp4(media)
     context.source = media
     result = ingest(context)
     assert result is context
     assert context.duration > 0
 
 
-def test_ingest_rejects_a_video_without_audio(tmp_path, context):
+def test_ingest_rejects_a_video_without_audio(tmp_path, context, make_mp4):
     media = tmp_path / "lecture.mp4"
-    _make_mp4(media, audio=False)
+    make_mp4(media, audio=False)
     context.source = media
     with pytest.raises(MediaError, match="no audio track"):
         ingest(context)
@@ -125,9 +100,9 @@ def test_extract_audio_wraps_container_open_errors(tmp_path, monkeypatch):
             pass
 
 
-def test_extract_audio_wraps_wav_write_errors(tmp_path, monkeypatch):
+def test_extract_audio_wraps_wav_write_errors(tmp_path, monkeypatch, make_mp4):
     media = tmp_path / "lecture.mp4"
-    _make_mp4(media)
+    make_mp4(media)
     monkeypatch.setattr(media_module, "_write_wav", lambda *args: (_ for _ in ()).throw(OSError))
     with pytest.raises(MediaError, match="audio extraction failed"):
         with extract_audio(media):
@@ -175,9 +150,9 @@ def test_write_wav_flushes_final_encoder_packets(tmp_path, monkeypatch):
     assert destination.packets == ["final-packet"]
 
 
-def test_extract_audio_creates_a_wav_and_cleans_it_up(tmp_path):
+def test_extract_audio_creates_a_wav_and_cleans_it_up(tmp_path, make_mp4):
     media = tmp_path / "lecture.mp4"
-    _make_mp4(media)
+    make_mp4(media)
     with extract_audio(media) as audio:
         audio_path = audio
         assert audio.is_file()
@@ -188,9 +163,9 @@ def test_extract_audio_creates_a_wav_and_cleans_it_up(tmp_path):
     assert not audio_path.exists()
 
 
-def test_extract_audio_rejects_a_video_without_audio(tmp_path):
+def test_extract_audio_rejects_a_video_without_audio(tmp_path, make_mp4):
     media = tmp_path / "lecture.mp4"
-    _make_mp4(media, audio=False)
+    make_mp4(media, audio=False)
     with pytest.raises(MediaError, match="no audio track"):
         with extract_audio(media):
             pass

@@ -743,9 +743,11 @@ stay whole, so negated auxiliaries (*"Don't we ...?"*) open questions.
 
 **The answer seed.** Specified as "text *after* the `?`", which contradicts section 3.1: stage 3
 splits *at* terminal punctuation, so a sentence never holds text after its own `?`.
-`answer.same_sentence_seed` still implements the old wording and is dead by construction
-([issue #38](https://github.com/mad201802/QuestXtract/issues/38)); the seed is to be redefined as
-the immediately following sentence at a near-zero gap.
+It is redefined as the immediately following sentence, taken when the silence before it is at
+most `answer_seed_max_gap_seconds` (1.0 s) and it is not itself a question; tags and check-ins
+get no seed ([issue #38](https://github.com/mad201802/QuestXtract/issues/38)). Measured on the
+three reference recordings: about 4 in 5 seeds of labelled content questions are real answers up
+to 1.0 s, falling to about half beyond it.
 
 **Not implemented, and why.** Two paths from the original design have no labelled failure
 behind them yet:
@@ -803,7 +805,7 @@ rather than written up front, and deliberately short: they only keep the obvious
 the judge's input. Tags follow the annotation guidelines, which label them `rhetorical`: a
 penalty with a reason code, not a veto.
 
-**Measured** with the harness (section 4), default config, `questxtract eval tests/data/`:
+**Measured at #12** with the harness (section 4), default config, `questxtract eval tests/data/`:
 
 | Recording | Content labels | TP | FP | FN | Recall | Precision | F1 |
 |---|---|---|---|---|---|---|---|
@@ -836,7 +838,22 @@ the video of the kid?"*, *"Am I recording?"*). None hit an unlabelled sentence.
 
 The confirmation tags (MIT's *"..., right?"*, TTK4225's *"True?"* and *"Okay?"*, several a
 minute) all stay out: none of the 64 is a tag, so the tag penalty does its job. Growing the
-check-in list with the TTK4225 forms is the cheapest precision win left.
+check-in list with the TTK4225 forms is the cheapest precision win left
+([#70](https://github.com/mad201802/QuestXtract/issues/70)).
+
+*After the answer seed (#38).* An answered question now carries its full score, so confidence is
+graded and the sweep is no longer empty above 0.55:
+
+| Recording | Content labels | TP | FP | FN | Recall | Precision | F1 |
+|---|---|---|---|---|---|---|---|
+| MIT 18.100B L1 | 28 | 28 | 1 | 0 | 1.00 | 0.97 | 0.98 |
+| TTK4225 2026-09-14 | 39 | 34 | 26 | 5 | 0.87 | 0.57 | 0.69 |
+| TTK4225 2026-09-15 | 60 | 59 | 49 | 1 | 0.98 | 0.55 | 0.70 |
+| **Pooled** | 127 | 121 | 76 | 6 | **0.95** | 0.61 | 0.75 |
+
+The sweep holds 0.95 / 0.61 from 0.35 to 0.55, then 0.49 / 0.62 at 0.60 and 0.42 / 0.68 from
+0.65 up. Eight more content questions pass the gate; so do eleven more check-ins, whose next
+sentence the seed takes as an answer because they are missing from the check-in list (#70).
 
 > **Decision.** `questxtract/detect.py`, cue tables inline as module constants.
 
@@ -846,7 +863,8 @@ check-in list with the TTK4225 forms is the cheapest precision win left.
 
 Three channels, composing rather than competing.
 
-**Adjacent seed.** The sentence immediately after the question's own, at a near-zero gap.
+**Adjacent seed.** The sentence immediately after the question's own, at a near-zero gap
+(`answer_seed_max_gap_seconds`, 1.0 s) and not itself a question.
 Distance 0. The Socratic case, and the highest-precision answer shape we have. Was specified as
 "text after the `?` in the question's own sentence", which 3.1's splitter makes impossible; see
 7.1(a) and [issue #38](https://github.com/mad201802/QuestXtract/issues/38).
@@ -1216,16 +1234,33 @@ real - the only two stages long enough to need it.
 
 ### 12.1 questions.json
 
-Fixed key set, `null` included, one file:
+Schema 2.0: a fixed key set, `null` included, in one file. The formal description is
+[`questions.schema.json`](../src/questxtract/questions.schema.json), which ships inside the
+package; the tests validate every export shape against it. One entry of each list shown:
 
 ```json
 {
-  "schema_version": "1.1",
+  "schema_version": "2.0",
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
-  "config": {"model_size": "turbo", "language": "en", "judge_model": "gpt-5.6-terra",
-             "vision_model": "gpt-5.6-luna"},
+  "config": {"model_size": "turbo", "language": "en", "min_confidence": 0.4,
+             "judge_model": "gpt-5.6-terra", "vision_model": "gpt-5.6-luna"},
   "stats": {"sentences": 1840, "board_states": 34, "candidates": 61,
             "emitted": 38, "judged": 38, "rejected": 23},
+  "segments": [
+    {"id": 37, "start": 1262.0, "end": 1340.5, "topic": null, "visual_ids": ["v_4c1e09"]}
+  ],
+  "visuals": [
+    {
+      "id": "v_4c1e09",
+      "start": 1240.0,
+      "end": 1402.5,
+      "keyframe_path": ".questxtract/9f2a.../frames/1388.jpg",
+      "description": "two-column comparison of stable and unstable sort passes",
+      "text": "stable: (3,a) (3,b) preserved",
+      "latex": null,
+      "confidence": 0.9
+    }
+  ],
   "questions": [
     {
       "id": "q_0007",
@@ -1238,6 +1273,7 @@ Fixed key set, `null` included, one file:
       "confidence": 0.82,
       "confidence_label": "high",
       "question_type": "why",
+      "source": "audio",
       "answer": {
         "text": "Because the second pass preserves the order of the first.",
         "start": 1291.0,
@@ -1246,32 +1282,55 @@ Fixed key set, `null` included, one file:
       },
       "segment_id": 37,
       "sentence_id": "s_1b88c0",
-      "visual": {
-        "start": 1240.0,
-        "end": 1402.5,
-        "keyframe_path": ".questxtract/9f2a.../frames/1388.jpg",
-        "description": "two-column comparison of stable and unstable sort passes",
-        "text": "stable: (3,a) (3,b) preserved",
-        "latex": null
-      },
+      "visual_ids": ["v_4c1e09"],
       "verdict": "revise",
-      "reasons": ["mark", "wh", "answer_cue", "visual_overlap", "judge_revised"]
+      "reasons": ["mark", "wh", "answer_cue", "visual_overlap", "judge_revised"],
+      "review": {"status": "pending", "text": null, "note": null, "metadata": {}}
     }
   ]
 }
 ```
 
-`original_text` is present whenever the judge revised, `null` otherwise. `answer` is `null` when
-no answer was found. `visual` is `null` when vision was off or nothing overlapped.
+**Shared things are listed once and referenced by id.** `segments` and `visuals` (board states,
+section 6.4) are top-level lists; a question points into them with `segment_id` and
+`visual_ids`, so a board state that ten questions discuss is written once. This is the shape the
+vision milestones grow into without a breaking change: M3's board timeline is the `visuals` list
+in time order, and M4's animations become one more top-level list pointing at visual ids.
+
+- `visual_ids` holds every board state joined to the question's segment; empty when vision is
+  off. `segment_id` is `null` when the question's sentence belongs to no segment.
+- `answer` is `null` when no answer was found. Its `start`/`end` span its own sentences
+  (`sentence_ids`), not the question.
+- `original_text` is present whenever the judge revised, `null` otherwise.
+- `source` says what the question was read from. Only `audio` is produced until M2/M3;
+  `visual` and `combined` are reserved.
+- `topic` on a segment is reserved for topic filtering (#16) and `null` until topics exist.
+- `config.min_confidence` is the threshold the file was cut at.
+
+**Versioning.** `schema_version` is `MAJOR.MINOR`. A minor version only adds keys, so a reader
+must ignore keys it does not know; a major version moves or removes something, and
+`read_questions` refuses a file of another major version. 1.x to 2.0 moved the board state out of
+each question (`visual` became the top-level `visuals` plus `visual_ids`) and added `segments`,
+`source`, `review` and `config.min_confidence`.
 
 Two consumers, two exporters: this file and the eval harness.
 
 ### 12.2 Editing (FR5)
 
 The output JSON is the edit surface, and the editor lives in the wrapper, not in this package.
-The format above is designed so an editor is a thin layer over it, and so that re-running the
-pipeline can merge human edits back by question id - which is why sentence ids are content
-hashes (section 5) rather than indices.
+Each question carries one block that belongs to people, `review`. The pipeline writes its
+defaults and never reads or overwrites it; everything else in the file is regenerated on every
+run.
+
+| `review` field | Meaning |
+|---|---|
+| `status` | `pending` (untouched), `accepted`, `deleted`, or `false_positive` (not a question at all) |
+| `text` | The edited question text; `null` while unedited. The question's own `text` stays the original. |
+| `note` | Free text from the reviewer. |
+| `metadata` | Any extra key-value data, such as a topic tag or a quiz difficulty. |
+
+Merging edits after a re-run (#15) is therefore copying `review` across by question id, which is
+why question and sentence ids are content hashes (section 5) rather than indices.
 
 ### 12.3 quiz.json (generative, separate)
 
@@ -1324,8 +1383,8 @@ claim cannot quietly stop being true.
 **Base:** `faster-whisper`, `numpy`. That is the whole list - `av`, `ctranslate2`, `onnxruntime`,
 `tokenizers`, `huggingface-hub` and `tqdm` arrive transitively through faster-whisper.
 
-**Extras:** `[llm]` -> `openai` (judge and vision, one key, one dependency).
-`[cli]` -> `tqdm` (already transitively present; pinned explicitly for the CLI).
+**Extras:** `[llm]` -> `openai` (judge and vision, one key, one dependency). The CLI needs no
+extra: its progress bar is a few lines of `print` in `cli.py`, not `tqdm`.
 
 **No system binaries.** No ffmpeg, no ffprobe. **No torch**, and therefore no torchvision, no
 triton, no CUDA wheels, no transformers, no pyannote, no speechbrain, no sentence-transformers,
@@ -1354,8 +1413,8 @@ its name, its signature and its `@stage` registration are real; only the algorit
 | Module | Stage | State | Owner |
 |---|---|---|---|
 | `models.py`, `config.py`, `pipeline.py` | the contract itself | done | #6 |
-| `media.py` | 1 ingest | source hash done; `av.open()` probe stubbed | #7 |
-| `transcribe.py` | 2 transcribe | stub; callers seed a transcript and run `STAGES[2:]` | #8 |
+| `media.py` | 1 ingest | done | #7 |
+| `transcribe.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry (`asr.py`) | #8 |
 | `sentences.py` | 3 sentences | done | — |
 | `segments.py` | 4 segments | done | — |
 | `vision.py` | 5 vision, attach_visual | capture stubbed; the interval join is done | M2/M3 |
@@ -1365,7 +1424,7 @@ its name, its signature and its `@stage` registration are real; only the algorit
 | `llm.py` | 9 judge | stub, no-ops when disabled | — |
 | `export.py` | 10 export | done | #13 |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest | #12 |
-| `cli.py` | not a stage | `process` and `eval` work; `quiz` exits 1 with a one-line error | #17 |
+| `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 with a one-line error | #17 |
 
 Every stub carries a `ponytail:` comment naming the section it owes, so `grep -rn 'ponytail:' src/`
 is the running list of what this document promises and the code does not yet do.

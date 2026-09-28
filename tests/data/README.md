@@ -36,7 +36,7 @@ data file.
 These three are the calibration recordings the design is built around (architecture.md 1.2).
 Additional recordings can be added the same way; add a row here for each.
 
-**Transcripts.** `<slug>.transcript.json` is `scripts/transcribe.py`'s output with the default
+**Transcripts.** `<slug>.transcript.json` is a transcript (`questxtract transcribe`) with the default
 config (faster-whisper `turbo`, punctuation prompt), trimmed to what the pipeline reads: per ASR
 chunk `text`/`start`/`end` and per word `word`/`start`/`end`. Committed so `evaluate.py` runs
 in CI without an ASR run. Re-transcribing changes the word clock, so a new transcript means
@@ -141,7 +141,7 @@ catches actual labelling mistakes.
 
 1. Pick a public lecture recording (YouTube URL is fine — the video itself is never committed,
    only the labels).
-2. Transcribe it (`scripts/transcribe.py`), trim it like the committed ones and save it as
+2. Transcribe it (`questxtract transcribe <recording>.mp4`), trim it like the committed ones and save it as
    `<slug>.transcript.json`. Read the transcript and note each question-shaped utterance as
    `start | verbatim transcript quote | kind` (`scripts/scratch_to_labels.py --help`); pass
    `--transcript` so the times come from the transcript's words, not from typing.

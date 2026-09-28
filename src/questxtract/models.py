@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, TypeVar
 
@@ -159,6 +159,18 @@ class Transcript:
             duration=duration,
         )
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise to plain JSON types, in the shape :meth:`from_dict` reads back unchanged.
+
+        Lists, not ``asdict``'s tuples: ``from_dict`` rejects a segments value that is not a list.
+        """
+        return {
+            "words": [asdict(w) for w in self.words],
+            "asr_segments": [asdict(s) for s in self.asr_segments],
+            "language": self.language,
+            "duration": self.duration,
+        }
+
 
 def _chunk_words(raw: dict[str, Any], chunk: AsrSegment) -> tuple[Word, ...]:
     """Words of one ASR chunk, synthesising evenly spaced ones when the engine gave none."""
@@ -261,6 +273,12 @@ class VisualContext:
     text: str = ""
     latex: str | None = None
     confidence: float = 0.0
+
+    @property
+    def id(self) -> str:
+        """Stable identifier from the lifetime and keyframe; a new caption keeps it."""
+        key = f"{self.start:.3f}|{self.end:.3f}|{self.keyframe_path}"
+        return f"v_{hashlib.sha1(key.encode()).hexdigest()[:6]}"
 
 
 @dataclass(frozen=True, kw_only=True)
