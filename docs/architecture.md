@@ -734,6 +734,8 @@ One candidate per sentence (3.1), scored in 7.3.
 **The interrogative head.** A question's first word is rarely the sentence's first word in
 lecture speech: *"So what does it mean ...?"*, *"Now, what is the challenge ...?"*. The head is
 the first word past leading discourse markers (`so`, `and`, `but`, `now`, `then`, `okay`, ...),
+and past question preambles (*"my question is (that)"*, *"the question is/was"*, *"I'd like to
+ask"*, *"I was wondering (if)"*), which announce a question without opening it,
 and for a sentence ending in `?` also the first word of its last comma clause, because ASR runs
 the preamble into the question: *"If you have the data, does that mean ...?"*. Without the `?`
 the clause rule stays off, or every *", which is ..."* would read as a wh-question. Contractions

@@ -129,6 +129,10 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   past discourse markers and, for a `?` sentence, in its last comma clause; negated auxiliaries
   count and `any` no longer does. On the reference recordings content questions found went from
   2/10 to 7/10 (MIT 18.100B), architecture.md 7.3.
+- A question opened by a preamble ("My question is that doesn't ...?", "The question is, why
+  ...?", "I was wondering if ...") scored on the `?` alone, since only single-word discourse
+  markers were skipped. The head is now found past these preambles too (#47). No sentence score
+  changes on the three reference recordings.
 - Confirmation tags ("Okay?", "True, you see?", "..., right?") scored like real questions, and
   check-ins ("Is that clear?") above them. New reasons `tag` and `check_in` (-0.40 each) keep
   tags out of the candidates and check-ins out of the emitted questions.
