@@ -101,10 +101,9 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   punctuation. The standing proxy for architecture.md 3.1's punctuation bet until
   `question_mark_rate` lands with #12. Exported in the `stats` block; no schema change.
 - `Segment.close_reason` (`gap`, `duration`, `chars`, or `end` for the last one) and
-  `stats["segments_closed_gap" | "_duration" | "_chars"]`. The segment thresholds are untuned
-  against a real recording and 3.1's force-split changed the sentence stream underneath them;
-  this is what says which rule is actually doing the cutting. Exported in the `stats` block;
-  no schema change.
+  `stats["segments_closed_gap" | "_duration" | "_chars"]`: which rule is actually doing the
+  cutting. On the three labelled recordings a pause closes 95-98% of segments, so the
+  thresholds are kept (architecture.md 3.2). Exported in the `stats` block; no schema change.
 - Reference recordings (#33): two TTK4225 lectures (2026-09-14 P03·12, 2026-09-15 P03·14)
   join MIT 18.100B, each labelled from its committed transcript per
   `docs/annotation_guidelines.md` (114 and 166 entries, every one blind). Ground truth for the
