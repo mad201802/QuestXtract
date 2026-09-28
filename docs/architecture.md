@@ -340,7 +340,7 @@ different things, and only one of them needs topicality:
 |---|---|---|
 | visual join (6.5) | time intervals | works; joins by interval intersection, no topic involved |
 | QA scoring's segment-relation term (9.1) | topical relatedness | not implemented |
-| FR11 filter (#16) | a topic *label*, not a boundary | not implemented; `topic` is `None` in the schema |
+| FR11 filter (#16) | a topic *label*, not a boundary | time filter done (`filtering.py`); topic is an experimental `topic=` hook that warns, since `topic` is `null` in the schema |
 
 A semantic segmenter would improve exactly the two that do not exist yet. It also cannot move
 NFR2: `detect.py` reads `Sentence`, never `segment_index`, so better boundaries change no

@@ -7,6 +7,7 @@ it over one recording. See ``docs/architecture.md`` for what each stage does and
 from .asr import AsrBackend, register_backend, resolve_backend
 from .config import Config
 from .export import read_questions, result_to_json, write_questions
+from .filtering import filter_document, filter_questions
 from .media import MediaError, extract_audio
 from .models import (
     AsrSegment,
@@ -43,6 +44,8 @@ __all__ = [
     "Word",
     "__version__",
     "extract_audio",
+    "filter_document",
+    "filter_questions",
     "process",
     "read_questions",
     "register_backend",
