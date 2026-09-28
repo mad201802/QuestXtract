@@ -342,9 +342,10 @@ different things, and only one of them needs topicality:
 | QA scoring's segment-relation term (9.1) | topical relatedness | dropped before it was built |
 | FR11 filter (#16) | a topic *label*, not a boundary | time filter done (`filtering.py`); topic is an experimental `topic=` hook that warns, since `topic` is `null` in the schema |
 
-A semantic segmenter would improve exactly the two that do not exist yet. It also cannot move
-NFR2: `detect.py` reads `Sentence`, never `segment_index`, so better boundaries change no
-detection number. The scoring term is dropped (9.1): segments are cut *on gaps*, so "same
+A semantic segmenter would improve exactly the two that need topicality, and neither exists: the
+scoring term was dropped, and FR11's topic filter is a hook with no labels to match. It also
+cannot move NFR2: `detect.py` reads `Sentence`, never `segment_index`, so better boundaries
+change no detection number. The scoring term is dropped (9.1): segments are cut *on gaps*, so "same
 segment" restates the gap and distance terms already in 9.1's table. That collinearity is a
 property of structural segmentation, not a bug in it.
 
