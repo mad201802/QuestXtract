@@ -118,6 +118,9 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   for tags or check-ins. Its reason code stays `intra_sentence_qa`. An answered question's
   confidence rises from 0.55 x score to 1.0 x score. Pooled recall at the default gate goes
   from 0.89 to 0.95 and precision from 0.64 to 0.61 (architecture.md 7.3, #70).
+- A question's `visual_ids` list the board states on screen while it was asked, falling back to
+  every state of its segment when none was. They listed the whole segment's, so a question could
+  point at a board written up to 90 s later (#40).
 - An answer's `start`/`end` in `questions.json` span its own sentences; they repeated the
   question's span (#13).
 - Question detection only looked at a sentence's first word, so "So what ...?", "Then how ...?"

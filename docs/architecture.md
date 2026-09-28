@@ -1295,8 +1295,10 @@ section 6.4) are top-level lists; a question points into them with `segment_id` 
 vision milestones grow into without a breaking change: M3's board timeline is the `visuals` list
 in time order, and M4's animations become one more top-level list pointing at visual ids.
 
-- `visual_ids` holds every board state joined to the question's segment; empty when vision is
-  off. `segment_id` is `null` when the question's sentence belongs to no segment.
+- `visual_ids` holds the board states on screen while the question was asked (overlapping its
+  `start`/`end`), falling back to every state joined to its segment when none was; empty when
+  vision is off. A segment's own `visual_ids` always holds every state joined to it.
+  `segment_id` is `null` when the question's sentence belongs to no segment.
 - `answer` is `null` when no answer was found. Its `start`/`end` span its own sentences
   (`sentence_ids`), not the question.
 - `original_text` is present whenever the judge revised, `null` otherwise.
