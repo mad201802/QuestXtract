@@ -2,9 +2,10 @@
 
 One mode, structural (pipeline.md 3.2). A segment is **not** a topic: nothing here measures
 what a run is about, and the only consumer that works today - the visual join in 6.5 - wants
-a time interval, not a topic. The two that would want topicality, FR11's filter and the QA
-scoring's segment-relation term, are both unbuilt, and neither this stage nor a smarter one
-can move NFR2, since detection reads sentences and never looks at ``segment_index``.
+a time interval, not a topic. The one that would want topicality, FR11's filter, is unbuilt
+(the QA scoring's segment-relation term was dropped, 9.1), and neither this stage nor a
+smarter one can move NFR2, since detection reads sentences and never looks at
+``segment_index``.
 
 3.2 records what a topical version would cost and why lexical cohesion, not embeddings, is
 the first rung if it is ever wanted.
@@ -91,10 +92,9 @@ def segments(ctx: Context) -> Context:
             indexed[position] = _with_segment(indexed[position], index)
     ctx.sentences = tuple(indexed)
     ctx.stats["segments"] = len(ctx.segments)
-    # Which rule is doing the cutting. The thresholds below are untuned against a real
-    # recording, and 3.1's force-split now surfaces pauses that used to sit inside one
-    # unpunctuated sentence where this stage could not see them. A gap count that dwarfs the
-    # other two is the signal that segment_max_gap_seconds is too tight for the lecturer.
+    # Which rule is doing the cutting. On the labelled recordings a pause closes 95-98% of
+    # segments and the length caps are rare backstops (3.2, #41); caps closing more than a
+    # few is the sign a new recording does not fit those thresholds.
     for reason in ("gap", "duration", "chars"):
         ctx.stats[f"segments_closed_{reason}"] = sum(
             1 for s in ctx.segments if s.close_reason == reason
