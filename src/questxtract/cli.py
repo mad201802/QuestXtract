@@ -241,7 +241,7 @@ def _eval(args: argparse.Namespace) -> int:
 def _quiz(args: argparse.Namespace) -> int:
     """Turn questions.json into quiz.json. Generative, and deliberately separate."""
     del args
-    print("error: quiz: the generative stage is not wired up yet", file=sys.stderr)
+    print("error: quiz is not implemented yet (#79)", file=sys.stderr)
     return 1
 
 
@@ -320,7 +320,9 @@ def build_parser() -> argparse.ArgumentParser:
     evaluation.add_argument("--json", action="store_true", help="machine-readable, for CI")
     evaluation.set_defaults(handler=_eval)
 
-    quiz = subs.add_parser("quiz", help="generate quiz.json from questions.json")
+    quiz = subs.add_parser(
+        "quiz", help="generate quiz.json from questions.json (not implemented yet)"
+    )
     quiz.add_argument("questions", help="a questions.json written by `process`")
     quiz.add_argument("-o", "--output", help="write the quiz here")
     quiz.set_defaults(handler=_quiz)

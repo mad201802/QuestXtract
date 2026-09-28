@@ -72,11 +72,11 @@ Two consequences that show up repeatedly below:
                               v
   6 detect                    |  lexical scoring + vetoes -> QuestionCandidate[]
                               v
-  7 answer                    |  forward window + far-window rescue -> AnswerCandidate[]
+  7 answer                    |  adjacent seed -> QAPair[]
                               v
-  8 rank + score              |  rule ranking, confidence, dedupe -> QAPair[]
+  8 score                     |  confidence, threshold -> QAPair[]
                               v
-  9 judge (optional)          |  one LLM pass: keep/revise/reject, refine, draft answer
+  9 judge (optional)          |  one LLM pass: keep/revise/reject, refine, find answers
                               v
  10 export                    |  questions.json (+ quiz.json, separate generative stage)
 ```
@@ -91,9 +91,10 @@ section 11.1 is this sequence, rows 1 to 9, plus the one split noted there. Row 
 
 ### 1.4 The rule path and the judge
 
-Detection, answer search, scoring and dedupe are cheap, inspectable rules. On top of them sits
-**one optional LLM judge pass** (section 10) that reviews the surviving candidates together. The
-rule path is the offline fallback: a run with no endpoint configured still produces candidates.
+Detection, the adjacent answer seed and the confidence are cheap, inspectable rules. On top of
+them sits **one optional LLM pass** (section 10) that reviews the surviving candidates together,
+refines their wording and finds their answers. The rule path is the offline fallback: a run with
+no endpoint configured still produces candidates, answered only where the adjacent seed found one.
 
 **Hard constraint (requirement 4.5, "the model shall not create questions on their own").** The
 judge may **reject, rescope or rewrite** a candidate, and it must cite the sentence ids it is
@@ -878,100 +879,38 @@ sentence the seed takes as an answer because they are missing from the check-in 
 
 ## 8. Answer search
 
-Three channels, composing rather than competing.
+One rule, the **adjacent seed**: the sentence immediately after the question's own, at a
+near-zero gap (`answer_seed_max_gap_seconds`, 1.0 s) and not itself a question. The Socratic
+case, and the highest-precision answer shape we have. Stage 3 splits at the `?`, so a sentence
+never holds its own answer; the seed is the next sentence.
 
-**Adjacent seed.** The sentence immediately after the question's own, at a near-zero gap
-(`answer_seed_max_gap_seconds`, 1.0 s) and not itself a question.
-Distance 0. The Socratic case, and the highest-precision answer shape we have. Was specified as
-"text after the `?` in the question's own sentence", which 3.1's splitter makes impossible; see
-7.1(a) and [issue #38](https://github.com/mad201802/QuestXtract/issues/38).
-
-**Forward window.** Walk forward 1 to `answer_window_sentences` (3), emitting the growing
-consecutive span at each distance. At the window edge, append one continuation sentence when the
-answer clearly runs on (previous text ends in `,;:` or next text starts with a connective or
-lowercase). Stop with an explicit, exported reason: `window_exhausted`, `competing_question`,
-`gap_limit` (> 45 s), `span_limit` (> 3 sentences), `duration_limit` (span > 45 s).
-
-**Far-window rescue.** For questions answered much later, after a digression. Deliberately hard
-to trigger:
-
-- question score at least `deferred_min_question_score` (0.62)
-- rhetorical, poll, tag and fragment questions excluded outright
-- no strong local answer (a local answer scoring >= 0.52 within 10 s with shared keywords blocks
-  the search entirely)
-- a forward scan over the next `deferred_window_sentences` (28) finds a sentence sharing at least
-  two content tokens with the question
-
-Survivors are filtered on the principle that the further away an answer is, the more lexical
-evidence it must carry: gap over 120 s needs 3 shared keywords or a shared number; gap over 60 s
-needs a signal score of 0.28; distance over 12 needs 2 keywords.
+Every answer further away, after a digression or several sentences later, comes from the LLM pass
+(section 10), not from rules. With no endpoint configured, a question keeps its seed or has no
+answer.
 
 There is **no speaker constraint on pairing**, and not only because we have no speaker layer:
 lectures are full of self-answered questions, and requiring a speaker change would delete the
 single most common QA shape in the corpus - which with off-mic students is *the entire shape*,
-since the lecturer both repeats and answers the student's question.
+since the lecturer both repeats and answers the student's question. The LLM pass follows the
+same rule.
 
-> **Decision.** `questxtract/answer.py`. Three functions called in sequence behind the one
-> `answer` stage entry (section 11.1): swapping the whole search replaces that entry, swapping one
-> channel is an edit inside the module.
+> **Decision.** `questxtract/answer.py`, the adjacent seed only. Why the rules stop there:
+> [design_decisions.md](design_decisions.md), D11.
 
 ---
 
-## 9. Scoring, ranking, dedupe
+## 9. Scoring
 
-### 9.1 Answer scoring
+### 9.1 Answer scoring (not planned)
 
-Additive, and every term is recorded in `reasons`, so a final score decomposes after the fact.
-
-```
-Proximity      +0.18 base
-               +0.28 / +0.20 / +0.12 / +0.06   distance 0 / 1 / 2 / beyond
-               +0.12 / +0.06 / -0.08           gap < 4 s / < 10 s / beyond
-
-Lexical        +up to 0.30  answer cue rules ("the answer is", "because", "so")
-               +up to 0.15  shared content tokens
-               +0.12        shared numbers
-               -0.28        quantity question, answer contains no number
-               -0.10        nothing shared at all
-
-Span quality   +0.08        3 to 80 tokens
-               -0.10        premise-only answer
-               -0.08        span over 80 tokens
-               -0.20        answer contains a '?'  (-0.35 if structurally a question)
-
-Quality gate   -0.34        answer is a poll or backchannel
-               -0.28        answer echoes the question
-               -0.26        answer is boilerplate ("that is a good question")
-               -0.24        answer is a continuation of the question
-               -0.12        low-information answer
-               +0.08        legitimate short Socratic answer
-```
-
-Answer text is trimmed before scoring: a meta opening ("that's a good question"), a trailing tag
-("..., right?"), and an interior check-in clause all come off.
-
-**No segment-relation term** ([#42](https://github.com/mad201802/QuestXtract/issues/42)). The
-table once carried `+0.10 / +0.05 / -0.05` for same / adjacent / distant segment. It is dropped
-before it was built, on 3.2's measurement:
-
-- It double-counts proximity. A pause closes 95 to 98 % of segments, so "same segment" means "no
-  pause over 2 s", which the gap term already prices and the distance term prices again.
-- A pause after a question is not a signal of its own. The sentence after a labelled content
-  question follows a pause over 2 s 29 / 18 / 13 % of the time, against 27 / 19 / 15 % after
-  any sentence.
-- The conditional variant, scoring only boundaries a length cap closed, would fire at 2 to 5 %
-  of boundaries, and those are the arbitrary cuts.
-- As a tie-break it decides nothing: the forward window's candidates already differ in
-  distance.
-
-If segments ever become topical (3.2), the term would carry a signal of its own; reopen it then.
+No rule-based answer scoring. An answer the adjacent seed found counts as found; judging whether
+an answer is good is the LLM pass's job (10.2), for the same reason as section 8.
 
 ### 9.2 Confidence
 
 ```
-confidence = clamp(0.55 * question_score + 0.45 * answer_score
-                   - 0.10 if a competing question was nearby
-                   - 0.24 if the answer is itself a question)
+confidence = 0.55 * question_score    no answer found
+           = 1.00 * question_score    the adjacent seed found one
 
 label:  >= 0.75 high | >= 0.45 medium | else low
 ```
@@ -979,31 +918,18 @@ label:  >= 0.75 high | >= 0.45 medium | else low
 A question with no answer keeps `0.55 * question_score` and an empty answer span. It is still
 exported: FR6 and FR7 ask for questions with timestamps, not for answered questions.
 
-Gate: `min_confidence` (0.40), swept in the eval report.
+Gate: `min_confidence` (0.40), swept in the eval report. With the LLM pass on, the final
+confidence moves within a band around this number (10.3).
 
-One number the user can reason about (FR10), plus a judge verdict. No parallel quality score, no
-risk band, no profile-scoped emission gates.
+One number the user can reason about (FR10), plus a verdict. No parallel quality score, no risk
+band, no profile-scoped emission gates.
 
-### 9.3 Dedupe
+### 9.3 Dedupe (not planned)
 
-One overlap metric over stopword-filtered content tokens:
+No rule-based dedupe. Echo pairs (a student asks, the lecturer restates, both get detected) and
+near duplicates are judged by the LLM pass, which sees every candidate in one call (10.4).
 
-```
-overlap(A, B) = |tokens(A) & tokens(B)| / min(|tokens(A)|, |tokens(B)|)
-```
-
-Two passes, both only over candidates starting within 90 seconds of each other:
-
-- **Echo pairs.** A student asks and the lecturer restates - with off-mic students this is the
-  *normal* case, not an edge case, and both directions get emitted. Detected by answer overlap >= 0.45 plus one
-  cross pairing (left question vs right answer) >= 0.55. Keep whichever question echoes the other
-  less.
-- **Near duplicates.** Question overlap >= 0.72 with answer overlap >= 0.50, or question overlap
-  >= 0.86 with answer overlap >= 0.35. Keep the higher confidence.
-
-Losers keep a reason code rather than vanishing.
-
-> **Decision.** `questxtract/score.py`, including dedupe.
+> **Decision.** `questxtract/score.py`: confidence and the threshold.
 
 ---
 
@@ -1046,6 +972,10 @@ ASR stays local. `gpt-4o-transcribe` and friends are not used: `faster-whisper` 
 timestamps, costs nothing, needs no network, and is the foundation of section 2.3.
 
 ### 10.2 What the judge does
+
+It filters, refines and answers: it keeps, revises or rejects each candidate, rewrites a messy
+question into a clean one, and drafts the answer. Beyond the adjacent seed (section 8), every
+answer comes from this pass, drafted from the transcript and, when vision is on, the board.
 
 One batched call per run (not per candidate). Input: every surviving candidate with its question
 text, answer text, surrounding transcript window, overlapping board-state context where present,
@@ -1366,7 +1296,7 @@ run.
 Merging edits after a re-run (#15) is therefore copying `review` across by question id, which is
 why question and sentence ids are content hashes (section 5) rather than indices.
 
-### 12.3 quiz.json (generative, separate)
+### 12.3 quiz.json (planned, #79)
 
 A different command producing a different file: `questxtract quiz questions.json -o quiz.json`.
 It is the only part of the system allowed to write text that was not spoken, and keeping it out
@@ -1390,9 +1320,9 @@ src/questxtract/
   segments.py      structural segmentation
   vision.py        layout probe, sampling, board states, VLM captioning, attach
   detect.py        question extraction, vetoes, scoring, cue tables
-  answer.py        adjacent seed, forward window, far-window rescue
-  score.py         answer scoring, confidence, dedupe
-  llm.py           OpenAI-compatible client, judge pass, vision calls
+  answer.py        adjacent seed
+  score.py         confidence, threshold
+  llm.py           OpenAI-compatible client, the LLM pass (filter, refine, answer), vision calls
   evaluate.py      labelled-set metrics
   export.py        questions.json writer and reader (section 12.1)
   pipeline.py      STAGES, run(), process(), cache, progress
@@ -1448,13 +1378,13 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `segments.py` | 4 segments | done | |
 | `vision.py` | 5 vision, attach_visual | capture is a stub that raises when `vision_enabled`; the interval join is done | #59 |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery are not built | #48, #78 |
-| `answer.py` | 7 answer | adjacent seed done; forward window and far-window rescue not built | |
-| `score.py` | 8 score | confidence and threshold only; answer scoring (9.1) and dedupe (9.3) not built | |
+| `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM pass | #46 |
+| `score.py` | 8 score | done: confidence and threshold; answer judging and dedupe are the LLM pass's | #46 |
 | `llm.py` | 9 judge | stub: no-op when disabled, raises when `judge_enabled` | #46 |
 | `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
 | `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest | |
-| `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 | |
+| `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
 running list of what this document describes and the code does not yet do.

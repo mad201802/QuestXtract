@@ -38,9 +38,9 @@ def client(config: Config) -> Any:
     return OpenAI(api_key=config.api_key or "local", base_url=config.base_url)
 
 
-# ponytail: no `cache=` yet. architecture.md 10.4 keys the judge's entry on the *candidate set*
-# hash, which the config-only `uses` header cannot express; caching on the source hash alone
-# would replay a stale verdict after detection changed. Wire both together in one change.
+# ponytail: #46, no `cache=` yet. architecture.md 10.4 keys the judge's entry on the
+# *candidate set* hash, which the config-only `uses` header cannot express; caching on the
+# source hash alone would replay a stale verdict after detection changed. Wire both together.
 @stage("judge", uses=("judge_model", "judge_max_candidates", "timeout_seconds"))
 def judge(ctx: Context) -> Context:
     """Review the surviving candidates together in one batched call.
@@ -51,6 +51,7 @@ def judge(ctx: Context) -> Context:
     """
     if not ctx.config.judge_enabled:
         return ctx
-    # ponytail: one batched call, id-set validation, sentence-id citation check and the
-    # confidence band of architecture.md 10.2-10.4.
-    raise NotImplementedError("judge: the LLM review pass is not wired up yet")
+    # ponytail: #46, one batched call that filters, refines questions and drafts cited answers,
+    # with id-set validation, the citation check and the confidence band of architecture.md
+    # 10.2-10.4.
+    raise NotImplementedError("judge is not implemented yet (#46); set judge_enabled=False")

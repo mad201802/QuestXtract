@@ -242,6 +242,26 @@ capacity we do not have. The import mode choice is small but prevents a known py
 (same-named test files in mirrored directories) that would otherwise appear the first time
 `tests/integration/` is added.
 
+### D11: Answers come from the LLM pass, not from rules
+
+*Chose:* the rules stop at the adjacent seed (the sentence right after the question). Every answer
+further away, refining a messy question, judging an answer and deduplicating echo pairs and near
+duplicates is the one LLM pass (stage 9, architecture.md 10), with the board text in the prompt
+when vision is on.
+
+*Alternative:* the rule-based answer search of the original design: a forward window over the
+next three sentences, a far-window rescue gated on shared keywords, an additive answer-scoring
+table and token-overlap dedupe.
+
+*Why:* the team found that answer finding can't be done reliably with rules. Whether a sentence
+answers a question depends on context the rules only approximate with token overlap, while an
+LLM that sees the question, the transcript around it and the board can judge it. It also folds
+four rule sets into one pass that already had to exist to filter rhetorical questions.
+
+*Cost:* without an endpoint, a question gets at most the adjacent seed as its answer. A drafted
+answer is generated text, so it must cite the transcript sentences it comes from (architecture.md
+10.3), and the customer has to accept LLM-drafted answers (#46).
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |

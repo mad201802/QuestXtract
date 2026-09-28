@@ -105,8 +105,8 @@ _TAG_WORDS = frozenset({"okay", "ok", "right", "true", "yes", "yeah", "correct",
 # of the lower-cased sentence, trailing vocatives allowed ("How much are we together, people,
 # on this?"). The comprehension checks do not count when content follows them: "Does that
 # make sense?" is a check-in, "Why does it make sense to sort first?" is a question.
-# ponytail: English phrase list grown from the labelled recordings; the judge (stage 9) is
-# the real content filter, this only keeps the obvious ones out of the candidate list.
+# ponytail: #70, English phrase list grown from the labelled recordings; the TTK4225 forms are
+# missing. The LLM pass (#46) is the real content filter, this only keeps the obvious ones out.
 _CHECK_INS = re.compile(
     r"\bmakes? sense\b(?! to (?!everyone\b|everybody\b|you\b)| of\b| for\b| in\b| here\b)"
     r"|\bis that clear\b(?! (?:why|what|how|that|whether|if|when|where)\b)"
@@ -116,8 +116,8 @@ _CHECK_INS = re.compile(
 
 # A head word without a '?' stays under the 0.45 gate: on the reference recordings every such
 # sentence was a statement ("What I mean is ...", "So when we ...").
-# ponytail: recovering a question the ASR left unpunctuated needs a second, independent gate
-# (a local answer slot, architecture.md 7.1c); add it when a labelled question is lost to it.
+# ponytail: #48, recovering a question the ASR left unpunctuated needs a second, independent
+# gate (a local answer slot, architecture.md 7.1); add it when a labelled question is lost to it.
 _SCORES = {"mark": 0.6, "wh": 0.4, "aux": 0.4, "tag": -0.4, "check_in": -0.4}
 
 

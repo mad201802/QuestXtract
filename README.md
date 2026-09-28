@@ -158,8 +158,8 @@ management like "is that clear?"). The last two lower the score; architecture.md
 table. Useful when reviewing borderline detections, e.g. with `scripts/dropped_questions.py`.
 
 `--threshold` gates the final **confidence**, not the raw detection score. An unanswered question
-carries `0.55 x question_score` (architecture.md 9.2), so it tops out at 0.55 until answer search
-lands.
+carries `0.55 x question_score` (architecture.md 9.2), so it tops out at 0.55; one the next
+sentence answers carries the full score.
 
 ### Python API
 

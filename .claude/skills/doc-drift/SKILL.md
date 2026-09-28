@@ -9,9 +9,9 @@ Report only; change nothing unless asked. Finish with one list,
 `file:line - what is wrong - suggested fix`, most misleading first.
 
 1. **Stubs vs status.** `grep -rn 'ponytail:\|NotImplementedError' src/` against the Status table
-   in docs/architecture.md and README.md's status lines. Flag every `ponytail:` line without an
-   issue number.
-2. **Config fields nothing reads.** Each must sit under the "not read yet, #N" comment in config.py.
+   in docs/architecture.md and README.md's status lines. Markers without their issue first:
+   `grep -rn 'ponytail:' src | grep -v 'ponytail: #[0-9]'` (must be empty).
+2. **Config fields nothing reads.** Each must carry a `# not read yet, #N` comment in config.py.
    ```bash
    uv run python -c "import dataclasses, pathlib, re; from questxtract.config import Config; src = ' '.join(p.read_text(encoding='utf-8') for p in pathlib.Path('src/questxtract').glob('*.py') if p.name != 'config.py'); print('unused:', [f.name for f in dataclasses.fields(Config) if not re.search(r'\b' + f.name + r'\b', src)])"
    ```

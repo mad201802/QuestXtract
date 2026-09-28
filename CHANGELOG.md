@@ -47,6 +47,9 @@ and D2.
 - `Config.max_question_chars` 220 → 350 and `Config.batch_size` 8 → 4 (architecture.md 2.2, 7.3);
   both are untuned experiments against real lecture audio, revisited once #11's labelled set
   exists. `batch_size` is part of the transcribe cache key, so the change re-transcribes once.
+- `Config.answer_window_sentences`, `Config.deferred_min_question_score` and
+  `Config.deferred_window_sentences` are removed. Nothing read them: answers beyond the adjacent
+  sentence will come from the LLM pass (#46), not from a rule-based window search.
 
 ### Added
 

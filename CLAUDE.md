@@ -47,7 +47,8 @@ Five-person course project; milestones, priorities and sprints live on GitHub.
 ## Unbuilt features
 
 - `grep -rn 'ponytail:' src` lists every stub and shortcut. Format:
-  `# ponytail: <what is missing>, #<issue>`. No issue, no stub: open the issue first.
+  `# ponytail: #<issue>, <what is missing>` (issue first, so one grep line shows it). No issue,
+  no stub: open the issue first. A Config field nothing reads yet gets `# not read yet, #<issue>`.
 - Build only what the current issue asks for. No Config fields, schema keys, stages or flags
   "for later".
 - When a stub gets implemented: delete its marker, update the Status table in

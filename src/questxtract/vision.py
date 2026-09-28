@@ -22,12 +22,12 @@ def vision(ctx: Context) -> Context:
 
     A no-op unless ``config.vision_enabled``, which is false unless an endpoint is
     configured. The layout probe, frame sampling, de-occlusion, board-state segmentation
-    and VLM captioning of architecture.md 6.2 to 6.5 land with the M2/M3 milestones.
+    and VLM captioning of architecture.md 6.2 to 6.5 are not implemented yet (#59).
     """
     if not ctx.config.vision_enabled:
         return ctx
-    # ponytail: frame sampling, keyframes and VLM captioning (architecture.md 6.2-6.5), #59.
-    raise NotImplementedError("vision: board reading lands with the M2/M3 milestones")
+    # ponytail: #59, frame sampling, keyframes and VLM captioning (architecture.md 6.2-6.5).
+    raise NotImplementedError("vision is not implemented yet (#59); set vision_enabled=False")
 
 
 def overlapping(

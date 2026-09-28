@@ -39,8 +39,8 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--from-scratch` | nothing | off | Ignores cached results and recomputes everything, transcription included. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
-One thing to know about `-t` today: until answer search is built, a question with no answer
-scores at most `0.55`. So any threshold above `0.55` currently returns no questions at all.
+One thing to know about `-t` today: a question with no answer scores at most `0.55`, so a
+threshold above `0.55` keeps only questions the next sentence answers.
 
 ### `questxtract transcribe <recording>`
 
@@ -65,7 +65,7 @@ reads.
 `questxtract eval <files|dirs> [--json]` scores the pipeline against the labelled set: recall,
 precision, false positives by kind, a threshold sweep, and every miss
 ([tests/data/README.md](../tests/data/README.md)). `questxtract quiz <questions.json>` is
-reserved for quiz generation; it is not implemented yet and exits with a one-line error.
+reserved for quiz generation; it is not implemented yet (#79) and exits with a one-line error.
 
 ## Where files go
 

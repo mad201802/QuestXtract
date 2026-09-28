@@ -32,7 +32,7 @@ class Config:
     initial_prompt: str = _PUNCTUATION_PROMPT
 
     # --- 2.4 vision-informed second ASR pass ---
-    hotwords_from_vision: bool = False
+    hotwords_from_vision: bool = False  # not read yet, #62
 
     # --- 3.1 sentences ---
     max_sentence_words: int = 60
@@ -53,11 +53,8 @@ class Config:
     min_question_score: float = 0.45
     max_question_chars: int = 350
 
-    # --- 8 answer search ---
+    # --- 8 answer search (answers beyond the adjacent seed come from the LLM pass, #46) ---
     answer_seed_max_gap_seconds: float = 1.0
-    answer_window_sentences: int = 3
-    deferred_min_question_score: float = 0.62
-    deferred_window_sentences: int = 28
 
     # --- 9 scoring ---
     min_confidence: float = 0.40
