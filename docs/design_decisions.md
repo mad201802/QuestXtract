@@ -1,4 +1,4 @@
-# Architecture review — M1 package foundation
+# Design decisions: M1 package foundation
 
 Working document for the project report. It records *why* the architecture in
 [architecture.md](architecture.md) looks the way it does: the drivers, the decisions, the
@@ -369,21 +369,7 @@ information-flow arrows — the compendium asks for an architecture sketch with 
   make the same output usable for captions/navigation. Pedagogy: the "extract, never invent"
   rule keeps the lecturer in control of what students are quizzed on.
 
-## 8. Open questions to settle with the customer
-
-1. Does the MCQ/numeric *builder* conflict with "never invent questions"? (our reading: no —
-   it formats; confirm.)
-2. exerplaza: API or import format? Which question types and LaTeX conventions? This decides
-   the shape of `builder/` output.
-3. Are YouTube URLs an input, or only test material to be downloaded manually? (Currently: out
-   of scope; `video/` would own it.)
-4. Is word-level timing acceptable as the definition of "question timestamp" (FR7), or is
-   segment-level enough?
-5. Review UI: web or desktop, and who hosts it? It changes nothing in the package but a lot in
-   the project plan.
-6. Real lecture recordings vs. public/mock videos — the GDPR answer in §6 depends on it.
-
-## 9. Sources worth citing (verify each before use)
+## 8. Sources worth citing (verify each before use)
 
 Collected in the team's research notes; check every entry on Google Scholar before it goes
 in the bibliography (some came via an AI-generated literature survey).

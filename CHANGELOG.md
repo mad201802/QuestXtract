@@ -7,7 +7,7 @@ The package is restructured around the pipeline described in
 layout introduced earlier in this cycle is reversed: the `Context -> Context` stage contract, not
 the directory, is the unit of ownership and replacement. `docs/architecture.md` is deleted, its
 still-current content folded into architecture.md sections 13.1, 13.3 and 14;
-`docs/architecture_review.md` keeps the decision history and records the reversal in D1 and D2.
+`docs/design_decisions.md` keeps the decision history and records the reversal in D1 and D2.
 
 ### Changed (breaking)
 

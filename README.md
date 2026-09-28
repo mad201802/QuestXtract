@@ -253,7 +253,7 @@ uv run mypy                # type check
 The package uses a `src/` layout and is built with [uv](https://github.com/astral-sh/uv). One
 module per pipeline stage, each exposing a single `@stage`-decorated `Context -> Context`
 function. See [docs/architecture.md](docs/architecture.md) for what each one does and why, and
-[docs/architecture_review.md](docs/architecture_review.md) for the decisions behind it:
+[docs/design_decisions.md](docs/design_decisions.md) for the decisions behind it:
 
 ```
 src/questxtract/
