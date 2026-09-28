@@ -297,18 +297,16 @@ secret unset.
 
 ## Roadmap
 
-- [x] **M0** — installable package, question detection over transcripts, JSON export, CI
-- [ ] **M1** — refactor the audio-only codebase in: video → audio → ASR → questions, end to end
-- [ ] **M2** — static image understanding, enriching the audio information
-- [ ] **M3** — flow-based image understanding across the whole recording
-- [ ] **M4** — [manim](https://github.com/manimCommunity/manim) animations generated from the image flow
-
-Detailed scope in [general_requirements.md](docs/general_requirements.md#general-requirements).
+Scope, due dates and progress: [GitHub milestones](https://github.com/mad201802/QuestXtract/milestones).
+The customer's requirements behind them: [general_requirements.md](docs/general_requirements.md#general-requirements).
 
 ## Contributing
 
 Branch off `main`, keep `uv run pytest` and `uv run ruff check .` green, open a PR. Public API
 functions need docstrings, type hints and tests.
+
+An issue enters a sprint only when it has real acceptance criteria, an owner and a milestone.
+Branch names, commit and PR titles, and the docs rules are in [CLAUDE.md](CLAUDE.md).
 
 ## License
 

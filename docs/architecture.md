@@ -1463,8 +1463,7 @@ its name, its signature and its `@stage` registration are real; only the algorit
 Every stub carries a `ponytail:` comment naming the section it owes, so `grep -rn 'ponytail:' src/`
 is the running list of what this document promises and the code does not yet do.
 
-Milestones, from the README roadmap: **M1** audio end to end (stages 1-4, 6-8), **M2** static board
-understanding, **M3** board flow across the recording, **M4** manim animations from that flow.
+What lands when: [GitHub milestones](https://github.com/mad201802/QuestXtract/milestones).
 
 ---
 
