@@ -118,6 +118,9 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   for tags or check-ins. Its reason code stays `intra_sentence_qa`. An answered question's
   confidence rises from 0.55 x score to 1.0 x score. Pooled recall at the default gate goes
   from 0.89 to 0.95 and precision from 0.64 to 0.61 (architecture.md 7.3, #70).
+- A question's `visual_ids` list the board states on screen while it was asked, falling back to
+  every state of its segment when none was. They listed the whole segment's, so a question could
+  point at a board written up to 90 s later (#40).
 - An answer's `start`/`end` in `questions.json` span its own sentences; they repeated the
   question's span (#13).
 - Question detection only looked at a sentence's first word, so "So what ...?", "Then how ...?"
@@ -126,6 +129,10 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   past discourse markers and, for a `?` sentence, in its last comma clause; negated auxiliaries
   count and `any` no longer does. On the reference recordings content questions found went from
   2/10 to 7/10 (MIT 18.100B), architecture.md 7.3.
+- A question opened by a preamble ("My question is that doesn't ...?", "The question is, why
+  ...?", "I was wondering if ...") scored on the `?` alone, since only single-word discourse
+  markers were skipped. The head is now found past these preambles too (#47). No sentence score
+  changes on the three reference recordings.
 - Confirmation tags ("Okay?", "True, you see?", "..., right?") scored like real questions, and
   check-ins ("Is that clear?") above them. New reasons `tag` and `check_in` (-0.40 each) keep
   tags out of the candidates and check-ins out of the emitted questions.

@@ -54,6 +54,18 @@ def test_head_word_found_past_discourse_markers():
     assert question_type("So why is this popular?") == "why"
 
 
+def test_head_word_found_past_question_preambles():
+    sentence = "My question is that doesn't a Markov assumption make this harder?"
+    assert score_sentence(sentence) == (1.0, ("mark", "aux"))
+    assert score_sentence("The question is, why does it converge?")[1] == ("mark", "wh")
+    assert score_sentence("So the question was how do we sample it?")[1] == ("mark", "wh")
+    assert score_sentence("I'd like to ask is the policy stationary?")[1] == ("mark", "aux")
+    assert score_sentence("I was wondering whether is it bounded?")[1] == ("mark", "aux")
+    assert question_type("My question is what happens at zero?") == "what"
+    # A preamble alone gives no head: the statement stays under the gate.
+    assert score_sentence("The question is important.") == (0.0, ())
+
+
 def test_head_word_found_in_the_last_clause_of_a_question():
     reasons = score_sentence("If you have the data, does that mean it is better?")[1]
     assert reasons == ("mark", "aux")
