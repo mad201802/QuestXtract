@@ -79,6 +79,16 @@ Every option, the cache, error messages and recipes: [docs/cli.md](docs/cli.md).
 `scripts/dropped_questions.py` saves the questions the threshold dropped next to the ones it
 kept, for inspecting false negatives.
 
+To measure the detector against the labelled reference recordings (NFR2, recall >= 0.50):
+
+```bash
+questxtract eval tests/data/          # table, sweep, missed questions and false positives
+questxtract eval tests/data/ --json   # the same report, machine-readable
+```
+
+Each `tests/data/<name>.labels.jsonl` is scored against the `<name>.transcript.json` next to it;
+[tests/data/README.md](tests/data/README.md) covers how the labels were made.
+
 `process` also takes a transcript made by any other ASR engine: a list of segments, or an object
 with a `segments` key, which is what most engines emit:
 
@@ -96,14 +106,19 @@ included, so a consumer never has to defensively check for a missing field:
 
 ```json
 {
-  "schema_version": "1.1",
+  "schema_version": "2.0",
   "source": { "path": "transcript.json", "duration_seconds": 12.0, "hash": null },
-  "config": { "model_size": "turbo", "language": "en",
+  "config": { "model_size": "turbo", "language": "en", "min_confidence": 0.4,
               "judge_model": "gpt-5.6-terra", "vision_model": "gpt-5.6-luna" },
-  "stats": { "sentences": 3, "sentences_unpunctuated": 0,
-             "segments": 1, "segments_closed_gap": 0,
+  "stats": { "sentences": 3, "sentences_unpunctuated": 1,
+             "segments": 2, "segments_closed_gap": 1,
              "segments_closed_duration": 0, "segments_closed_chars": 0,
              "candidates": 1, "answered": 0, "emitted": 1 },
+  "segments": [
+    { "id": 0, "start": 0.0, "end": 6.0, "topic": null, "visual_ids": [] },
+    { "id": 1, "start": 9.0, "end": 12.0, "topic": null, "visual_ids": [] }
+  ],
+  "visuals": [],
   "questions": [
     {
       "id": "q_ca0d72",
@@ -116,16 +131,24 @@ included, so a consumer never has to defensively check for a missing field:
       "confidence": 0.55,
       "confidence_label": "medium",
       "question_type": "what",
+      "source": "audio",
       "answer": null,
       "segment_id": 0,
       "sentence_id": "s_ca0d72",
-      "visual": null,
+      "visual_ids": [],
       "verdict": "unjudged",
-      "reasons": ["mark", "wh", "no_answer_found"]
+      "reasons": ["mark", "wh", "no_answer_found"],
+      "review": { "status": "pending", "text": null, "note": null, "metadata": {} }
     }
   ]
 }
 ```
+
+`segments` and `visuals` (board states, empty until the vision stage lands) are listed once, and
+questions point into them with `segment_id` and `visual_ids`. `review` is where teacher edits go;
+the pipeline never overwrites it ([architecture.md 12.2](docs/architecture.md#122-editing-fr5)).
+The formal schema ships with the package as
+[questions.schema.json](src/questxtract/questions.schema.json).
 
 `id` and `sentence_id` identify a question across re-runs and edits; `sentence_id` is a content
 hash, so it survives a re-transcription. `reasons` says which rules fired: `mark` (ends in `?`),

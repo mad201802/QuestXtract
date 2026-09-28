@@ -62,9 +62,10 @@ reads.
 | `--version` | Prints the installed version. |
 | `-h`, `--help` | Without a command, lists the commands; after one, lists that command's options. |
 
-`questxtract eval <dirs> [--json]` scores the pipeline against the labelled set, and
-`questxtract quiz <questions.json>` is reserved for quiz generation. Neither is implemented yet;
-both exit with a one-line error.
+`questxtract eval <files|dirs> [--json]` scores the pipeline against the labelled set: recall,
+precision, false positives by kind, a threshold sweep, and every miss
+([tests/data/README.md](../tests/data/README.md)). `questxtract quiz <questions.json>` is
+reserved for quiz generation; it is not implemented yet and exits with a one-line error.
 
 ## Where files go
 

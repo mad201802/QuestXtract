@@ -1,13 +1,34 @@
-{"start": 305.0, "text": "So what does it mean to write something so that is mathematically rigorous?", "kind": "content", "end": 308.0, "split": "seed"}
-{"start": 997.0, "text": "What are the properties that we really have about the rational numbers?", "kind": "content", "end": 1000.0, "split": "blind"}
-{"start": 1046.0, "text": "If you take a quotient like this, you think that this is equal to another quotient, right?", "kind": "rhetorical", "end": 1049.0, "split": "blind"}
-{"start": 1165.0, "text": "Then how do you add two rational numbers together?", "kind": "content", "end": 1168.0, "split": "blind"}
-{"start": 1324.0, "text": "What does it mean to multiply two rational numbers together?", "kind": "content", "end": 1327.0, "split": "seed"}
-{"start": 1621.0, "text": "So how do we do that?", "kind": "rhetorical", "end": 1624.0, "split": "seed"}
-{"start": 2036.0, "text": "What property do these two operations need to have?", "kind": "content", "end": 2039.0, "split": "seed"}
-{"start": 3014.0, "text": "And why is this not a field? It's for multiplication, right?", "kind": "content", "end": 3017.0, "split": "blind"}
-{"start": 3066.0, "text": "So what does it mean that a field is ordered?", "kind": "content", "end": 3069.0, "split": "blind"}
-{"start": 3363.0, "text": "So this here is, how do the ordering interacts with addition?", "kind": "content", "end": 3366.0, "split": "blind"}
-{"start": 3375.0, "text": "And the other thing is, how do it act interacts with multiplication?", "kind": "content", "end": 3378.0, "split": "blind"}
-{"start": 3476.0, "text": "What does it mean that one is less than the other?", "kind": "content", "end": 3479.0, "split": "blind"}
-{"start": 3881.0, "text": "Is that clear?", "kind": "check_in", "end": 3884.0, "split": "seed"}
+{"start": 304.7, "text": "So what does it mean to write something so that it's kind of mathematically rigorous?", "kind": "content", "end": 311.76, "split": "blind"}
+{"start": 468.61, "text": "But now the question is then, how do we make this into survival?", "kind": "content", "end": 474.79, "split": "blind"}
+{"start": 533.12, "text": "But how do we make this into a rigorous proof?", "kind": "content", "end": 535.62, "split": "blind"}
+{"start": 536.56, "text": "And what is the property?", "kind": "content", "end": 538.18, "split": "blind"}
+{"start": 538.46, "text": "So how do we make this into a proof?", "kind": "content", "end": 540.3, "split": "blind"}
+{"start": 543.86, "text": "So how do we make this intuition into a proof?", "kind": "content", "end": 560.52, "split": "blind"}
+{"start": 633.13, "text": "The first question that arises is, what are you using?", "kind": "content", "end": 638.43, "split": "blind"}
+{"start": 638.55, "text": "What property do we need to make this into a proof?", "kind": "content", "end": 642.82, "split": "blind"}
+{"start": 642.92, "text": "What property do we need of the real numbers?", "kind": "content", "end": 645.24, "split": "blind"}
+{"start": 649.78, "text": "So what property are we using of the real numbers?", "kind": "content", "end": 665.87, "split": "blind"}
+{"start": 674.06, "text": "And so in fact, what is the real numbers?", "kind": "content", "end": 677.54, "split": "blind"}
+{"start": 678.02, "text": "So what are the real numbers?", "kind": "content", "end": 679.58, "split": "blind"}
+{"start": 696.84, "text": "in particular, what is square root of 2?", "kind": "content", "end": 703.27, "split": "blind"}
+{"start": 703.61, "text": "So what is square root of 2?", "kind": "content", "end": 705.33, "split": "blind"}
+{"start": 712.17, "text": "And is that a real number?", "kind": "content", "end": 715.43, "split": "blind"}
+{"start": 717.81, "text": "Is square root of 2 a real number?", "kind": "content", "end": 720.47, "split": "blind"}
+{"start": 872.46, "text": "What are these properties that we're using?", "kind": "content", "end": 875.4, "split": "blind"}
+{"start": 988.03, "text": "And so now what are the properties?", "kind": "content", "end": 990.53, "split": "blind"}
+{"start": 1001.83, "text": "What are the properties that we really have about the rational numbers?", "kind": "content", "end": 1005.75, "split": "blind"}
+{"start": 1098.9, "text": "Or integers, right?", "kind": "rhetorical", "end": 1100.0, "split": "blind"}
+{"start": 1170.67, "text": "How do you add two rational numbers together?", "kind": "content", "end": 1173.35, "split": "blind"}
+{"start": 1322.04, "text": "so what does it mean to multiply two rational numbers together?", "kind": "content", "end": 1325.62, "split": "blind"}
+{"start": 1389.91, "text": "What is a field?", "kind": "content", "end": 1390.67, "split": "blind"}
+{"start": 1416.72, "text": "When is it less than another rational number?", "kind": "content", "end": 1419.74, "split": "blind"}
+{"start": 1619.75, "text": "So how do we do that?", "kind": "rhetorical", "end": 1621.85, "split": "blind"}
+{"start": 2036.13, "text": "What properties do these two operations need to have?", "kind": "content", "end": 2040.55, "split": "blind"}
+{"start": 2874.69, "text": "And so I'm adding the O2 to it, right?", "kind": "rhetorical", "end": 2878.52, "split": "blind"}
+{"start": 2909.21, "text": "So now we know what a field is, right?", "kind": "rhetorical", "end": 2921.83, "split": "blind"}
+{"start": 2951.58, "text": "so the rational numbers here is a field, right?", "kind": "rhetorical", "end": 2954.76, "split": "blind"}
+{"start": 3010.95, "text": "And why is this not a field?", "kind": "content", "end": 3012.45, "split": "blind"}
+{"start": 3100.41, "text": "So what does it mean that this field is ordered?", "kind": "content", "end": 3102.85, "split": "blind"}
+{"start": 3471.67, "text": "If you take two rational numbers, what does it mean that one is less than the other?", "kind": "content", "end": 3475.97, "split": "blind"}
+{"start": 3701.14, "text": "Why is that equivalent?", "kind": "content", "end": 3702.56, "split": "blind"}
+{"start": 3878.13, "text": "Is that clear?", "kind": "check_in", "end": 3879.55, "split": "blind"}
