@@ -1,4 +1,7 @@
-"""Command line interface: ``process``, ``eval`` and ``quiz``."""
+"""Command line interface: ``process``, ``transcribe``, ``eval`` and ``quiz``.
+
+Every command and option, with recipes: docs/cli.md.
+"""
 
 from __future__ import annotations
 
@@ -11,11 +14,11 @@ from pathlib import Path
 from . import __version__
 from .config import Config
 from .evaluate import evaluate, format_report
-from .export import result_to_json, write_questions
-from .models import Context, SchemaError, Transcript
+from .export import result_to_json
+from .models import Context, SchemaError, Stage, Transcript
 from .pipeline import STAGES, run
 
-_AFTER_TRANSCRIBE = 2  # stages 1 and 2 are skipped when a transcript is supplied
+_AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
 
 _BAR_WIDTH = 10
 # A redirected stderr on Windows is cp1252, not the UTF-8 console, and the block glyphs
@@ -35,6 +38,32 @@ _STAGE_LABELS = {
     "score": "Scoring",
     "judge": "Reviewing",
 }
+
+_INPUT_KINDS = {".mp4": "an .mp4 recording", ".json": "a .json transcript"}
+
+_EXAMPLES = """\
+examples:
+  questxtract process lecture.mp4               video -> lecture.questions.json
+  questxtract transcribe lecture.mp4            transcript only -> lecture.transcript.json
+  questxtract process lecture.transcript.json   questions from an existing transcript
+
+every command and option, with recipes: docs/cli.md
+"""
+
+_PROCESS_EXAMPLES = """\
+examples:
+  questxtract process lecture.mp4                        writes lecture.questions.json
+  questxtract process lecture.mp4 -o out/questions.json  choose where it goes
+  questxtract process lecture.mp4 -t 0.3                 more questions, less strict
+  questxtract process lecture.mp4 -m base                quick run with a small model
+  questxtract process lecture.transcript.json -o -       existing transcript, print it
+"""
+
+_TRANSCRIBE_EXAMPLES = """\
+examples:
+  questxtract transcribe lecture.mp4                     writes lecture.transcript.json
+  questxtract transcribe lecture.mp4 -m small -o t.json  smaller model, custom path
+"""
 
 
 def _progress_bar(total: int) -> Callable[[str, float], None]:
@@ -91,7 +120,64 @@ def _draw(index: int, total: int, name: str, fraction: float) -> None:
     print(f"\r{_render(index, total, name, fraction)}", end="", file=sys.stderr, flush=True)
 
 
-def _load_transcript(path: str) -> Transcript:
+def _check_input(path: Path, allowed: Sequence[str]) -> None:
+    """Reject a bad input up front, not minutes into a transcription.
+
+    Raises:
+        FileNotFoundError: If ``path`` does not exist.
+        ValueError: If its suffix is not one of ``allowed``.
+
+    """
+    if not path.is_file():
+        raise FileNotFoundError(f"{path}: no such file")
+    if path.suffix.lower() not in allowed:
+        expected = " or ".join(_INPUT_KINDS[suffix] for suffix in allowed)
+        raise ValueError(f"{path}: expected {expected}")
+
+
+def _output_path(output: str | None, source: Path, kind: str) -> Path | None:
+    """Resolve ``-o``: ``None`` means stdout (``-o -``); omitted means next to the input.
+
+    ``lecture.mp4`` and ``lecture.transcript.json`` both default to ``lecture.<kind>.json``.
+    The parent directory is created now, so a typo'd path fails before the slow part.
+    """
+    if output == "-":
+        return None
+    if output:
+        path = Path(output)
+    else:
+        base = source.name.removesuffix(".transcript.json")
+        if base == source.name:
+            base = source.stem
+        path = source.with_name(f"{base}.{kind}.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _write(text: str, path: Path | None, summary: str) -> None:
+    """Write ``text`` to ``path``, or print it when ``path`` is ``None``."""
+    if path is None:
+        print(text)
+        return
+    path.write_text(text, encoding="utf-8")
+    print(f"{summary} -> {path}", file=sys.stderr)
+
+
+def _config(args: argparse.Namespace) -> Config:
+    """Apply the flags every command shares over the defaults."""
+    return Config().replace(model_size=args.model, from_scratch=args.from_scratch)
+
+
+def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
+    """Run ``stages`` under the progress bar, closing its line if anything interrupts it."""
+    try:
+        return run(ctx, stages, progress=_progress_bar(len(stages)))
+    except BaseException:
+        print(file=sys.stderr)  # close the redrawing bar line before the error/traceback
+        raise
+
+
+def _load_transcript(path: str | Path) -> Transcript:
     """Read a transcript JSON file.
 
     Raises:
@@ -106,32 +192,38 @@ def _load_transcript(path: str) -> Transcript:
 
 
 def _process(args: argparse.Namespace) -> int:
-    """Run the pipeline over a transcript and write ``questions.json``."""
-    try:
-        transcript = _load_transcript(args.transcript)
-    except (OSError, SchemaError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
+    """Extract questions from a recording (every stage) or a transcript (skips ASR)."""
+    source = Path(args.input)
+    _check_input(source, (".mp4", ".json"))
+    output = _output_path(args.output, source, "questions")
+    config = _config(args).replace(min_confidence=args.threshold)
 
-    config = Config().replace(min_confidence=args.threshold, from_scratch=args.from_scratch)
-    ctx = Context(source=Path(args.transcript), config=config, transcript=transcript)
-    ctx.duration = transcript.duration
-    # Stages 1 and 2 are skipped: the transcript is already in hand. This is the documented
-    # `stages=` seam (architecture.md 11.1), not a workaround. "Transcribing" therefore never
-    # appears in the bar below until issue #17 lets `process` accept a raw recording.
-    stages = STAGES[_AFTER_TRANSCRIBE:]
-    progress = _progress_bar(len(stages))
-    try:
-        ctx = run(ctx, stages, progress=progress)
-    except Exception:
-        print(file=sys.stderr)  # close the redrawing bar line before the error/traceback
-        raise
-
-    if args.output:
-        write_questions(ctx, args.output)
-        print(f"{len(ctx.pairs)} questions -> {args.output}", file=sys.stderr)
+    if source.suffix.lower() == ".json":
+        transcript = _load_transcript(source)
+        ctx = Context(source=source, config=config, transcript=transcript)
+        ctx.duration = transcript.duration
+        # The documented `stages=` seam (architecture.md 11.1): the transcript is in hand.
+        ctx = _run(ctx, STAGES[_AFTER_TRANSCRIBE:])
     else:
-        print(result_to_json(ctx))
+        ctx = _run(Context(source=source, config=config), STAGES)
+
+    _write(result_to_json(ctx), output, f"{len(ctx.pairs)} questions")
+    return 0
+
+
+def _transcribe(args: argparse.Namespace) -> int:
+    """Transcribe a recording only, into a file ``process`` reads back.
+
+    Runs the real ingest and transcribe stages, so it shares their cache with ``process``:
+    whichever of the two runs second on the same recording skips the ASR.
+    """
+    source = Path(args.recording)
+    _check_input(source, (".mp4",))
+    output = _output_path(args.output, source, "transcript")
+    ctx = _run(Context(source=source, config=_config(args)), STAGES[:_AFTER_TRANSCRIBE])
+    assert ctx.transcript is not None  # noqa: S101 - the transcribe stage always sets it
+    text = json.dumps(ctx.transcript.to_dict(), indent=2, ensure_ascii=False)
+    _write(text, output, f"{len(ctx.transcript.asr_segments)} segments")
     return 0
 
 
@@ -155,20 +247,71 @@ def _quiz(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser."""
-    parser = argparse.ArgumentParser(prog="questxtract", description=__doc__)
+    defaults = Config()
+    raw = argparse.RawDescriptionHelpFormatter
+    parser = argparse.ArgumentParser(
+        prog="questxtract",
+        description="Find the questions asked in a lecture recording.",
+        epilog=_EXAMPLES,
+        formatter_class=raw,
+    )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subs = parser.add_subparsers(dest="command", required=True)
 
-    process = subs.add_parser("process", help="extract questions from a recording or transcript")
-    process.add_argument("transcript", help="transcript JSON with text/start/end segments")
-    process.add_argument("-o", "--output", help="write questions here instead of stdout")
-    process.add_argument(
-        "-t", "--threshold", type=float, default=0.40, help="minimum confidence (default: 0.40)"
+    # Flags every command that can transcribe shares, so both --help pages read the same.
+    shared = argparse.ArgumentParser(add_help=False)
+    shared.add_argument(
+        "-o",
+        "--output",
+        metavar="PATH",
+        help="where to write (default: next to the input; '-' prints to the terminal)",
+    )
+    shared.add_argument(
+        "-m",
+        "--model",
+        default=defaults.model_size,
+        metavar="NAME",
+        help="Whisper model: tiny, base, small, medium, large-v3 or turbo (default: "
+        "%(default)s); smaller is faster and less accurate. Only used when transcribing",
+    )
+    shared.add_argument(
+        "--from-scratch",
+        action="store_true",
+        help="ignore cached results and recompute everything, transcription included",
+    )
+
+    process = subs.add_parser(
+        "process",
+        parents=[shared],
+        help="extract questions from a recording or a transcript",
+        description="Extract the questions asked in a recording, or in an existing transcript.",
+        epilog=_PROCESS_EXAMPLES,
+        formatter_class=raw,
     )
     process.add_argument(
-        "--from-scratch", action="store_true", help="ignore every cache entry and recompute"
+        "input",
+        help="an .mp4 recording (runs everything) or a .json transcript (skips transcription)",
+    )
+    process.add_argument(
+        "-t",
+        "--threshold",
+        type=float,
+        default=defaults.min_confidence,
+        metavar="0-1",
+        help="keep questions with at least this confidence (default: %(default)s)",
     )
     process.set_defaults(handler=_process)
+
+    transcribe = subs.add_parser(
+        "transcribe",
+        parents=[shared],
+        help="transcribe a recording only, into a file `process` reads back",
+        description="Transcribe a recording into a transcript file, without extracting questions.",
+        epilog=_TRANSCRIBE_EXAMPLES,
+        formatter_class=raw,
+    )
+    transcribe.add_argument("recording", help="an .mp4 recording")
+    transcribe.set_defaults(handler=_transcribe)
 
     evaluation = subs.add_parser("eval", help="score against the labelled set")
     evaluation.add_argument(
@@ -190,7 +333,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     handler: object = args.handler
     assert callable(handler)  # noqa: S101 - set_defaults guarantees it
-    return int(handler(args))
+    try:
+        return int(handler(args))
+    except KeyboardInterrupt:
+        print("interrupted", file=sys.stderr)
+        return 130
+    except (OSError, ValueError) as exc:
+        # Everything a user can cause - a missing or unreadable file, a non-mp4, a recording
+        # with no audio, a malformed transcript, an unknown model name - arrives as one of
+        # these with a readable message; a traceback would only bury it (issue #17).
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

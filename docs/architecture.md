@@ -1381,8 +1381,8 @@ claim cannot quietly stop being true.
 **Base:** `faster-whisper`, `numpy`. That is the whole list - `av`, `ctranslate2`, `onnxruntime`,
 `tokenizers`, `huggingface-hub` and `tqdm` arrive transitively through faster-whisper.
 
-**Extras:** `[llm]` -> `openai` (judge and vision, one key, one dependency).
-`[cli]` -> `tqdm` (already transitively present; pinned explicitly for the CLI).
+**Extras:** `[llm]` -> `openai` (judge and vision, one key, one dependency). The CLI needs no
+extra: its progress bar is a few lines of `print` in `cli.py`, not `tqdm`.
 
 **No system binaries.** No ffmpeg, no ffprobe. **No torch**, and therefore no torchvision, no
 triton, no CUDA wheels, no transformers, no pyannote, no speechbrain, no sentence-transformers,
@@ -1411,8 +1411,8 @@ its name, its signature and its `@stage` registration are real; only the algorit
 | Module | Stage | State | Owner |
 |---|---|---|---|
 | `models.py`, `config.py`, `pipeline.py` | the contract itself | done | #6 |
-| `media.py` | 1 ingest | source hash done; `av.open()` probe stubbed | #7 |
-| `transcribe.py` | 2 transcribe | stub; callers seed a transcript and run `STAGES[2:]` | #8 |
+| `media.py` | 1 ingest | done | #7 |
+| `transcribe.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry (`asr.py`) | #8 |
 | `sentences.py` | 3 sentences | done | — |
 | `segments.py` | 4 segments | done | — |
 | `vision.py` | 5 vision, attach_visual | capture stubbed; the interval join is done | M2/M3 |
@@ -1422,7 +1422,7 @@ its name, its signature and its `@stage` registration are real; only the algorit
 | `llm.py` | 9 judge | stub, no-ops when disabled | — |
 | `export.py` | 10 export | done | #13 |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest | #12 |
-| `cli.py` | not a stage | `process` and `eval` work; `quiz` exits 1 with a one-line error | #17 |
+| `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 with a one-line error | #17 |
 
 Every stub carries a `ponytail:` comment naming the section it owes, so `grep -rn 'ponytail:' src/`
 is the running list of what this document promises and the code does not yet do.

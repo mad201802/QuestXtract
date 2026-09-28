@@ -225,18 +225,18 @@ def test_cli_roundtrip(tmp_path):
     assert data["stats"]["sentences"] == 4
 
 
-def test_cli_writes_to_stdout_without_output(tmp_path, capsys):
-    assert main(["process", str(_transcript_file(tmp_path))]) == 0
+def test_cli_writes_to_stdout_with_a_dash_output(tmp_path, capsys):
+    assert main(["process", str(_transcript_file(tmp_path)), "-o", "-"]) == 0
     assert json.loads(capsys.readouterr().out)["questions"]
 
 
 def test_cli_threshold_filters(tmp_path, capsys):
-    assert main(["process", str(_transcript_file(tmp_path)), "-t", "0.2"]) == 0
+    assert main(["process", str(_transcript_file(tmp_path)), "-t", "0.2", "-o", "-"]) == 0
     assert len(json.loads(capsys.readouterr().out)["questions"]) == 1
     # Answered with no pause, so the full question score carries: 1.0.
-    assert main(["process", str(_transcript_file(tmp_path)), "-t", "0.9"]) == 0
+    assert main(["process", str(_transcript_file(tmp_path)), "-t", "0.9", "-o", "-"]) == 0
     assert len(json.loads(capsys.readouterr().out)["questions"]) == 1
-    assert main(["process", str(_transcript_file(tmp_path)), "-t", "1.1"]) == 0
+    assert main(["process", str(_transcript_file(tmp_path)), "-t", "1.1", "-o", "-"]) == 0
     assert json.loads(capsys.readouterr().out)["questions"] == []
 
 
