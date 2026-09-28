@@ -30,23 +30,28 @@ output: unreliable sentence boundaries, unreliable punctuation, no speaker label
 So the pipeline spends most of its effort on two things: rebuilding timed sentence structure
 before detection, and rejecting false positives after it.
 
-### 1.2 The two reference recordings
+### 1.2 The reference recordings
 
-The design is calibrated against two deliberately opposite lectures. Neither is grading material;
-both are what we develop and measure against.
+The design is calibrated against deliberately different lectures. None is grading material;
+all are what we develop and measure against.
 
 | Recording | Regime | What it stresses |
 |---|---|---|
 | [MIT 18.100B Real Analysis, L1](https://www.youtube.com/watch?v=BWvjy0a1Ffg) | chalk, sliding blackboards, dense LaTeX math, **camera pans and zooms to follow the lecturer**, few audible student questions | vision, LaTeX, manim, ASR on math jargon |
-| [Stanford CS234 RL, L1 2024](https://www.youtube.com/watch?v=WsvFL-LjA6U) | projected slides plus classroom, students asking questions **off-mic**, ~80 minutes | question detection, lecturer-repeats-question, echo pairs |
+| [TTK4225, 2026-09-14, P03·12 — impulse responses and BIBO stability](https://www.youtube.com/watch?v=ufmTACqiE78) | digital tablet notes (OneNote/PDF sheet), single instructor, control-theory derivations with heavy Socratic back-and-forth | question detection on implicit-cue and self-answered questions, ASR on control-theory notation |
+| [TTK4225, 2026-09-15, P03·14 — sinusoidal fidelity](https://www.youtube.com/watch?v=IQa2TSykWdc) | digital tablet notes (OneNote/PDF sheet), same course, frequent student Q&A | echo pairs (student question + instructor restatement), habitual confirmation-tag handling ("...right?"/"...true?") |
 
 Two consequences that show up repeatedly below:
 
 - **There is no single video layout.** Merged single-camera, separate speaker plus screenshare,
-  blackboard-only, picture-in-picture. Section 6 uses a VLM layout probe rather than a classifier.
-- **On CS234 the students are inaudible.** What *is* in the audio is the lecturer repeating the
-  question - "so the question is whether...". That makes the implicit-cue path (section 7.1b) the
-  **primary** detection path on classroom recordings, not a nice-to-have.
+  blackboard-only, digital tablet notes, picture-in-picture. Section 6 uses a VLM layout probe
+  rather than a classifier.
+- **The TTK4225 instructor uses a habitual confirmation tag** ("...right?"/"...true?") very
+  frequently across both recordings — see `docs/annotation_guidelines.md` section 2 for how this is labelled
+  consistently rather than case by case.
+- **In a classroom the students are often inaudible.** What *is* in the audio is the lecturer
+  repeating the question - "so the question is whether...". That makes the implicit-cue path
+  (section 7.1b) a detection path on classroom recordings, not a nice-to-have.
 
 ### 1.3 Stage order
 
@@ -195,11 +200,11 @@ footprint turns out to be a problem on a laptop.
 > stage.
 >
 > **Dev workflow.** No dev machine has a GPU, and `turbo` on CPU runs a 90-minute lecture in
-> roughly the same wall-clock time again. So the cached `transcribe.json` for both reference
-> recordings **will be committed to the repo** - it is not there yet, and until it is, sections 3
-> and 6 to 9 are developed against synthetic word specs and cannot be measured against real audio.
-> It lands with #11/#12, which are the first things that need it. Full ASR runs on the server or
-> overnight; the inner loop for everyone working on those sections should never touch Whisper.
+> roughly the same wall-clock time again. So the cached `transcribe.json` for the reference
+> recording is committed as `tests/data/<slug>.transcript.json` (#12), trimmed to the words and
+> chunk spans the pipeline reads; the quality metrics above are dropped there, since nothing
+> downstream of stage 2 reads them yet. Full ASR runs on the server or overnight; the inner loop
+> for everyone working on sections 3 and 6 to 9 should never touch Whisper.
 
 ### 2.3 Timing: word timestamps, no forced alignment
 
@@ -251,8 +256,8 @@ a partition, so no provenance validator is needed.
 
 Speaker identification by name is out of scope (requirements, 1. Purpose & Scope) and a single
 main speaker is assumed (4.2). There is no diarization, no speaker attribution and no acoustic
-speaker check. On CS234 the students are off-mic, so there is frequently no second voice on the
-recording to diarize in the first place - the lecturer's repetition of the question is the signal,
+speaker check. In a classroom the students are often off-mic, so there is frequently no second
+voice on the recording to diarize in the first place - the lecturer's repetition of the question is the signal,
 and that is a lexical problem, not an acoustic one.
 
 ---
@@ -301,8 +306,9 @@ with no reason code to show for it.
 >
 > **Risk, stated plainly:** this bets on Whisper emitting question marks, and 2.2 already admits
 > `initial_prompt` decays. The eval harness measures the bet directly via `question_mark_rate`
-> (section 4.3); until #12 lands, the stage's own `stats["sentences_unpunctuated"]` is the standing
-> proxy, and a count that climbs means the splitter is guessing from silence alone. If it drops,
+> (section 4.3; 1.00 on the reference recording, 7.3); between labelled runs, the stage's own
+> `stats["sentences_unpunctuated"]` is the standing proxy, and a count that climbs means the
+> splitter is guessing from silence alone. If it drops,
 > the fix in order of cost is: a better `initial_prompt`, then a larger Whisper model, then a
 > neural splitter as one function behind the same interface.
 >
@@ -395,11 +401,16 @@ One JSONL file per labelled recording, `tests/data/<name>.labels.jsonl`:
 {"start": 1284.2, "end": 1288.9, "text": "why does a stable sort matter here", "kind": "content"}
 ```
 
+next to the transcript it is timed against, `tests/data/<name>.transcript.json`. A label's `text`
+quotes that transcript and its `start`/`end` are snapped to the quoted words
+(`scripts/scratch_to_labels.py --transcript`), so labels and predictions share one clock. The
+first, hand-timed pass (#11) sat 3 to 55 s off it, which no overlap rule survives.
+
 `kind` is `content` (a real question we want), `rhetorical`, `check_in` or `procedural`. Labelling
 the negatives is what lets us measure the thing that is actually hard - the false positive rate -
 rather than only recall.
 
-Two properties of the set matter:
+Two properties of the set matter (the committed set is labelled differently, see below):
 
 - **Pre-annotated.** Labellers correct a high-recall detector dump (`?` OR wh-head OR aux-head, no
   scoring, no vetoes) instead of scrubbing 80 minutes of video. Roughly 5x faster.
@@ -407,13 +418,25 @@ Two properties of the set matter:
   seed. Pre-annotation cannot surface what the detector never proposed, so without a blind slice
   the recall number measures the seed, not the system.
 
-Coverage: both reference recordings, ~30-60 `content` questions, negatives labelled too.
+Coverage: the reference recording, 28 `content` questions, 34 entries in all.
+
+**What the committed set actually is.** The transcript was labelled exhaustively, sentence by
+sentence, with no seed, so every entry is `blind` and `blind_slice_recall` equals recall; the
+seed workflow above stays the cheap path for longer recordings. Exhaustive labelling is what
+makes precision measurable: an unlabelled prediction is a real false positive. The ground truth
+is the transcript, not the audio - a question the ASR never transcribed (an off-mic student)
+is not labelled, because no text rule can reach it; `tests/data/README.md` lists the
+ones dropped for that reason. The MIT labels were LLM-drafted from the transcript and are
+pending human review.
 
 ### 4.2 Matching and metrics
 
 A prediction matches a label when their time ranges overlap and the overlap covers at least half
 the shorter range. Time-based matching, not text matching, because ASR text will differ from what
-a human typed and we are not evaluating the ASR here.
+a human typed and we are not evaluating the ASR here. Overlap is measured against the shorter
+span, not as IoU, because a prediction is a whole sentence that may carry a long preamble
+around a short labelled question. Matching is one-to-one, highest overlap first: otherwise one
+run-on sentence satisfies two labels, or two predictions both count as hits on one.
 
 ```
 recall    = matched_content_labels / content_labels        <- NFR2 gate, >= 0.50
@@ -435,9 +458,15 @@ questxtract eval tests/data/            # all labelled recordings, table to stdo
 questxtract eval tests/data/ --json     # machine-readable, for CI
 ```
 
-CI runs it against one short recording with the cached transcription artifacts committed to the
-repo (section 2.2), so the gate costs seconds and needs no ASR run and no network. Full-length
-recordings run on demand.
+What is scored is the pipeline's output: stages 3 onward over the committed transcript, with
+`min_confidence` at 0 so every detection candidate comes back, then gated at the default for the
+headline. The sweep over the gate therefore covers both ends: at 0 it scores every candidate,
+at 0.40 what a user gets. The text report lists every missed content question and every false
+positive with the label kind it hit; `--json` carries the same lists.
+
+CI runs it through pytest (`tests/test_evaluate.py`), which asserts pooled recall >= 0.50 over
+the reference recording. It runs in well under a second, so there is no separate short
+recording.
 
 > **Decision.** `questxtract/evaluate.py`. The report includes a threshold sweep over
 > `min_confidence`, so the NFR2 tradeoff is visible rather than assumed.
@@ -587,7 +616,7 @@ Two different worlds hide under "read the board":
 | slides, screencast, beamer | essentially nothing | near-duplicate frame dedupe, then OCR |
 | chalkboard, whiteboard, handwriting | everything | see below |
 
-FR4 says "animation/drawing" and one of the two reference recordings is MIT chalk, so we are in
+FR4 says "animation/drawing" and the reference recording is MIT chalk, so we are in
 regime 2 and must also survive regime 1.
 
 Tesseract, PaddleOCR and EasyOCR are printed-text models. On chalk they are close to useless, and
@@ -728,23 +757,25 @@ stay whole, so negated auxiliaries (*"Don't we ...?"*) open questions.
 
 **The answer seed.** Specified as "text *after* the `?`", which contradicts section 3.1: stage 3
 splits *at* terminal punctuation, so a sentence never holds text after its own `?`.
-`answer.same_sentence_seed` still implements the old wording and is dead by construction
-([issue #38](https://github.com/mad201802/QuestXtract/issues/38)); the seed is to be redefined as
-the immediately following sentence at a near-zero gap.
+It is redefined as the immediately following sentence, taken when the silence before it is at
+most `answer_seed_max_gap_seconds` (1.0 s) and it is not itself a question; tags and check-ins
+get no seed ([issue #38](https://github.com/mad201802/QuestXtract/issues/38)). Measured on the
+three reference recordings: about 4 in 5 seeds of labelled content questions are real answers up
+to 1.0 s, falling to about half beyond it.
 
 **Not implemented, and why.** Two paths from the original design have no labelled failure
 behind them yet:
 
-- *Implicit cue, no `?`* (*"the question is whether ..."*). Expected to be the primary path on
-  CS234, where students are off-mic. Measured, it is not: the lecturer's restatement reaches
-  the ASR with its `?` (*"So the question was, ... is if you have good demonstration ...?"*),
-  and the off-mic student questions are not in the transcript at all, so no text rule reaches
-  them.
+- *Implicit cue, no `?`* (*"the question is whether ..."*). Expected on classroom recordings
+  where students are off-mic. A lecturer's restatement usually reaches the ASR with its `?`,
+  and an off-mic student question is not in the transcript at all, so no text rule reaches it.
 - *Missing `?` recovery* (an interrogative head **and** a local answer slot). Whisper `turbo`
   with the punctuation prompt marked every labelled content question that is in the transcript;
-  the 35 `?`-less head-word sentences on the three measured recordings were all statements.
+  the 35 `?`-less head-word sentences on the measured recordings were all statements.
 
-Either lands when a labelled question is lost to it.
+Either lands when a labelled question is lost to it; on the reference recordings the harness
+(7.3) shows one, the `?`-less cut-off *"Can this one be..."*. The rules are follow-up work, not
+part of #12.
 
 ### 7.2 Vetoes
 
@@ -788,24 +819,55 @@ rather than written up front, and deliberately short: they only keep the obvious
 the judge's input. Tags follow the annotation guidelines, which label them `rhetorical`: a
 penalty with a reason code, not a veto.
 
-**Measured.** Both reference recordings, transcribed with the default config, plus one 11-minute
-lecture from the customer's own course (no labels; tag-heavy). A label counts as found when an
-emitted question overlaps it after padding the label by 5 s, because the hand-timed labels sit
-3 to 55 s off the ASR clock; that padding is a stopgap for #12, not the harness's rule (4.2).
+**Measured at #12** with the harness (section 4), default config, `questxtract eval tests/data/`:
 
-| Recording | Before: content found / emitted / candidates | After |
-|---|---|---|
-| MIT 18.100B L1 | 2 of 10 / 10 / 39 | 7 of 10 / 29 / 30 |
-| Stanford CS234 L1 | 5 of 17 / 19 / 67 | 9 of 17 / 40 / 52 |
-| customer lecture | - / 8 / 25 | - / 10 / 12 |
+| Recording | Content labels | TP | FP | FN | Recall | Precision | F1 |
+|---|---|---|---|---|---|---|---|
+| MIT 18.100B L1 | 28 | 28 | 1 | 0 | 1.00 | 0.97 | 0.98 |
+| TTK4225 2026-09-14 | 39 | 33 | 21 | 6 | 0.85 | 0.61 | 0.71 |
+| TTK4225 2026-09-15 | 60 | 52 | 42 | 8 | 0.87 | 0.55 | 0.68 |
+| **Pooled** | 127 | 113 | 64 | 14 | **0.89** | 0.64 | 0.74 |
 
-"Before" lost most questions to the head-word rule: *"So what ...?"* scored 0.60 on the mark
-alone and fell under the emission gate. Of the 11 still missed: 4 are student questions asked
-off-mic, 1 was never transcribed, 2 are detected but sit more than 5 s from their label,
-and 4 were spoken or transcribed as statements (*"So this here is how the ordering interacts
-with addition"*). None is reachable by a text rule on this transcript. Precision is not
-measured here: outside the blind slices the labels are not exhaustive, so an unlabelled
-emission is not necessarily wrong - most are real lecturer questions.
+NFR2 holds with room. `question_mark_rate` is 0.99: Whisper `turbo` with the punctuation prompt
+put a `?` on every labelled content question but one, a cut-off *"Can this one be..."*, so 3.1's
+bet holds on these three. The sweep is flat from 0 to 0.30 (recall 0.99, precision 0.53) and
+from 0.35 to 0.55 (0.89 / 0.64), and empty above 0.55, the unanswered ceiling of 9.2: the gate
+only ever separates `?`-with-head (1.00) from `?`-only (0.60) sentences.
+
+*Missed (14, all TTK4225).* Thirteen have their `?` but no head where 7.1 looks for one, so they
+score 0.33 and fall under the gate. Six put the wh-word at the end as an answer slot - *"And
+this is going to be what?"*, *"The integral of this violet here is going to be what?"*. Three
+carry the head in an earlier comma clause than the last - *"The area of an exponential in time,
+this area here, is it finite, infinite, or you do not know?"*. Two open on a preposition that 7.1's head
+search does not skip (*"For which age are we guaranteed ...?"*), and two were merged by 3.1 with a preceding
+fragment (*"Unit step function, u. Is it absolutely integrable?"*, *"Find z. How do you find
+z?"*). The fourteenth is the `?`-less cut-off above. An end-slot *what* is the obvious next rule.
+
+*False positives (64).* 43 hit `check_in` labels, nearly all this lecturer's own check-in forms
+(*"Do you see it, people?"*, *"How much are we together, people?"*, *"Are they clear?"*) that the
+check-in list, grown from the earlier recordings, does not yet hold. 18 hit `rhetorical` ones:
+concept-free framing (*"So how do we do that?"*, *"What does it mean?"*) and rhetorical
+confirmations (*"Doesn't it go like this?"*). 3 hit `procedural` ones (*"Shall we already watch
+the video of the kid?"*, *"Am I recording?"*). None hit an unlabelled sentence.
+
+The confirmation tags (MIT's *"..., right?"*, TTK4225's *"True?"* and *"Okay?"*, several a
+minute) all stay out: none of the 64 is a tag, so the tag penalty does its job. Growing the
+check-in list with the TTK4225 forms is the cheapest precision win left
+([#70](https://github.com/mad201802/QuestXtract/issues/70)).
+
+*After the answer seed (#38).* An answered question now carries its full score, so confidence is
+graded and the sweep is no longer empty above 0.55:
+
+| Recording | Content labels | TP | FP | FN | Recall | Precision | F1 |
+|---|---|---|---|---|---|---|---|
+| MIT 18.100B L1 | 28 | 28 | 1 | 0 | 1.00 | 0.97 | 0.98 |
+| TTK4225 2026-09-14 | 39 | 34 | 26 | 5 | 0.87 | 0.57 | 0.69 |
+| TTK4225 2026-09-15 | 60 | 59 | 49 | 1 | 0.98 | 0.55 | 0.70 |
+| **Pooled** | 127 | 121 | 76 | 6 | **0.95** | 0.61 | 0.75 |
+
+The sweep holds 0.95 / 0.61 from 0.35 to 0.55, then 0.49 / 0.62 at 0.60 and 0.42 / 0.68 from
+0.65 up. Eight more content questions pass the gate; so do eleven more check-ins, whose next
+sentence the seed takes as an answer because they are missing from the check-in list (#70).
 
 > **Decision.** `questxtract/detect.py`, cue tables inline as module constants.
 
@@ -815,7 +877,8 @@ emission is not necessarily wrong - most are real lecturer questions.
 
 Three channels, composing rather than competing.
 
-**Adjacent seed.** The sentence immediately after the question's own, at a near-zero gap.
+**Adjacent seed.** The sentence immediately after the question's own, at a near-zero gap
+(`answer_seed_max_gap_seconds`, 1.0 s) and not itself a question.
 Distance 0. The Socratic case, and the highest-precision answer shape we have. Was specified as
 "text after the `?` in the question's own sentence", which 3.1's splitter makes impossible; see
 7.1(a) and [issue #38](https://github.com/mad201802/QuestXtract/issues/38).
@@ -842,8 +905,8 @@ needs a signal score of 0.28; distance over 12 needs 2 keywords.
 
 There is **no speaker constraint on pairing**, and not only because we have no speaker layer:
 lectures are full of self-answered questions, and requiring a speaker change would delete the
-single most common QA shape in the corpus - which on CS234 is *the entire shape*, since the
-lecturer both repeats and answers the student's question.
+single most common QA shape in the corpus - which with off-mic students is *the entire shape*,
+since the lecturer both repeats and answers the student's question.
 
 > **Decision.** `questxtract/answer.py`. Three functions called in sequence behind the one
 > `answer` stage entry (section 11.1): swapping the whole search replaces that entry, swapping one
@@ -928,8 +991,8 @@ overlap(A, B) = |tokens(A) & tokens(B)| / min(|tokens(A)|, |tokens(B)|)
 
 Two passes, both only over candidates starting within 90 seconds of each other:
 
-- **Echo pairs.** A student asks and the lecturer restates - on CS234 this is the *normal* case,
-  not an edge case, and both directions get emitted. Detected by answer overlap >= 0.45 plus one
+- **Echo pairs.** A student asks and the lecturer restates - with off-mic students this is the
+  *normal* case, not an edge case, and both directions get emitted. Detected by answer overlap >= 0.45 plus one
   cross pairing (left question vs right answer) >= 0.55. Keep whichever question echoes the other
   less.
 - **Near duplicates.** Question overlap >= 0.72 with answer overlap >= 0.50, or question overlap
@@ -1174,9 +1237,8 @@ correct invalidation by naming the config fields it reads, and a stage that gain
 and forgets to list it is the one bug class this design still has. Keep `uses` next to the
 signature so the two are reviewed together.
 
-`transcribe.json` for both reference recordings will be committed to the repo (section 2.2), which
-is what will let CI run the eval gate in seconds with no ASR and no network. It is not committed
-yet; that lands with #11/#12.
+The reference recording's transcript is committed next to its labels (section 2.2),
+which is what lets CI run the eval gate in seconds with no ASR and no network.
 
 ### 11.3 Progress (FR9)
 
@@ -1201,16 +1263,33 @@ real - the only two stages long enough to need it.
 
 ### 12.1 questions.json
 
-Fixed key set, `null` included, one file:
+Schema 2.0: a fixed key set, `null` included, in one file. The formal description is
+[`questions.schema.json`](../src/questxtract/questions.schema.json), which ships inside the
+package; the tests validate every export shape against it. One entry of each list shown:
 
 ```json
 {
-  "schema_version": "1.1",
+  "schema_version": "2.0",
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
-  "config": {"model_size": "turbo", "language": "en", "judge_model": "gpt-5.6-terra",
-             "vision_model": "gpt-5.6-luna"},
+  "config": {"model_size": "turbo", "language": "en", "min_confidence": 0.4,
+             "judge_model": "gpt-5.6-terra", "vision_model": "gpt-5.6-luna"},
   "stats": {"sentences": 1840, "board_states": 34, "candidates": 61,
             "emitted": 38, "judged": 38, "rejected": 23},
+  "segments": [
+    {"id": 37, "start": 1262.0, "end": 1340.5, "topic": null, "visual_ids": ["v_4c1e09"]}
+  ],
+  "visuals": [
+    {
+      "id": "v_4c1e09",
+      "start": 1240.0,
+      "end": 1402.5,
+      "keyframe_path": ".questxtract/9f2a.../frames/1388.jpg",
+      "description": "two-column comparison of stable and unstable sort passes",
+      "text": "stable: (3,a) (3,b) preserved",
+      "latex": null,
+      "confidence": 0.9
+    }
+  ],
   "questions": [
     {
       "id": "q_0007",
@@ -1223,6 +1302,7 @@ Fixed key set, `null` included, one file:
       "confidence": 0.82,
       "confidence_label": "high",
       "question_type": "why",
+      "source": "audio",
       "answer": {
         "text": "Because the second pass preserves the order of the first.",
         "start": 1291.0,
@@ -1231,32 +1311,55 @@ Fixed key set, `null` included, one file:
       },
       "segment_id": 37,
       "sentence_id": "s_1b88c0",
-      "visual": {
-        "start": 1240.0,
-        "end": 1402.5,
-        "keyframe_path": ".questxtract/9f2a.../frames/1388.jpg",
-        "description": "two-column comparison of stable and unstable sort passes",
-        "text": "stable: (3,a) (3,b) preserved",
-        "latex": null
-      },
+      "visual_ids": ["v_4c1e09"],
       "verdict": "revise",
-      "reasons": ["mark", "wh", "answer_cue", "visual_overlap", "judge_revised"]
+      "reasons": ["mark", "wh", "answer_cue", "visual_overlap", "judge_revised"],
+      "review": {"status": "pending", "text": null, "note": null, "metadata": {}}
     }
   ]
 }
 ```
 
-`original_text` is present whenever the judge revised, `null` otherwise. `answer` is `null` when
-no answer was found. `visual` is `null` when vision was off or nothing overlapped.
+**Shared things are listed once and referenced by id.** `segments` and `visuals` (board states,
+section 6.4) are top-level lists; a question points into them with `segment_id` and
+`visual_ids`, so a board state that ten questions discuss is written once. This is the shape the
+vision milestones grow into without a breaking change: M3's board timeline is the `visuals` list
+in time order, and M4's animations become one more top-level list pointing at visual ids.
+
+- `visual_ids` holds every board state joined to the question's segment; empty when vision is
+  off. `segment_id` is `null` when the question's sentence belongs to no segment.
+- `answer` is `null` when no answer was found. Its `start`/`end` span its own sentences
+  (`sentence_ids`), not the question.
+- `original_text` is present whenever the judge revised, `null` otherwise.
+- `source` says what the question was read from. Only `audio` is produced until M2/M3;
+  `visual` and `combined` are reserved.
+- `topic` on a segment is reserved for topic filtering (#16) and `null` until topics exist.
+- `config.min_confidence` is the threshold the file was cut at.
+
+**Versioning.** `schema_version` is `MAJOR.MINOR`. A minor version only adds keys, so a reader
+must ignore keys it does not know; a major version moves or removes something, and
+`read_questions` refuses a file of another major version. 1.x to 2.0 moved the board state out of
+each question (`visual` became the top-level `visuals` plus `visual_ids`) and added `segments`,
+`source`, `review` and `config.min_confidence`.
 
 Two consumers, two exporters: this file and the eval harness.
 
 ### 12.2 Editing (FR5)
 
 The output JSON is the edit surface, and the editor lives in the wrapper, not in this package.
-The format above is designed so an editor is a thin layer over it, and so that re-running the
-pipeline can merge human edits back by question id - which is why sentence ids are content
-hashes (section 5) rather than indices.
+Each question carries one block that belongs to people, `review`. The pipeline writes its
+defaults and never reads or overwrites it; everything else in the file is regenerated on every
+run.
+
+| `review` field | Meaning |
+|---|---|
+| `status` | `pending` (untouched), `accepted`, `deleted`, or `false_positive` (not a question at all) |
+| `text` | The edited question text; `null` while unedited. The question's own `text` stays the original. |
+| `note` | Free text from the reviewer. |
+| `metadata` | Any extra key-value data, such as a topic tag or a quiz difficulty. |
+
+Merging edits after a re-run (#15) is therefore copying `review` across by question id, which is
+why question and sentence ids are content hashes (section 5) rather than indices.
 
 ### 12.3 quiz.json (generative, separate)
 
@@ -1309,8 +1412,8 @@ claim cannot quietly stop being true.
 **Base:** `faster-whisper`, `numpy`. That is the whole list - `av`, `ctranslate2`, `onnxruntime`,
 `tokenizers`, `huggingface-hub` and `tqdm` arrive transitively through faster-whisper.
 
-**Extras:** `[llm]` -> `openai` (judge and vision, one key, one dependency).
-`[cli]` -> `tqdm` (already transitively present; pinned explicitly for the CLI).
+**Extras:** `[llm]` -> `openai` (judge and vision, one key, one dependency). The CLI needs no
+extra: its progress bar is a few lines of `print` in `cli.py`, not `tqdm`.
 
 **No system binaries.** No ffmpeg, no ffprobe. **No torch**, and therefore no torchvision, no
 triton, no CUDA wheels, no transformers, no pyannote, no speechbrain, no sentence-transformers,
@@ -1339,8 +1442,8 @@ its name, its signature and its `@stage` registration are real; only the algorit
 | Module | Stage | State | Owner |
 |---|---|---|---|
 | `models.py`, `config.py`, `pipeline.py` | the contract itself | done | #6 |
-| `media.py` | 1 ingest | source hash done; `av.open()` probe stubbed | #7 |
-| `transcribe.py` | 2 transcribe | stub; callers seed a transcript and run `STAGES[2:]` | #8 |
+| `media.py` | 1 ingest | done | #7 |
+| `transcribe.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry (`asr.py`) | #8 |
 | `sentences.py` | 3 sentences | done | — |
 | `segments.py` | 4 segments | done | — |
 | `vision.py` | 5 vision, attach_visual | capture stubbed; the interval join is done | M2/M3 |
@@ -1349,8 +1452,8 @@ its name, its signature and its `@stage` registration are real; only the algorit
 | `score.py` | 8 score | confidence only; 9.1 answer scoring and 9.3 dedupe owed | — |
 | `llm.py` | 9 judge | stub, no-ops when disabled | — |
 | `export.py` | 10 export | done | #13 |
-| `evaluate.py` | not a stage | stub | #12, needs the labelled set #11 |
-| `cli.py` | not a stage | `process` works; `eval` and `quiz` exit 1 with a one-line error | #17 |
+| `evaluate.py` | not a stage | done; NFR2 gated in pytest | #12 |
+| `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 with a one-line error | #17 |
 
 Every stub carries a `ponytail:` comment naming the section it owes, so `grep -rn 'ponytail:' src/`
 is the running list of what this document promises and the code does not yet do.

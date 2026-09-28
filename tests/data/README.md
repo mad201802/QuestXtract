@@ -8,15 +8,17 @@ anything — this file only covers structure and naming, not what a label means.
 
 ```
 tests/data/
-  <recording-name>.labels.jsonl   one file per labelled recording
-  README.md                       this file
+  <recording-name>.labels.jsonl       one file per labelled recording
+  <recording-name>.transcript.json    the ASR transcript the labels are timed against
+  README.md                           this file
 ```
 
 One JSONL file per recording. File stem should be a short, stable slug for the recording, e.g.:
 
 ```
 tests/data/mit_18_100b_l1.labels.jsonl
-tests/data/stanford_cs234_l1.labels.jsonl
+tests/data/ttk4225_2026_09_14.labels.jsonl
+tests/data/ttk4225_2026_09_15.labels.jsonl
 ```
 
 Record the source recording's title, uploader, and URL in a comment-style first line is not
@@ -28,22 +30,62 @@ data file.
 | Slug | Recording | URL | Regime |
 |---|---|---|---|
 | `mit_18_100b_l1` | MIT 18.100B Real Analysis, Lecture 1 | https://www.youtube.com/watch?v=BWvjy0a1Ffg | chalkboard, few audible questions |
-| `stanford_cs234_l1` | Stanford CS234 RL, Lecture 1 (2024) | https://www.youtube.com/watch?v=WsvFL-LjA6U | slides + classroom, students off-mic |
+| `ttk4225_2026_09_14` | TTK4225, 2026-09-14, P03·12 — impulse responses and BIBO stability | https://www.youtube.com/watch?v=ufmTACqiE78 | digital tablet notes (OneNote/PDF sheet), heavy Socratic back-and-forth |
+| `ttk4225_2026_09_15` | TTK4225, 2026-09-15, P03·14 — sinusoidal fidelity | https://www.youtube.com/watch?v=IQa2TSykWdc | digital tablet notes (OneNote/PDF sheet), frequent student Q&A |
 
-These are the two calibration recordings the design is built around (architecture.md 1.2) —
-label these first. Additional recordings can be added the same way; add a row here for each.
+These three are the calibration recordings the design is built around (architecture.md 1.2).
+Additional recordings can be added the same way; add a row here for each.
 
-**Current labelling method for these two:** the pipeline has no working seed detector yet
-(`detect.py`'s stage exists, but there's no tool that runs it standalone over a raw
-transcript). Both recordings were transcribed and labelled by hand instead: a labeller
-watched the video, captured candidate timestamps and text while watching, then classified
-each into a `kind` afterward — see `scripts/scratch_to_labels.py` and the workflow note under
-"Adding a new recording" below. This means, strictly, every entry here was found the way the
-blind slice is meant to be found (exhaustive, unassisted), not via the pre-annotation seed
-workflow the guidelines describe as the default. Entries are still tagged `"split": "seed"` /
-`"split": "blind"` per the guidelines' two-window convention so `blind_slice_recall` has
-something defined to compute over, even though the "seed" entries here weren't seed-assisted
-in the literal sense.
+**Transcripts.** `<slug>.transcript.json` is a transcript (`questxtract transcribe`) with the default
+config (faster-whisper `turbo`, punctuation prompt), trimmed to what the pipeline reads: per ASR
+chunk `text`/`start`/`end` and per word `word`/`start`/`end`. Committed so `evaluate.py` runs
+in CI without an ASR run. Re-transcribing changes the word clock, so a new transcript means
+re-snapping the labels (`scratch_to_labels.py --transcript`).
+
+**License.** Transcripts and labels are derived from the recording, so they carry its license,
+not the repository's MIT license: the MIT recording is MIT OpenCourseWare, and
+`mit_18_100b_l1.*` are CC BY-NC-SA 4.0 (attribution: MIT OpenCourseWare, 18.100B Real
+Analysis). The TTK4225 recordings are the lecturer's own, and `ttk4225_*` are committed with
+the lecturer's (Damiano's) permission. Only commit a transcript of a recording whose license
+allows redistributing derivatives; a public YouTube upload alone does not.
+
+**Labelling method** (issue #12, replacing the hand-timed first pass of #11). The full
+transcript of each recording was read sentence by sentence, with no seed detector, and every
+question-shaped utterance got a `kind` per the guidelines, including `?`-less ones. Each entry's
+`text` quotes the transcript verbatim, trimmed to the question, one sentence per entry, and
+`start`/`end` are snapped to its first and last word by `scratch_to_labels.py --transcript`, so
+labels and predictions share one clock. Because the whole recording is labelled from scratch,
+every entry is `"split": "blind"`.
+
+The MIT labels were drafted by an LLM (Claude) from the transcript text and are pending human
+review against the audio; until that review is recorded here, treat their content-vs-rhetorical
+calls as provisional.
+
+**TTK4225 conventions.** The instructor uses a habitual confirmation tag ("True?", "Okay?",
+"...right?") several times a minute. Per `docs/annotation_guidelines.md` section 2, every
+standalone tag or tag closing a statement is labelled `rhetorical`; a "True." the ASR
+transcribed as a statement is not labelled. Bare framing questions that name no concept
+("What am I doing?", "What does it mean?") are `rhetorical`; the same question naming its
+subject ("If I am times 0.5, what am I doing?") is `content`. Prompts with no question mark
+("Yes, no, I do not know.", "Together.", "Discuss.") are not labelled; spoken poll options
+that did get a `?` ("One, two, three, four?") are `check_in`.
+
+Totals: MIT 34 entries (28 content), TTK4225 2026-09-14 114 entries (39 content),
+TTK4225 2026-09-15 166 entries (60 content).
+
+**The ground truth is the transcript, not the audio.** A question that never reached the
+transcript cannot be found by any text rule, so it is not labelled. Entries of the #11
+hand-labelled pass that are therefore gone:
+
+| Recording | Old label | Why dropped |
+|---|---|---|
+| MIT | 1046 s "...this is equal to another quotient, right?" (rhetorical) | transcribed as a statement, no tag |
+| MIT | 3363 s "...how do the ordering interacts with addition?" (content) | transcribed as a statement: "this here is how the ordering interacts with addition" |
+| MIT | 3375 s "...how do it act interacts with multiplication?" (content) | same sentence, same reason |
+
+Every other old label is in the new files, re-timed. The #11 TTK4225 labels were hand-timed
+up to several minutes off: 2026-09-14's "Is h of t absolutely integrable?", noted at 424 s, is
+spoken at 712 s.
 
 ## Schema
 
@@ -84,7 +126,7 @@ set, in the sense that it was not generated by anything the detector itself cont
 ## Validating a file before committing it
 
 ```bash
-uv run python scripts/validate_labels.py tests/data/mit_18_100b_l1.labels.jsonl
+uv run python scripts/validate_labels.py tests/data/ttk4225_2026_09_14.labels.jsonl
 # or, everything at once:
 uv run python scripts/validate_labels.py tests/data/
 ```
@@ -99,18 +141,16 @@ catches actual labelling mistakes.
 
 1. Pick a public lecture recording (YouTube URL is fine — the video itself is never committed,
    only the labels).
-2. Get a transcript with timestamps. Watch (or listen) while jotting candidate timestamp +
-   question text as you go; classify each into a `kind` afterward. See
-   `scripts/scratch_to_labels.py --help` for the plain-text scratch format this converts into
-   JSONL. (Once a standalone seed-detector tool exists over `detect.py`'s rules, that becomes
-   the faster first pass per `docs/annotation_guidelines.md` section 5 — until then, this
-   manual capture-then-classify method is the practical equivalent.)
+2. Transcribe it (`questxtract transcribe <recording>.mp4`), trim it like the committed ones and save it as
+   `<slug>.transcript.json`. Read the transcript and note each question-shaped utterance as
+   `start | verbatim transcript quote | kind` (`scripts/scratch_to_labels.py --help`); pass
+   `--transcript` so the times come from the transcript's words, not from typing.
 3. Label every candidate per `docs/annotation_guidelines.md` section 2-4. In particular, note
    section 2's rule for habitual confirmation tags ("...right?", "...true?") — some
    instructors use these constantly; decide once and apply consistently through the whole
    recording rather than re-deciding per instance.
 4. Pick two 10-minute windows, label them exhaustively (every candidate, not just obvious
    ones), tag those entries `"split": "blind"` via `scratch_to_labels.py --blind START END`.
-5. Run the validator (below). Fix anything it flags.
+5. Run the validator (above). Fix anything it flags.
 6. Add a row to the table in this file with the recording's slug, title and URL.
 7. Commit the `.labels.jsonl` file and this README's updated table together.

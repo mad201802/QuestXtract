@@ -31,24 +31,39 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   heuristic is still there, now over `Sentence` rather than `TranscriptSegment`.
 - CLI takes a subcommand: `questxtract transcript.json` → `questxtract process transcript.json`.
   `--threshold` now gates the final confidence (architecture.md 9.2), not the raw detection score.
+- `questxtract process` writes to a file next to its input (`lecture.questions.json`) instead of
+  stdout. Pass `-o -` for the old behaviour.
 - `AsrBackend.transcribe` takes a third argument, `on_progress: Callable[[float], None] | None`.
   An out-of-tree backend must accept it, even if it ignores it. It is called with fractions in
   `[0, 1)` only: the caller, never the backend, decides when the stage is finished.
 - Export `schema_version` 1.0 → 1.1: every question object carries `start_hms` and `end_hms`
   alongside `start`/`end`. Added keys only, so a 1.0 consumer still reads a 1.1 file.
+- Export `schema_version` 1.1 → 2.0 (#13). Board states move out of each question into a
+  top-level `visuals` list, referenced by `visual_ids` (every overlapping state, not only the
+  first). A top-level `segments` list (id, span, a reserved `topic`, `visual_ids`) makes
+  `segment_id` resolvable. Every question gains `source` and a `review` block that belongs to
+  people; `config` gains `min_confidence`. `read_questions` refuses another major version.
 - `Config.max_question_chars` 220 → 350 and `Config.batch_size` 8 → 4 (architecture.md 2.2, 7.3);
   both are untuned experiments against real lecture audio, revisited once #11's labelled set
   exists. `batch_size` is part of the transcribe cache key, so the change re-transcribes once.
 
 ### Added
 
+- `questions.schema.json`, the formal JSON Schema of `questions.json` 2.x, ships inside the
+  package; the tests validate every export shape against it (#13). `VisualContext.id` gives a
+  board state a stable id derived from its lifetime and keyframe.
 - Automatic releases (#45): pushing a tag `vX.Y.Z` publishes the package to PyPI and creates the GitHub Release with the matching CHANGELOG section as notes. `scripts/release_notes.py` fails the release first if the tag, `pyproject.toml` and `CHANGELOG.md` disagree.
 - A terminal progress bar on stderr, one redrawn line per stage, rendered by the CLI from the
   existing `Progress` callback (#14). The transcribe stage reports inside itself, per decoded
   word, through the backend's `on_progress`.
-- `scripts/`: `transcribe.py` and `extract_questions.py` run a raw recording end to end until
-  the CLI accepts one (#17); `dropped_questions.py` writes the candidates the threshold dropped
-  next to the ones it kept, for inspecting false negatives.
+- `questxtract process lecture.mp4` runs every stage on a recording; a `.json` input still skips
+  transcription (#17). `questxtract transcribe lecture.mp4` writes the transcript only, sharing
+  the transcribe cache with `process`. `-m/--model` picks the Whisper model. Bad inputs fail
+  with one `error:` line before anything slow runs; Ctrl+C exits 130. Documented in
+  [docs/cli.md](docs/cli.md).
+- `Transcript.to_dict()`, the inverse of `from_dict`.
+- `scripts/dropped_questions.py` writes the candidates the threshold dropped next to the ones it
+  kept, for inspecting false negatives.
 
 - The stage contract: `@stage(name, cache=..., uses=...)`, the `STAGES` list, `run(ctx, stages=)`
   and `process()`. Passing a different `stages=` list is the entire plugin system.
@@ -63,8 +78,18 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   none, so downstream stages always have a word list to slice.
 - Sentence rebuilding (`sentences.py`) with word-index snapping and force-split at the widest
   internal gap, and structural segmentation (`segments.py`) on gap, duration and length.
-- `questxtract eval` and `questxtract quiz` subcommands, which exit 1 with a one-line error until
-  `evaluate.py` (#12) and the generative stage land.
+- `questxtract quiz` subcommand, which exits 1 with a one-line error until the generative stage
+  lands.
+- The evaluation harness (#12): `questxtract eval <dir|file>...` scores the pipeline against
+  every `*.labels.jsonl` that has a `*.transcript.json` beside it - content recall, precision,
+  f1, false positives by label kind, `question_mark_rate`, `blind_slice_recall`, a sweep over
+  `min_confidence`, and every missed question and false positive. `--json` for machines.
+  Matching is one-to-one by time overlap. `tests/test_evaluate.py` gates NFR2 (pooled recall
+  >= 0.50) in CI; today it is 0.89, precision 0.64.
+- `tests/data/<slug>.transcript.json` for the reference recordings, and exhaustive,
+  transcript-anchored labels replacing the hand-timed #11 set (127 content questions, 314
+  entries). `scripts/scratch_to_labels.py --transcript` snaps a label's times to the words it
+  quotes.
 - Optional `questxtract[llm]` extra for the judge and vision calls, imported inside the functions
   so the base install stays stdlib-only.
 - `tests/test_pipeline.py` asserts that `STAGES` matches the stage order architecture.md 1.3
@@ -76,18 +101,31 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
   punctuation. The standing proxy for architecture.md 3.1's punctuation bet until
   `question_mark_rate` lands with #12. Exported in the `stats` block; no schema change.
 - `Segment.close_reason` (`gap`, `duration`, `chars`, or `end` for the last one) and
-  `stats["segments_closed_gap" | "_duration" | "_chars"]`: which rule is actually doing the
-  cutting. On the three labelled recordings a pause closes 95-98% of segments, so the
-  thresholds are kept (architecture.md 3.2). Exported in the `stats` block; no schema change.
+  `stats["segments_closed_gap" | "_duration" | "_chars"]`. The segment thresholds are untuned
+  against a real recording and 3.1's force-split changed the sentence stream underneath them;
+  this is what says which rule is actually doing the cutting. Exported in the `stats` block;
+  no schema change.
+- Reference recordings (#33): two TTK4225 lectures (2026-09-14 P03·12, 2026-09-15 P03·14)
+  join MIT 18.100B, each labelled from its committed transcript per
+  `docs/annotation_guidelines.md` (114 and 166 entries, every one blind). Ground truth for the
+  NFR2 recall gate in `evaluate.py` (#12).
 
 ### Fixed
 
+- The same-sentence answer seed never fired: it looked for text after the `?` in the question's
+  own sentence, and stage 3 splits at the `?` (#38). It is now the adjacent seed, the next
+  sentence across at most `answer_seed_max_gap_seconds` (1.0 s), not itself a question, and never
+  for tags or check-ins. Its reason code stays `intra_sentence_qa`. An answered question's
+  confidence rises from 0.55 x score to 1.0 x score. Pooled recall at the default gate goes
+  from 0.89 to 0.95 and precision from 0.64 to 0.61 (architecture.md 7.3, #70).
+- An answer's `start`/`end` in `questions.json` span its own sentences; they repeated the
+  question's span (#13).
 - Question detection only looked at a sentence's first word, so "So what ...?", "Then how ...?"
   and "If you have the data, does that mean ...?" scored on the `?` alone (0.60), which the
   unanswered confidence (0.55 x score) put under the 0.40 emission gate. The head is now found
   past discourse markers and, for a `?` sentence, in its last comma clause; negated auxiliaries
   count and `any` no longer does. On the reference recordings content questions found went from
-  2/10 to 7/10 (MIT 18.100B) and 5/17 to 9/17 (CS234), architecture.md 7.3.
+  2/10 to 7/10 (MIT 18.100B), architecture.md 7.3.
 - Confirmation tags ("Okay?", "True, you see?", "..., right?") scored like real questions, and
   check-ins ("Is that clear?") above them. New reasons `tag` and `check_in` (-0.40 each) keep
   tags out of the candidates and check-ins out of the emitted questions.

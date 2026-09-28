@@ -19,6 +19,13 @@ watching a video rather than carefully formatted.
   since exact end timing rarely matters for the phrase-level recall metric. Adjust by hand
   in the output JSONL afterward if a particular span badly needs a tighter/looser end time.
 
+Snapping to a transcript: pass `--transcript PATH` and the middle field must quote the
+transcript verbatim (case and punctuation ignored). The quote is located in the transcript's
+word stream, nearest the noted start where it occurs more than once, and `start`/`end` are
+set from its first and last word. The noted start then only needs to be roughly right, and
+the label sits on the same clock `evaluate.py` matches predictions on. A quote that is not in
+the transcript is an error, not a silent fallback to the hand-typed time.
+
 Blind-slice windows: pass `--blind START END` (seconds, repeatable) for each 10-minute
 window that should be exhaustively-labelled per the guidelines. Any entry whose start falls
 inside one of those windows is tagged `"split": "blind"`; everything else defaults to
@@ -27,15 +34,21 @@ inside one of those windows is tagged `"split": "blind"`; everything else defaul
 Usage:
     uv run python scripts/scratch_to_labels.py notes.txt \
         -o tests/data/mit_18_100b_l1.labels.jsonl --blind 300 900 --blind 3600 4200
+    uv run python scripts/scratch_to_labels.py notes.txt -o out.labels.jsonl \
+        --transcript tests/data/mit_18_100b_l1.transcript.json
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+
+from questxtract.cli import _load_transcript
+from questxtract.models import Word
 
 _VALID_KINDS = frozenset({"content", "rhetorical", "check_in", "procedural"})
 
@@ -96,6 +109,32 @@ def convert(
     return sorted(records, key=lambda r: r["start"])
 
 
+def _tokens(text: str) -> list[str]:
+    return re.findall(r"\w+", text.casefold().replace("\u2019", "'"))
+
+
+def snap(records: list[dict], words: Sequence[Word]) -> list[dict]:
+    """Set each record's ``start``/``end`` from the transcript words its ``text`` quotes.
+
+    Raises:
+        ValueError: If a record's text does not occur in ``words``.
+
+    """
+    stream = [(tok, i) for i, w in enumerate(words) for tok in _tokens(w.text)]
+    tokens = [tok for tok, _ in stream]
+    for record in records:
+        quote = _tokens(record["text"])
+        hits = [
+            j for j in range(len(tokens) - len(quote) + 1) if tokens[j : j + len(quote)] == quote
+        ]
+        if not quote or not hits:
+            raise ValueError(f"not in the transcript: {record['text']!r}")
+        best = min(hits, key=lambda j: abs(words[stream[j][1]].start - record["start"]))
+        record["start"] = words[stream[best][1]].start
+        record["end"] = words[stream[best + len(quote) - 1][1]].end
+    return sorted(records, key=lambda r: r["start"])
+
+
 def _in_any_window(start: float, windows: Sequence[tuple[float, float]]) -> bool:
     return any(lo <= start <= hi for lo, hi in windows)
 
@@ -120,6 +159,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=[],
         help="a blind-slice window in seconds, e.g. --blind 300 900. Repeatable.",
     )
+    parser.add_argument(
+        "--transcript", help="snap start/end to this transcript's words (text must quote it)"
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -132,7 +174,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         records = convert(
             lines, default_duration=args.duration, blind_windows=[tuple(w) for w in args.blind]
         )
-    except ValueError as exc:
+        if args.transcript:
+            records = snap(records, _load_transcript(args.transcript).words)
+    except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 

@@ -1,6 +1,30 @@
 import pytest
 
-from questxtract import QAPair, QuestionCandidate, SchemaError, Sentence, Transcript, Word
+from questxtract import (
+    QAPair,
+    QuestionCandidate,
+    SchemaError,
+    Sentence,
+    Transcript,
+    VisualContext,
+    Word,
+)
+
+
+def test_visual_context_id_is_stable_and_survives_a_new_caption():
+    board = VisualContext(start=0.0, end=5.0, keyframe_path="frames/1.jpg")
+    recaptioned = VisualContext(start=0.0, end=5.0, keyframe_path="frames/1.jpg", description="x")
+    assert board.id == recaptioned.id and board.id.startswith("v_")
+    assert board.id != VisualContext(start=5.0, end=9.0, keyframe_path="frames/2.jpg").id
+
+
+def test_transcript_to_dict_round_trips_through_from_dict(transcript):
+    """What `questxtract transcribe` writes, `questxtract process` reads back unchanged."""
+    chunked = Transcript.from_dict(
+        {"segments": [{"text": "What is it?", "start": 1.0, "end": 2.0, "avg_logprob": -0.3}]}
+    )
+    for original in (transcript, chunked):
+        assert Transcript.from_dict(original.to_dict()) == original
 
 
 def test_reads_whisper_style_words():
