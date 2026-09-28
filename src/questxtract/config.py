@@ -1,4 +1,4 @@
-"""Every pipeline setting in one flat frozen record (pipeline.md 11.1).
+"""Every pipeline setting in one flat frozen record (architecture.md 11.1).
 
 Flat, not nested: that is what lets a stage's ``uses=(...)`` be a tuple of names rather
 than a path expression. Stages read config only through ``ctx.config``; nothing else in

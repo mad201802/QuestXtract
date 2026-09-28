@@ -1,4 +1,4 @@
-"""Core data types for QuestXtract (pipeline.md section 5).
+"""Core data types for QuestXtract (architecture.md section 5).
 
 ``Context`` is the one mutable object in the system: the value every stage takes and
 returns. Everything else is a frozen, keyword-only dataclass.
@@ -14,7 +14,7 @@ from typing import Any, TypeVar
 
 from .config import Config  # imported for real: the cache resolves Context's annotations
 
-#: Stage name plus fraction complete (pipeline.md 11.3).
+#: Stage name plus fraction complete (architecture.md 11.3).
 Progress = Callable[[str, float], None]
 
 #: Every stage has this signature. That sameness is the whole extension mechanism.
@@ -63,9 +63,9 @@ class Word:
 class AsrSegment:
     """A raw ASR decoding chunk, as emitted by the engine.
 
-    Not a :class:`Segment`: that is a run of sentences (pipeline.md 3.2). This is the
+    Not a :class:`Segment`: that is a run of sentences (architecture.md 3.2). This is the
     engine's own chunking, kept only for its quality metrics, which are the cheapest
-    hallucination detector available and which the eval harness reads (pipeline.md 2.2).
+    hallucination detector available and which the eval harness reads (architecture.md 2.2).
 
     Args:
         text: The transcribed text of the chunk.
@@ -104,7 +104,7 @@ class AsrSegment:
 class Transcript:
     """The output of stage 2: timed words plus the engine's own chunking.
 
-    Words are the atomic unit (pipeline.md 2.5); every later timing is a slice of
+    Words are the atomic unit (architecture.md 2.5); every later timing is a slice of
     ``words``, never an interpolation.
 
     Args:
@@ -222,7 +222,7 @@ class Sentence:
 
 @dataclass(frozen=True, kw_only=True)
 class Segment:
-    """A contiguous run of sentences, bounded by silence and by length (pipeline.md 3.2).
+    """A contiguous run of sentences, bounded by silence and by length (architecture.md 3.2).
 
     Structural, not topical: nothing measures what the run is about. Distinct from
     :class:`AsrSegment`, which is the engine's own decoding chunk.
@@ -250,7 +250,7 @@ class Segment:
 
 @dataclass(frozen=True, kw_only=True)
 class VisualContext:
-    """What the board showed over one board-state lifetime (pipeline.md 6.4).
+    """What the board showed over one board-state lifetime (architecture.md 6.4).
 
     The lifetime is the board state's own, not a segment's span: the lecturer writes for
     two minutes and talks about it for six.
@@ -283,7 +283,7 @@ class VisualContext:
 
 @dataclass(frozen=True, kw_only=True)
 class QuestionCandidate:
-    """A sentence that detection believes is a question (pipeline.md 7).
+    """A sentence that detection believes is a question (architecture.md 7).
 
     Args:
         sentence_id: Id of the :class:`Sentence` it came from.
@@ -309,7 +309,7 @@ class QAPair:
         question: The candidate this pair was built from.
         answer_sentence_ids: Sentences the answer span covers; empty when none was found.
         answer_text: The answer span's text; empty when none was found.
-        confidence: Combined confidence in ``[0, 1]`` (pipeline.md 9.2).
+        confidence: Combined confidence in ``[0, 1]`` (architecture.md 9.2).
         start: Question start in seconds, the FR7 timestamp.
         end: Question end in seconds.
         verdict: ``unjudged``, ``keep``, ``revise`` or ``reject``.
@@ -335,7 +335,7 @@ class QAPair:
 
 @dataclass
 class Context:
-    """The value every stage takes and returns (pipeline.md 11.1).
+    """The value every stage takes and returns (architecture.md 11.1).
 
     A stage reads what earlier stages produced and sets its own field. If a stage needs
     something an earlier stage did not produce, it fails on the spot with a ``None``.
@@ -368,13 +368,13 @@ def stage(name: str, *, cache: str | None = None, uses: tuple[str, ...] = ()) ->
     """Tag a function as a pipeline stage.
 
     Lives here rather than in ``pipeline`` so the stage modules can import it without a
-    cycle; ``questxtract.pipeline`` re-exports it, which is where pipeline.md 11.1 puts it.
+    cycle; ``questxtract.pipeline`` re-exports it, which is where architecture.md 11.1 puts it.
 
     Args:
         name: The stage name, used for progress reporting and the cache file.
         cache: The ``Context`` field this stage produces, cached as ``<name>.json``.
             ``None`` means always recompute.
-        uses: ``Config`` field names whose values form the cache header (pipeline.md 11.2).
+        uses: ``Config`` field names whose values form the cache header (architecture.md 11.2).
             Keep this next to the signature: a stage that gains a config field and forgets
             to list it here is the one invalidation bug this design still has.
 

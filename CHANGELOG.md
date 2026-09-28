@@ -5,9 +5,10 @@
 The package is restructured around the pipeline described in
 [docs/architecture.md](docs/architecture.md), which is now the design of record. The package-per-stage
 layout introduced earlier in this cycle is reversed: the `Context -> Context` stage contract, not
-the directory, is the unit of ownership and replacement. `docs/architecture.md` is deleted, its
-still-current content folded into architecture.md sections 13.1, 13.3 and 14;
-`docs/design_decisions.md` keeps the decision history and records the reversal in D1 and D2.
+the directory, is the unit of ownership and replacement. The earlier architecture document that
+described that layout is gone; its still-current content lives in architecture.md sections 13.1,
+13.3 and 14. `docs/design_decisions.md` keeps the decision history and records the reversal in D1
+and D2.
 
 ### Changed (breaking)
 

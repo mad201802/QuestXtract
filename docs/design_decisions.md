@@ -6,11 +6,12 @@ alternatives we rejected, and what an independent review changed. Each section n
 report chapter it feeds (numbering follows the TDT4290 compendium's suggested structure).
 
 > **One decision was later reversed.** The M1 foundation shipped a package-per-stage layout
-> (`video/ audio/ detection/ models/ output/`) described in a companion `architecture.md`.
-> `docs/architecture.md` then superseded both: the stage contract, not the directory, became the
-> unit of ownership and replacement, and `architecture.md` was deleted into architecture.md
-> sections 13.1, 13.3 and 14. **D1** and **D2** below record that reversal rather than hiding
-> it — the rejected alternative is kept, because the argument is the part worth reporting.
+> (`video/ audio/ detection/ models/ output/`) described in an earlier architecture document.
+> The pipeline document, today's [architecture.md](architecture.md), then superseded it: the
+> stage contract, not the directory, became the unit of ownership and replacement, and the
+> earlier document was folded into architecture.md sections 13.1, 13.3 and 14. **D1** and **D2**
+> below record that reversal rather than hiding it: the rejected alternative is kept, because the
+> argument is the part worth reporting.
 
 ## 1. Drivers (→ report ch. 4 pre-study, ch. 6 requirements)
 

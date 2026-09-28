@@ -4,7 +4,7 @@ ASR segments are not sentences: the engine emits chunks bounded by its decoding 
 and by silence, so one chunk routinely holds two questions or half of one. Detection
 needs units that read on their own.
 
-We attack the input rather than the output (pipeline.md 3.1): a ``turbo``-sized Whisper
+We attack the input rather than the output (architecture.md 3.1): a ``turbo``-sized Whisper
 punctuates well, and a punctuated transcript splits on its terminal punctuation. One walk
 over the word list asks each word whether it ends a sentence, so the boundaries are word
 indices already and a sentence's timings are real measurements, never interpolations.
@@ -63,7 +63,7 @@ def split_sentences(
 def _boundaries(words: tuple[Word, ...]) -> list[tuple[int, int]]:
     r"""Return half-open word ranges, one per sentence, from terminal punctuation.
 
-    Equivalent to pipeline.md 3.1's ``(?<=[.!?])\s+`` split followed by snapping the
+    Equivalent to architecture.md 3.1's ``(?<=[.!?])\s+`` split followed by snapping the
     character offsets back to word indices, done in one walk instead of two, with the
     abbreviations and initials that regex cannot tell from a full stop held back.
     """
@@ -83,7 +83,7 @@ def _force_split(
 ) -> list[tuple[int, int]]:
     """Split a run-on at its silences, then cap whatever is still over-long.
 
-    The one case the regex genuinely cannot see (pipeline.md 3.1). A span that both ends
+    The one case the regex genuinely cannot see (architecture.md 3.1). A span that both ends
     in real terminal punctuation and fits in ``max_words`` is a sentence and is left
     alone - lecturers pause mid-sentence at the board constantly, so silence on its own
     is not a boundary. Anything else is a run-on the ASR failed to punctuate, and there
@@ -137,7 +137,7 @@ def sentences(ctx: Context) -> Context:
         min_gap=ctx.config.force_split_min_gap_seconds,
     )
     ctx.stats["sentences"] = len(ctx.sentences)
-    # The stage's stated risk (pipeline.md 3.1) is that Whisper stops emitting punctuation.
+    # The stage's stated risk (architecture.md 3.1) is that Whisper stops emitting punctuation.
     # question_mark_rate polices it properly, but that lives in evaluate.py (#12). Until
     # then this is the standing proxy: a run that climbs means the regex is guessing.
     ctx.stats["sentences_unpunctuated"] = sum(1 for s in ctx.sentences if not _is_terminal(s.text))

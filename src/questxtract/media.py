@@ -1,8 +1,8 @@
 """Stage 1: validate the source, probe the container, hash it for the cache key.
 
 PyAV bundles the FFmpeg libraries, so this is not a subprocess and there is nothing for
-the user to install. There is no separate audio-extraction stage: stage 2 hands the
-container straight to the decoder (pipeline.md 2.1).
+the user to install. There is no separate audio-extraction stage: the ASR backend calls
+:func:`extract_audio` for a temporary WAV (architecture.md 2.1).
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ def _write_wav(
 def source_hash(path: Path) -> str:
     """Content hash of a media file: first and last 8 MiB plus the file size.
 
-    This is the cache key every later stage is filed under (pipeline.md 2.1).
+    This is the cache key every later stage is filed under (architecture.md 2.1).
     """
     size = path.stat().st_size
     digest = hashlib.sha256(str(size).encode())

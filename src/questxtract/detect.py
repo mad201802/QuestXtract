@@ -2,7 +2,7 @@
 
 Purely lexical and orthographic. No classifier, no prosody. Every decision leaves a reason
 code, which is what makes both the review workflow and the LLM judge's job possible
-(pipeline.md 7).
+(architecture.md 7).
 
 Sentences are only extracted, never invented: every candidate's text is a span of the
 transcript.
@@ -215,7 +215,7 @@ def detect_questions(
     Args:
         sentences: The transcript's sentences, in recording order.
         threshold: Minimum score for a sentence to be reported.
-        max_chars: A sentence longer than this is rejected outright (pipeline.md 7.3).
+        max_chars: A sentence longer than this is rejected outright (architecture.md 7.3).
 
     Returns:
         The candidates, in recording order.

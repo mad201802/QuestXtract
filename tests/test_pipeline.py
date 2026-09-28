@@ -8,7 +8,7 @@ from questxtract.pipeline import stage_info
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "questxtract"
 
-# pipeline.md 1.3, rows 1 to 9, plus the vision/attach_visual split noted in 11.1 rule 4.
+# architecture.md 1.3, rows 1 to 9, plus the vision/attach_visual split noted in 11.1 rule 4.
 DOC_ORDER = [
     "ingest",
     "transcribe",
@@ -28,7 +28,7 @@ def test_stages_match_the_documented_order():
 
 
 def test_grep_at_stage_returns_the_contents_of_stages():
-    """pipeline.md 13.1 makes this claim about the code; assert it rather than trust it."""
+    """architecture.md 13.1 makes this claim about the code; assert it rather than trust it."""
     names = [
         m
         for path in sorted(SRC.glob("*.py"))
@@ -39,7 +39,7 @@ def test_grep_at_stage_returns_the_contents_of_stages():
 
 
 def test_run_accepts_a_custom_stage_list(context):
-    """The `stages=` keyword is the entire plugin system (pipeline.md 11.1)."""
+    """The `stages=` keyword is the entire plugin system (architecture.md 11.1)."""
 
     @stage("shout")
     def shout(ctx: Context) -> Context:
@@ -67,7 +67,7 @@ def test_undecorated_functions_are_rejected(context):
 
 
 def test_optional_stages_no_op_themselves(context):
-    """pipeline.md 11.1 rule 3: the runner stays dumb."""
+    """architecture.md 11.1 rule 3: the runner stays dumb."""
     from questxtract.llm import judge
     from questxtract.vision import vision
 

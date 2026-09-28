@@ -5,8 +5,9 @@ Export is not a stage: it runs on the finished ``Context``.
 One rule governs the shape: **do not drop ``None`` on serialisation.** A fixed key set is
 emitted, always, ``null`` included, so consumers never have to defensively ``.get()`` a
 missing ``answer``. Segments and board states are listed once and referenced by id. The
-format is also the edit surface (FR5): ``review`` is the one block people own, and a re-run
-merges it back by question id (#15). Formal description: ``questions.schema.json``.
+format is also the edit surface (FR5): ``review`` is the one block people own. A re-run does
+not carry those edits over yet; merging them back by question id is #15. Formal description:
+``questions.schema.json``.
 """
 
 from __future__ import annotations

@@ -6,7 +6,7 @@ The default ``Config`` makes zero outbound calls.
 The hard constraint from the requirements (4.5, "the model shall not create questions on
 their own"): the judge may reject, rescope or rewrite a candidate, and it must cite the
 sentence ids it is working from. It may never add one. Quiz generation is generative and
-lives in a separate, separately named stage (pipeline.md 12.3), so the boundary is visible
+lives in a separate, separately named stage (architecture.md 12.3), so the boundary is visible
 in the code and in the output, not only in a prompt.
 """
 
@@ -38,7 +38,7 @@ def client(config: Config) -> Any:
     return OpenAI(api_key=config.api_key or "local", base_url=config.base_url)
 
 
-# ponytail: no `cache=` yet. Pipeline.md 10.4 keys the judge's entry on the *candidate set*
+# ponytail: no `cache=` yet. architecture.md 10.4 keys the judge's entry on the *candidate set*
 # hash, which the config-only `uses` header cannot express; caching on the source hash alone
 # would replay a stale verdict after detection changed. Wire both together in one change.
 @stage("judge", uses=("judge_model", "judge_max_candidates", "timeout_seconds"))
@@ -47,10 +47,10 @@ def judge(ctx: Context) -> Context:
 
     A no-op unless ``config.judge_enabled``. The judge is never required: a timeout, a rate
     limit, a malformed response or a missing key logs a warning, marks every candidate
-    ``unjudged``, and the run completes on rule scores alone (pipeline.md 10.3).
+    ``unjudged``, and the run completes on rule scores alone (architecture.md 10.3).
     """
     if not ctx.config.judge_enabled:
         return ctx
     # ponytail: one batched call, id-set validation, sentence-id citation check and the
-    # confidence band of pipeline.md 10.2-10.4.
+    # confidence band of architecture.md 10.2-10.4.
     raise NotImplementedError("judge: the LLM review pass is not wired up yet")

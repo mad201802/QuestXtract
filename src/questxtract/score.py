@@ -1,7 +1,7 @@
 """Stage 8: rank, score and dedupe.
 
 One number the user can reason about (FR10), plus a judge verdict. No parallel quality
-score, no risk band, no profile-scoped emission gates (pipeline.md 9.2).
+score, no risk band, no profile-scoped emission gates (architecture.md 9.2).
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ _ANSWER_WEIGHT = 0.45
 
 
 def confidence_label(confidence: float) -> str:
-    """Bucket a confidence into ``high``, ``medium`` or ``low`` (pipeline.md 9.2)."""
+    """Bucket a confidence into ``high``, ``medium`` or ``low`` (architecture.md 9.2)."""
     if confidence >= 0.75:
         return "high"
     return "medium" if confidence >= 0.45 else "low"
@@ -30,7 +30,7 @@ def score_pairs(pairs: Sequence[QAPair], *, min_confidence: float = 0.40) -> tup
     """
     out: list[QAPair] = []
     for pair in pairs:
-        # ponytail: answer scoring is the full additive table in pipeline.md 9.1; until it
+        # ponytail: answer scoring is the full additive table in architecture.md 9.1; until it
         # exists an answer contributes nothing and only the question score carries.
         confidence = _QUESTION_WEIGHT * pair.question.score
         if pair.answer_text:
@@ -58,7 +58,7 @@ def _rescored(pair: QAPair, confidence: float) -> QAPair:
 @stage("score")
 def score(ctx: Context) -> Context:
     """Score and filter ``ctx.pairs``."""
-    # ponytail: dedupe (echo pairs, near duplicates) is pipeline.md 9.3; it needs the answer
+    # ponytail: dedupe (echo pairs, near duplicates) is architecture.md 9.3; it needs the answer
     # scoring above it to decide which of two overlapping pairs to keep.
     ctx.pairs = score_pairs(ctx.pairs, min_confidence=ctx.config.min_confidence)
     ctx.stats["emitted"] = len(ctx.pairs)

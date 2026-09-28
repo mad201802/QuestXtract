@@ -1,10 +1,9 @@
 """Stage 7: find the answer span for each question candidate.
 
-Three channels composing rather than competing (pipeline.md 8): the same-sentence seed,
-the forward window and the far-window rescue. Only the first is implemented; the other two
-land with the solution-extraction work.
+Three channels composing rather than competing (architecture.md 8): the adjacent seed, the
+forward window and the far-window rescue. Only the adjacent seed is implemented.
 
-A question with no answer is still a result. Pipeline.md 9.2 is explicit: FR6 and FR7 ask
+A question with no answer is still a result. architecture.md 9.2 is explicit: FR6 and FR7 ask
 for questions with timestamps, not for answered questions.
 """
 
@@ -73,7 +72,7 @@ def pair_answers(
 @stage("answer")
 def answer(ctx: Context) -> Context:
     """Pair each candidate in ``ctx.candidates`` with an answer span into ``ctx.pairs``."""
-    # ponytail: forward window + far-window rescue, pipeline.md 8. Swapping the whole search
+    # ponytail: forward window + far-window rescue, architecture.md 8. Swapping the whole search
     # replaces this stage entry; swapping one channel is an edit inside this module.
     ctx.pairs = pair_answers(
         ctx.candidates, ctx.sentences, max_seed_gap=ctx.config.answer_seed_max_gap_seconds

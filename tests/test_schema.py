@@ -130,7 +130,7 @@ def test_from_dict_wrong_type_raises() -> None:
 
 
 def test_question_is_immutable() -> None:
-    """Frozen, matching every other type in models.py (pipeline.md 5, D3)."""
+    """Frozen, matching every other type in models.py (architecture.md 5, D3)."""
     q = Question(question="x?", start=0.0, end=1.0, confidence=0.5)
     with pytest.raises(AttributeError):
         q.confidence = 0.9  # type: ignore[misc]

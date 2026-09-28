@@ -1,6 +1,6 @@
 """Stage 4: group sentences into segments bounded by silence and by length.
 
-One mode, structural (pipeline.md 3.2). A segment is **not** a topic: nothing here measures
+One mode, structural (architecture.md 3.2). A segment is **not** a topic: nothing here measures
 what a run is about, and the only consumer that works today - the visual join in 6.5 - wants
 a time interval, not a topic. The one that would want topicality, FR11's filter, is unbuilt
 (the QA scoring's segment-relation term was dropped, 9.1), and neither this stage nor a

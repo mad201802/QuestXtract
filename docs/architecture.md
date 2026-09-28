@@ -56,7 +56,7 @@ Two consequences that show up repeatedly below:
 ### 1.3 Stage order
 
 ```
-                    video or audio file
+                      .mp4 recording
                               |
   1 ingest                    |  validate, probe via PyAV, hash for cache key
                               v
@@ -122,10 +122,10 @@ to install. That matters for NFR1 (Linux, macOS **and Windows**): "install ffmpe
 PATH" is the single most common install failure in this class of tool, and we do not have that
 step.
 
-There is no separate audio-extraction stage. `faster_whisper.audio.decode_audio` opens any
-container PyAV can read and resamples to 16 kHz mono float32 in process, so `lecture.mp4` goes
-straight to `model.transcribe()`: no `audio.wav`, no ffmpeg arguments in the cache key, no system
-binary in the dependency list.
+Only `.mp4` is accepted today. There is no separate audio-extraction stage: the faster-whisper
+backend (`asr.py`) calls `media.extract_audio`, which decodes the first audio track with PyAV into
+a temporary 16 kHz mono WAV and deletes it when transcription ends. The WAV never reaches the
+cache, and there is no system binary in the dependency list.
 
 One recording, one clock. No multi-input sessions, no session-absolute clock.
 
@@ -140,7 +140,7 @@ from faster_whisper import WhisperModel, BatchedInferencePipeline
 
 model = BatchedInferencePipeline(WhisperModel(model_size, compute_type="int8"))
 segments, info = model.transcribe(
-    str(source_path),  # the .mp4 itself; PyAV decodes it
+    str(audio_path),  # 16 kHz mono WAV from media.extract_audio
     beam_size=5,
     language="en",  # FR: English lectures (4.2); None to auto-detect
     vad_filter=True,  # skip silence: fewer hallucinated segments, faster
@@ -1414,8 +1414,9 @@ claim cannot quietly stop being true.
 
 ### 13.2 Dependencies
 
-**Base:** `faster-whisper`, `numpy`. That is the whole list - `av`, `ctranslate2`, `onnxruntime`,
-`tokenizers`, `huggingface-hub` and `tqdm` arrive transitively through faster-whisper.
+**Base** (`pyproject.toml`): `av` (container probe and audio extraction), `faster-whisper` (ASR),
+`numpy` and `onnxruntime`. `ctranslate2`, `tokenizers`, `huggingface-hub` and `tqdm` arrive
+transitively through faster-whisper.
 
 **Extras:** `[llm]` -> `openai` (judge and vision, one key, one dependency). The CLI needs no
 extra: its progress bar is a few lines of `print` in `cli.py`, not `tqdm`.
@@ -1425,43 +1426,38 @@ triton, no CUDA wheels, no transformers, no pyannote, no speechbrain, no sentenc
 no openpyxl. The install is a couple of hundred MB, and NFR1's Windows leg stops being the hard
 one.
 
-**`wtpsplit` is not on that list, and this is a correction.** It was, on the assumption that a
-neural splitter (3.1's third rung) means torch. It does not: `wtpsplit-lite` (MIT) runs the same
+**`wtpsplit` is not on that list.** A neural splitter (3.1's third rung) does not need torch:
+`wtpsplit-lite` (MIT) runs the same
 SaT models on ONNX with exactly four dependencies - `huggingface-hub`, `numpy`, `onnxruntime` and
 `tokenizers` - **all four of which we already install** transitively through `faster-whisper`. So
 the code cost of that rung is zero new packages. Its real cost is the weights: 428 MB for
 `sat-3l-sm`, against a stage that today costs ~20 ms and nothing on disk. That is the number the
-decision should be re-made against, and it stays deferred until #12 can measure whether it buys
-anything.
-
-**Today the base install is stdlib-only**, because stages 1, 2 and 5 are still stubs (13.3). Each
-base dependency arrives with the issue that needs it: `av` and `faster-whisper` with #7 and #8,
-`numpy` with the M2 vision work. `[llm]` already exists, since `llm.py` names it in the error it
-raises when the extra is missing.
+decision should be made against, once the eval harness shows the splitter losing questions.
 
 ### 13.3 Status
 
-What exists behind the stage contract today, and who finishes each piece. "Stub" means the module,
-its name, its signature and its `@stage` registration are real; only the algorithm is owed.
+What the code does today, and the open issue for each missing piece. "Stub" means the module, its
+name, its signature and its `@stage` registration are real; only the algorithm is missing.
 
-| Module | Stage | State | Owner |
+| Module | Stage | State | Issue |
 |---|---|---|---|
-| `models.py`, `config.py`, `pipeline.py` | the contract itself | done | #6 |
-| `media.py` | 1 ingest | done | #7 |
-| `transcribe.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry (`asr.py`) | #8 |
-| `sentences.py` | 3 sentences | done | — |
-| `segments.py` | 4 segments | done | — |
-| `vision.py` | 5 vision, attach_visual | capture stubbed; the interval join is done | M2/M3 |
-| `detect.py` | 6 detect | keyword heuristic only; 7.1-7.3 owed | #10 |
-| `answer.py` | 7 answer | seed only, and dead by construction (#38); window and rescue owed | #38 |
-| `score.py` | 8 score | confidence only; 9.1 answer scoring and 9.3 dedupe owed | — |
-| `llm.py` | 9 judge | stub, no-ops when disabled | — |
-| `export.py` | 10 export | done | #13 |
-| `evaluate.py` | not a stage | done; NFR2 gated in pytest | #12 |
-| `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 with a one-line error | #17 |
+| `models.py`, `config.py`, `pipeline.py` | the contract itself | done | |
+| `media.py` | 1 ingest | done: probe, source hash, audio extraction to a temporary WAV | |
+| `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not built | #62 |
+| `sentences.py` | 3 sentences | done | |
+| `segments.py` | 4 segments | done | |
+| `vision.py` | 5 vision, attach_visual | capture is a stub that raises when `vision_enabled`; the interval join is done | #59 |
+| `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery are not built | #48, #78 |
+| `answer.py` | 7 answer | adjacent seed done; forward window and far-window rescue not built | |
+| `score.py` | 8 score | confidence and threshold only; answer scoring (9.1) and dedupe (9.3) not built | |
+| `llm.py` | 9 judge | stub: no-op when disabled, raises when `judge_enabled` | #46 |
+| `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
+| `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |
+| `evaluate.py` | not a stage | done; NFR2 gated in pytest | |
+| `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 | |
 
-Every stub carries a `ponytail:` comment naming the section it owes, so `grep -rn 'ponytail:' src/`
-is the running list of what this document promises and the code does not yet do.
+Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
+running list of what this document describes and the code does not yet do.
 
 What lands when: [GitHub milestones](https://github.com/mad201802/QuestXtract/milestones).
 
