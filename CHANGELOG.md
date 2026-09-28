@@ -49,6 +49,11 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
 
 ### Added
 
+- `filter_questions(ctx, start=, end=)` and `filter_document(data, start=, end=)` filter a
+  finished `Context` or a `read_questions()` document by time range, `start <= question.start <
+  end` in seconds, either side optional (#16, FR11). They return a new value; only the question
+  list shrinks. `topic=` is experimental: it matches the question's segment topic, and warns
+  since no topic labels exist yet.
 - `questions.schema.json`, the formal JSON Schema of `questions.json` 2.x, ships inside the
   package; the tests validate every export shape against it (#13). `VisualContext.id` gives a
   board state a stable id derived from its lifetime and keyframe.

@@ -188,6 +188,30 @@ whole plugin system — swap the detector, drop a stage, add an enrichment step:
 run(ctx, [*STAGES[2:6], my_detector, *STAGES[7:]])
 ```
 
+### Filtering questions
+
+`filter_questions` narrows a finished `Context`, `filter_document` a `questions.json` document
+(edited or not). Both return a new value and leave the input untouched:
+
+```python
+from questxtract import filter_document, filter_questions, process, read_questions
+
+ctx = process("lecture.mp4")
+window = filter_questions(ctx, start=300, end=600)  # new Context, ctx untouched
+
+data = read_questions("lecture.questions.json")
+window = filter_document(data, start=300, end=600)  # new dict, same schema
+```
+
+A question is kept when `start <= question.start < end`, in seconds; leave out either bound to
+open that side. Order is kept and only the question list shrinks, so `segment_id` and
+`visual_ids` still resolve. An invalid range (`start > end`, negative, NaN/inf, not a number)
+raises `ValueError`.
+
+`topic=` is **experimental**: it matches the topic of the question's segment, but nothing
+produces topic labels yet (every `segments[].topic` is `null`), so today it warns and matches
+nothing.
+
 ### Swapping the ASR engine
 
 The ASR engine is a pluggable backend behind `Config.asr_backend`, not a hardcoded import.
