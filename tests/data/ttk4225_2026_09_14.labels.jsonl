@@ -1,0 +1,114 @@
+{"start": 0.94, "text": "Now, we have the impulse responses, and through the impulse responses we saw that H convoluted U gives me Y fourth response, true?", "kind": "rhetorical", "end": 11.04, "split": "blind"}
+{"start": 12.65, "text": "Now, we have a property that is an important property, it's like bounded input, bounded output stability, true?", "kind": "rhetorical", "end": 18.11, "split": "blind"}
+{"start": 38.27, "text": "True?", "kind": "rhetorical", "end": 38.39, "split": "blind"}
+{"start": 51.36, "text": "For which age are we guaranteed that starting here we end up here?", "kind": "content", "end": 55.66, "split": "blind"}
+{"start": 55.9, "text": "For which age is it such that maybe I go out?", "kind": "content", "end": 60.72, "split": "blind"}
+{"start": 97.27, "text": "Is it absolutely integrable?", "kind": "content", "end": 98.57, "split": "blind"}
+{"start": 98.67, "text": "That means if I take this function, take the absolute value, and I do the integral between minus infinity and plus infinity, do I get something bounded?", "kind": "content", "end": 107.57, "split": "blind"}
+{"start": 115.8, "text": "Is this function here bounded?", "kind": "content", "end": 117.5, "split": "blind"}
+{"start": 122.5, "text": "You see the point, people?", "kind": "check_in", "end": 123.9, "split": "blind"}
+{"start": 165.55, "text": "The area of an exponential in time, this area here, is it finite, infinite, or you do not know?", "kind": "content", "end": 173.47, "split": "blind"}
+{"start": 178.53, "text": "Are we together that it's finite?", "kind": "check_in", "end": 179.61, "split": "blind"}
+{"start": 267.32, "text": "The answer here, what would you answer, people?", "kind": "check_in", "end": 269.24, "split": "blind"}
+{"start": 299.43, "text": "If I do the integral of this stuff here from minus infinity to plus infinity, are we together that this area is going to be infinite?", "kind": "check_in", "end": 306.21, "split": "blind"}
+{"start": 315.78, "text": "Are we together?", "kind": "check_in", "end": 316.7, "split": "blind"}
+{"start": 317.56, "text": "People?", "kind": "check_in", "end": 318.08, "split": "blind"}
+{"start": 362.26, "text": "True?", "kind": "rhetorical", "end": 362.54, "split": "blind"}
+{"start": 400.86, "text": "Do we remember this, people?", "kind": "check_in", "end": 402.3, "split": "blind"}
+{"start": 408.55, "text": "True?", "kind": "rhetorical", "end": 408.85, "split": "blind"}
+{"start": 414.95, "text": "Okay?", "kind": "rhetorical", "end": 415.39, "split": "blind"}
+{"start": 420.6, "text": "How much are we together, people?", "kind": "check_in", "end": 421.5, "split": "blind"}
+{"start": 424.43, "text": "If I was instead adding something like this, then what would the answer be?", "kind": "content", "end": 435.73, "split": "blind"}
+{"start": 449.96, "text": "How much are we together, people?", "kind": "check_in", "end": 451.38, "split": "blind"}
+{"start": 459.33, "text": "Okay?", "kind": "rhetorical", "end": 459.55, "split": "blind"}
+{"start": 494.37, "text": "Okay?", "kind": "rhetorical", "end": 494.75, "split": "blind"}
+{"start": 498.39, "text": "Okay?", "kind": "rhetorical", "end": 498.83, "split": "blind"}
+{"start": 502.19, "text": "How much are we together, people?", "kind": "check_in", "end": 503.21, "split": "blind"}
+{"start": 524.92, "text": "How much are we together on this?", "kind": "check_in", "end": 526.26, "split": "blind"}
+{"start": 533.07, "text": "How much are we together?", "kind": "check_in", "end": 534.09, "split": "blind"}
+{"start": 541.32, "text": "How much are we together that if I've got a length here?", "kind": "check_in", "end": 543.62, "split": "blind"}
+{"start": 543.78, "text": "This one?", "kind": "rhetorical", "end": 544.28, "split": "blind"}
+{"start": 544.52, "text": "Is this one only for ATI systems?", "kind": "content", "end": 546.86, "split": "blind"}
+{"start": 550.38, "text": "Indeed, do you see any superposition principle happening, being involved here?", "kind": "content", "end": 555.76, "split": "blind"}
+{"start": 566.18, "text": "Can I define Bibo's stability properties for this one?", "kind": "content", "end": 568.7, "split": "blind"}
+{"start": 587.17, "text": "Okay, if it was like this, could I define it?", "kind": "content", "end": 590.91, "split": "blind"}
+{"start": 600.48, "text": "Okay?", "kind": "rhetorical", "end": 600.8, "split": "blind"}
+{"start": 602.83, "text": "Okay, that there's no linearity?", "kind": "check_in", "end": 604.47, "split": "blind"}
+{"start": 605.4, "text": "Okay, that if it is autonomous, we cannot do?", "kind": "check_in", "end": 608.04, "split": "blind"}
+{"start": 626.22, "text": "You see?", "kind": "check_in", "end": 626.5, "split": "blind"}
+{"start": 632.83, "text": "Are they clear?", "kind": "check_in", "end": 633.85, "split": "blind"}
+{"start": 634.5, "text": "How much are they clear?", "kind": "check_in", "end": 635.58, "split": "blind"}
+{"start": 641.09, "text": "Do you see now the convolution?", "kind": "check_in", "end": 643.67, "split": "blind"}
+{"start": 644.81, "text": "With the video before, do you see the convolution?", "kind": "check_in", "end": 647.37, "split": "blind"}
+{"start": 649.2, "text": "The definition, how?", "kind": "rhetorical", "end": 650.58, "split": "blind"}
+{"start": 712.21, "text": "Is h of t absolutely integrable?", "kind": "content", "end": 714.87, "split": "blind"}
+{"start": 773.55, "text": "People, what would you say?", "kind": "check_in", "end": 774.97, "split": "blind"}
+{"start": 835.19, "text": "How does it go?", "kind": "content", "end": 836.33, "split": "blind"}
+{"start": 837.08, "text": "Doesn't it go like this?", "kind": "rhetorical", "end": 838.76, "split": "blind"}
+{"start": 840.81, "text": "True?", "kind": "rhetorical", "end": 841.15, "split": "blind"}
+{"start": 842.81, "text": "True?", "kind": "rhetorical", "end": 843.25, "split": "blind"}
+{"start": 860.77, "text": "You see the part?", "kind": "check_in", "end": 861.55, "split": "blind"}
+{"start": 864.35, "text": "One input that is the same, where do I go?", "kind": "content", "end": 867.55, "split": "blind"}
+{"start": 873.74, "text": "If I get, though, this one that is with a frequency that is different from this frequency here, will I get through H and convoluted H?", "kind": "content", "end": 887.28, "split": "blind"}
+{"start": 887.4, "text": "Will I get inside, outside, or you do not know?", "kind": "content", "end": 892.94, "split": "blind"}
+{"start": 893.2, "text": "Is the question clear?", "kind": "check_in", "end": 894.14, "split": "blind"}
+{"start": 976.04, "text": "What is the definition of vivo stability?", "kind": "content", "end": 978.38, "split": "blind"}
+{"start": 995.54, "text": "This system here, is it vivo-stable?", "kind": "content", "end": 997.8, "split": "blind"}
+{"start": 1007.44, "text": "How much are we together, people?", "kind": "check_in", "end": 1008.52, "split": "blind"}
+{"start": 1056.55, "text": "And if I do convolve by this one at now, what does it mean?", "kind": "content", "end": 1061.05, "split": "blind"}
+{"start": 1085.43, "text": "How much do you see it, people?", "kind": "check_in", "end": 1086.55, "split": "blind"}
+{"start": 1123.66, "text": "No?", "kind": "procedural", "end": 1124.16, "split": "blind"}
+{"start": 1173.03, "text": "This area here, is it going to be finite, infinite, or you do not know?", "kind": "content", "end": 1179.82, "split": "blind"}
+{"start": 1185.51, "text": "This area here is going to be infinite, true?", "kind": "rhetorical", "end": 1187.79, "split": "blind"}
+{"start": 1211.0, "text": "Do I go outside, inside, or you do not know?", "kind": "content", "end": 1218.01, "split": "blind"}
+{"start": 1287.31, "text": "What would you say, people?", "kind": "check_in", "end": 1288.65, "split": "blind"}
+{"start": 1289.53, "text": "Do I get something finite-infinite or better?", "kind": "content", "end": 1292.65, "split": "blind"}
+{"start": 1293.04, "text": "Do I get something that is unbounded, something bounded, or you do not know?", "kind": "content", "end": 1296.4, "split": "blind"}
+{"start": 1304.99, "text": "Unbounded, bounded, unbounded, bounded, or you do not know?", "kind": "check_in", "end": 1308.01, "split": "blind"}
+{"start": 1331.71, "text": "What does it mean?", "kind": "rhetorical", "end": 1332.37, "split": "blind"}
+{"start": 1332.69, "text": "If now is this one, what is this value here?", "kind": "content", "end": 1337.18, "split": "blind"}
+{"start": 1344.14, "text": "True?", "kind": "rhetorical", "end": 1344.6, "split": "blind"}
+{"start": 1346.54, "text": "Are we together?", "kind": "check_in", "end": 1347.32, "split": "blind"}
+{"start": 1349.12, "text": "If instead I have now equal to this one, what is the stuff?", "kind": "content", "end": 1357.47, "split": "blind"}
+{"start": 1357.81, "text": "What is this one?", "kind": "content", "end": 1359.21, "split": "blind"}
+{"start": 1370.33, "text": "So, how is my signal Y force response looking like in time?", "kind": "content", "end": 1377.43, "split": "blind"}
+{"start": 1394.4, "text": "True?", "kind": "rhetorical", "end": 1394.54, "split": "blind"}
+{"start": 1394.96, "text": "You see that it grows?", "kind": "check_in", "end": 1396.12, "split": "blind"}
+{"start": 1398.47, "text": "What is going to be this signal here?", "kind": "content", "end": 1400.37, "split": "blind"}
+{"start": 1400.81, "text": "Which signal is it going to be?", "kind": "content", "end": 1402.25, "split": "blind"}
+{"start": 1412.28, "text": "This area, didn't we say that it goes to infinity if I go to infinity?", "kind": "rhetorical", "end": 1415.96, "split": "blind"}
+{"start": 1419.54, "text": "True?", "kind": "rhetorical", "end": 1419.76, "split": "blind"}
+{"start": 1420.92, "text": "Are you following me?", "kind": "check_in", "end": 1421.66, "split": "blind"}
+{"start": 1422.62, "text": "What does it mean?", "kind": "rhetorical", "end": 1423.58, "split": "blind"}
+{"start": 1443.34, "text": "See?", "kind": "check_in", "end": 1443.58, "split": "blind"}
+{"start": 1464.06, "text": "Okay?", "kind": "rhetorical", "end": 1464.14, "split": "blind"}
+{"start": 1466.7, "text": "Okay?", "kind": "rhetorical", "end": 1467.1, "split": "blind"}
+{"start": 1482.72, "text": "You see?", "kind": "check_in", "end": 1483.2, "split": "blind"}
+{"start": 1486.46, "text": "You see the point?", "kind": "check_in", "end": 1486.98, "split": "blind"}
+{"start": 1493.75, "text": "Do you see it, people?", "kind": "check_in", "end": 1495.17, "split": "blind"}
+{"start": 1499.64, "text": "Do you see it?", "kind": "check_in", "end": 1500.14, "split": "blind"}
+{"start": 1531.11, "text": "True?", "kind": "rhetorical", "end": 1531.29, "split": "blind"}
+{"start": 1541.8, "text": "True?", "kind": "rhetorical", "end": 1542.3, "split": "blind"}
+{"start": 1548.29, "text": "Is blue H absolutely integrable?", "kind": "content", "end": 1551.53, "split": "blind"}
+{"start": 1551.79, "text": "Yes?", "kind": "check_in", "end": 1552.31, "split": "blind"}
+{"start": 1611.55, "text": "People, how are we?", "kind": "check_in", "end": 1613.13, "split": "blind"}
+{"start": 1613.74, "text": "Is it absolutely integrable?", "kind": "content", "end": 1615.34, "split": "blind"}
+{"start": 1629.72, "text": "How much are we together on this, people 1, 2, 3?", "kind": "check_in", "end": 1631.64, "split": "blind"}
+{"start": 1634.46, "text": "What does this theorem say?", "kind": "content", "end": 1636.98, "split": "blind"}
+{"start": 1647.38, "text": "Is this impulse response blue absolutely integrable?", "kind": "content", "end": 1650.18, "split": "blind"}
+{"start": 1651.12, "text": "What does the theorem say?", "kind": "content", "end": 1652.34, "split": "blind"}
+{"start": 1666.55, "text": "True?", "kind": "rhetorical", "end": 1667.17, "split": "blind"}
+{"start": 1678.57, "text": "True?", "kind": "rhetorical", "end": 1678.83, "split": "blind"}
+{"start": 1680.12, "text": "For blue, how will my bounded input that causes my unbounded output look like?", "kind": "content", "end": 1687.62, "split": "blind"}
+{"start": 1726.84, "text": "Are you visualizing in your head the signs that convolve and you have this kind of comb?", "kind": "check_in", "end": 1732.04, "split": "blind"}
+{"start": 1733.12, "text": "Do you have that in mind, people?", "kind": "check_in", "end": 1734.7, "split": "blind"}
+{"start": 1747.76, "text": "Is it a bounded input?", "kind": "content", "end": 1748.8, "split": "blind"}
+{"start": 1750.54, "text": "Is it a bounded input?", "kind": "content", "end": 1751.74, "split": "blind"}
+{"start": 1759.07, "text": "Do you see that whenever I take this one and put it, for example, here, the fact is that I'm going to kind of recover the same result that I was having before.", "kind": "rhetorical", "end": 1778.89, "split": "blind"}
+{"start": 1779.79, "text": "Do you see it?", "kind": "check_in", "end": 1780.41, "split": "blind"}
+{"start": 1781.77, "text": "And then if I make this now move, what do I get?", "kind": "content", "end": 1786.14, "split": "blind"}
+{"start": 1810.65, "text": "You see it, people.", "kind": "check_in", "end": 1811.43, "split": "blind"}
+{"start": 1883.01, "text": "What is happening to the swing if you keep pushing?", "kind": "content", "end": 1885.63, "split": "blind"}
+{"start": 1892.73, "text": "You see it?", "kind": "check_in", "end": 1894.28, "split": "blind"}
+{"start": 1897.24, "text": "Questions?", "kind": "check_in", "end": 1897.86, "split": "blind"}
+{"start": 1899.57, "text": "Questions, people?", "kind": "check_in", "end": 1900.57, "split": "blind"}

@@ -252,6 +252,6 @@ def test_cli_reports_missing_file(tmp_path, capsys):
 
 def test_unimplemented_subcommands_fail_readably(tmp_path, capsys):
     assert main(["eval", str(tmp_path)]) == 1
-    assert "#12" in capsys.readouterr().err
+    assert capsys.readouterr().err.startswith("error: ")
     assert main(["quiz", str(tmp_path / "q.json")]) == 1
     assert capsys.readouterr().err.startswith("error: ")

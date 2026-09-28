@@ -49,6 +49,11 @@ The lecturer is not expecting or wanting a spoken response. Three common shapes:
   ("...so why is this not a field? It's for multiplication, right?"), label the content
   question as `content` and do not also create a second entry for the trailing tag.
 
+A framing question that only announces the next step and names no concept of its own ("So how
+do we do that?", "So why is this popular?") is rhetorical; one that asks about a concept a student
+should be able to answer afterwards ("What is a field?", "How does a Markov chain work?") is
+`content`, even when the lecturer answers it straight away.
+
 For the first two shapes, the test: if a student answered out loud, would it derail the
 lecture rather than fit into it? If yes, `rhetorical`.
 
@@ -68,6 +73,13 @@ though a real answer is expected, because the answer is not itself instructional
 > "Can you pass me the marker?"
 > "Is this thing recording?"
 > "Can you turn the lights down?"
+
+Includes managing the exchange with a student rather than its content: asking for a name
+("Could you say your name first, please?"), calling on someone ("Yeah?"), and **clarification
+echoes** - the lecturer repeating a fragment of a student's question back to check it ("Okay,
+sorting and what?", "It's faster, but only on average?"). A full restatement of the
+student's question ("So the question was, ..., does that still hold for negative
+numbers?") is not an echo: label it `content`.
 
 ## 3. Vetoes — things that look like questions and are not
 
@@ -146,7 +158,9 @@ measuring the seed, not the system — and that is a data problem, not a detecto
 
 ## 8. Worked example
 
-Source: MIT 18.100B Real Analysis, Lecture 1.
+Source: MIT 18.100B Real Analysis, Lecture 1. The other reference recordings are TTK4225,
+2026-09-14 (P03·12) and 2026-09-15 (P03·14) — see `tests/data/README.md` for the full titles
+and URLs.
 
 ```jsonl
 {"start": 142.0, "end": 145.3, "text": "what is a supremum", "kind": "content", "split": "seed"}
@@ -158,6 +172,19 @@ Source: MIT 18.100B Real Analysis, Lecture 1.
 The fourth entry has no `?` and no wh-word start — the seed detector would never have proposed
 it. It only exists because the 1800-1900s window fell inside a blind slice and was labelled
 from scratch.
+
+**Note on the TTK4225 instructor's habitual tag.** Both TTK4225 recordings use "...right?"/
+"...true?" very frequently as a confirmation tag. Per section 2, every instance is labelled
+`rhetorical` unless it trails a real content question, in which case only the content question
+gets an entry:
+
+```jsonl
+{"start": 1185.51, "end": 1187.79, "text": "This area here is going to be infinite, true?", "kind": "rhetorical", "split": "blind"}
+{"start": 3014.0, "end": 3017.0, "text": "and why is this not a field? it's for multiplication, right?", "kind": "content", "split": "blind"}
+```
+
+Both TTK4225 files apply this to every standalone tag and every tag closing a statement; see
+`tests/data/README.md`'s TTK4225 conventions for the related framing and poll rules.
 
 ## 9. Disagreements
 
