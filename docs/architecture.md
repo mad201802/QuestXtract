@@ -4,7 +4,9 @@ How QuestXtract turns a lecture recording into a set of questions with timestamp
 provenance.
 
 Related: [general_requirements.md](general_requirements.md) for the requirement ids (FR/NFR)
-referenced throughout.
+referenced throughout. The audio-only prototype this package replaces is
+[lecture-qa-extraction](https://github.com/matteopogetta/lecture-qa-extraction/tree/985c6f11594d0863274e13e2002b59bf17ad1c7f)
+(commit `985c6f1`); its own pipeline document lives there.
 
 ---
 
