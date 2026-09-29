@@ -57,11 +57,12 @@ Five-person course project; milestones, priorities and sprints live on GitHub.
 ## Docs
 
 - `architecture.md` describes the code as it is. A planned part gets "(planned, #N)" in its
-  heading and one short paragraph; its design detail belongs in the issue.
+  heading and stays short: the decision and its reason; build detail belongs in the issue.
 - No history in docs ("since #14", "raised from 220", "this is a correction"). That goes in
-  CHANGELOG.md and commit messages.
-- Don't reference section numbers ("see 7.1(a)") in code or docs; they break on every renumber.
-  Link a heading, or let the text stand on its own.
+  CHANGELOG.md, `design_decisions.md` and commit messages.
+- `architecture.md` section numbers are stable: code and issues cite them ("architecture.md
+  9.2"). Never renumber; shorten or mark a section instead. Every cited number must resolve
+  (`/doc-drift` checks it). No lettered sub-references like "7.1(a)".
 - Metrics come from `questxtract eval`. Paste them in the PR; never copy them into issues or
   docs. architecture.md keeps one current results table.
 - Update an existing doc instead of adding a new file.

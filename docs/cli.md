@@ -77,7 +77,7 @@ Without `-o`, output lands next to the input, named after it:
 | `lecture.transcript.json` | `lecture.questions.json` | (needs an `.mp4`) |
 
 A second run overwrites the file. Pass `-o` to keep several versions side by side. The
-questions file format is described in the [README](../README.md#cli) and in
+questions file format is described in the [README](../README.md#output) and in
 [architecture.md 12.1](architecture.md#121-questionsjson).
 
 ## Recipes
