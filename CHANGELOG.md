@@ -49,6 +49,14 @@ still-current content folded into architecture.md sections 13.1, 13.3 and 14;
 
 ### Added
 
+- The vision stage runs, for slides (#55): it samples the recording at `vision_fps`, cuts a
+  board state wherever more than 2 % of the pixels change (merging down to `vision_max_states`),
+  and captions each keyframe with one `llm.describe_board` call, which sends the PNG and the
+  words spoken while it was on screen to `vision_model`. Chalkboards (layout probe,
+  de-occlusion, ink curve) are still owed.
+- Offline vision tests (#55): `tests/conftest.py` builds a synthetic slide MP4 at test time with
+  known slide-change timestamps, and a stub VLM replaces `llm.describe_board`. An end-to-end test
+  runs `STAGES` with vision on against it, with no network and no API key.
 - `filter_questions(ctx, start=, end=)` and `filter_document(data, start=, end=)` filter a
   finished `Context` or a `read_questions()` document by time range, `start <= question.start <
   end` in seconds, either side optional (#16, FR11). They return a new value; only the question

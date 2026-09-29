@@ -1255,8 +1255,8 @@ name on the decorator, so a stage added to `STAGES` reports progress without doi
 stages call `ctx.progress` again mid-run: transcription reports `word.end / info.duration` as each
 word decodes, capped at 0.99 since the caller - not the backend - decides when a stage is actually
 finished, through an `on_progress` callback every `AsrBackend` accepts (asr.py) rather than
-faster-whisper's own `log_progress` flag. Vision will report per board state once that stage is
-real - the only two stages long enough to need it.
+faster-whisper's own `log_progress` flag. Vision reports once per board state, before each
+captioning call - the only two stages long enough to need it.
 
 > **Decision.** A callable, not a progress framework, and not a logging handler.
 
@@ -1451,11 +1451,11 @@ its name, its signature and its `@stage` registration are real; only the algorit
 | `transcribe.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry (`asr.py`) | #8 |
 | `sentences.py` | 3 sentences | done | — |
 | `segments.py` | 4 segments | done | — |
-| `vision.py` | 5 vision, attach_visual | capture stubbed; the interval join is done | M2/M3 |
+| `vision.py` | 5 vision, attach_visual | slides regime only: `vision_fps` sampling, pixel-diff board states, one `llm.describe_board` call per keyframe (#55); layout probe, de-occlusion and the ink curve (6.2-6.4) owed; the interval join is done | M2/M3 |
 | `detect.py` | 6 detect | keyword heuristic only; 7.1-7.3 owed | #10 |
 | `answer.py` | 7 answer | seed only, and dead by construction (#38); window and rescue owed | #38 |
 | `score.py` | 8 score | confidence only; 9.1 answer scoring and 9.3 dedupe owed | — |
-| `llm.py` | 9 judge | stub, no-ops when disabled | — |
+| `llm.py` | 9 judge | judge stub, no-ops when disabled; `describe_board`, the vision call, done | — |
 | `export.py` | 10 export | done | #13 |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest | #12 |
 | `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 with a one-line error | #17 |

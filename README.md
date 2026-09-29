@@ -38,8 +38,9 @@ turns them into study material. It **extracts** questions, it never invents them
 
 Shipped in `0.1`: the ten-stage pipeline contract, MP4 validation and audio extraction, ASR
 through a pluggable backend interface (faster-whisper by default), sentence and segment
-rebuilding, question detection, timestamps, confidence, JSON export, CLI. The blackboard/vision
-stage is still a stub behind that contract — see the [roadmap](#roadmap) and
+rebuilding, question detection, timestamps, confidence, JSON export, CLI. The vision stage reads
+slides only so far (sample, cut on slide changes, caption each with the VLM); chalkboards and the
+layout probe are still owed — see the [roadmap](#roadmap) and
 [architecture.md 13.3](docs/architecture.md#133-status).
 
 ## Install
@@ -144,7 +145,7 @@ included, so a consumer never has to defensively check for a missing field:
 }
 ```
 
-`segments` and `visuals` (board states, empty until the vision stage lands) are listed once, and
+`segments` and `visuals` (board states, empty unless vision is enabled) are listed once, and
 questions point into them with `segment_id` and `visual_ids`. `review` is where teacher edits go;
 the pipeline never overwrites it ([architecture.md 12.2](docs/architecture.md#122-editing-fr5)).
 The formal schema ships with the package as
@@ -273,6 +274,10 @@ tests/            flat, one module per source module
 
 Which stages are real today and which are stubs: [architecture.md 13.3](docs/architecture.md#133-status).
 `grep -rn 'ponytail:' src/` lists every shortcut the code still owes that document.
+
+The suite is offline: no network, no API key. The vision tests build a synthetic slide video at
+test time (`slides_lecture` in `tests/conftest.py`, slide changes at known timestamps) and swap
+the VLM for `stub_vlm`, which monkeypatches `llm.describe_board` to return canned captions.
 
 CI runs lint, format check and the test suite on Linux, macOS and Windows against Python 3.10 and
 3.13 for every pull request. Green CI is required before merging into `main`.
