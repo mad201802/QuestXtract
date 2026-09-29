@@ -191,6 +191,6 @@ transcription.
 - **`--language`**: every lecture is transcribed as English. Transcribing another language would
   work, but question detection matches English words: the question words (what, why, how) and
   auxiliary verbs (is, can, does). It would find almost nothing beyond sentences ending in `?`.
-  The flag comes once detection supports other languages (#10). The Python API already accepts
+  Requirement 4.2 assumes English lectures, so no flag is planned. The Python API accepts
   `Config(language=...)` for experiments.
 - **YouTube URLs**: the CLI takes a local file. Download the video first.
