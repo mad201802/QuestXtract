@@ -1,6 +1,6 @@
 """Stage 5: optional enrichment of the audio with what is on the board.
 
-Two stages, not one, because of pipeline.md 11.1 rule 4: capture is expensive and caches
+Two stages, not one, because of architecture.md 11.1 rule 4: capture is expensive and caches
 as ``vision.json``, while the interval join is eight lines and always recomputes. Nailing
 one board state to one segment at capture time would bake in a wrong join that every
 consumer inherits.
@@ -22,12 +22,12 @@ def vision(ctx: Context) -> Context:
 
     A no-op unless ``config.vision_enabled``, which is false unless an endpoint is
     configured. The layout probe, frame sampling, de-occlusion, board-state segmentation
-    and VLM captioning of pipeline.md 6.2 to 6.5 land with the M2/M3 milestones.
+    and VLM captioning of architecture.md 6.2 to 6.5 are not implemented yet (#59).
     """
     if not ctx.config.vision_enabled:
         return ctx
-    # ponytail: PyAV sampling + numpy de-occlusion + VLM captioning, pipeline.md 6.2-6.5 (M2/M3).
-    raise NotImplementedError("vision: board reading lands with the M2/M3 milestones")
+    # ponytail: #59, frame sampling, keyframes and VLM captioning (architecture.md 6.2-6.5).
+    raise NotImplementedError("vision is not implemented yet (#59); set vision_enabled=False")
 
 
 def overlapping(

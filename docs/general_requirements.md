@@ -34,6 +34,8 @@ The project delivers an installable Python package that takes a lecture recordin
 5. The model shall not create questions on their own, only extract from questions asked. 
 
 ## 5. Milestones
+The customer's phases, as agreed. The team plans and tracks them as [GitHub milestones](https://github.com/mad201802/QuestXtract/milestones), which are the reference for scope and due dates.
+
 1. Get familiar with the current audio only codebase and refactor it
 2. Deployable in own machine or in server -> github repo with a python package
 3. Get information from the images considering them as static, and enrich the audio information

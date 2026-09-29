@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from questxtract import (
@@ -25,6 +27,17 @@ def test_transcript_to_dict_round_trips_through_from_dict(transcript):
     )
     for original in (transcript, chunked):
         assert Transcript.from_dict(original.to_dict()) == original
+
+
+def test_transcript_from_file_reads_json_and_rejects_non_json(transcript, tmp_path):
+    good = tmp_path / "t.json"
+    good.write_text(json.dumps(transcript.to_dict()), encoding="utf-8")
+    assert Transcript.from_file(good) == transcript
+
+    bad = tmp_path / "bad.json"
+    bad.write_text("not json", encoding="utf-8")
+    with pytest.raises(SchemaError, match="not valid JSON"):
+        Transcript.from_file(bad)
 
 
 def test_reads_whisper_style_words():

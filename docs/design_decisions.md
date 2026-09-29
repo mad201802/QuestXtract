@@ -1,4 +1,4 @@
-# Architecture review — M1 package foundation
+# Design decisions: M1 package foundation
 
 Working document for the project report. It records *why* the architecture in
 [architecture.md](architecture.md) looks the way it does: the drivers, the decisions, the
@@ -6,11 +6,12 @@ alternatives we rejected, and what an independent review changed. Each section n
 report chapter it feeds (numbering follows the TDT4290 compendium's suggested structure).
 
 > **One decision was later reversed.** The M1 foundation shipped a package-per-stage layout
-> (`video/ audio/ detection/ models/ output/`) described in a companion `architecture.md`.
-> `docs/architecture.md` then superseded both: the stage contract, not the directory, became the
-> unit of ownership and replacement, and `architecture.md` was deleted into architecture.md
-> sections 13.1, 13.3 and 14. **D1** and **D2** below record that reversal rather than hiding
-> it — the rejected alternative is kept, because the argument is the part worth reporting.
+> (`video/ audio/ detection/ models/ output/`) described in an earlier architecture document.
+> The pipeline document, today's [architecture.md](architecture.md), then superseded it: the
+> stage contract, not the directory, became the unit of ownership and replacement, and the
+> earlier document was folded into architecture.md sections 13.1, 13.3 and 14. **D1** and **D2**
+> below record that reversal rather than hiding it: the rejected alternative is kept, because the
+> argument is the part worth reporting.
 
 ## 1. Drivers (→ report ch. 4 pre-study, ch. 6 requirements)
 
@@ -241,6 +242,26 @@ capacity we do not have. The import mode choice is small but prevents a known py
 (same-named test files in mirrored directories) that would otherwise appear the first time
 `tests/integration/` is added.
 
+### D11: Answers come from the LLM pass, not from rules
+
+*Chose:* the rules stop at the adjacent seed (the sentence right after the question). Every answer
+further away, refining a messy question, judging an answer and deduplicating echo pairs and near
+duplicates is the one LLM pass (stage 9, architecture.md 10), with the board text in the prompt
+when vision is on.
+
+*Alternative:* the rule-based answer search of the original design: a forward window over the
+next three sentences, a far-window rescue gated on shared keywords, an additive answer-scoring
+table and token-overlap dedupe.
+
+*Why:* the team found that answer finding can't be done reliably with rules. Whether a sentence
+answers a question depends on context the rules only approximate with token overlap, while an
+LLM that sees the question, the transcript around it and the board can judge it. It also folds
+four rule sets into one pass that already had to exist to filter rhetorical questions.
+
+*Cost:* without an endpoint, a question gets at most the adjacent seed as its answer. A drafted
+answer is generated text, so it must cite the transcript sentences it comes from (architecture.md
+10.3), and the customer has to accept LLM-drafted answers (#46).
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |
@@ -369,21 +390,7 @@ information-flow arrows — the compendium asks for an architecture sketch with 
   make the same output usable for captions/navigation. Pedagogy: the "extract, never invent"
   rule keeps the lecturer in control of what students are quizzed on.
 
-## 8. Open questions to settle with the customer
-
-1. Does the MCQ/numeric *builder* conflict with "never invent questions"? (our reading: no —
-   it formats; confirm.)
-2. exerplaza: API or import format? Which question types and LaTeX conventions? This decides
-   the shape of `builder/` output.
-3. Are YouTube URLs an input, or only test material to be downloaded manually? (Currently: out
-   of scope; `video/` would own it.)
-4. Is word-level timing acceptable as the definition of "question timestamp" (FR7), or is
-   segment-level enough?
-5. Review UI: web or desktop, and who hosts it? It changes nothing in the package but a lot in
-   the project plan.
-6. Real lecture recordings vs. public/mock videos — the GDPR answer in §6 depends on it.
-
-## 9. Sources worth citing (verify each before use)
+## 8. Sources worth citing (verify each before use)
 
 Collected in the team's research notes; check every entry on Google Scholar before it goes
 in the bibliography (some came via an AI-generated literature survey).

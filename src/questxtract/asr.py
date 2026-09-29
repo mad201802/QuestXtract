@@ -139,7 +139,7 @@ def _load_model(model_size: str, compute_type: str) -> Any:
 
 @register_backend("faster_whisper")
 class FasterWhisperBackend:
-    """The default backend: faster-whisper, batched (pipeline.md 2.2).
+    """The default backend: faster-whisper, batched (architecture.md 2.2).
 
     Runs on audio extracted via :func:`~questxtract.media.extract_audio` rather than
     handing the raw container straight to faster-whisper: ``media.py`` already contains
@@ -160,7 +160,7 @@ class FasterWhisperBackend:
 
         Raises:
             RuntimeError: If ``faster-whisper`` is not importable. It is a base
-                dependency (pipeline.md 13.2), so this should not happen in a normal
+                dependency (architecture.md 13.2), so this should not happen in a normal
                 install; the import is still guarded so a broken environment fails with
                 a clear message rather than an opaque traceback.
 

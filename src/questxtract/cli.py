@@ -15,7 +15,7 @@ from . import __version__
 from .config import Config
 from .evaluate import evaluate, format_report
 from .export import result_to_json
-from .models import Context, SchemaError, Stage, Transcript
+from .models import Context, Stage, Transcript
 from .pipeline import STAGES, run
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
@@ -177,20 +177,6 @@ def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
         raise
 
 
-def _load_transcript(path: str | Path) -> Transcript:
-    """Read a transcript JSON file.
-
-    Raises:
-        SchemaError: If the file is not JSON or is not a recognised transcript shape.
-
-    """
-    try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeError) as exc:
-        raise SchemaError(f"{path}: not valid JSON ({exc})") from exc
-    return Transcript.from_dict(data)
-
-
 def _process(args: argparse.Namespace) -> int:
     """Extract questions from a recording (every stage) or a transcript (skips ASR)."""
     source = Path(args.input)
@@ -199,7 +185,7 @@ def _process(args: argparse.Namespace) -> int:
     config = _config(args).replace(min_confidence=args.threshold)
 
     if source.suffix.lower() == ".json":
-        transcript = _load_transcript(source)
+        transcript = Transcript.from_file(source)
         ctx = Context(source=source, config=config, transcript=transcript)
         ctx.duration = transcript.duration
         # The documented `stages=` seam (architecture.md 11.1): the transcript is in hand.
@@ -241,7 +227,7 @@ def _eval(args: argparse.Namespace) -> int:
 def _quiz(args: argparse.Namespace) -> int:
     """Turn questions.json into quiz.json. Generative, and deliberately separate."""
     del args
-    print("error: quiz: the generative stage is not wired up yet", file=sys.stderr)
+    print("error: quiz is not implemented yet (#79)", file=sys.stderr)
     return 1
 
 
@@ -320,7 +306,9 @@ def build_parser() -> argparse.ArgumentParser:
     evaluation.add_argument("--json", action="store_true", help="machine-readable, for CI")
     evaluation.set_defaults(handler=_eval)
 
-    quiz = subs.add_parser("quiz", help="generate quiz.json from questions.json")
+    quiz = subs.add_parser(
+        "quiz", help="generate quiz.json from questions.json (not implemented yet)"
+    )
     quiz.add_argument("questions", help="a questions.json written by `process`")
     quiz.add_argument("-o", "--output", help="write the quiz here")
     quiz.set_defaults(handler=_quiz)

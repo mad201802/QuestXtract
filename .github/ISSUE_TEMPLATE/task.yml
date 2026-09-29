@@ -1,6 +1,5 @@
 name: Task
-description: A planned unit of work with acceptance criteria
-labels: ["task"]
+description: A planned unit of work with acceptance criteria. Set the milestone, one type label, and the board's Priority and Size.
 body:
   - type: textarea
     id: description
@@ -43,28 +42,6 @@ body:
         - [ ] Public API has docstrings and type hints
         - [ ] README / docs updated if behaviour or CLI flags changed
         - [ ] Reviewed and merged into `main` with green CI
-    validations:
-      required: true
-  - type: dropdown
-    id: milestone
-    attributes:
-      label: Roadmap milestone
-      options:
-        - "M1 - video to audio to ASR pipeline"
-        - "M2 - static image understanding"
-        - "M3 - image flow across the recording"
-        - "M4 - manim animations"
-        - "Maintenance / none"
-    validations:
-      required: true
-  - type: dropdown
-    id: priority
-    attributes:
-      label: Priority
-      options:
-        - "High - blocks the milestone"
-        - "Medium - planned"
-        - "Low - nice to have"
     validations:
       required: true
   - type: textarea

@@ -38,5 +38,5 @@ def test_vision_no_ops_when_disabled(context):
 
 def test_vision_refuses_when_enabled_but_unimplemented(context):
     context.config = context.config.replace(vision_enabled=True)
-    with pytest.raises(NotImplementedError, match="M2/M3"):
+    with pytest.raises(NotImplementedError, match="#59"):
         vision(context)

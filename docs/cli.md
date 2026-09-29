@@ -39,8 +39,8 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--from-scratch` | nothing | off | Ignores cached results and recomputes everything, transcription included. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
-One thing to know about `-t` today: until answer search is built, a question with no answer
-scores at most `0.55`. So any threshold above `0.55` currently returns no questions at all.
+One thing to know about `-t` today: a question with no answer scores at most `0.55`, so a
+threshold above `0.55` keeps only questions the next sentence answers.
 
 ### `questxtract transcribe <recording>`
 
@@ -65,7 +65,7 @@ reads.
 `questxtract eval <files|dirs> [--json]` scores the pipeline against the labelled set: recall,
 precision, false positives by kind, a threshold sweep, and every miss
 ([tests/data/README.md](../tests/data/README.md)). `questxtract quiz <questions.json>` is
-reserved for quiz generation; it is not implemented yet and exits with a one-line error.
+reserved for quiz generation; it is not implemented yet (#79) and exits with a one-line error.
 
 ## Where files go
 
@@ -77,7 +77,7 @@ Without `-o`, output lands next to the input, named after it:
 | `lecture.transcript.json` | `lecture.questions.json` | (needs an `.mp4`) |
 
 A second run overwrites the file. Pass `-o` to keep several versions side by side. The
-questions file format is described in the [README](../README.md#cli) and in
+questions file format is described in the [README](../README.md#output) and in
 [architecture.md 12.1](architecture.md#121-questionsjson).
 
 ## Recipes
@@ -191,6 +191,6 @@ transcription.
 - **`--language`**: every lecture is transcribed as English. Transcribing another language would
   work, but question detection matches English words: the question words (what, why, how) and
   auxiliary verbs (is, can, does). It would find almost nothing beyond sentences ending in `?`.
-  The flag comes once detection supports other languages (#10). The Python API already accepts
+  Requirement 4.2 assumes English lectures, so no flag is planned. The Python API accepts
   `Config(language=...)` for experiments.
 - **YouTube URLs**: the CLI takes a local file. Download the video first.

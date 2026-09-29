@@ -4,7 +4,7 @@ Everything in the pipeline is one function with the same ``Context -> Context`` 
 That sameness is the whole extension mechanism: a caller who wants a different ASR engine,
 a custom detector or an extra enrichment step passes a different list to ``run()``.
 
-Four rules hold the contract up (pipeline.md 11.1):
+Four rules hold the contract up (architecture.md 11.1):
 
 1. Stages never import each other; they communicate only through ``Context``.
 2. Stages read config only through ``ctx.config``.
@@ -37,7 +37,7 @@ from .vision import attach_visual, vision
 __all__ = ["STAGES", "Stage", "StageInfo", "process", "run", "stage", "stage_info"]
 
 
-# --- cache (pipeline.md 11.2) -------------------------------------------------
+# --- cache (architecture.md 11.2) -------------------------------------------------
 
 
 def _encode(value: Any) -> Any:
@@ -106,9 +106,9 @@ def _cached(fn: Stage, ctx: Context) -> Context:
     return ctx
 
 
-# --- the pipeline (pipeline.md 1.3) -------------------------------------------
+# --- the pipeline (architecture.md 1.3) -------------------------------------------
 
-#: Reading this list is reading the diagram in pipeline.md 1.3.
+#: Reading this list is reading the diagram in architecture.md 1.3.
 STAGES: tuple[Stage, ...] = (
     ingest,
     transcribe,

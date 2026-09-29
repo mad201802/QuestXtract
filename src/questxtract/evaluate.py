@@ -1,7 +1,7 @@
 """The evaluation harness: measure the pipeline against the labelled set.
 
 NFR2 gives a number to hit (recall >= 50% on the team's labelled set), so the metric runs
-in CI. Sections 6 through 9 of pipeline.md are blind without it.
+in CI. Sections 6 through 9 of architecture.md are blind without it.
 
 A prediction matches a label when their time ranges overlap and the overlap covers at least
 half the shorter range. Time-based, not text-based, because ASR text will differ from what a
@@ -97,7 +97,7 @@ def evaluate(paths: Sequence[str | Path]) -> dict[str, Any]:
         if not transcript_path.is_file():
             skipped.append(str(labels_path))
             continue
-        transcript = Transcript.from_dict(json.loads(transcript_path.read_text(encoding="utf-8")))
+        transcript = Transcript.from_file(transcript_path)
         if name in runs:
             raise ValueError(f"duplicate recording name: {name}")
         runs[name] = (_read_labels(labels_path), _predict(transcript), transcript.words)
@@ -221,7 +221,7 @@ def _counts(
 
 
 def _has_mark(label: dict[str, Any], words: tuple[Word, ...]) -> bool:
-    """Whether the transcript words under ``label`` carry a '?' (pipeline.md 4.2)."""
+    """Whether the transcript words under ``label`` carry a '?' (architecture.md 4.2)."""
     return any("?" in w.text for w in words if w.start < label["end"] and w.end > label["start"])
 
 

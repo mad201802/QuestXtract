@@ -54,6 +54,10 @@ def test_export_emits_a_fixed_key_set_with_nulls_kept(finished):
         "questions",
     }
     assert data["config"]["min_confidence"] == finished.config.min_confidence
+    # judge and vision are off by default, so no model is named as if it ran
+    assert data["config"]["judge_model"] is None and data["config"]["vision_model"] is None
+    judged = dataclasses.replace(finished, config=finished.config.replace(judge_enabled=True))
+    assert result_to_dict(judged)["config"]["judge_model"] == finished.config.judge_model
     question = data["questions"][0]
     assert set(question) == QUESTION_KEYS
     assert question["answer"] is None

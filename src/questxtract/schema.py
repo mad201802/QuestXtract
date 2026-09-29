@@ -2,13 +2,14 @@
 
 This defines ``Question``: a flat, validated, serialisable shape for "one question."
 
-**Not the teacher-facing format.** ``export.py`` owns ``questions.json`` - the format
-the CLI editor reads and writes, and the one re-run merges human edits back into by id.
-That format needs provenance (``id``, ``sentence_id``, ``answer_sentence_ids``) that this
-type deliberately omits. ``Question`` is a lighter internal shape: useful anywhere in the
-pipeline that wants "a question with a timestamp and a confidence" without the full
-export record's edit-tracking fields. If a use for it as a public/API shape shows up
-later, build it *from* the export record rather than growing this type to duplicate it.
+**Not produced by the pipeline.** Nothing in the package builds a ``Question`` today; the
+pipeline's output is ``questions.json``, owned by ``export.py``, whose ``review`` block is
+where people edit. That format needs provenance (``id``, ``sentence_id``,
+``answer_sentence_ids``) that this type deliberately omits. ``Question`` is a lighter internal
+shape: useful anywhere in the pipeline that wants "a question with a timestamp and a
+confidence" without the full export record's edit-tracking fields. If a use for it as a
+public/API shape shows up later, build it *from* the export record rather than growing this
+type to duplicate it.
 
 Acceptance criteria this satisfies:
     1. schema is defined                -> the ``Question`` dataclass below

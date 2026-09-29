@@ -22,8 +22,8 @@
         "model_size": {"type": "string"},
         "language": {"type": "string"},
         "min_confidence": {"$ref": "#/$defs/fraction", "description": "The threshold this file was cut at."},
-        "judge_model": {"type": "string"},
-        "vision_model": {"type": "string"}
+        "judge_model": {"type": ["string", "null"], "description": "null when the LLM pass was off."},
+        "vision_model": {"type": ["string", "null"], "description": "null when vision was off."}
       }
     },
     "stats": {"type": "object", "additionalProperties": {"type": "integer"}},
