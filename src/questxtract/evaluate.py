@@ -97,7 +97,7 @@ def evaluate(paths: Sequence[str | Path]) -> dict[str, Any]:
         if not transcript_path.is_file():
             skipped.append(str(labels_path))
             continue
-        transcript = Transcript.from_dict(json.loads(transcript_path.read_text(encoding="utf-8")))
+        transcript = Transcript.from_file(transcript_path)
         if name in runs:
             raise ValueError(f"duplicate recording name: {name}")
         runs[name] = (_read_labels(labels_path), _predict(transcript), transcript.words)

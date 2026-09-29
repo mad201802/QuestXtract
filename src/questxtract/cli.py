@@ -15,7 +15,7 @@ from . import __version__
 from .config import Config
 from .evaluate import evaluate, format_report
 from .export import result_to_json
-from .models import Context, SchemaError, Stage, Transcript
+from .models import Context, Stage, Transcript
 from .pipeline import STAGES, run
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
@@ -177,20 +177,6 @@ def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
         raise
 
 
-def _load_transcript(path: str | Path) -> Transcript:
-    """Read a transcript JSON file.
-
-    Raises:
-        SchemaError: If the file is not JSON or is not a recognised transcript shape.
-
-    """
-    try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeError) as exc:
-        raise SchemaError(f"{path}: not valid JSON ({exc})") from exc
-    return Transcript.from_dict(data)
-
-
 def _process(args: argparse.Namespace) -> int:
     """Extract questions from a recording (every stage) or a transcript (skips ASR)."""
     source = Path(args.input)
@@ -199,7 +185,7 @@ def _process(args: argparse.Namespace) -> int:
     config = _config(args).replace(min_confidence=args.threshold)
 
     if source.suffix.lower() == ".json":
-        transcript = _load_transcript(source)
+        transcript = Transcript.from_file(source)
         ctx = Context(source=source, config=config, transcript=transcript)
         ctx.duration = transcript.duration
         # The documented `stages=` seam (architecture.md 11.1): the transcript is in hand.

@@ -24,7 +24,7 @@ from .vision import overlapping
 SCHEMA_VERSION = "2.0"
 SCHEMA_PATH = Path(__file__).with_name("questions.schema.json")
 
-_CONFIG_KEYS = ("model_size", "language", "min_confidence", "judge_model", "vision_model")
+_CONFIG_KEYS = ("model_size", "language", "min_confidence")
 _SOURCE = "audio"  # questions are only read from speech until the vision milestones (M2/M3)
 
 
@@ -38,7 +38,12 @@ def result_to_dict(ctx: Context) -> dict[str, Any]:
             "duration_seconds": ctx.duration or None,
             "hash": ctx.source_hash or None,
         },
-        "config": {key: getattr(ctx.config, key) for key in _CONFIG_KEYS},
+        "config": {
+            **{key: getattr(ctx.config, key) for key in _CONFIG_KEYS},
+            # null when the stage is off, so the file never names a model that did not run
+            "judge_model": ctx.config.judge_model if ctx.config.judge_enabled else None,
+            "vision_model": ctx.config.vision_model if ctx.config.vision_enabled else None,
+        },
         "stats": dict(ctx.stats),
         "segments": [_segment(index, segment) for index, segment in enumerate(ctx.segments)],
         "visuals": [_visual(state) for state in ctx.visual],

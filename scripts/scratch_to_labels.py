@@ -47,8 +47,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from questxtract.cli import _load_transcript
-from questxtract.models import Word
+from questxtract.models import Transcript, Word
 
 _VALID_KINDS = frozenset({"content", "rhetorical", "check_in", "procedural"})
 
@@ -175,7 +174,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             lines, default_duration=args.duration, blind_windows=[tuple(w) for w in args.blind]
         )
         if args.transcript:
-            records = snap(records, _load_transcript(args.transcript).words)
+            records = snap(records, Transcript.from_file(args.transcript).words)
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

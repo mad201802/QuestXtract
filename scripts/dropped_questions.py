@@ -17,10 +17,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from questxtract.cli import _load_transcript
 from questxtract.config import Config
 from questxtract.export import write_questions
-from questxtract.models import Context, SchemaError
+from questxtract.models import Context, SchemaError, Transcript
 from questxtract.pipeline import STAGES, run
 
 _AFTER_TRANSCRIBE = 2  # stages 1 and 2 are skipped: the transcript is already in hand
@@ -39,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        transcript = _load_transcript(args.transcript)
+        transcript = Transcript.from_file(args.transcript)
     except (OSError, SchemaError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

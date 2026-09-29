@@ -7,6 +7,7 @@ returns. Everything else is a frozen, keyword-only dataclass.
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -158,6 +159,20 @@ class Transcript:
             language=str(data.get("language", "en")),
             duration=duration,
         )
+
+    @classmethod
+    def from_file(cls, path: str | Path) -> Transcript:
+        """Read a transcript JSON file, in any shape :meth:`from_dict` accepts.
+
+        Raises:
+            SchemaError: If the file is not JSON or is not a recognised transcript shape.
+
+        """
+        try:
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, UnicodeError) as exc:
+            raise SchemaError(f"{path}: not valid JSON ({exc})") from exc
+        return cls.from_dict(data)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to plain JSON types, in the shape :meth:`from_dict` reads back unchanged.

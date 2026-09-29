@@ -111,7 +111,7 @@ included, so a consumer never has to defensively check for a missing field:
   "schema_version": "2.0",
   "source": { "path": "transcript.json", "duration_seconds": 12.0, "hash": null },
   "config": { "model_size": "turbo", "language": "en", "min_confidence": 0.4,
-              "judge_model": "gpt-5.6-terra", "vision_model": "gpt-5.6-luna" },
+              "judge_model": null, "vision_model": null },
   "stats": { "sentences": 3, "sentences_unpunctuated": 1,
              "segments": 2, "segments_closed_gap": 1,
              "segments_closed_duration": 0, "segments_closed_chars": 0,
