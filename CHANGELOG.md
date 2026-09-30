@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- Detection finds the question word after a leading preposition ("For which ...?"), in an earlier
+  comma clause ("This area here, is it finite, ...?"), and after a lower-case single letter that
+  ends a sentence ("Unit step function, u. Is it absolutely integrable?"). (#78)
+
 ## 0.1.0
 
 First release. QuestXtract turns a lecture recording (`.mp4`) or an ASR transcript (`.json`) into

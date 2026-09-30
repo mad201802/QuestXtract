@@ -85,6 +85,13 @@ _PREAMBLES = tuple(
     )
 )
 
+# A wh-word can follow a preposition that belongs to the question: "For which age ...?",
+# "In what sense ...?". Skipped only right before a wh-word, so "In the limit ..." is untouched.
+_PREPOSITIONS = frozenset(
+    "about after against among as at before between by during for from in into like of on "
+    "over per since than through to toward towards under until upon via with within without".split()
+)
+
 _TYPES = {
     "what": "what",
     "why": "why",
@@ -176,25 +183,33 @@ def _is_tag(sentence: str) -> bool:
 def _heads(sentence: str) -> tuple[str, ...]:
     """Return the words a question in ``sentence`` can open with, past discourse markers.
 
-    For a sentence ending in ``?`` whose opener is not interrogative, the last comma clause
-    counts too, since ASR runs a preamble into the question: "If you have the data, does
-    that mean ...?". Without the ``?`` it does not, or every ", which is ..." would read as a
-    wh-question; nor after an interrogative opener, where the last clause is part of the
-    question: "Is it a function from X to Y, where X is compact?" is yes/no.
+    For a sentence ending in ``?`` whose opener is not interrogative, later comma clauses
+    count too, since ASR runs a preamble into the question: "If you have the data, does
+    that mean ...?", "This area here, is it finite, infinite, or you do not know?". The last
+    clause counts with any head; an earlier one only with an auxiliary, because a wh-word
+    there usually opens a relative clause (", what would you ..., people?"). Without the
+    ``?`` none of them count, or every ", which is ..." would read as a wh-question; nor after
+    an interrogative opener, where the clauses are part of the question: "Is it a function
+    from X to Y, where X is compact?" is yes/no.
     """
     heads: list[str] = []
     opener = _opener(sentence)
     if opener:
         heads.append(opener)
     if sentence.rstrip().endswith("?") and opener not in _WH_WORDS | _AUX_WORDS:
-        last = _opener(sentence.rsplit(",", 1)[-1])
-        if last and last not in heads:
-            heads.append(last)
+        *earlier, last = sentence.split(",")
+        clause_heads = [h for h in map(_opener, earlier[1:]) if h in _AUX_WORDS]
+        for head in [*clause_heads, _opener(last)]:
+            if head and head not in heads:
+                heads.append(head)
     return tuple(heads)
 
 
 def _opener(clause: str) -> str:
-    """Return the first word of ``clause`` past discourse markers and preambles, or ``""``."""
+    """Return the first word of ``clause`` past discourse markers and preambles, or ``""``.
+
+    A preposition right before a wh-word is skipped too: "For which age ...?" opens on "which".
+    """
     words = _words(clause)
     while words:
         if words[0] in _DISCOURSE_MARKERS:
@@ -204,6 +219,8 @@ def _opener(clause: str) -> str:
         if preamble is None:
             break
         words = words[len(preamble) :]
+    if len(words) > 1 and words[0] in _PREPOSITIONS and words[1] in _WH_WORDS:
+        return words[1]
     return words[0] if words else ""
 
 
