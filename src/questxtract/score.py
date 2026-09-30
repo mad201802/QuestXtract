@@ -1,6 +1,6 @@
-"""Stage 8: confidence and the threshold.
+"""Stage 9: confidence and the threshold.
 
-One number the user can reason about (FR10), plus a judge verdict. No parallel quality
+One number the user can reason about (FR10), plus the judge's verdict. No parallel quality
 score, no risk band, no profile-scoped emission gates (architecture.md 9.2).
 """
 
@@ -30,8 +30,8 @@ def score_pairs(pairs: Sequence[QAPair], *, min_confidence: float = 0.40) -> tup
     """
     out: list[QAPair] = []
     for pair in pairs:
-        # ponytail: #46, an answer is not scored on its own; the LLM pass moves the final
-        # confidence within the band of architecture.md 10.3.
+        # An answer is not scored on its own (architecture.md 9.1). With the LLM detector,
+        # question.score is the model's own confidence.
         confidence = _QUESTION_WEIGHT * pair.question.score
         if pair.answer_text:
             confidence += _ANSWER_WEIGHT * pair.question.score
@@ -58,8 +58,7 @@ def _rescored(pair: QAPair, confidence: float) -> QAPair:
 @stage("score")
 def score(ctx: Context) -> Context:
     """Score and filter ``ctx.pairs``."""
-    # ponytail: #46, no dedupe here; the LLM pass sees all candidates at once and judges echo
-    # pairs and near duplicates.
+    # No dedupe (architecture.md 9.3).
     ctx.pairs = score_pairs(ctx.pairs, min_confidence=ctx.config.min_confidence)
     ctx.stats["emitted"] = len(ctx.pairs)
     return ctx

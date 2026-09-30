@@ -53,17 +53,18 @@ class Config:
     min_question_score: float = 0.45
     max_question_chars: int = 350
 
-    # --- 8 answer search (answers beyond the adjacent seed come from the LLM pass, #46) ---
+    # --- 8 answer search (answers beyond the adjacent seed come from the LLM detector) ---
     answer_seed_max_gap_seconds: float = 1.0
 
     # --- 9 scoring ---
     min_confidence: float = 0.40
 
     # --- 10 the LLM layer ---
-    base_url: str | None = None
-    judge_enabled: bool = False  # auto: true when an endpoint is reachable
+    detector: str = "rules"  # or "llm": the judge reads the transcript and picks the questions
+    base_url: str | None = None  # None is OpenAI; "http://localhost:11434/v1" is a local Ollama
     judge_model: str = "gpt-5.6-terra"
-    judge_max_candidates: int = 60
+    judge_chunk_chars: int = 8000  # transcript text per call, sized for an 8k-token context
+    judge_reasoning_effort: str = "none"  # "" leaves it to the server
     timeout_seconds: int = 120
 
     # --- 11.2 cache ---

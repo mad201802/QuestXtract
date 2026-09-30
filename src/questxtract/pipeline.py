@@ -118,8 +118,8 @@ STAGES: tuple[Stage, ...] = (
     attach_visual,
     detect,
     answer,
-    score,
     judge,
+    score,
 )
 
 

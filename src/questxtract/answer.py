@@ -1,7 +1,7 @@
 """Stage 7: find the answer span for each question candidate.
 
-One rule, the adjacent seed (architecture.md 8). Answers further away come from the LLM pass
-(stage 9), not from rules here.
+One rule, the adjacent seed (architecture.md 8). Answers further away come from the LLM
+detector (stage 8, ``--detector llm``), not from rules here.
 
 A question with no answer is still a result. architecture.md 9.2 is explicit: FR6 and FR7 ask
 for questions with timestamps, not for answered questions.
@@ -60,7 +60,7 @@ def pair_answers(
                 question=candidate,
                 answer_sentence_ids=(seed.id,) if seed else (),
                 answer_text=seed.text.strip() if seed else "",
-                confidence=0.0,  # stage 8 fills this in
+                confidence=0.0,  # stage 9 fills this in
                 start=sentence.start,
                 end=sentence.end,
                 reasons=("intra_sentence_qa",) if seed else ("no_answer_found",),
@@ -72,7 +72,6 @@ def pair_answers(
 @stage("answer")
 def answer(ctx: Context) -> Context:
     """Pair each candidate in ``ctx.candidates`` with an answer span into ``ctx.pairs``."""
-    # ponytail: #46, only the adjacent seed; an answer further away comes from the LLM pass.
     ctx.pairs = pair_answers(
         ctx.candidates, ctx.sentences, max_seed_gap=ctx.config.answer_seed_max_gap_seconds
     )

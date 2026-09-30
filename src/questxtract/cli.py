@@ -6,6 +6,7 @@ Every command and option, with recipes: docs/cli.md.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import sys
 from collections.abc import Callable, Sequence
@@ -36,7 +37,7 @@ _STAGE_LABELS = {
     "detect": "Detecting questions",
     "answer": "Finding answers",
     "score": "Scoring",
-    "judge": "Reviewing",
+    "judge": "LLM detection",
 }
 
 _INPUT_KINDS = {".mp4": "an .mp4 recording", ".json": "a .json transcript"}
@@ -57,6 +58,9 @@ examples:
   questxtract process lecture.mp4 -t 0.3                 more questions, less strict
   questxtract process lecture.mp4 -m base                quick run with a small model
   questxtract process lecture.transcript.json -o -       existing transcript, print it
+  questxtract process lecture.mp4 --detector llm         an LLM picks the questions
+  questxtract process lecture.mp4 --detector llm \
+      --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b   a local model in Ollama
 """
 
 _TRANSCRIBE_EXAMPLES = """\
@@ -168,6 +172,25 @@ def _config(args: argparse.Namespace) -> Config:
     return Config().replace(model_size=args.model, from_scratch=args.from_scratch)
 
 
+def _with_llm(config: Config, args: argparse.Namespace) -> Config:
+    """Apply the LLM flags, and check an LLM run can start before anything slow runs.
+
+    Raises:
+        ValueError: If ``--detector llm`` lacks the ``[llm]`` extra, or has neither an API
+            key nor a local endpoint.
+
+    """
+    config = config.replace(
+        detector=args.detector, judge_model=args.llm_model, base_url=args.llm_url
+    )
+    if config.detector == "llm":
+        if importlib.util.find_spec("openai") is None:
+            raise ValueError("--detector llm needs the LLM extra: pip install 'questxtract[llm]'")
+        if config.base_url is None and not config.api_key:
+            raise ValueError("--detector llm needs OPENAI_API_KEY, or --llm-url for a local server")
+    return config
+
+
 def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
     """Run ``stages`` under the progress bar, closing its line if anything interrupts it."""
     try:
@@ -184,7 +207,7 @@ def _process(args: argparse.Namespace) -> int:
     source = Path(args.input)
     _check_input(source, (".mp4", ".json"))
     output = _output_path(args.output, source, "questions")
-    config = _config(args).replace(min_confidence=args.threshold)
+    config = _with_llm(_config(args), args).replace(min_confidence=args.threshold)
 
     if source.suffix.lower() == ".json":
         transcript = Transcript.from_file(source)
@@ -218,7 +241,7 @@ def _transcribe(args: argparse.Namespace) -> int:
 def _eval(args: argparse.Namespace) -> int:
     """Score the pipeline against the labelled set."""
     try:
-        report = evaluate(args.paths)
+        report = evaluate(args.paths, _with_llm(Config(), args))
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -268,9 +291,31 @@ def build_parser() -> argparse.ArgumentParser:
         help="ignore cached results and recompute everything, transcription included",
     )
 
+    # How questions are found: `process` and `eval` share these.
+    llm = argparse.ArgumentParser(add_help=False)
+    llm.add_argument(
+        "--detector",
+        choices=("rules", "llm"),
+        default=defaults.detector,
+        help="how questions are found: rules (fast, offline) or llm (a language model reads the "
+        "transcript; needs the questxtract[llm] extra) (default: %(default)s)",
+    )
+    llm.add_argument(
+        "--llm-model",
+        default=defaults.judge_model,
+        metavar="NAME",
+        help="the model for --detector llm, e.g. qwen3.5:9b in Ollama (default: %(default)s)",
+    )
+    llm.add_argument(
+        "--llm-url",
+        metavar="URL",
+        help="an OpenAI-compatible endpoint for --detector llm, e.g. http://localhost:11434/v1 "
+        "for Ollama (default: OpenAI, with the key from OPENAI_API_KEY)",
+    )
+
     process = subs.add_parser(
         "process",
-        parents=[shared],
+        parents=[shared, llm],
         help="extract questions from a recording or a transcript",
         description="Extract the questions asked in a recording, or in an existing transcript.",
         epilog=_PROCESS_EXAMPLES,
@@ -301,7 +346,7 @@ def build_parser() -> argparse.ArgumentParser:
     transcribe.add_argument("recording", help="an .mp4 recording")
     transcribe.set_defaults(handler=_transcribe)
 
-    evaluation = subs.add_parser("eval", help="score against the labelled set")
+    evaluation = subs.add_parser("eval", parents=[llm], help="score against the labelled set")
     evaluation.add_argument(
         "paths", nargs="+", help="*.labels.jsonl files, or directories holding them"
     )

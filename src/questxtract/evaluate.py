@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import Config
+from .llm import JUDGE_PROMPT_VERSION
 from .models import Context, Transcript, Word
 from .pipeline import STAGES, run
 
@@ -73,22 +74,25 @@ def match(predictions: Sequence[Span], labels: Sequence[Span]) -> dict[int, int]
     return pairs
 
 
-def evaluate(paths: Sequence[str | Path]) -> dict[str, Any]:
+def evaluate(paths: Sequence[str | Path], config: Config | None = None) -> dict[str, Any]:
     """Score the pipeline against every labelled recording under ``paths``.
 
     ``paths`` are ``*.labels.jsonl`` files or directories holding them. A label file with no
     ``<name>.transcript.json`` beside it cannot be scored and is listed under ``skipped``.
+    ``config`` defaults to ``Config()``; pass one with ``detector="llm"`` to score the LLM
+    detector (its answers are cached, so a second run makes no calls).
 
     Returns:
-        The report: the gate ``threshold``, per-recording and pooled ``total`` metrics, and
-        a pooled ``sweep`` over the confidence threshold.
+        The report: the ``detector`` that ran, the gate ``threshold``, per-recording and
+        pooled ``total`` metrics, and a pooled ``sweep`` over the confidence threshold.
 
     Raises:
         FileNotFoundError: If a path does not exist.
         ValueError: If no label file under ``paths`` has a transcript.
 
     """
-    threshold = Config().min_confidence
+    config = config or Config()
+    threshold = config.min_confidence
     runs: dict[str, tuple[list[dict[str, Any]], list[dict[str, Any]], tuple[Word, ...]]] = {}
     skipped: list[str] = []
     for labels_path in _label_files(paths):
@@ -100,7 +104,7 @@ def evaluate(paths: Sequence[str | Path]) -> dict[str, Any]:
         transcript = Transcript.from_file(transcript_path)
         if name in runs:
             raise ValueError(f"duplicate recording name: {name}")
-        runs[name] = (_read_labels(labels_path), _predict(transcript), transcript.words)
+        runs[name] = (_read_labels(labels_path), _predict(transcript, config), transcript.words)
     if not runs:
         raise ValueError(f"no *.labels.jsonl with a matching *.transcript.json under {paths}")
 
@@ -108,6 +112,7 @@ def evaluate(paths: Sequence[str | Path]) -> dict[str, Any]:
         return _metrics(_sum([_counts(*r, t) for r in runs.values()]))
 
     return {
+        "detector": _detector(config),
         "threshold": threshold,
         "recordings": {name: _metrics(_counts(*r, threshold)) for name, r in runs.items()},
         "total": pooled(threshold),
@@ -124,7 +129,7 @@ def format_report(report: dict[str, Any]) -> str:
     """Render :func:`evaluate`'s report as a plain-text table plus its failure cases."""
     rows = [*report["recordings"].items(), ("TOTAL", report["total"])]
     lines = [
-        f"threshold {report['threshold']:.2f}",
+        f"detector {report['detector']}, threshold {report['threshold']:.2f}",
         f"{'recording':<22}{'content':>8}{'tp':>5}{'fp':>5}{'fn':>5}"
         f"{'recall':>8}{'prec':>7}{'f1':>7}{'?-rate':>8}",
     ]
@@ -174,9 +179,16 @@ def _read_labels(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in lines if line.strip()]
 
 
-def _predict(transcript: Transcript) -> list[dict[str, Any]]:
+def _detector(config: Config) -> str:
+    """Name what found the questions, so a pasted report says which model and prompt."""
+    if config.detector != "llm":
+        return config.detector
+    return f"llm {config.judge_model} (prompt {JUDGE_PROMPT_VERSION})"
+
+
+def _predict(transcript: Transcript, config: Config) -> list[dict[str, Any]]:
     """Run stages 3 onward with the emission gate open, so the sweep sees every candidate."""
-    config = Config().replace(min_confidence=0.0)
+    config = config.replace(min_confidence=0.0)
     ctx = Context(source=Path("eval"), config=config, transcript=transcript)
     ctx.duration = transcript.duration
     ctx = run(ctx, STAGES[_AFTER_TRANSCRIBE:])

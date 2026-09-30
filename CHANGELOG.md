@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added
+
+- `--detector llm` on `process` and `eval`: a language model reads the transcript, picks the
+  questions actually asked, cites the sentences that answer them and rewrites a messy question,
+  keeping the spoken version as `original_text`. It answers with sentence ids that are checked
+  against the transcript, so it never adds a question. Any OpenAI-compatible endpoint works:
+  OpenAI with `OPENAI_API_KEY`, or a local server such as Ollama with `--llm-url` and
+  `--llm-model`. Requests are cached in `.questxtract/judge/`. Needs the `llm` extra. (#88)
+
+### Changed (breaking)
+
+- `Config.judge_enabled` and `Config.judge_max_candidates` are gone. `Config(detector="llm")`
+  turns the LLM on; `judge_chunk_chars` and `judge_reasoning_effort` tune it. The `judge` stage
+  runs before `score`, so the threshold applies to what the model picked. `evaluate()` takes an
+  optional `Config`, and its report names the `detector`. (#88)
+
 ### Fixed
 
 - Detection finds the question word after a leading preposition ("For which ...?"), in an earlier

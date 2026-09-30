@@ -1,10 +1,13 @@
+import json
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import av
 import pytest
 
-from questxtract import Config, Context, Sentence, Transcript, Word
+from questxtract import Config, Context, Sentence, Transcript, Word, llm
 
 
 def _make_mp4(path: Path, *, audio: bool = True) -> Path:
@@ -86,3 +89,34 @@ def sentences(transcript: Transcript) -> tuple[Sentence, ...]:
 @pytest.fixture
 def context(transcript: Transcript) -> Context:
     return Context(source=Path("lecture.mp4"), config=Config(), transcript=transcript)
+
+
+class FakeLLM:
+    """Stands in for the OpenAI client: replays canned replies in order, repeating the last
+    one, and records every request. A reply is a JSON-able object, a raw string, or an
+    exception to raise."""
+
+    def __init__(self, replies: tuple[Any, ...]) -> None:
+        self.replies = list(replies)
+        self.requests: list[dict[str, Any]] = []
+        self.chat = self.completions = self
+
+    def create(self, **request: Any) -> Any:
+        self.requests.append(request)
+        reply = self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+        if isinstance(reply, Exception):
+            raise reply
+        content = reply if isinstance(reply, str) else json.dumps(reply)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+
+
+@pytest.fixture
+def fake_llm(monkeypatch: pytest.MonkeyPatch) -> Callable[..., FakeLLM]:
+    """Install a :class:`FakeLLM` as the LLM client: the LLM detector without a network."""
+
+    def install(*replies: Any) -> FakeLLM:
+        client = FakeLLM(replies)
+        monkeypatch.setattr(llm, "client", lambda config: client)
+        return client
+
+    return install

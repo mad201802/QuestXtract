@@ -1391,6 +1391,7 @@ llm = [
 dev = [
     { name = "jsonschema" },
     { name = "mypy" },
+    { name = "openai" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
@@ -1411,6 +1412,7 @@ provides-extras = ["llm"]
 dev = [
     { name = "jsonschema", specifier = ">=4" },
     { name = "mypy", specifier = ">=1.13" },
+    { name = "openai", specifier = ">=1.0" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-cov", specifier = ">=5" },
     { name = "ruff", specifier = ">=0.6" },

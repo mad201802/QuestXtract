@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from questxtract import Config
 from questxtract.cli import main
 from questxtract.evaluate import evaluate, match, overlap_ratio, overlaps
+from questxtract.llm import JUDGE_PROMPT_VERSION
 
 
 def test_overlap_is_measured_against_the_shorter_span() -> None:
@@ -103,6 +107,26 @@ def test_cli_eval_prints_table_and_json(tmp_path: Path, capsys: pytest.CaptureFi
     assert "TOTAL" in capsys.readouterr().out
     assert main(["eval", str(tmp_path), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["total"]["recall"] == 1.0
+
+
+def test_eval_scores_the_llm_detector_and_names_it(
+    tmp_path: Path,
+    fake_llm: Callable[..., Any],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#88: `eval --detector llm` runs the same harness over what the model picked."""
+    monkeypatch.chdir(tmp_path)  # the LLM cache is cwd-relative
+    labels = [{"start": 0.0, "end": 1.5, "text": "What is a field?", "kind": "content"}]
+    client = fake_llm({"questions": []})  # the model finds nothing, so recall drops to 0
+
+    url = ["--llm-url", "http://localhost:11434/v1"]
+    assert main(["eval", str(_write(tmp_path, labels)), "--detector", "llm", *url, "--json"]) == 0
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["detector"] == f"llm {Config().judge_model} (prompt {JUDGE_PROMPT_VERSION})"
+    assert report["total"]["recall"] == 0.0 and len(client.requests) == 1
+    assert evaluate([tmp_path])["detector"] == "rules"
 
 
 def test_nfr2_recall_on_the_reference_recordings() -> None:
