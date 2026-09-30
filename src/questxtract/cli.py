@@ -59,8 +59,8 @@ examples:
   questxtract process lecture.mp4 -m base                quick run with a small model
   questxtract process lecture.transcript.json -o -       existing transcript, print it
   questxtract process lecture.mp4 --detector llm         an LLM picks the questions
-  questxtract process lecture.mp4 --detector llm \
-      --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b   a local model in Ollama
+  questxtract process lecture.mp4 --detector llm         a local model in Ollama:
+      --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
 """
 
 _TRANSCRIBE_EXAMPLES = """\
