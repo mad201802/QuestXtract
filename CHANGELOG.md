@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+
+- `questxtract process` rejects a `--threshold` outside 0 to 1 with a one-line error instead of
+  writing a file that fails its own schema. (#85)
+
 ## 0.1.0
 
 First release. QuestXtract turns a lecture recording (`.mp4`) or an ASR transcript (`.json`) into
