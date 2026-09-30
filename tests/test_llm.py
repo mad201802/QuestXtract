@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import openai
@@ -186,6 +188,23 @@ def test_an_endpoint_error_is_a_connection_error(context, fake_llm, tmp_path):
     fake_llm(openai.OpenAIError("Connection error."))
     with pytest.raises(ConnectionError, match="judge: http://localhost:11434/v1: Connection error"):
         _run(context, tmp_path, base_url="http://localhost:11434/v1")
+
+
+def test_a_request_that_never_answers_times_out(context, monkeypatch, tmp_path):
+    """The SDK's timeout is per read; a server sending keep-alive bytes never trips it, so the
+    whole call has a deadline of its own."""
+    release = threading.Event()
+
+    def create(**request: Any) -> Any:
+        release.wait(5)  # stands in for a request that keeps the connection open
+
+    stalled = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(llm, "client", lambda config: stalled)
+    try:
+        with pytest.raises(ConnectionError, match="no answer within 0 s"):
+            _run(context, tmp_path, timeout_seconds=0)
+    finally:
+        release.set()
 
 
 def test_an_unknown_detector_fails_loudly(context):

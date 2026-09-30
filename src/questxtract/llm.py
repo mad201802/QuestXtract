@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import threading
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -181,8 +182,8 @@ def _ask(config: Config, chunk: Sequence[Sentence], only: Sequence[str] = ()) ->
 
     for _ in range(2):  # a second try for invalid JSON; the SDK retries network errors itself
         try:
-            response = llm.chat.completions.create(**request)
-        except OpenAIError as exc:
+            response = _create(llm, request, config.timeout_seconds)
+        except (OpenAIError, TimeoutError) as exc:
             raise ConnectionError(f"judge: {config.base_url or 'OpenAI'}: {exc}") from exc
         content = response.choices[0].message.content
         entries = _parse(content)
@@ -191,6 +192,36 @@ def _ask(config: Config, chunk: Sequence[Sentence], only: Sequence[str] = ()) ->
             path.write_text(content, encoding="utf-8")
             return entries
     raise ValueError(f"judge: {config.judge_model} did not return the expected JSON, twice")
+
+
+def _create(llm: Any, request: dict[str, Any], seconds: float) -> Any:
+    """Make one request, with a deadline on the whole call.
+
+    The SDK's timeout is per read, and a server that keeps the connection alive while the model
+    works never trips it: OpenRouter sends filler bytes, with no overall limit, so a stalled
+    request would hang the run. The call runs in a daemon thread and is abandoned past the
+    deadline; the process does not wait for it on exit.
+
+    Raises:
+        TimeoutError: If no answer arrived within ``seconds``, the SDK's retries included.
+
+    """
+    outcome: list[Any] = []
+
+    def call() -> None:
+        try:
+            outcome.append(llm.chat.completions.create(**request))
+        except Exception as exc:  # re-raised in the caller's thread below
+            outcome.append(exc)
+
+    worker = threading.Thread(target=call, daemon=True)
+    worker.start()
+    worker.join(seconds)
+    if not outcome:
+        raise TimeoutError(f"no answer within {seconds:g} s")
+    if isinstance(outcome[0], Exception):
+        raise outcome[0]
+    return outcome[0]
 
 
 def _skipped(entries: Sequence[Any], chunk: Sequence[Sentence]) -> list[str]:

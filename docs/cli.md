@@ -245,6 +245,7 @@ A `.json` transcript input never touches the cache. There is nothing expensive l
 | `--detector llm needs OPENAI_API_KEY, or --llm-url for a local server` | Set the key, or pass `--llm-url` for a local server. |
 | `--detector llm needs the LLM extra: ...` | Install `questxtract[llm]`. |
 | `judge: <endpoint>: ...` | The model endpoint failed: it is not running, the key is wrong, or the model name is unknown to it. The message after the endpoint says which. |
+| `judge: <endpoint>: no answer within 120 s` | The model took longer than `timeout_seconds` for one part of the lecture. Common with reasoning turned up; raise `Config(timeout_seconds=...)`. |
 | `judge: <model> did not return the expected JSON, twice` | The model could not follow the output format. Try a larger model; rerun to try again. |
 
 A missing file or wrong file type is caught before anything runs, and so is `--detector llm`

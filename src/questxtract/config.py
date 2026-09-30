@@ -65,7 +65,7 @@ class Config:
     judge_model: str = "gpt-5.6-terra"
     judge_chunk_chars: int = 8000  # transcript text per call, sized for an 8k-token context
     judge_reasoning_effort: str = "none"  # "" leaves it to the server
-    timeout_seconds: int = 120
+    timeout_seconds: int = 120  # per LLM request, start to answer, retries included
 
     # --- 11.2 cache ---
     cache_dir: str = ".questxtract"

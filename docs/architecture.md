@@ -740,7 +740,10 @@ breaks, which are silences of 2 s or more.
    valid JSON, which no schema catches, so the ones a first answer skipped are asked for once
    more, by id. Any still missing are counted in `stats.judge_skipped`.
 5. **It is required once asked for.** The user chose the LLM, so an unreachable endpoint, a bad
-   key, an unknown model or invalid JSON twice ends the run with one `error:` line. There is no
+   key, an unknown model, no answer within `timeout_seconds` or invalid JSON twice ends the run
+   with one `error:` line. The deadline covers the whole request: a server may keep the
+   connection alive while the model works (OpenRouter does, with no limit of its own), which a
+   per-read timeout never catches. There is no
    silent fallback to the rules. Chunks already answered stay cached (10.4), so a re-run resumes.
 
 ### 10.4 One call per chunk, cached per request
