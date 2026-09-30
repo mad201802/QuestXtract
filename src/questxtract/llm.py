@@ -1,13 +1,13 @@
-"""Stage 8, the judge: a text LLM picks the questions from the transcript (architecture.md 10).
+"""Stage 8, the judge: a text LLM decides which candidates are real questions (architecture.md 10).
 
 Off unless ``config.detector == "llm"``; the default ``Config`` makes zero outbound calls and
 the rules alone produce the result.
 
 The hard constraint from the requirements (4.5, "the model shall not create questions on
-their own"): the model answers with sentence ids, and every id is checked against the
-transcript it was sent. It may reword a question it found, and the export keeps the spoken
-version beside it (``original_text``); it can never add one that was not spoken. Quiz
-generation is generative and lives in a separate command (architecture.md 12.3).
+their own"): the model only judges candidates the code chose, by sentence id, and every id
+is checked against the request it came from. It may reword a question it kept, and the export
+keeps the spoken version beside it (``original_text``); it can never add one that was not
+spoken. Quiz generation is generative and lives in a separate command (architecture.md 12.3).
 """
 
 from __future__ import annotations
@@ -15,33 +15,37 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import threading
-from collections.abc import Iterable, Sequence
+from collections import Counter
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 from .config import Config
-from .models import Context, QAPair, QuestionCandidate, Segment, Sentence, stage
+from .models import Context, QAPair, QuestionCandidate, Sentence, stage
 
-# The prompt and the schema are module-level constants, version-tagged, so a prompt change is
-# a reviewable diff. A change to either changes the cache key, so no stale answer is replayed.
-JUDGE_PROMPT_VERSION = "v3"
+# The prompt and the schema are module-level, version-tagged, so a prompt change is a reviewable
+# diff. A change to either changes the cache key, so no stale answer is replayed.
+JUDGE_PROMPT_VERSION = "v4"
 
 _KINDS = ("content", "rhetorical", "check_in", "procedural")
+_FIELDS = ("reason", "kind", "question", "answer_sentence_ids", "confidence")
 
 # Label definitions condensed from docs/annotation_guidelines.md 2, so the model and the
 # labelled set draw the same lines.
 _PROMPT = """\
-You find the questions asked in a university lecture. The transcript comes from speech
+You judge the questions asked in a university lecture. The transcript comes from speech
 recognition: punctuation and sentence breaks can be wrong. Students are often inaudible, so the
 lecturer repeating a student's question in full counts as that question.
 
-Each input line is one sentence: its id, its start time in seconds, its text. Lines marked
-"(context)" come from just before or just after this part of the lecture, so you can follow it
-across the cut: give no entry for them, but an answer may cite a context line after its question.
+You get an excerpt of the lecture, one sentence per line: its id, its start time in seconds, its
+text. Lines starting with ">>" are the candidates: judge each of them, and only them, with the
+other lines as context. "[said 5x in this lecture]" means the lecturer uses these exact words
+that often; a form repeated that much is usually a habit, such as a confirmation tag or a
+check-in, rather than a real question.
 
-Give an entry for every sentence that asks a question, and for every sentence ending in "?",
-labelled with one kind:
+Label each candidate with one kind:
 - content: a question about the subject that a student should be able to answer after the
   lecture: "What is a field?", "How does a Markov chain work?", "Does anyone know why that
   matters?". It counts when the lecturer answers it straight away, when the lecturer puts it to
@@ -58,51 +62,20 @@ labelled with one kind:
 - procedural: logistics and managing the exchange: "Can you pass me the marker?", asking for a
   name, calling on someone, echoing a fragment of a student's question to check it.
 
-For each one give:
-- sentence_id: the id of the sentence holding the question, copied exactly. Only ids from the
-  input, one entry per sentence.
+For each candidate give:
+- reason: one short sentence on what the candidate does in the lecture, before you label it.
 - kind: one of the four above.
 - question: for a content question with messy wording (fillers, false starts, a preamble, or a
   question that only makes sense with the sentence before it), a clean standalone version that
   keeps its meaning and adds nothing that was not said. Otherwise "".
-- answer_sentence_ids: for a content question the lecture answers, the ids of the sentences
+- answer_sentence_ids: for a content question the excerpt answers, the ids of the sentences
   after it that give the answer, in order. Otherwise [].
 - confidence: from 0 to 1, how sure you are that the kind is right.
 
-Answer with JSON only, in this shape: {"questions": [{"sentence_id": "...", "kind": "...",
-"question": "...", "answer_sentence_ids": ["..."], "confidence": 0.0}]}. Never invent a
-question: every entry must be a sentence of the input.\
+Answer with JSON only: an object with one key per candidate id, in order, each holding these
+five fields, e.g. {"s_1a2b3c": {"reason": "...", "kind": "...", "question": "",
+"answer_sentence_ids": [], "confidence": 0.0}}. Judge only the candidates, never other lines.\
 """
-
-_ITEM = {
-    "type": "object",
-    "properties": {
-        "sentence_id": {"type": "string"},
-        "kind": {"type": "string", "enum": list(_KINDS)},
-        "question": {"type": "string"},
-        "answer_sentence_ids": {"type": "array", "items": {"type": "string"}},
-        "confidence": {"type": "number"},
-    },
-    "required": ["sentence_id", "kind", "question", "answer_sentence_ids", "confidence"],
-    "additionalProperties": False,
-}
-
-# Constrained decoding on the server (OpenAI, Ollama, vLLM, llama.cpp). Servers differ in how
-# faithfully they apply it, and a router such as OpenRouter may pick one that ignores it, so the
-# prompt spells the shape out too and _parse and _pairs check everything again.
-_RESPONSE_FORMAT = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "questions",
-        "strict": True,
-        "schema": {
-            "type": "object",
-            "properties": {"questions": {"type": "array", "items": _ITEM}},
-            "required": ["questions"],
-            "additionalProperties": False,
-        },
-    },
-}
 
 
 def client(config: Config) -> Any:
@@ -126,80 +99,119 @@ def client(config: Config) -> Any:
     )
 
 
-def _chunks(
-    sentences: Sequence[Sentence], segments: Sequence[Segment], max_chars: int
-) -> list[tuple[Sentence, ...]]:
-    """Group whole segments into chunks of at most ``max_chars`` of text.
+def _form(text: str) -> str:
+    """Return the words of ``text``, lower-cased: what counts as the same question form."""
+    return " ".join(re.findall(r"\w+(?:'\w+)?", text.casefold().replace("\u2019", "'")))
 
-    A segment wider than ``max_chars`` is a chunk on its own rather than being cut. A question is
-    never split, since chunks hold whole sentences; what a cut takes away is the lecture around
-    it, which :func:`_edge` hands back as context from the neighbouring chunks.
+
+def _batches(
+    positions: Sequence[int], total: int, window: int, size: int
+) -> list[tuple[list[int], range]]:
+    """Group candidate positions into requests, each with one contiguous excerpt.
+
+    Every candidate brings ``window`` sentences on each side. A candidate within ``window``
+    sentences of the previous one joins its request, up to ``size`` candidates, so the excerpt
+    stays one piece of lecture; any other starts a new request. Excerpts may overlap, which is
+    how no candidate loses the lecture around it.
     """
-    chunks: list[list[Sentence]] = [[]]
-    size = 0
-    for segment in segments:
-        width = len(segment.text)
-        if chunks[-1] and size + width > max_chars:
-            chunks.append([])
-            size = 0
-        chunks[-1].extend(sentences[segment.sentence_start : segment.sentence_end])
-        size += width
-    return [tuple(c) for c in chunks if c]
+    batches: list[tuple[list[int], range]] = []
+    for at in positions:
+        low, high = max(0, at - window), min(total, at + window + 1)
+        if batches and len(batches[-1][0]) < size and at <= batches[-1][0][-1] + window:
+            members, span = batches[-1]
+            batches[-1] = ([*members, at], range(span.start, high))
+        else:
+            batches.append(([at], range(low, high)))
+    return batches
 
 
-def _edge(sentences: Iterable[Sentence], max_chars: int) -> tuple[Sentence, ...]:
-    """Return the leading sentences of ``sentences`` that fit in ``max_chars`` of text."""
-    out: list[Sentence] = []
-    size = 0
-    for sentence in sentences:
-        size += len(sentence.text) + 1
-        if size > max_chars:
-            break
-        out.append(sentence)
-    return tuple(out)
+def _schema(excerpt: Sequence[Sentence], candidates: Sequence[Sentence]) -> dict[str, Any]:
+    """Build the response format of one request: exactly these candidates, fixed choices each.
+
+    Under constrained decoding (OpenAI strict mode, Ollama, vLLM, llama.cpp) the model cannot
+    skip a candidate, end early, or cite an answer that is not a later sentence of the excerpt.
+    Servers differ in how faithfully they apply a schema, so ``_pairs`` checks it all again.
+    """
+    ids = [s.id for s in excerpt]
+
+    def judgement(sentence: Sentence) -> dict[str, Any]:
+        later = ids[ids.index(sentence.id) + 1 :] or ["none"]
+        return {
+            "type": "object",
+            "properties": {
+                "reason": {"type": "string"},
+                "kind": {"type": "string", "enum": list(_KINDS)},
+                "question": {"type": "string"},
+                "answer_sentence_ids": {
+                    "type": "array",
+                    "items": {"type": "string", "enum": later},
+                },
+                "confidence": {"type": "number"},
+            },
+            "required": list(_FIELDS),
+            "additionalProperties": False,
+        }
+
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "judgements",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {s.id: judgement(s) for s in candidates},
+                "required": [s.id for s in candidates],
+                "additionalProperties": False,
+            },
+        },
+    }
 
 
-def _line(sentence: Sentence, *, context: bool = False) -> str:
-    """One transcript line of the request: id, start second, text."""
-    mark = "(context) " if context else ""
-    return f"{mark}{sentence.id} {sentence.start:.0f}s {sentence.text.strip()}"
+def _excerpt(excerpt: Sequence[Sentence], candidates: set[str], repeats: Counter[str]) -> str:
+    """Render the excerpt as request lines: candidates marked ">>", with their repeat count."""
+    lines = []
+    for s in excerpt:
+        said = repeats[_form(s.text)] if s.id in candidates else 0
+        mark = ">> " if s.id in candidates else "   "
+        # From 3 on: on the labelled set no content question repeats that often, and 61% of
+        # rhetorical ones (habitual tags) do. A real question asked twice is common.
+        note = f" [said {said}x in this lecture]" if said >= 3 else ""
+        lines.append(f"{mark}{s.id} {s.start:.0f}s{note} {s.text.strip()}")
+    return "\n".join(lines)
 
 
 def _ask(
     config: Config,
-    chunk: Sequence[Sentence],
-    only: Sequence[str] = (),
-    before: Sequence[Sentence] = (),
-    after: Sequence[Sentence] = (),
-) -> list[Any]:
-    """Send one chunk to the model and return its list of entries, cached on the request.
+    excerpt: Sequence[Sentence],
+    candidates: Sequence[Sentence],
+    repeats: Counter[str],
+    *,
+    again: bool = False,
+) -> dict[str, Any]:
+    """Ask the model to judge ``candidates`` in ``excerpt``; cached on the request.
 
-    ``before`` and ``after`` are context from the neighbouring chunks, marked as such. ``only``
-    narrows the request to those sentence ids, for the ones a first answer skipped.
-    The cache key is the whole request, so any change to the transcript, the sentence split,
-    the prompt, the model or the endpoint asks again, and nothing else does.
+    Returns the judgements by candidate id. ``again`` marks a follow-up for candidates a first
+    answer left out; it also keeps that request from being byte-identical to the first one,
+    whose cached answer would otherwise come back instead. The cache key is the whole request,
+    so any change to the transcript, the sentence split, the prompt, the model or the endpoint
+    asks again, and nothing else does.
 
     Raises:
-        ConnectionError: If the endpoint fails after the SDK's own retries.
-        ValueError: If the model answers with something other than the expected JSON twice.
+        ConnectionError: If the endpoint fails after the SDK's own retries, or times out.
+        ValueError: If the model answers with something other than a JSON object twice.
 
     """
-    lines = "\n".join(
-        [
-            *(_line(s, context=True) for s in before),
-            *(_line(s) for s in chunk),
-            *(_line(s, context=True) for s in after),
-        ]
-    )
-    if only:
-        lines += f"\n\nGive an entry for each of these sentences, and only these: {', '.join(only)}"
     request: dict[str, Any] = {
         "model": config.judge_model,
         "messages": [
             {"role": "system", "content": _PROMPT},
-            {"role": "user", "content": lines},
+            {
+                "role": "user",
+                "content": _excerpt(excerpt, {s.id for s in candidates}, repeats)
+                + ("\n\nJudge every line marked >>, leaving none out." if again else ""),
+            },
         ],
-        "response_format": _RESPONSE_FORMAT,
+        "response_format": _schema(excerpt, candidates),
     }
     if config.judge_reasoning_effort:
         request["reasoning_effort"] = config.judge_reasoning_effort
@@ -219,11 +231,11 @@ def _ask(
         except (OpenAIError, TimeoutError) as exc:
             raise ConnectionError(f"judge: {config.base_url or 'OpenAI'}: {exc}") from exc
         content = response.choices[0].message.content
-        entries = _parse(content)
-        if entries is not None:
+        judgements = _parse(content)
+        if judgements is not None:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
-            return entries
+            return judgements
     raise ValueError(f"judge: {config.judge_model} did not return the expected JSON, twice")
 
 
@@ -257,62 +269,43 @@ def _create(llm: Any, request: dict[str, Any], seconds: float) -> Any:
     return outcome[0]
 
 
-def _skipped(entries: Sequence[Any], chunk: Sequence[Sentence]) -> list[str]:
-    """Ids of the chunk's sentences ending in "?" that no entry names.
-
-    A model can end its list early with valid JSON, which no schema catches: on a chunk with
-    57 such sentences, one answer named 4. Every one of them must come back with some kind.
-    """
-    named = {e.get("sentence_id") for e in entries if isinstance(e, dict)}
-    return [s.id for s in chunk if s.text.rstrip().endswith("?") and s.id not in named]
-
-
-def _parse(content: str | None) -> list[Any] | None:
-    """Return the ``questions`` list of a response, or ``None`` when there is none."""
+def _parse(content: str | None) -> dict[str, Any] | None:
+    """Return a response's judgements by candidate id, or ``None`` when it is no JSON object."""
     try:
         data = json.loads(content or "")
     except json.JSONDecodeError:
         return None
-    entries = data.get("questions") if isinstance(data, dict) else None
-    return entries if isinstance(entries, list) else None
+    return data if isinstance(data, dict) else None
 
 
 def _pairs(
-    entries: Sequence[Any],
-    chunk: Sequence[Sentence],
+    judgements: dict[str, Any],
+    excerpt: Sequence[Sentence],
+    candidates: Sequence[Sentence],
     rules: dict[str, QuestionCandidate],
     stats: dict[str, int],
-    before: Sequence[Sentence] = (),
-    after: Sequence[Sentence] = (),
 ) -> list[QAPair]:
-    """Turn the model's entries into pairs, keeping only what traces back to ``chunk``.
+    """Turn the judgements into pairs, keeping only what traces back to the request.
 
-    An entry naming a sentence that is not in the chunk, or malformed in any way, is dropped
-    and counted in ``judge_dropped``: never added (requirement 4.5). An entry naming a context
-    sentence is left out without counting: that sentence belongs to the neighbouring chunk,
-    which judges it. An answer may reach into ``after``. Kinds other than ``content`` are
-    counted in ``judge_rejected``.
+    A judgement for anything but one of ``candidates``, or malformed in any way, is dropped and
+    counted in ``judge_dropped``: never added (requirement 4.5). Kinds other than ``content`` are
+    counted in ``judge_rejected``. An answer is later sentences of the excerpt; other ids are
+    dropped, not trusted.
     """
-    lecture = (*chunk, *after)
-    position = {s.id: i for i, s in enumerate(lecture)}
-    context = {s.id for s in (*before, *after)}
-    seen: set[str] = set()
+    position = {s.id: i for i, s in enumerate(excerpt)}
+    asked = {s.id for s in candidates}
     out: list[QAPair] = []
-    for entry in entries:
-        fields = _fields(entry)
-        if fields is not None and fields[0] in context:
-            continue
-        if fields is None or position.get(fields[0], len(chunk)) >= len(chunk) or fields[0] in seen:
+    for sentence_id, judgement in judgements.items():
+        fields = _fields(judgement)
+        if sentence_id not in asked or fields is None:
             stats["judge_dropped"] += 1
             continue
-        sentence_id, kind, question, answer_ids, confidence = fields
-        seen.add(sentence_id)
+        kind, question, answer_ids, confidence = fields
         if kind != "content":
             stats["judge_rejected"] += 1
             continue
         at = position[sentence_id]
-        sentence = chunk[at]
-        # An answer comes after its question; ids from elsewhere are dropped, not trusted.
+        sentence = excerpt[at]
         answers = sorted({position[a] for a in answer_ids if position.get(a, -1) > at})
         rule = rules.get(sentence_id)
         text = question.strip() or sentence.text.strip()
@@ -325,8 +318,8 @@ def _pairs(
                     question_type=rule.question_type if rule else "other",
                     reasons=(*(rule.reasons if rule else ()), "llm"),
                 ),
-                answer_sentence_ids=tuple(lecture[i].id for i in answers),
-                answer_text=" ".join(lecture[i].text.strip() for i in answers),
+                answer_sentence_ids=tuple(excerpt[i].id for i in answers),
+                answer_text=" ".join(excerpt[i].text.strip() for i in answers),
                 confidence=0.0,  # stage 9 fills this in
                 start=sentence.start,
                 end=sentence.end,
@@ -337,18 +330,16 @@ def _pairs(
     return out
 
 
-def _fields(entry: Any) -> tuple[str, str, str, list[Any], float] | None:
-    """Unpack one entry, or return ``None`` when any field has the wrong type or range."""
-    if not isinstance(entry, dict):
+def _fields(judgement: Any) -> tuple[str, str, list[Any], float] | None:
+    """Unpack one judgement, or return ``None`` when any field has the wrong type or range."""
+    if not isinstance(judgement, dict):
         return None
-    sentence_id = entry.get("sentence_id")
-    kind = entry.get("kind")
-    question = entry.get("question")
-    answer_ids = entry.get("answer_sentence_ids")
-    confidence = entry.get("confidence")
+    kind = judgement.get("kind")
+    question = judgement.get("question")
+    answer_ids = judgement.get("answer_sentence_ids")
+    confidence = judgement.get("confidence")
     if (
-        not isinstance(sentence_id, str)
-        or kind not in _KINDS
+        kind not in _KINDS
         or not isinstance(question, str)
         or not isinstance(answer_ids, list)
         or isinstance(confidence, bool)
@@ -356,16 +347,18 @@ def _fields(entry: Any) -> tuple[str, str, str, list[Any], float] | None:
         or not math.isfinite(confidence)
     ):
         return None
-    return sentence_id, str(kind), question, answer_ids, min(1.0, max(0.0, float(confidence)))
+    return str(kind), question, answer_ids, min(1.0, max(0.0, float(confidence)))
 
 
 @stage("judge")
 def judge(ctx: Context) -> Context:
-    """Replace the rules' candidates and pairs with the questions the LLM picks.
+    """Replace the rules' candidates and pairs with the ones the LLM judges real questions.
 
-    A no-op unless ``config.detector == "llm"``. Runs before stage 9, so the ``min_confidence``
-    cut applies to what the model picked. Caches each request itself (``_ask``) instead of
-    declaring ``cache=``: its input is the transcript, which a config-only header cannot key.
+    A no-op unless ``config.detector == "llm"``. The candidates are every sentence ending in "?"
+    plus the rules' own; the model decides each of them in a window of the lecture around it
+    (``_batches``). Runs before stage 9, so the ``min_confidence`` cut applies to what the model
+    kept. Caches each request itself (``_ask``) instead of declaring ``cache=``: its input is the
+    transcript, which a config-only header cannot key.
 
     Raises:
         ValueError: If ``config.detector`` is neither ``rules`` nor ``llm``, or the model does
@@ -379,24 +372,30 @@ def judge(ctx: Context) -> Context:
         return ctx
     if detector != "llm":
         raise ValueError(f"unknown detector {detector!r}, expected 'rules' or 'llm'")
+    sentences = ctx.sentences
     rules = {c.sentence_id: c for c in ctx.candidates}
-    chunks = _chunks(ctx.sentences, ctx.segments, ctx.config.judge_chunk_chars)
+    positions = [
+        i for i, s in enumerate(sentences) if s.text.rstrip().endswith("?") or s.id in rules
+    ]
+    repeats = Counter(_form(sentences[i].text) for i in positions)
+    batches = _batches(
+        positions, len(sentences), ctx.config.judge_window, ctx.config.judge_batch_size
+    )
     ctx.stats.update(judge_dropped=0, judge_rejected=0, judge_skipped=0)
     pairs: list[QAPair] = []
-    width = ctx.config.judge_context_chars
-    for done, chunk in enumerate(chunks):
+    for done, (members, span) in enumerate(batches):
         if ctx.progress:
-            ctx.progress("judge", done / len(chunks))
-        before = _edge(reversed(chunks[done - 1]), width)[::-1] if done else ()
-        after = _edge(chunks[done + 1], width) if done + 1 < len(chunks) else ()
-        entries = _ask(ctx.config, chunk, before=before, after=after)
-        skipped = _skipped(entries, chunk)
-        if skipped:  # asked once more, for exactly those; what is still missing is counted
-            entries = [*entries, *_ask(ctx.config, chunk, skipped, before, after)]
-            ctx.stats["judge_skipped"] += len(_skipped(entries, chunk))
-        pairs += _pairs(entries, chunk, rules, ctx.stats, before, after)
-    ctx.pairs = tuple(pairs)
-    ctx.candidates = tuple(p.question for p in pairs)
+            ctx.progress("judge", done / len(batches))
+        excerpt = sentences[span.start : span.stop]
+        candidates = [sentences[i] for i in members]
+        judgements = _ask(ctx.config, excerpt, candidates, repeats)
+        missing = [s for s in candidates if s.id not in judgements]
+        if missing:  # a server that ignores the schema can still skip some: ask once more
+            judgements = {**_ask(ctx.config, excerpt, missing, repeats, again=True), **judgements}
+            ctx.stats["judge_skipped"] += sum(1 for s in candidates if s.id not in judgements)
+        pairs += _pairs(judgements, excerpt, candidates, rules, ctx.stats)
+    ctx.pairs = tuple(sorted(pairs, key=lambda p: p.start))  # a follow-up answers out of order
+    ctx.candidates = tuple(p.question for p in ctx.pairs)
     ctx.stats["candidates"] = len(ctx.candidates)
     ctx.stats["answered"] = sum(1 for p in pairs if p.answer_text)
     return ctx

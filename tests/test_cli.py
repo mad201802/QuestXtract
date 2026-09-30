@@ -296,14 +296,14 @@ def test_detector_llm_uses_the_model_and_endpoint_given(
     monkeypatch.chdir(tmp_path)  # the LLM cache is cwd-relative
     source = _transcript_file(tmp_path)
     (sentence,) = split_sentences(Transcript.from_file(source))
-    entry = {
-        "sentence_id": sentence.id,
+    judged = {
+        "reason": "",
         "kind": "content",
         "question": "",
         "answer_sentence_ids": [],
         "confidence": 1.0,
     }
-    client = fake_llm({"questions": [entry]})
+    client = fake_llm({sentence.id: judged})
     url = "http://localhost:11434/v1"
 
     args = ["process", str(source), "--detector", "llm", "--llm-model", "qwen3.5:9b"]

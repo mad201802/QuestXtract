@@ -1,9 +1,10 @@
-"""Tests for the LLM detector (#88). A fake client stands in for the endpoint: no network."""
+"""Tests for the LLM detector (#88, #89). A fake client stands in for the endpoint: no network."""
 
 from __future__ import annotations
 
 import json
 import threading
+from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -12,16 +13,18 @@ import openai
 import pytest
 from jsonschema import Draft202012Validator
 
-from questxtract import Config, Context, Sentence, Transcript, llm
+from questxtract import Config, Context, Transcript, llm
 from questxtract.export import SCHEMA_PATH, result_to_dict
 from questxtract.pipeline import STAGES, run
-from questxtract.segments import build_segments
 from questxtract.sentences import split_sentences
 
+# The `context` fixture: "Today we cover sorting." / "What is a stable sort?" / "It keeps equal
+# elements in order." The one candidate is the middle sentence, the one ending in "?".
 
-def _entry(sentence: Sentence, kind: str = "content", **fields: Any) -> dict[str, Any]:
+
+def _judged(kind: str = "content", **fields: Any) -> dict[str, Any]:
     return {
-        "sentence_id": sentence.id,
+        "reason": "",
         "kind": kind,
         "question": "",
         "answer_sentence_ids": [],
@@ -33,6 +36,19 @@ def _entry(sentence: Sentence, kind: str = "content", **fields: Any) -> dict[str
 def _run(context: Context, tmp_path: Path, **config: Any) -> Context:
     context.config = context.config.replace(detector="llm", cache_dir=str(tmp_path), **config)
     return run(context, STAGES[2:])
+
+
+def _lecture(text: str, seconds_apart: float = 1.0) -> Context:
+    """A context over ``text``, one word every ``seconds_apart`` seconds."""
+    words = [
+        {"word": w, "start": seconds_apart * i, "end": seconds_apart * i + 0.5}
+        for i, w in enumerate(text.split())
+    ]
+    end = seconds_apart * len(words)
+    transcript = Transcript.from_dict(
+        {"segments": [{"text": text, "start": 0.0, "end": end, "words": words}]}
+    )
+    return Context(source=Path("t.json"), config=Config(), transcript=transcript)
 
 
 def test_the_rules_detector_makes_no_calls(context, monkeypatch):
@@ -47,44 +63,69 @@ def test_the_rules_detector_makes_no_calls(context, monkeypatch):
     assert ctx.pairs[0].verdict == "unjudged"
 
 
-def test_an_unknown_sentence_id_is_dropped_and_counted_never_added(
+def test_the_schema_requires_exactly_the_candidates_and_later_answers(
     context, sentences, fake_llm, tmp_path
 ):
-    """AC, requirement 4.5: the model cannot add a question that was not spoken."""
-    invented = {**_entry(sentences[1]), "sentence_id": "s_000000"}
-    fake_llm({"questions": [invented, _entry(sentences[1]), _entry(sentences[1])]})
-    ctx = _run(context, tmp_path)
-    assert [p.question.sentence_id for p in ctx.pairs] == [sentences[1].id]
-    assert ctx.stats["judge_dropped"] == 2  # the invented id and the duplicate
+    """AC: under constrained decoding the model can skip no candidate and cite no answer that
+    is not a later sentence of its excerpt."""
+    client = fake_llm({sentences[1].id: _judged()})
+    _run(context, tmp_path)
+    (request,) = client.requests
+    schema = request["response_format"]["json_schema"]
+    assert schema["strict"] is True
+    assert schema["schema"]["required"] == [sentences[1].id]
+    answers = schema["schema"]["properties"][sentences[1].id]["properties"]["answer_sentence_ids"]
+    assert answers["items"]["enum"] == [sentences[2].id]
+    assert request["reasoning_effort"] == "none"
+    lines = request["messages"][1]["content"].splitlines()
+    assert lines[0].startswith(f"   {sentences[0].id} 0s ")
+    assert lines[1] == f">> {sentences[1].id} 2s What is a stable sort?"
+
+    _run(context, tmp_path, judge_reasoning_effort="", from_scratch=True)
+    assert "reasoning_effort" not in client.requests[1]
 
 
-def test_malformed_entries_are_dropped_and_other_kinds_counted(
+def test_an_id_that_was_not_a_candidate_is_dropped_and_counted_never_added(
     context, sentences, fake_llm, tmp_path
 ):
+    """AC, requirement 4.5: the model cannot add a question, not even a real sentence it was
+    not asked about."""
     fake_llm(
         {
-            "questions": [
-                "not an object",
-                _entry(sentences[0], kind="question"),
-                _entry(sentences[0], confidence="high"),
-                _entry(sentences[0], kind="check_in"),
-                _entry(sentences[1], confidence=7),
-            ]
+            "s_000000": _judged(),
+            sentences[0].id: _judged(),  # a real sentence, but no candidate
+            sentences[1].id: _judged(),
         }
     )
     ctx = _run(context, tmp_path)
+    assert [p.question.sentence_id for p in ctx.pairs] == [sentences[1].id]
+    assert ctx.stats["judge_dropped"] == 2
+
+
+def test_malformed_judgements_are_dropped_and_other_kinds_counted(fake_llm, tmp_path):
+    ctx = _lecture("Is one? Is two? Is three? Is four? Is five?")
+    one, two, three, four, five = split_sentences(ctx.transcript)
+    fake_llm(
+        {
+            one.id: "not an object",
+            two.id: _judged(kind="question"),
+            three.id: _judged(confidence="high"),
+            four.id: _judged(kind="check_in"),
+            five.id: _judged(confidence=7),
+        }
+    )
+    ctx = _run(ctx, tmp_path)
     assert ctx.stats["judge_dropped"] == 3 and ctx.stats["judge_rejected"] == 1
-    assert ctx.pairs[0].question.score == 1.0  # clamped into [0, 1]
+    (pair,) = ctx.pairs
+    assert pair.question.sentence_id == five.id and pair.question.score == 1.0  # clamped
 
 
 def test_a_later_answer_is_the_text_of_the_cited_sentences(fake_llm, tmp_path):
-    """AC: an answer several sentences later is extractive: the cited sentences' own text."""
-    text = "What is a stable sort? Let me draw it. Here. It keeps equal keys in order."
-    transcript = Transcript.from_dict({"segments": [{"text": text, "start": 0.0, "end": 8.0}]})
-    ctx = Context(source=Path("t.json"), config=Config(), transcript=transcript)
-    question, draw, here, answer = split_sentences(transcript)
+    """An answer is extractive: the cited sentences' own text, later ones only."""
+    ctx = _lecture("What is a stable sort? Let me draw it. Here. It keeps equal keys in order.")
+    question, draw, here, answer = split_sentences(ctx.transcript)
     cited = [answer.id, question.id, "s_000000"]  # an earlier and an unknown id are dropped
-    fake_llm({"questions": [_entry(question, answer_sentence_ids=cited)]})
+    fake_llm({question.id: _judged(answer_sentence_ids=cited)})
     (pair,) = _run(ctx, tmp_path).pairs
     assert pair.answer_sentence_ids == (answer.id,)
     assert pair.answer_text == "It keeps equal keys in order."
@@ -94,10 +135,10 @@ def test_a_later_answer_is_the_text_of_the_cited_sentences(fake_llm, tmp_path):
 def test_a_rewritten_question_exports_the_spoken_one_beside_it(
     context, sentences, fake_llm, tmp_path
 ):
-    """AC: `text` is the rewrite, `original_text` the transcript, `verdict` revise; and the
-    export of an LLM run passes the published schema unchanged (no schema bump)."""
+    """`text` is the rewrite, `original_text` the transcript, `verdict` revise; and the export
+    of an LLM run passes the published schema unchanged (no schema bump)."""
     rewrite = "What makes a sorting algorithm stable?"
-    fake_llm({"questions": [_entry(sentences[1], question=rewrite)]})
+    fake_llm({sentences[1].id: _judged(question=rewrite)})
     data = result_to_dict(_run(context, tmp_path))
     (question,) = data["questions"]
     assert question["text"] == rewrite
@@ -109,27 +150,49 @@ def test_a_rewritten_question_exports_the_spoken_one_beside_it(
     Draft202012Validator(json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))).validate(data)
 
 
-def test_a_question_the_rules_missed_is_kept_verbatim(context, sentences, fake_llm, tmp_path):
-    fake_llm({"questions": [_entry(sentences[0], question=f"  {sentences[0].text}  ")]})
-    (pair,) = _run(context, tmp_path).pairs
+def test_a_question_mark_the_rules_rejected_is_still_a_candidate(fake_llm, tmp_path):
+    """Candidates are every sentence ending in "?" plus the rules' own: a confirmation tag
+    scores under the rules' gate, and the model still judges it."""
+    ctx = _lecture("It is sorted, right?")
+    (tag,) = split_sentences(ctx.transcript)
+    fake_llm({tag.id: _judged(question=f"  {tag.text}  ")})
+    (pair,) = _run(ctx, tmp_path).pairs
     assert pair.verdict == "keep"
     assert pair.question.reasons == ("llm",) and pair.question.question_type == "other"
 
 
 def test_the_threshold_cuts_the_models_own_confidence(context, sentences, fake_llm, tmp_path):
-    """The judge runs before `score`, so `min_confidence` applies to what the model picked, and
+    """The judge runs before `score`, so `min_confidence` applies to what the model kept, and
     to its confidence as it is: the model saw the answer, so no answer weighting on top."""
-    fake_llm({"questions": [_entry(sentences[1], confidence=0.5)]})
+    fake_llm({sentences[1].id: _judged(confidence=0.5)})
     (pair,) = _run(context, tmp_path).pairs
     assert pair.confidence == 0.5  # unanswered, and not cut to 0.55 * 0.5
 
-    fake_llm({"questions": [_entry(sentences[1], confidence=0.3)]})
+    fake_llm({sentences[1].id: _judged(confidence=0.3)})
     assert _run(context, tmp_path, from_scratch=True).pairs == ()
 
 
+def test_a_form_repeated_in_the_lecture_carries_its_count(fake_llm, tmp_path):
+    """AC: from three times on, a candidate line says how often the lecturer says it."""
+    ctx = _lecture("True? Is it bounded? True? Is it bounded? True?")
+    client = fake_llm({})
+    _run(ctx, tmp_path, judge_window=0, judge_batch_size=1)
+    lines = [r["messages"][1]["content"] for r in client.requests]
+    assert sum("[said 3x in this lecture] True?" in line for line in lines) >= 3
+    assert not any("Is it bounded?" in line and "[said" in line for line in lines)
+
+
+def test_nearby_candidates_share_a_request_and_distant_ones_do_not():
+    """AC: a candidate within the window of the previous one joins its request, up to the
+    batch size; the excerpt is one piece of lecture covering both windows."""
+    assert llm._batches([5, 8, 30], 40, 4, 8) == [([5, 8], range(1, 13)), ([30], range(26, 35))]
+    assert llm._batches([5, 8, 9], 40, 4, 2) == [([5, 8], range(1, 13)), ([9], range(5, 14))]
+    assert llm._batches([0, 39], 40, 4, 8) == [([0], range(0, 5)), ([39], range(35, 40))]
+
+
 def test_answers_are_cached_on_the_request(context, sentences, fake_llm, tmp_path):
-    """AC: another threshold makes zero calls; --from-scratch makes them again."""
-    client = fake_llm({"questions": [_entry(sentences[1])]})
+    """Another threshold makes zero calls; --from-scratch makes them again."""
+    client = fake_llm({sentences[1].id: _judged()})
     _run(context, tmp_path)
     _run(context, tmp_path, min_confidence=0.2)
     assert len(client.requests) == 1
@@ -144,42 +207,29 @@ def test_answers_are_cached_on_the_request(context, sentences, fake_llm, tmp_pat
     assert len(client.requests) == 4
 
 
-def test_the_request_asks_for_json_matching_the_schema(context, sentences, fake_llm, tmp_path):
-    client = fake_llm({"questions": [_entry(sentences[1])]})
-    _run(context, tmp_path)
-    (request,) = client.requests
-    assert request["response_format"]["json_schema"]["strict"] is True
-    assert request["reasoning_effort"] == "none"
-    lines = request["messages"][1]["content"].splitlines()
-    assert lines[1].startswith("s_") and lines[1].endswith("2s What is a stable sort?")
-
-    _run(context, tmp_path, judge_reasoning_effort="", from_scratch=True)
-    assert "reasoning_effort" not in client.requests[1]
-
-
-def test_a_question_the_first_answer_skipped_is_asked_for_again(
-    context, sentences, fake_llm, tmp_path
-):
-    """A model can end its list early with valid JSON: every sentence ending in '?' must come
-    back with some kind, so the skipped ones are asked for once more."""
-    client = fake_llm({"questions": []}, {"questions": [_entry(sentences[1])]})
-    ctx = _run(context, tmp_path)
-    assert [p.question.sentence_id for p in ctx.pairs] == [sentences[1].id]
-    follow_up = client.requests[1]["messages"][1]["content"]
-    assert follow_up.endswith(f"and only these: {sentences[1].id}")
+def test_a_candidate_the_answer_skipped_is_asked_for_again(fake_llm, tmp_path):
+    """AC: a server that ignores the schema can skip a candidate; the skipped ones are asked
+    for once more, and what is still missing is counted."""
+    ctx = _lecture("Is one? Is two?")
+    one, two = split_sentences(ctx.transcript)
+    client = fake_llm({one.id: _judged()}, {two.id: _judged()})
+    ctx = _run(ctx, tmp_path)
+    assert [p.question.sentence_id for p in ctx.pairs] == [one.id, two.id]
+    follow_up = client.requests[1]
+    assert follow_up["response_format"]["json_schema"]["schema"]["required"] == [two.id]
     assert ctx.stats["judge_skipped"] == 0
 
-    fake_llm({"questions": []})  # skipped twice: counted, and the run goes on
-    assert _run(context, tmp_path, from_scratch=True).stats["judge_skipped"] == 1
+    fake_llm({})  # skipped twice: counted, and the run goes on
+    assert _run(ctx, tmp_path, from_scratch=True).stats["judge_skipped"] == 2
 
 
 def test_invalid_json_is_asked_again_once_then_fails(context, sentences, fake_llm, tmp_path):
-    """AC: invalid JSON twice ends the run; there is no silent fallback to the rules."""
-    client = fake_llm("not json", {"questions": [_entry(sentences[1])]})
+    """Invalid JSON twice ends the run; there is no silent fallback to the rules."""
+    client = fake_llm("not json", {sentences[1].id: _judged()})
     assert len(_run(context, tmp_path).pairs) == 1
     assert len(client.requests) == 2
 
-    fake_llm("not json", {"answers": []})
+    fake_llm("not json", '["a list, not an object"]')
     with pytest.raises(ValueError, match="did not return the expected JSON, twice"):
         _run(context, tmp_path, from_scratch=True)
 
@@ -213,88 +263,22 @@ def test_an_unknown_detector_fails_loudly(context):
         run(context, STAGES[2:])
 
 
-def test_chunks_hold_whole_segments_up_to_the_limit():
-    texts = ["One two.", "Three four.", "Five six."]
-    transcript = Transcript.from_dict(
-        {
-            "segments": [
-                {"text": t, "start": 10.0 * i, "end": 10.0 * i + 1.0} for i, t in enumerate(texts)
-            ]
-        }
-    )
-    sentences = split_sentences(transcript)
-    segments = build_segments(sentences)  # 9 s silences: one segment per sentence
-    assert len(segments) == 3
-    widths = [[len(c) for c in llm._chunks(sentences, segments, limit)] for limit in (100, 19, 1)]
-    assert widths == [[3], [2, 1], [1, 1, 1]]  # a segment over the limit is a chunk of its own
-
-
-def _four_segments() -> Context:
-    """Four one-sentence segments, 4 s apart: "What is one? Two. What is three? Four."."""
-    text = "What is one? Two. What is three? Four."
-    words = [
-        {"word": w, "start": 5.0 * i, "end": 5.0 * i + 1.0} for i, w in enumerate(text.split())
-    ]
-    transcript = Transcript.from_dict(
-        {"segments": [{"text": text, "start": 0.0, "end": 36.0, "words": words}]}
-    )
-    return Context(source=Path("t.json"), config=Config(judge_chunk_chars=1), transcript=transcript)
-
-
-def test_an_answer_across_a_chunk_boundary_comes_from_the_context_lines(fake_llm, tmp_path):
-    """Every chunk is sent with context lines from its neighbours; an answer may cite one, and
-    a question named in them is left to the chunk that owns it."""
-    ctx = _four_segments()
-    one, two, three, four = split_sentences(ctx.transcript)
-    client = fake_llm(
-        {
-            "questions": [
-                _entry(one, answer_sentence_ids=[two.id]),
-                _entry(three, answer_sentence_ids=[four.id]),
-            ]
-        }
-    )
-    ctx = _run(ctx, tmp_path)
-    assert [(p.question.text, p.answer_text) for p in ctx.pairs] == [
-        ("What is one?", "Two."),
-        ("What is three?", "Four."),
-    ]
-    first = client.requests[0]["messages"][1]["content"].splitlines()
-    assert first[0].startswith(one.id) and first[1].startswith(f"(context) {two.id}")
-    second = client.requests[1]["messages"][1]["content"].splitlines()
-    assert second[0].startswith(f"(context) {one.id}") and second[1].startswith(two.id)
-    # the chunks of "Two." and "Four." name the neighbours' questions as context: not counted;
-    # the chunks of the two questions name each other's question, which is no context of theirs
-    assert ctx.stats["judge_dropped"] == 3
-
-
-def test_context_can_be_turned_off(fake_llm, tmp_path):
-    client = fake_llm({"questions": []})
-    _run(_four_segments(), tmp_path, judge_context_chars=0)
-    assert not any("(context)" in r["messages"][1]["content"] for r in client.requests)
-
-
-def test_every_chunk_is_one_request_and_reports_progress(fake_llm, tmp_path):
-    text = "What is one? Two. What is three? Four."
-    # 4 s between words, so every sentence is a segment of its own
-    words = [
-        {"word": w, "start": 5.0 * i, "end": 5.0 * i + 1.0} for i, w in enumerate(text.split())
-    ]
-    transcript = Transcript.from_dict(
-        {"segments": [{"text": text, "start": 0.0, "end": 36.0, "words": words}]}
-    )
+def test_every_request_reports_progress(fake_llm, tmp_path):
+    ctx = _lecture("Is one? Is two? Is three?")
     seen: list[float] = []
-    ctx = Context(
-        source=Path("t.json"),
-        config=Config(judge_chunk_chars=1),
-        transcript=transcript,
-        progress=lambda name, fraction: seen.append(fraction) if name == "judge" else None,
+    ctx.progress = lambda name, fraction: seen.append(fraction) if name == "judge" else None
+    client = fake_llm({})
+    _run(ctx, tmp_path, judge_window=0, judge_batch_size=1)
+    assert len(client.requests) == 3 * 2  # one per candidate, each asked again when skipped
+    assert seen[0] == 0.0 and max(seen) < 1.0 and len(seen) == 4
+
+
+def test_the_form_of_a_question_ignores_case_and_punctuation():
+    assert llm._form("True?") == llm._form("  true ") == "true"
+    assert llm._form("Don’t we, people?") == "don't we people"
+    assert Counter(map(llm._form, ["Right?", "right.", "Right, right?"])) == Counter(
+        {"right": 2, "right right": 1}
     )
-    client = fake_llm({"questions": []})
-    _run(ctx, tmp_path)
-    # one per chunk, plus a follow-up for each of the two chunks whose question went unanswered
-    assert len(client.requests) == len(ctx.segments) + 2 > 3
-    assert seen[0] == 0.0 and max(seen) < 1.0
 
 
 def test_the_client_points_at_the_configured_endpoint():
