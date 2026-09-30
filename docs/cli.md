@@ -159,6 +159,15 @@ questxtract process lecture.mp4 --detector llm
 questxtract process lecture.mp4 --detector llm --llm-model gpt-5.6-luna
 ```
 
+**Another hosted provider (OpenRouter and the like).** Anything that speaks the OpenAI API works:
+put that provider's key in `OPENAI_API_KEY` and pass its URL and model name.
+
+```bash
+export OPENAI_API_KEY=sk-or-...                # the OpenRouter key
+questxtract process lecture.mp4 --detector llm \
+    --llm-url https://openrouter.ai/api/v1 --llm-model deepseek/deepseek-v4.1-flash
+```
+
 **Local (Ollama).** Any OpenAI-compatible server works (Ollama, llama.cpp's `llama-server`,
 vLLM, LM Studio); pass its URL. With [Ollama](https://ollama.com), give it an 8k context first:
 below 24 GB of graphics memory it defaults to 4k and silently cuts longer prompts.

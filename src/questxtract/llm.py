@@ -60,7 +60,9 @@ For each one give:
   after it that give the answer, in order. Otherwise [].
 - confidence: from 0 to 1, how sure you are that the kind is right.
 
-Never invent a question: every entry must be a sentence of the input.\
+Answer with JSON only, in this shape: {"questions": [{"sentence_id": "...", "kind": "...",
+"question": "...", "answer_sentence_ids": ["..."], "confidence": 0.0}]}. Never invent a
+question: every entry must be a sentence of the input.\
 """
 
 _ITEM = {
@@ -77,7 +79,8 @@ _ITEM = {
 }
 
 # Constrained decoding on the server (OpenAI, Ollama, vLLM, llama.cpp). Servers differ in how
-# faithfully they apply it, so _parse and _pairs check everything again.
+# faithfully they apply it, and a router such as OpenRouter may pick one that ignores it, so the
+# prompt spells the shape out too and _parse and _pairs check everything again.
 _RESPONSE_FORMAT = {
     "type": "json_schema",
     "json_schema": {
