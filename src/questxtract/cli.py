@@ -179,6 +179,8 @@ def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
 
 def _process(args: argparse.Namespace) -> int:
     """Extract questions from a recording (every stage) or a transcript (skips ASR)."""
+    if not 0.0 <= args.threshold <= 1.0:  # also catches nan
+        raise ValueError(f"--threshold must be between 0 and 1, got {args.threshold}")
     source = Path(args.input)
     _check_input(source, (".mp4", ".json"))
     output = _output_path(args.output, source, "questions")

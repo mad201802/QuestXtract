@@ -257,8 +257,6 @@ def test_cli_threshold_filters(tmp_path, capsys):
     # Answered with no pause, so the full question score carries: 1.0.
     assert main(["process", str(_transcript_file(tmp_path)), "-t", "0.9", "-o", "-"]) == 0
     assert len(json.loads(capsys.readouterr().out)["questions"]) == 1
-    assert main(["process", str(_transcript_file(tmp_path)), "-t", "1.1", "-o", "-"]) == 0
-    assert json.loads(capsys.readouterr().out)["questions"] == []
 
 
 def test_cli_reports_malformed_transcript_readably(tmp_path, capsys):
@@ -279,3 +277,22 @@ def test_unimplemented_subcommands_fail_readably(tmp_path, capsys):
     assert capsys.readouterr().err.startswith("error: ")
     assert main(["quiz", str(tmp_path / "q.json")]) == 1
     assert capsys.readouterr().err.startswith("error: ")
+
+
+@pytest.mark.parametrize("threshold", ["1.1", "-0.1", "nan"])
+def test_cli_rejects_a_threshold_outside_0_to_1(tmp_path, capsys, threshold):
+    """#85 AC1: exit 1, one line naming the range, no file written."""
+    out = tmp_path / "out" / "q.json"
+    args = ["process", str(_transcript_file(tmp_path)), "-t", threshold, "-o", str(out)]
+    assert main(args) == 1
+    err = capsys.readouterr().err
+    assert "between 0 and 1" in err and len(err.strip().splitlines()) == 1
+    assert not out.parent.exists()
+
+
+@pytest.mark.parametrize("threshold", ["0", "1"])
+def test_cli_accepts_the_threshold_bounds(tmp_path, validator, threshold):
+    """#85 AC2."""
+    out = tmp_path / "q.json"
+    assert main(["process", str(_transcript_file(tmp_path)), "-t", threshold, "-o", str(out)]) == 0
+    validator.validate(read_questions(out))
