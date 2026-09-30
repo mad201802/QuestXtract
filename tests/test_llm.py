@@ -257,6 +257,42 @@ def test_a_request_that_never_answers_times_out(context, monkeypatch, tmp_path):
         release.set()
 
 
+def test_a_stalled_request_is_sent_once_more(context, sentences, monkeypatch, tmp_path):
+    """A stall is usually the provider: one more try, before the run fails."""
+    release = threading.Event()
+    calls: list[int] = []
+    answer = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=json.dumps({sentences[1].id: _judged()}))
+            )
+        ]
+    )
+
+    def create(**request: Any) -> Any:
+        calls.append(1)
+        if len(calls) == 1:
+            release.wait(5)  # the first try stalls
+        return answer
+
+    flaky = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(llm, "client", lambda config: flaky)
+    try:
+        assert len(_run(context, tmp_path, timeout_seconds=1).pairs) == 1
+    finally:
+        release.set()
+    assert len(calls) == 2
+
+
+def test_parallel_requests_give_the_same_result_in_recording_order(fake_llm, tmp_path):
+    ctx = _lecture("Is one? Is two? Is three?")
+    one, two, three = split_sentences(ctx.transcript)
+    fake_llm({one.id: _judged(), two.id: _judged(), three.id: _judged()})
+    ctx = _run(ctx, tmp_path, judge_window=0, judge_batch_size=1, judge_parallel=3)
+    assert [p.question.sentence_id for p in ctx.pairs] == [one.id, two.id, three.id]
+    assert ctx.stats["judge_dropped"] == 6  # each request's answer names the other two
+
+
 def test_an_unknown_detector_fails_loudly(context):
     context.config = context.config.replace(detector="LLM")
     with pytest.raises(ValueError, match="unknown detector 'LLM'"):

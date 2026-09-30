@@ -19,6 +19,7 @@ import re
 import threading
 from collections import Counter
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,7 @@ from .models import Context, QAPair, QuestionCandidate, Sentence, stage
 
 # The prompt and the schema are module-level, version-tagged, so a prompt change is a reviewable
 # diff. A change to either changes the cache key, so no stale answer is replayed.
-JUDGE_PROMPT_VERSION = "v4"
+JUDGE_PROMPT_VERSION = "v5"
 
 _KINDS = ("content", "rhetorical", "check_in", "procedural")
 _FIELDS = ("reason", "kind", "question", "answer_sentence_ids", "confidence")
@@ -45,25 +46,29 @@ other lines as context. "[said 5x in this lecture]" means the lecturer uses thes
 that often; a form repeated that much is usually a habit, such as a confirmation tag or a
 check-in, rather than a real question.
 
+First ask what the candidate asks about. Who answers it does not matter: lecturers answer most
+of their own questions, straight away or after a pause, and that makes none of them rhetorical.
+
 Label each candidate with one kind:
-- content: a question about the subject that a student should be able to answer after the
-  lecture: "What is a field?", "How does a Markov chain work?", "Does anyone know why that
-  matters?". It counts when the lecturer answers it straight away, when the lecturer puts it to
-  the class and waits, and when it is short and leans on what is on the board ("Is this matrix
-  invertible?", "Does it converge or diverge?"). A student's question the lecturer restates in
-  full counts too.
-- rhetorical: asked for effect, not for an answer. The test: if a student answered it out loud,
-  would that derail the lecture rather than fit into it? If so, it is rhetorical. Framing that
-  only announces the next step and names no concept ("So how do we do that?", "So why is this
-  popular?"), rhetorical confirmation ("Isn't that interesting?"), and a confirmation tag
-  closing a statement ("..., right?", "..., true?").
+- content: it asks about the subject: a concept, a definition, a property, a fact, a step of
+  the argument or the calculation. "What is a group?", "What property do we need here?", "Is
+  this matrix invertible?", "Can we swap the sum and the integral?", "What do we get if the
+  input doubles?". It counts when the lecturer answers it at once, when it introduces what the
+  lecturer explains next, when it leans on the board ("Does it converge or diverge?"), and when
+  it is a student's question the lecturer repeats in full.
+- rhetorical: it asks about no subject matter of its own. Framing that only announces the next
+  step and names nothing ("So how do we do that?", "What does it mean?", "What am I doing
+  here?"), questions asked for effect ("Isn't that nice?"), and a confirmation tag closing a
+  statement ("..., right?", "..., true?").
 - check_in: classroom management, not the subject: "Can everyone hear me?", "Is this too fast
-  for anyone?", "Any questions?", and polls whose answer is not about the subject.
+  for anyone?", "Any questions?", "Are we together?", and polls whose answer is not about the
+  subject.
 - procedural: logistics and managing the exchange: "Can you pass me the marker?", asking for a
-  name, calling on someone, echoing a fragment of a student's question to check it.
+  name, calling on someone, and echoing only a fragment of a student's question to check it
+  ("Sorting and what?"). A full restatement of a student's question is content.
 
 For each candidate give:
-- reason: one short sentence on what the candidate does in the lecture, before you label it.
+- reason: one short sentence: the subject matter it asks about, or that it asks about none.
 - kind: one of the four above.
 - question: for a content question with messy wording (fillers, false starts, a preamble, or a
   question that only makes sense with the sentence before it), a clean standalone version that
@@ -225,17 +230,27 @@ def _ask(
     llm = client(config)  # first: without the extra, it raises the install hint
     from openai import OpenAIError  # noqa: PLC0415 - the optional extra, as in client()
 
-    for _ in range(2):  # a second try for invalid JSON; the SDK retries network errors itself
+    endpoint = config.base_url or "OpenAI"
+    stalled: TimeoutError | None = None
+    # Once more after a stall or invalid JSON; the SDK retries HTTP errors itself. A stall is
+    # usually the provider: the same model answers in seconds before and after one.
+    for _ in range(2):
         try:
             response = _create(llm, request, config.timeout_seconds)
-        except (OpenAIError, TimeoutError) as exc:
-            raise ConnectionError(f"judge: {config.base_url or 'OpenAI'}: {exc}") from exc
+        except TimeoutError as exc:
+            stalled = exc
+            continue
+        except OpenAIError as exc:
+            raise ConnectionError(f"judge: {endpoint}: {exc}") from exc
+        stalled = None
         content = response.choices[0].message.content
         judgements = _parse(content)
         if judgements is not None:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
             return judgements
+    if stalled is not None:
+        raise ConnectionError(f"judge: {endpoint}: {stalled}, twice") from stalled
     raise ValueError(f"judge: {config.judge_model} did not return the expected JSON, twice")
 
 
@@ -350,6 +365,23 @@ def _fields(judgement: Any) -> tuple[str, str, list[Any], float] | None:
     return str(kind), question, answer_ids, min(1.0, max(0.0, float(confidence)))
 
 
+def _batch(
+    config: Config,
+    excerpt: Sequence[Sentence],
+    candidates: Sequence[Sentence],
+    repeats: Counter[str],
+    rules: dict[str, QuestionCandidate],
+) -> tuple[list[QAPair], Counter[str]]:
+    """Judge one request's candidates, asking once more for any the answer left out."""
+    stats: Counter[str] = Counter()
+    judgements = _ask(config, excerpt, candidates, repeats)
+    missing = [s for s in candidates if s.id not in judgements]
+    if missing:  # a server that ignores the schema can still skip some
+        judgements = {**_ask(config, excerpt, missing, repeats, again=True), **judgements}
+        stats["judge_skipped"] += sum(1 for s in candidates if s.id not in judgements)
+    return _pairs(judgements, excerpt, candidates, rules, stats), stats
+
+
 @stage("judge")
 def judge(ctx: Context) -> Context:
     """Replace the rules' candidates and pairs with the ones the LLM judges real questions.
@@ -383,17 +415,27 @@ def judge(ctx: Context) -> Context:
     )
     ctx.stats.update(judge_dropped=0, judge_rejected=0, judge_skipped=0)
     pairs: list[QAPair] = []
-    for done, (members, span) in enumerate(batches):
-        if ctx.progress:
-            ctx.progress("judge", done / len(batches))
-        excerpt = sentences[span.start : span.stop]
-        candidates = [sentences[i] for i in members]
-        judgements = _ask(ctx.config, excerpt, candidates, repeats)
-        missing = [s for s in candidates if s.id not in judgements]
-        if missing:  # a server that ignores the schema can still skip some: ask once more
-            judgements = {**_ask(ctx.config, excerpt, missing, repeats, again=True), **judgements}
-            ctx.stats["judge_skipped"] += sum(1 for s in candidates if s.id not in judgements)
-        pairs += _pairs(judgements, excerpt, candidates, rules, ctx.stats)
+    pool = ThreadPoolExecutor(max(1, ctx.config.judge_parallel))
+    try:
+        futures = [
+            pool.submit(
+                _batch,
+                ctx.config,
+                sentences[span.start : span.stop],
+                [sentences[i] for i in members],
+                repeats,
+                rules,
+            )
+            for members, span in batches
+        ]
+        for done, future in enumerate(as_completed(futures)):
+            if ctx.progress:
+                ctx.progress("judge", done / len(batches))
+            batch_pairs, batch_stats = future.result()
+            pairs += batch_pairs
+            ctx.stats.update({k: ctx.stats[k] + v for k, v in batch_stats.items()})
+    finally:  # on a failure, the requests not yet sent are not sent
+        pool.shutdown(wait=True, cancel_futures=True)
     ctx.pairs = tuple(sorted(pairs, key=lambda p: p.start))  # a follow-up answers out of order
     ctx.candidates = tuple(p.question for p in ctx.pairs)
     ctx.stats["candidates"] = len(ctx.candidates)

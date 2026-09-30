@@ -65,6 +65,7 @@ class Config:
     judge_model: str = "gpt-5.6-terra"
     judge_window: int = 10  # sentences of lecture on each side of a candidate
     judge_batch_size: int = 8  # nearby candidates judged in one request
+    judge_parallel: int = 1  # requests in flight; a local server queues them past the deadline
     judge_reasoning_effort: str = "none"  # "" leaves it to the server
     timeout_seconds: int = 120  # per LLM request, start to answer, retries included
 
