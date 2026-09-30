@@ -24,7 +24,7 @@ from .models import Context, QAPair, QuestionCandidate, Segment, Sentence, stage
 
 # The prompt and the schema are module-level constants, version-tagged, so a prompt change is
 # a reviewable diff. A change to either changes the cache key, so no stale answer is replayed.
-JUDGE_PROMPT_VERSION = "v1"
+JUDGE_PROMPT_VERSION = "v2"
 
 _KINDS = ("content", "rhetorical", "check_in", "procedural")
 
@@ -37,15 +37,21 @@ lecturer repeating a student's question in full counts as that question.
 
 Each input line is one sentence: its id, its start time in seconds, its text.
 
-List every sentence that asks a question, labelled with one kind:
-- content: a real question about the subject, one a student should be able to answer after the
-  lecture. Includes a question the lecturer asks and answers straight away, and a student's
-  question the lecturer restates in full.
-- rhetorical: asked for effect, not for an answer. Framing that only announces the next step
-  and names no concept ("So how do we do that?"), rhetorical confirmation ("Isn't that
-  nice?"), and a confirmation tag closing a statement ("..., right?", "..., true?").
-- check_in: classroom management, not the subject: "Can everyone hear me?", "Does that make
-  sense?", "Any questions?", polls and shows of hands.
+Give an entry for every sentence that asks a question, and for every sentence ending in "?",
+labelled with one kind:
+- content: a question about the subject that a student should be able to answer after the
+  lecture: "What is a field?", "How does a Markov chain work?", "Does anyone know why that
+  matters?". It counts when the lecturer answers it straight away, when the lecturer puts it to
+  the class and waits, and when it is short and leans on what is on the board ("Is this matrix
+  invertible?", "Does it converge or diverge?"). A student's question the lecturer restates in
+  full counts too.
+- rhetorical: asked for effect, not for an answer. The test: if a student answered it out loud,
+  would that derail the lecture rather than fit into it? If so, it is rhetorical. Framing that
+  only announces the next step and names no concept ("So how do we do that?", "So why is this
+  popular?"), rhetorical confirmation ("Isn't that interesting?"), and a confirmation tag
+  closing a statement ("..., right?", "..., true?").
+- check_in: classroom management, not the subject: "Can everyone hear me?", "Is this too fast
+  for anyone?", "Any questions?", and polls whose answer is not about the subject.
 - procedural: logistics and managing the exchange: "Can you pass me the marker?", asking for a
   name, calling on someone, echoing a fragment of a student's question to check it.
 
@@ -138,9 +144,10 @@ def _chunks(
     return [tuple(c) for c in chunks if c]
 
 
-def _ask(config: Config, chunk: Sequence[Sentence]) -> list[Any]:
+def _ask(config: Config, chunk: Sequence[Sentence], only: Sequence[str] = ()) -> list[Any]:
     """Send one chunk to the model and return its list of entries, cached on the request.
 
+    ``only`` narrows the request to those sentence ids, for the ones a first answer skipped.
     The cache key is the whole request, so any change to the transcript, the sentence split,
     the prompt, the model or the endpoint asks again, and nothing else does.
 
@@ -150,6 +157,8 @@ def _ask(config: Config, chunk: Sequence[Sentence]) -> list[Any]:
 
     """
     lines = "\n".join(f"{s.id} {s.start:.0f}s {s.text.strip()}" for s in chunk)
+    if only:
+        lines += f"\n\nGive an entry for each of these sentences, and only these: {', '.join(only)}"
     request: dict[str, Any] = {
         "model": config.judge_model,
         "messages": [
@@ -182,6 +191,16 @@ def _ask(config: Config, chunk: Sequence[Sentence]) -> list[Any]:
             path.write_text(content, encoding="utf-8")
             return entries
     raise ValueError(f"judge: {config.judge_model} did not return the expected JSON, twice")
+
+
+def _skipped(entries: Sequence[Any], chunk: Sequence[Sentence]) -> list[str]:
+    """Ids of the chunk's sentences ending in "?" that no entry names.
+
+    A model can end its list early with valid JSON, which no schema catches: on a chunk with
+    57 such sentences, one answer named 4. Every one of them must come back with some kind.
+    """
+    named = {e.get("sentence_id") for e in entries if isinstance(e, dict)}
+    return [s.id for s in chunk if s.text.rstrip().endswith("?") and s.id not in named]
 
 
 def _parse(content: str | None) -> list[Any] | None:
@@ -290,12 +309,17 @@ def judge(ctx: Context) -> Context:
         raise ValueError(f"unknown detector {detector!r}, expected 'rules' or 'llm'")
     rules = {c.sentence_id: c for c in ctx.candidates}
     chunks = _chunks(ctx.sentences, ctx.segments, ctx.config.judge_chunk_chars)
-    ctx.stats.update(judge_dropped=0, judge_rejected=0)
+    ctx.stats.update(judge_dropped=0, judge_rejected=0, judge_skipped=0)
     pairs: list[QAPair] = []
     for done, chunk in enumerate(chunks):
         if ctx.progress:
             ctx.progress("judge", done / len(chunks))
-        pairs += _pairs(_ask(ctx.config, chunk), chunk, rules, ctx.stats)
+        entries = _ask(ctx.config, chunk)
+        skipped = _skipped(entries, chunk)
+        if skipped:  # asked once more, for exactly those; what is still missing is counted
+            entries = [*entries, *_ask(ctx.config, chunk, skipped)]
+            ctx.stats["judge_skipped"] += len(_skipped(entries, chunk))
+        pairs += _pairs(entries, chunk, rules, ctx.stats)
     ctx.pairs = tuple(pairs)
     ctx.candidates = tuple(p.question for p in pairs)
     ctx.stats["candidates"] = len(ctx.candidates)

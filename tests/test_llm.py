@@ -137,8 +137,8 @@ def test_answers_are_cached_on_the_request(context, sentences, fake_llm, tmp_pat
     assert len(client.requests) == 4
 
 
-def test_the_request_asks_for_json_matching_the_schema(context, fake_llm, tmp_path):
-    client = fake_llm({"questions": []})
+def test_the_request_asks_for_json_matching_the_schema(context, sentences, fake_llm, tmp_path):
+    client = fake_llm({"questions": [_entry(sentences[1])]})
     _run(context, tmp_path)
     (request,) = client.requests
     assert request["response_format"]["json_schema"]["strict"] is True
@@ -148,6 +148,22 @@ def test_the_request_asks_for_json_matching_the_schema(context, fake_llm, tmp_pa
 
     _run(context, tmp_path, judge_reasoning_effort="", from_scratch=True)
     assert "reasoning_effort" not in client.requests[1]
+
+
+def test_a_question_the_first_answer_skipped_is_asked_for_again(
+    context, sentences, fake_llm, tmp_path
+):
+    """A model can end its list early with valid JSON: every sentence ending in '?' must come
+    back with some kind, so the skipped ones are asked for once more."""
+    client = fake_llm({"questions": []}, {"questions": [_entry(sentences[1])]})
+    ctx = _run(context, tmp_path)
+    assert [p.question.sentence_id for p in ctx.pairs] == [sentences[1].id]
+    follow_up = client.requests[1]["messages"][1]["content"]
+    assert follow_up.endswith(f"and only these: {sentences[1].id}")
+    assert ctx.stats["judge_skipped"] == 0
+
+    fake_llm({"questions": []})  # skipped twice: counted, and the run goes on
+    assert _run(context, tmp_path, from_scratch=True).stats["judge_skipped"] == 1
 
 
 def test_invalid_json_is_asked_again_once_then_fails(context, sentences, fake_llm, tmp_path):
@@ -207,7 +223,8 @@ def test_every_chunk_is_one_request_and_reports_progress(fake_llm, tmp_path):
     )
     client = fake_llm({"questions": []})
     _run(ctx, tmp_path)
-    assert len(client.requests) == len(ctx.segments) > 1
+    # one per chunk, plus a follow-up for each of the two chunks whose question went unanswered
+    assert len(client.requests) == len(ctx.segments) + 2 > 3
     assert seen[0] == 0.0 and max(seen) < 1.0
 
 

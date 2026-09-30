@@ -734,7 +734,10 @@ breaks, which are silences of 2 s or more.
 3. **Three layers of output checks**, because servers differ in how faithfully they apply a
    schema: constrained decoding on the server, then `json.loads` with one repeat of the request,
    then rules 1 and 2. None trusts the layer before it.
-4. **It is required once asked for.** The user chose the LLM, so an unreachable endpoint, a bad
+4. **Every sentence ending in `?` comes back with a kind.** A model can end its list early in
+   valid JSON, which no schema catches, so the ones a first answer skipped are asked for once
+   more, by id. Any still missing are counted in `stats.judge_skipped`.
+5. **It is required once asked for.** The user chose the LLM, so an unreachable endpoint, a bad
    key, an unknown model or invalid JSON twice ends the run with one `error:` line. There is no
    silent fallback to the rules. Chunks already answered stay cached (10.4), so a re-run resumes.
 

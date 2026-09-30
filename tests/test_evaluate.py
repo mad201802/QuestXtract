@@ -125,7 +125,7 @@ def test_eval_scores_the_llm_detector_and_names_it(
 
     report = json.loads(capsys.readouterr().out)
     assert report["detector"] == f"llm {Config().judge_model} (prompt {JUDGE_PROMPT_VERSION})"
-    assert report["total"]["recall"] == 0.0 and len(client.requests) == 1
+    assert report["total"]["recall"] == 0.0 and client.requests[0]["model"] == Config().judge_model
     assert evaluate([tmp_path])["detector"] == "rules"
 
 
