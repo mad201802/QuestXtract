@@ -31,6 +31,16 @@ def test_single_letter_initial_does_not_split():
     assert len(split_sentences(_t(spec))) == 1
 
 
+def test_lower_case_single_letter_splits():
+    """#78: "u." is a variable, not an initial."""
+    words = "Unit step function, u. Is it absolutely integrable?".split()
+    spec = [(t, i * 0.3, i * 0.3 + 0.25) for i, t in enumerate(words)]
+    assert [s.text for s in split_sentences(_t(spec))] == [
+        "Unit step function, u.",
+        "Is it absolutely integrable?",
+    ]
+
+
 def test_ellipsis_does_not_split():
     words = "we take the limit... of the sequence".split()
     spec = [(t, i * 0.3, i * 0.3 + 0.25) for i, t in enumerate(words)]

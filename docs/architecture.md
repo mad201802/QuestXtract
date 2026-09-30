@@ -245,7 +245,7 @@ ends a sentence: a split on terminal punctuation, with the word-index snapping b
 | Case | Example | Why |
 |---|---|---|
 | abbreviation | `So Dr. Rudin defines it.` | a short suppression list; `Step 1.` still splits, digits are not abbreviations |
-| single-letter initial | `for all n greater than capital N.` | the MIT 18.100B regime is nothing but these |
+| single-letter initial | `for all n greater than capital N.` | the MIT 18.100B regime is nothing but these; only a capital counts, a lower-case letter (`u.`) is a variable ending its sentence |
 | ellipsis | `we take the limit... of the sequence` | a trailing-off, not a stop |
 
 It is a suppression list rather than a classifier because the two error directions are not
@@ -503,11 +503,14 @@ One candidate per sentence (3.1), scored in 7.3.
 lecture speech: *"So what does it mean ...?"*, *"Now, what is the challenge ...?"*. The head is
 the first word past leading discourse markers (`so`, `and`, `but`, `now`, `then`, `okay`, ...),
 and past question preambles (*"my question is (that)"*, *"the question is/was"*, *"I'd like to
-ask"*, *"I was wondering (if)"*), which announce a question without opening it,
-and for a sentence ending in `?` also the first word of its last comma clause, because ASR runs
-the preamble into the question: *"If you have the data, does that mean ...?"*. Without the `?`
-the clause rule stays off, or every *", which is ..."* would read as a wh-question. Contractions
-stay whole, so negated auxiliaries (*"Don't we ...?"*) open questions.
+ask"*, *"I was wondering (if)"*), which announce a question without opening it, and past a
+preposition right before a wh-word (*"For which age ...?"*). For a sentence ending in `?` the
+first words of later comma clauses count too, because ASR runs the preamble into the question:
+the last clause with any head (*"If you have the data, does that mean ...?"*), an earlier one
+only with an auxiliary (*"This area here, is it finite, infinite, ...?"*), since a wh-word there
+usually opens a relative clause. Without the `?` the clause rule stays off, or every *", which
+is ..."* would read as a wh-question. Contractions stay whole, so negated auxiliaries (*"Don't
+we ...?"*) open questions.
 
 **The answer seed.** The sentence right after the question, when the silence before it is at most
 `answer_seed_max_gap_seconds` (1.0 s) and it is not itself a question; tags and check-ins get no
@@ -568,18 +571,15 @@ that changes the numbers; issues link here instead of copying them.
 | Recording | Content labels | TP | FP | FN | Recall | Precision | F1 |
 |---|---|---|---|---|---|---|---|
 | MIT 18.100B L1 | 28 | 28 | 1 | 0 | 1.00 | 0.97 | 0.98 |
-| TTK4225 2026-09-14 | 39 | 34 | 26 | 5 | 0.87 | 0.57 | 0.69 |
+| TTK4225 2026-09-14 | 39 | 39 | 26 | 0 | 1.00 | 0.60 | 0.75 |
 | TTK4225 2026-09-15 | 60 | 59 | 49 | 1 | 0.98 | 0.55 | 0.70 |
-| **Pooled** | 127 | 121 | 76 | 6 | **0.95** | 0.61 | 0.75 |
+| **Pooled** | 127 | 126 | 76 | 1 | **0.99** | 0.62 | 0.77 |
 
 NFR2 holds with room, and `question_mark_rate` is 0.99, so 3.1's bet holds. The sweep: recall
-0.99 / precision 0.53 up to a threshold of 0.30, 0.95 / 0.61 from 0.35 to 0.55, 0.42 / 0.68 from
+0.99 / precision 0.53 up to a threshold of 0.30, 0.99 / 0.62 from 0.35 to 0.55, 0.45 / 0.66 from
 0.65 up.
 
-*Missed (6).* Five have their `?` but no head where 7.1 looks: two open on a preposition (*"For
-which age ...?"*), two carry it in an earlier comma clause (*"This area here, is it going to be
-finite, ...?"*), one was merged with a preceding fragment ending in a single letter (*"Unit step
-function, u. Is it ...?"*); all five are #78. The sixth is the `?`-less cut-off above.
+*Missed (1).* The `?`-less cut-off above.
 
 *False positives (76).* 54 hit `check_in` labels, nearly all the TTK4225 lecturer's own forms
 (*"Do you see it, people?"*, *"Are they clear?"*) missing from the check-in list (#70). 19 hit

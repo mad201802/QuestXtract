@@ -32,7 +32,9 @@ def _is_terminal(word: str) -> bool:
     if not text.endswith(".") or text.endswith(".."):
         return False
     core = text[:-1]
-    if len(core) == 1 and core.isalpha():  # "capital N." - an initial, not a full stop
+    # "capital N." is an initial, not a full stop; initials are capitals, so a lower-case
+    # letter ends its sentence: "Unit step function, u. Is it ...?"
+    if len(core) == 1 and core.isalpha() and core.isupper():
         return False
     return core.lower().replace(".", "") not in _ABBREV
 

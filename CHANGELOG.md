@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Detection finds the question word after a leading preposition ("For which ...?"), in an earlier
+  comma clause ("This area here, is it finite, ...?"), and after a lower-case single letter that
+  ends a sentence ("Unit step function, u. Is it absolutely integrable?"). (#78)
 - `questxtract process` rejects a `--threshold` outside 0 to 1 with a one-line error instead of
   writing a file that fails its own schema. (#85)
 
