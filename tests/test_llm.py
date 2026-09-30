@@ -229,6 +229,51 @@ def test_chunks_hold_whole_segments_up_to_the_limit():
     assert widths == [[3], [2, 1], [1, 1, 1]]  # a segment over the limit is a chunk of its own
 
 
+def _four_segments() -> Context:
+    """Four one-sentence segments, 4 s apart: "What is one? Two. What is three? Four."."""
+    text = "What is one? Two. What is three? Four."
+    words = [
+        {"word": w, "start": 5.0 * i, "end": 5.0 * i + 1.0} for i, w in enumerate(text.split())
+    ]
+    transcript = Transcript.from_dict(
+        {"segments": [{"text": text, "start": 0.0, "end": 36.0, "words": words}]}
+    )
+    return Context(source=Path("t.json"), config=Config(judge_chunk_chars=1), transcript=transcript)
+
+
+def test_an_answer_across_a_chunk_boundary_comes_from_the_context_lines(fake_llm, tmp_path):
+    """Every chunk is sent with context lines from its neighbours; an answer may cite one, and
+    a question named in them is left to the chunk that owns it."""
+    ctx = _four_segments()
+    one, two, three, four = split_sentences(ctx.transcript)
+    client = fake_llm(
+        {
+            "questions": [
+                _entry(one, answer_sentence_ids=[two.id]),
+                _entry(three, answer_sentence_ids=[four.id]),
+            ]
+        }
+    )
+    ctx = _run(ctx, tmp_path)
+    assert [(p.question.text, p.answer_text) for p in ctx.pairs] == [
+        ("What is one?", "Two."),
+        ("What is three?", "Four."),
+    ]
+    first = client.requests[0]["messages"][1]["content"].splitlines()
+    assert first[0].startswith(one.id) and first[1].startswith(f"(context) {two.id}")
+    second = client.requests[1]["messages"][1]["content"].splitlines()
+    assert second[0].startswith(f"(context) {one.id}") and second[1].startswith(two.id)
+    # the chunks of "Two." and "Four." name the neighbours' questions as context: not counted;
+    # the chunks of the two questions name each other's question, which is no context of theirs
+    assert ctx.stats["judge_dropped"] == 3
+
+
+def test_context_can_be_turned_off(fake_llm, tmp_path):
+    client = fake_llm({"questions": []})
+    _run(_four_segments(), tmp_path, judge_context_chars=0)
+    assert not any("(context)" in r["messages"][1]["content"] for r in client.requests)
+
+
 def test_every_chunk_is_one_request_and_reports_progress(fake_llm, tmp_path):
     text = "What is one? Two. What is three? Four."
     # 4 s between words, so every sentence is a segment of its own

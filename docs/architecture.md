@@ -687,8 +687,8 @@ of 10.3 are ours to write either way ([design_decisions.md](design_decisions.md)
 Two settings exist for local servers. `judge_reasoning_effort` (`none`) keeps thinking models from
 spending minutes per chunk; Qwen3.5 in Ollama thinks unless told not to, and `""` leaves the choice
 to the server. Ollama's context length cannot be set per request and is 4k tokens below 24 GB of
-VRAM, and a longer prompt is cut silently, so `judge_chunk_chars` is sized for an 8k context and
-[cli.md](cli.md) starts Ollama with `OLLAMA_CONTEXT_LENGTH=8192`.
+VRAM, and a longer prompt is cut silently, so a chunk and its context (10.2) are sized for an 8k
+context and [cli.md](cli.md) starts Ollama with `OLLAMA_CONTEXT_LENGTH=8192`.
 
 ASR stays local: `faster-whisper` gives word timestamps, costs nothing and needs no network.
 
@@ -724,8 +724,12 @@ the output of section 12 without a schema change:
 - The answer is the cited sentences' own text: extractive, no generated answer text.
 - The question gains the reason `llm`, its pair `llm_answer` or `no_answer_found`.
 
-Chunks do not overlap, so an answer past a chunk boundary is lost. Boundaries fall on segment
-breaks, which are silences of 2 s or more.
+A question is never split: chunks hold whole sentences, and boundaries fall on segment breaks,
+which are silences of 2 s or more. What a cut would take away is the lecture around a question,
+so each chunk is sent with up to `judge_context_chars` of each neighbouring chunk, marked
+`(context)`. An answer may cite a context line after its question; a question in a context line
+belongs to the neighbour, which judges it, so an entry naming one is left out without counting as
+dropped.
 
 ### 10.3 Constraints on the LLM detector
 
@@ -759,7 +763,8 @@ would see asks again, and nothing else does: another `-t` or an `eval` re-run co
 and a `.json` transcript input, which has no source hash, is cached too.
 
 > **Decision.** `questxtract/llm.py`. Config: `detector` (`rules`), `base_url`, `api_key` (from
-> `OPENAI_API_KEY`), `judge_model`, `judge_chunk_chars` (8000), `judge_reasoning_effort` (`none`),
+> `OPENAI_API_KEY`), `judge_model`, `judge_chunk_chars` (7000), `judge_context_chars` (1500),
+> `judge_reasoning_effort` (`none`),
 > `timeout_seconds` (120). Prompt and schema are module-level constants, so a prompt change is a
 > reviewable diff. Dependency: `openai`, in the optional extra `questxtract[llm]`, imported
 > inside the functions.
@@ -1040,7 +1045,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `vision.py` | 5 vision, attach_visual | capture is a stub that raises when `vision_enabled`; the interval join is done | #59 |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery are not built | #48, #78 |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
-| `llm.py` | 8 judge | done: the LLM detector (10); chunks do not overlap | #88 |
+| `llm.py` | 8 judge | done: the LLM detector (10) | |
 | `score.py` | 9 score | done: confidence and threshold | |
 | `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
 | `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |

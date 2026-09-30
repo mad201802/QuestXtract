@@ -63,7 +63,10 @@ class Config:
     detector: str = "rules"  # or "llm": the judge reads the transcript and picks the questions
     base_url: str | None = None  # None is OpenAI; "http://localhost:11434/v1" is a local Ollama
     judge_model: str = "gpt-5.6-terra"
-    judge_chunk_chars: int = 8000  # transcript text per call, sized for an 8k-token context
+    # Transcript text per call, plus context from each neighbouring chunk so no cut loses the
+    # lecture around a question: 7000 + 2 * 1500 characters fit an 8k-token context.
+    judge_chunk_chars: int = 7000
+    judge_context_chars: int = 1500
     judge_reasoning_effort: str = "none"  # "" leaves it to the server
     timeout_seconds: int = 120  # per LLM request, start to answer, retries included
 

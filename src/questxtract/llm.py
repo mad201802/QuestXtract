@@ -16,7 +16,7 @@ import hashlib
 import json
 import math
 import threading
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +25,7 @@ from .models import Context, QAPair, QuestionCandidate, Segment, Sentence, stage
 
 # The prompt and the schema are module-level constants, version-tagged, so a prompt change is
 # a reviewable diff. A change to either changes the cache key, so no stale answer is replayed.
-JUDGE_PROMPT_VERSION = "v2"
+JUDGE_PROMPT_VERSION = "v3"
 
 _KINDS = ("content", "rhetorical", "check_in", "procedural")
 
@@ -36,7 +36,9 @@ You find the questions asked in a university lecture. The transcript comes from 
 recognition: punctuation and sentence breaks can be wrong. Students are often inaudible, so the
 lecturer repeating a student's question in full counts as that question.
 
-Each input line is one sentence: its id, its start time in seconds, its text.
+Each input line is one sentence: its id, its start time in seconds, its text. Lines marked
+"(context)" come from just before or just after this part of the lecture, so you can follow it
+across the cut: give no entry for them, but an answer may cite a context line after its question.
 
 Give an entry for every sentence that asks a question, and for every sentence ending in "?",
 labelled with one kind:
@@ -129,10 +131,10 @@ def _chunks(
 ) -> list[tuple[Sentence, ...]]:
     """Group whole segments into chunks of at most ``max_chars`` of text.
 
-    A segment wider than ``max_chars`` is a chunk on its own rather than being cut.
+    A segment wider than ``max_chars`` is a chunk on its own rather than being cut. A question is
+    never split, since chunks hold whole sentences; what a cut takes away is the lecture around
+    it, which :func:`_edge` hands back as context from the neighbouring chunks.
     """
-    # ponytail: #88, no overlap between chunks, so an answer past a chunk boundary is lost.
-    # Boundaries fall on segment breaks, which are silences of 2 s or more.
     chunks: list[list[Sentence]] = [[]]
     size = 0
     for segment in segments:
@@ -145,10 +147,35 @@ def _chunks(
     return [tuple(c) for c in chunks if c]
 
 
-def _ask(config: Config, chunk: Sequence[Sentence], only: Sequence[str] = ()) -> list[Any]:
+def _edge(sentences: Iterable[Sentence], max_chars: int) -> tuple[Sentence, ...]:
+    """Return the leading sentences of ``sentences`` that fit in ``max_chars`` of text."""
+    out: list[Sentence] = []
+    size = 0
+    for sentence in sentences:
+        size += len(sentence.text) + 1
+        if size > max_chars:
+            break
+        out.append(sentence)
+    return tuple(out)
+
+
+def _line(sentence: Sentence, *, context: bool = False) -> str:
+    """One transcript line of the request: id, start second, text."""
+    mark = "(context) " if context else ""
+    return f"{mark}{sentence.id} {sentence.start:.0f}s {sentence.text.strip()}"
+
+
+def _ask(
+    config: Config,
+    chunk: Sequence[Sentence],
+    only: Sequence[str] = (),
+    before: Sequence[Sentence] = (),
+    after: Sequence[Sentence] = (),
+) -> list[Any]:
     """Send one chunk to the model and return its list of entries, cached on the request.
 
-    ``only`` narrows the request to those sentence ids, for the ones a first answer skipped.
+    ``before`` and ``after`` are context from the neighbouring chunks, marked as such. ``only``
+    narrows the request to those sentence ids, for the ones a first answer skipped.
     The cache key is the whole request, so any change to the transcript, the sentence split,
     the prompt, the model or the endpoint asks again, and nothing else does.
 
@@ -157,7 +184,13 @@ def _ask(config: Config, chunk: Sequence[Sentence], only: Sequence[str] = ()) ->
         ValueError: If the model answers with something other than the expected JSON twice.
 
     """
-    lines = "\n".join(f"{s.id} {s.start:.0f}s {s.text.strip()}" for s in chunk)
+    lines = "\n".join(
+        [
+            *(_line(s, context=True) for s in before),
+            *(_line(s) for s in chunk),
+            *(_line(s, context=True) for s in after),
+        ]
+    )
     if only:
         lines += f"\n\nGive an entry for each of these sentences, and only these: {', '.join(only)}"
     request: dict[str, Any] = {
@@ -249,19 +282,27 @@ def _pairs(
     chunk: Sequence[Sentence],
     rules: dict[str, QuestionCandidate],
     stats: dict[str, int],
+    before: Sequence[Sentence] = (),
+    after: Sequence[Sentence] = (),
 ) -> list[QAPair]:
     """Turn the model's entries into pairs, keeping only what traces back to ``chunk``.
 
     An entry naming a sentence that is not in the chunk, or malformed in any way, is dropped
-    and counted in ``judge_dropped``: never added (requirement 4.5). Kinds other than
-    ``content`` are counted in ``judge_rejected``.
+    and counted in ``judge_dropped``: never added (requirement 4.5). An entry naming a context
+    sentence is left out without counting: that sentence belongs to the neighbouring chunk,
+    which judges it. An answer may reach into ``after``. Kinds other than ``content`` are
+    counted in ``judge_rejected``.
     """
-    position = {s.id: i for i, s in enumerate(chunk)}
+    lecture = (*chunk, *after)
+    position = {s.id: i for i, s in enumerate(lecture)}
+    context = {s.id for s in (*before, *after)}
     seen: set[str] = set()
     out: list[QAPair] = []
     for entry in entries:
         fields = _fields(entry)
-        if fields is None or fields[0] not in position or fields[0] in seen:
+        if fields is not None and fields[0] in context:
+            continue
+        if fields is None or position.get(fields[0], len(chunk)) >= len(chunk) or fields[0] in seen:
             stats["judge_dropped"] += 1
             continue
         sentence_id, kind, question, answer_ids, confidence = fields
@@ -284,8 +325,8 @@ def _pairs(
                     question_type=rule.question_type if rule else "other",
                     reasons=(*(rule.reasons if rule else ()), "llm"),
                 ),
-                answer_sentence_ids=tuple(chunk[i].id for i in answers),
-                answer_text=" ".join(chunk[i].text.strip() for i in answers),
+                answer_sentence_ids=tuple(lecture[i].id for i in answers),
+                answer_text=" ".join(lecture[i].text.strip() for i in answers),
                 confidence=0.0,  # stage 9 fills this in
                 start=sentence.start,
                 end=sentence.end,
@@ -342,15 +383,18 @@ def judge(ctx: Context) -> Context:
     chunks = _chunks(ctx.sentences, ctx.segments, ctx.config.judge_chunk_chars)
     ctx.stats.update(judge_dropped=0, judge_rejected=0, judge_skipped=0)
     pairs: list[QAPair] = []
+    width = ctx.config.judge_context_chars
     for done, chunk in enumerate(chunks):
         if ctx.progress:
             ctx.progress("judge", done / len(chunks))
-        entries = _ask(ctx.config, chunk)
+        before = _edge(reversed(chunks[done - 1]), width)[::-1] if done else ()
+        after = _edge(chunks[done + 1], width) if done + 1 < len(chunks) else ()
+        entries = _ask(ctx.config, chunk, before=before, after=after)
         skipped = _skipped(entries, chunk)
         if skipped:  # asked once more, for exactly those; what is still missing is counted
-            entries = [*entries, *_ask(ctx.config, chunk, skipped)]
+            entries = [*entries, *_ask(ctx.config, chunk, skipped, before, after)]
             ctx.stats["judge_skipped"] += len(_skipped(entries, chunk))
-        pairs += _pairs(entries, chunk, rules, ctx.stats)
+        pairs += _pairs(entries, chunk, rules, ctx.stats, before, after)
     ctx.pairs = tuple(pairs)
     ctx.candidates = tuple(p.question for p in pairs)
     ctx.stats["candidates"] = len(ctx.candidates)

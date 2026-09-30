@@ -14,7 +14,8 @@
 ### Changed (breaking)
 
 - `Config.judge_enabled` and `Config.judge_max_candidates` are gone. `Config(detector="llm")`
-  turns the LLM on; `judge_chunk_chars` and `judge_reasoning_effort` tune it. The `judge` stage
+  turns the LLM on; `judge_chunk_chars`, `judge_context_chars` and `judge_reasoning_effort` tune
+  it. The `judge` stage
   runs before `score`, so the threshold applies to what the model picked, and to the model's own
   confidence, without the rules' answer weighting. `evaluate()` takes an
   optional `Config`, and its report names the `detector`. (#88)

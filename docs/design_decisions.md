@@ -298,8 +298,9 @@ llama.cpp, vLLM, LM Studio), so a library on top would add dependencies without 
 new dependency was needed.
 
 *Cost:* an LLM run needs an endpoint: cents per lecture for a hosted model, minutes of local
-compute for a local one, and a context setting for Ollama (architecture.md 10.1). Chunks do not
-overlap, so an answer across a chunk boundary is lost. Once asked for, the LLM is required: a
+compute for a local one, and a context setting for Ollama (architecture.md 10.1). Each chunk
+carries context from its neighbours, so an answer more than `judge_context_chars` past a chunk
+boundary is still lost. Once asked for, the LLM is required: a
 failed endpoint ends the run instead of falling back to the rules, so the output never silently
 mixes the two.
 
