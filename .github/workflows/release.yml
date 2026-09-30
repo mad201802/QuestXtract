@@ -68,10 +68,16 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: release
-      - run: >
-          gh release create "${{ github.ref_name }}" dist/*
-          --repo "${{ github.repository }}"
-          --title "${{ github.ref_name }}"
-          --notes-file release-notes.md
+      # A Release created by hand in the GitHub UI (which also pushes the tag) gets the files
+      # attached and its notes replaced instead of failing the job.
+      - run: |
+          if gh release view "$TAG" --repo "$REPO" > /dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --repo "$REPO" --clobber
+            gh release edit "$TAG" --repo "$REPO" --title "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" dist/* --repo "$REPO" --title "$TAG" --notes-file release-notes.md
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
