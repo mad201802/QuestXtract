@@ -62,6 +62,17 @@ reads.
 | `--from-scratch` | nothing | off | Transcribes again even if a cached transcript exists. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
+### `questxtract qti <questions.json>`
+
+Exports a questions file as a QTI 3.0 ZIP package. By default, all questions
+are exported except those with reviewer status `deleted` or `false_positive`.
+
+| Option | Takes | Default | What it does |
+|---|---|---|---|
+| `-o`, `--output` | a path | required | Where to write the QTI package. |
+| `--only-keep` | nothing | off | Export only questions with verdict `keep`, still honoring reviewer rejections. |
+| `-h`, `--help` | nothing | | Shows the options and examples. |
+
 ### Everywhere
 
 | Option | What it does |

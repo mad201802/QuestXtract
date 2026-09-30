@@ -73,13 +73,13 @@ class AssessmentTest:
 def questions_to_qti(
     document: dict[str, Any],
     *,
-    include_unjudged: bool = False,
+    only_keep: bool = False,
     language: str | None = None,
 ) -> AssessmentTest:
     """Convert a ``questions.json`` document to the supported QTI model.
 
-    Only ``keep`` records are exported by default.  ``revise`` and ``reject`` are
-    intentionally never exported; ``unjudged`` requires an explicit opt-in.
+    By default every question is exported except those explicitly rejected by a reviewer.
+    ``only_keep`` opts into exporting only records judged ``keep``.
     """
     if not isinstance(document, dict) or not isinstance(document.get("questions"), list):
         raise QtiExportError("expected an object with a 'questions' list")
@@ -92,10 +92,11 @@ def questions_to_qti(
     for index, raw in enumerate(document["questions"]):
         if not isinstance(raw, dict):
             raise QtiExportError(f"questions[{index}]: expected an object")
-        verdict = raw.get("verdict")
-        if verdict == "reject" or verdict == "revise":
+        review = raw.get("review")
+        review_status = review.get("status") if isinstance(review, dict) else None
+        if review_status in {"deleted", "false_positive"}:
             continue
-        if verdict != "keep" and not (include_unjudged and verdict == "unjudged"):
+        if only_keep and raw.get("verdict") != "keep":
             continue
         item = _item_from_record(raw, default_language, index)
         if item.identifier in seen:
@@ -114,13 +115,11 @@ def write_qti_package(
     document: dict[str, Any],
     path: str | Path,
     *,
-    include_unjudged: bool = False,
+    only_keep: bool = False,
     language: str | None = None,
 ) -> None:
     """Write a deterministic QTI 3.0 ZIP package."""
-    assessment = questions_to_qti(
-        document, include_unjudged=include_unjudged, language=language
-    )
+    assessment = questions_to_qti(document, only_keep=only_keep, language=language)
     output = Path(path)
     try:
         with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as package:
@@ -140,7 +139,7 @@ def export_qti(
     questions_path: str | Path,
     output_path: str | Path,
     *,
-    include_unjudged: bool = False,
+    only_keep: bool = False,
     language: str | None = None,
 ) -> None:
     """Read ``questions.json`` and write a QTI package."""
@@ -151,7 +150,7 @@ def export_qti(
     write_qti_package(
         document,
         output_path,
-        include_unjudged=include_unjudged,
+        only_keep=only_keep,
         language=language,
     )
 

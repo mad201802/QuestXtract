@@ -1,15 +1,17 @@
 # QTI 3.0 export
 
-QuestXtract can export the approved records in `questions.json` as a QTI 3.0
+QuestXtract can export records in `questions.json` as a QTI 3.0
 package:
 
 ```console
 questxtract qti questions.json -o questions.qti.zip
 ```
 
-The command exports only records whose `verdict` is `keep`. Records with
-`revise` or `reject` are not exported. `unjudged` records can be included
-explicitly with `--include-unjudged`.
+By default, the command exports every question, including `unjudged`, `keep`,
+`revise`, and `reject`. It excludes only questions whose reviewer explicitly
+set `review.status` to `deleted` or `false_positive`. Use `--only-keep` to
+export only questions with `verdict == "keep"`; reviewer rejections remain
+excluded in that mode.
 
 The initial profile supports one interaction only:
 
