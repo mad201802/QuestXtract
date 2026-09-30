@@ -8,7 +8,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from .asr import AsrBackend, register_backend, resolve_backend
 from .config import Config
-from .export import read_questions, result_to_json, write_questions
+from .export import merge_reviews, read_questions, result_to_json, write_questions
 from .filtering import filter_document, filter_questions
 from .media import MediaError, extract_audio
 from .models import (
@@ -51,6 +51,7 @@ __all__ = [
     "extract_audio",
     "filter_document",
     "filter_questions",
+    "merge_reviews",
     "process",
     "read_questions",
     "register_backend",

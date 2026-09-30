@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- `questxtract process` keeps teacher edits when it writes over an existing `questions.json`:
+  each `review` block carries over to the question with the same id. An edited question the new
+  run no longer finds is reported on stderr and kept under a new top-level `orphaned_reviews`
+  list (schema 2.1), and moves back if a later run finds it again. An existing file that can't be
+  read is left untouched and the run stops. `merge_reviews` does the same merge from Python. (#15)
+
 ## 0.1.0
 
 First release. QuestXtract turns a lecture recording (`.mp4`) or an ASR transcript (`.json`) into

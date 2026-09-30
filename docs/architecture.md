@@ -828,7 +828,7 @@ Vision will report per board state.
 
 ### 12.1 questions.json
 
-Schema 2.0: a fixed key set, `null` included, in one file. The formal description is
+Schema 2.1: a fixed key set, `null` included, in one file. The formal description is
 [`questions.schema.json`](../src/questxtract/questions.schema.json), which ships inside the
 package; the tests validate every export shape against it. The example shows one entry of each
 list, with vision and the LLM pass on (both planned); with them off, `visuals` is empty, `verdict`
@@ -836,7 +836,7 @@ is `unjudged` and both model names are `null`:
 
 ```json
 {
-  "schema_version": "2.0",
+  "schema_version": "2.1",
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
   "config": {"model_size": "turbo", "language": "en", "min_confidence": 0.4,
              "judge_model": "gpt-5.6-terra", "vision_model": "gpt-5.6-luna"},
@@ -884,7 +884,8 @@ is `unjudged` and both model names are `null`:
       "reasons": ["mark", "wh", "intra_sentence_qa"],
       "review": {"status": "pending", "text": null, "note": null, "metadata": {}}
     }
-  ]
+  ],
+  "orphaned_reviews": []
 }
 ```
 
@@ -903,6 +904,8 @@ one more top-level list pointing at visual ids.
 - `original_text` is set when the LLM pass revised the question, `null` otherwise.
 - `source` says what the question was read from; only `audio` is produced until vision lands,
   `visual` and `combined` are reserved.
+- `orphaned_reviews` holds edited reviews whose question a re-run no longer found (12.2); empty
+  otherwise.
 - `topic` on a segment stays `null` until something produces topics.
 - `config.min_confidence` is the threshold the file was cut at; `config.judge_model` and
   `config.vision_model` are `null` when that stage was off.
@@ -915,7 +918,7 @@ refuses a file of another major version.
 
 The output JSON is the edit surface, and the editor lives in the wrapper, not in this package.
 Each question carries one block that belongs to people, `review`. The pipeline writes its
-defaults and never reads or overwrites it; everything else in the file is regenerated on every
+defaults and never reads or changes it; everything else in the file is regenerated on every
 run.
 
 | `review` field | Meaning |
@@ -925,8 +928,12 @@ run.
 | `note` | Free text from the reviewer. |
 | `metadata` | Any extra key-value data, such as a topic tag or a quiz difficulty. |
 
-Keeping edits across a re-run (#15, not built yet) means copying `review` across by question id,
-which is why question and sentence ids are content hashes (section 5) rather than indices.
+**A re-run keeps the edits.** When `process` writes over an existing file, `merge_reviews` copies
+each `review` to the question with the same id, which is why question and sentence ids are content
+hashes (section 5) rather than indices. An edited review whose question the new run no longer
+finds is reported on stderr and kept under `orphaned_reviews` with the question's `text` and
+`start`; a later run that finds the id again moves it back. A file that cannot be read stops the
+run and is left untouched, rather than overwriting edits it cannot see.
 
 ### 12.3 quiz.json (planned, #79)
 
@@ -1006,7 +1013,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM pass | #46 |
 | `score.py` | 8 score | done: confidence and threshold; answer judging and dedupe are the LLM pass's | #46 |
 | `llm.py` | 9 judge | stub: no-op when disabled, raises when `judge_enabled` | #46 |
-| `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
+| `export.py` | 10 export | done | |
 | `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest | |
 | `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
@@ -1022,8 +1029,8 @@ What lands when: [GitHub milestones](https://github.com/mad201802/QuestXtract/mi
 
 Explicit boundaries, so the package does not grow into them by accident.
 
-- **The teacher review/edit UI** ([issue #15](https://github.com/mad201802/QuestXtract/issues/15))
-  is a separate application. This package's part is that its JSON round-trips (section 12.2).
+- **The teacher review/edit UI** is a separate application. This package's part is that its JSON
+  round-trips (section 12.2).
 - **exerplaza.com upload** is likewise a separate consumer of the exported JSON. Nothing in
   `questxtract` talks to exerplaza directly.
 - **The labelled dataset** is test

@@ -1,10 +1,18 @@
+import copy
 import dataclasses
 import json
 
 import pytest
 from jsonschema import Draft202012Validator, ValidationError
 
-from questxtract import SchemaError, Transcript, VisualContext, read_questions, write_questions
+from questxtract import (
+    SchemaError,
+    Transcript,
+    VisualContext,
+    merge_reviews,
+    read_questions,
+    write_questions,
+)
 from questxtract.cli import main
 from questxtract.export import SCHEMA_PATH, _format_hms, result_to_dict
 from questxtract.pipeline import STAGES, run
@@ -52,6 +60,7 @@ def test_export_emits_a_fixed_key_set_with_nulls_kept(finished):
         "segments",
         "visuals",
         "questions",
+        "orphaned_reviews",
     }
     assert data["config"]["min_confidence"] == finished.config.min_confidence
     # judge and vision are off by default, so no model is named as if it ran
@@ -238,7 +247,7 @@ def test_cli_roundtrip(tmp_path):
     out = tmp_path / "q.json"
     assert main(["process", str(_transcript_file(tmp_path)), "-o", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
-    assert data["schema_version"] == "2.0"
+    assert data["schema_version"] == "2.1"
     # An aux head without a '?' scores 0.4, under the 0.45 detection gate, so it is never a
     # candidate (architecture.md 7.3).
     assert [q["text"] for q in data["questions"]] == ["What is a stable sort?"]
@@ -279,3 +288,82 @@ def test_unimplemented_subcommands_fail_readably(tmp_path, capsys):
     assert capsys.readouterr().err.startswith("error: ")
     assert main(["quiz", str(tmp_path / "q.json")]) == 1
     assert capsys.readouterr().err.startswith("error: ")
+
+
+def _edit_first_question(path, **review):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["questions"][0]["review"].update(review)
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return data["questions"][0]
+
+
+EDIT = {
+    "status": "accepted",
+    "text": "What makes a sort stable?",
+    "note": "keep",
+    "metadata": {"topic": "sorting"},
+}
+
+
+@pytest.mark.parametrize("flags", [[], ["--from-scratch"]])
+def test_a_rerun_keeps_the_review_edits_of_the_same_question(tmp_path, flags):
+    """#15 AC1, and AC3: --from-scratch only bypasses the pipeline cache."""
+    transcript, out = _transcript_file(tmp_path), tmp_path / "q.json"
+    assert main(["process", str(transcript), "-o", str(out)]) == 0
+    edited = _edit_first_question(out, **EDIT)
+    assert main(["process", str(transcript), "-o", str(out), "-t", "0.2", *flags]) == 0
+    data = read_questions(out)
+    assert data["questions"][0]["id"] == edited["id"]
+    assert data["questions"][0]["review"] == edited["review"]
+    assert data["orphaned_reviews"] == []
+
+
+def test_an_edit_whose_question_is_gone_is_reported_kept_and_restored(tmp_path, capsys, validator):
+    """#15 AC2 and AC4: reported by id, kept in a file that validates, back once found again."""
+    transcript, out = _transcript_file(tmp_path), tmp_path / "q.json"
+    assert main(["process", str(transcript), "-o", str(out)]) == 0
+    edited = _edit_first_question(out, **EDIT)
+    capsys.readouterr()
+    # the lecturer's question turns into a statement, so its id is gone from the next run
+    text = transcript.read_text(encoding="utf-8")
+    statement = text.replace("What is a stable sort?", "A stable sort.")
+    transcript.write_text(statement, encoding="utf-8")
+    assert main(["process", str(transcript), "-o", str(out)]) == 0
+    assert edited["id"] in capsys.readouterr().err
+    data = read_questions(out)
+    assert data["questions"] == []
+    assert data["orphaned_reviews"] == [
+        {
+            "id": edited["id"],
+            "text": edited["text"],
+            "start": edited["start"],
+            "review": edited["review"],
+        }
+    ]
+    validator.validate(data)
+    transcript.write_text(text, encoding="utf-8")
+    assert main(["process", str(transcript), "-o", str(out)]) == 0
+    data = read_questions(out)
+    assert data["questions"][0]["review"] == edited["review"]
+    assert data["orphaned_reviews"] == []
+
+
+def test_merge_reviews_orphans_only_edits_and_leaves_its_inputs_alone(finished):
+    previous = result_to_dict(finished)
+    template = previous["questions"][0]
+    untouched = {**copy.deepcopy(template), "id": "q_gone_untouched"}
+    edited = {**copy.deepcopy(template), "id": "q_gone_edited"}
+    edited["review"]["note"] = "check the slide"
+    previous["questions"] += [untouched, edited]
+    snapshot, new = copy.deepcopy(previous), result_to_dict(finished)
+    merged = merge_reviews(new, previous)
+    assert [entry["id"] for entry in merged["orphaned_reviews"]] == ["q_gone_edited"]
+    assert previous == snapshot and new["orphaned_reviews"] == []
+
+
+def test_an_existing_file_that_cannot_be_merged_is_left_untouched(tmp_path, capsys):
+    out = tmp_path / "q.json"
+    out.write_text("not json", encoding="utf-8")
+    assert main(["process", str(_transcript_file(tmp_path)), "-o", str(out)]) == 1
+    assert out.read_text(encoding="utf-8") == "not json"
+    assert "not overwriting" in capsys.readouterr().err

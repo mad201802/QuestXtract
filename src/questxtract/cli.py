@@ -10,12 +10,13 @@ import json
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 from . import __version__
 from .config import Config
 from .evaluate import evaluate, format_report
-from .export import result_to_json
-from .models import Context, Stage, Transcript
+from .export import merge_reviews, read_questions, result_to_dict
+from .models import Context, SchemaError, Stage, Transcript
 from .pipeline import STAGES, run
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
@@ -177,11 +178,33 @@ def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
         raise
 
 
+def _previous(path: Path | None) -> dict[str, Any] | None:
+    """Read the questions file a run is about to replace, so its review edits survive (#15).
+
+    Read before the pipeline runs: a file that cannot be merged fails in a second instead
+    of after the transcription, and is left as it is.
+
+    Raises:
+        SchemaError: If ``path`` exists but is not a questions file this version can read.
+
+    """
+    if path is None or not path.exists():
+        return None
+    try:
+        return read_questions(path)
+    except SchemaError as exc:
+        raise SchemaError(
+            f"{exc}; not overwriting it, so its review edits are kept. "
+            "Move it away or pick another -o"
+        ) from exc
+
+
 def _process(args: argparse.Namespace) -> int:
     """Extract questions from a recording (every stage) or a transcript (skips ASR)."""
     source = Path(args.input)
     _check_input(source, (".mp4", ".json"))
     output = _output_path(args.output, source, "questions")
+    previous = _previous(output)
     config = _config(args).replace(min_confidence=args.threshold)
 
     if source.suffix.lower() == ".json":
@@ -193,7 +216,19 @@ def _process(args: argparse.Namespace) -> int:
     else:
         ctx = _run(Context(source=source, config=config), STAGES)
 
-    _write(result_to_json(ctx), output, f"{len(ctx.pairs)} questions")
+    document = result_to_dict(ctx)
+    if previous is not None:
+        document = merge_reviews(document, previous)
+        orphans = [entry["id"] for entry in document["orphaned_reviews"]]
+        if orphans:
+            print(
+                f"warning: {len(orphans)} edited question(s) not found in this run, "
+                f"review kept under orphaned_reviews: {', '.join(orphans)}",
+                file=sys.stderr,
+            )
+    _write(
+        json.dumps(document, indent=2, ensure_ascii=False), output, f"{len(ctx.pairs)} questions"
+    )
     return 0
 
 

@@ -270,7 +270,7 @@ answer is generated text, so it must cite the transcript sentences it comes from
 | FR2 extract audio track | none needed — `faster_whisper.audio.decode_audio` reads the container in process (architecture.md 2.1) | by design |
 | FR3 transcribe with ASR | `transcribe.py` (#8) → `Transcript` | stub |
 | FR4 extract drawing/animation from video | `vision.py` (M2/M3) | roadmap |
-| FR5 teacher can edit after extraction | package side: fixed-key JSON with content-hash sentence ids (`export.py`); the editing UI itself is #15, a separate app (D6) | partial — export only |
+| FR5 teacher can edit after extraction | package side: fixed-key JSON with content-hash sentence ids (`export.py`); re-runs keep `review` edits by question id (`merge_reviews`); the editing UI itself is a separate app (D6) | partial — export only |
 | FR6 identify question sentences | `detect.py` (#10) | keyword heuristic |
 | FR7 start timestamp per question | `QAPair.start`, a slice of the word list — word-accurate by construction, never interpolated (architecture.md 2.5) | done |
 | FR8 export JSON | `export.py`, architecture.md 12.1 (#13) | done |

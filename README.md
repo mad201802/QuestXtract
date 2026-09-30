@@ -32,7 +32,7 @@ turns them into study material. It **extracts** questions, it never invents them
 | 🗣️ **Transcription** | Speech-to-text with faster-whisper, or any ASR engine behind a small interface |
 | ❓ **Question detection** | Question sentences found in the transcript, with a confidence score and the rules that fired |
 | ⏱️ **Timestamps** | Every question carries its position in the recording |
-| ✏️ **Human in the loop** | A `review` block per question for teacher edits, never overwritten by the pipeline |
+| ✏️ **Human in the loop** | A `review` block per question for teacher edits, kept when the pipeline runs again |
 | 📦 **JSON export** | `questions.json` with a fixed key set and a formal JSON Schema |
 
 Planned: reading the board and slides (#59), an LLM pass that refines questions and finds their

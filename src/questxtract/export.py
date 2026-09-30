@@ -5,13 +5,14 @@ Export is not a stage: it runs on the finished ``Context``.
 One rule governs the shape: **do not drop ``None`` on serialisation.** A fixed key set is
 emitted, always, ``null`` included, so consumers never have to defensively ``.get()`` a
 missing ``answer``. Segments and board states are listed once and referenced by id. The
-format is also the edit surface (FR5): ``review`` is the one block people own. A re-run does
-not carry those edits over yet; merging them back by question id is #15. Formal description:
+format is also the edit surface (FR5): ``review`` is the one block people own, and
+:func:`merge_reviews` carries it across a re-run by question id. Formal description:
 ``questions.schema.json``.
 """
 
 from __future__ import annotations
 
+import copy
 import json
 from collections.abc import Sequence
 from pathlib import Path
@@ -21,10 +22,11 @@ from .models import Context, QAPair, SchemaError, Segment, Sentence, VisualConte
 from .score import confidence_label
 from .vision import overlapping
 
-SCHEMA_VERSION = "2.0"
+SCHEMA_VERSION = "2.1"  # 2.1 added orphaned_reviews (#15)
 SCHEMA_PATH = Path(__file__).with_name("questions.schema.json")
 
 _CONFIG_KEYS = ("model_size", "language", "min_confidence")
+_PENDING_REVIEW: dict[str, Any] = {"status": "pending", "text": None, "note": None, "metadata": {}}
 _SOURCE = "audio"  # questions are only read from speech until the vision milestones (M2/M3)
 
 
@@ -48,6 +50,7 @@ def result_to_dict(ctx: Context) -> dict[str, Any]:
         "segments": [_segment(index, segment) for index, segment in enumerate(ctx.segments)],
         "visuals": [_visual(state) for state in ctx.visual],
         "questions": [_question(pair, by_id, ctx.segments) for pair in ctx.pairs],
+        "orphaned_reviews": [],  # filled by merge_reviews when a re-run loses an edited question
     }
 
 
@@ -116,7 +119,7 @@ def _question(
         "visual_ids": _visual_ids(pair, segment, segments),
         "verdict": pair.verdict,
         "reasons": list(pair.question.reasons) + list(pair.reasons),
-        "review": {"status": "pending", "text": None, "note": None, "metadata": {}},
+        "review": copy.deepcopy(_PENDING_REVIEW),
     }
 
 
@@ -158,8 +161,45 @@ def result_to_json(ctx: Context) -> str:
     return json.dumps(result_to_dict(ctx), indent=2, ensure_ascii=False)
 
 
+def merge_reviews(document: dict[str, Any], previous: dict[str, Any]) -> dict[str, Any]:
+    """Carry the ``review`` blocks of an earlier ``questions.json`` into a new run (FR5).
+
+    Each question keeps the ``review`` of the earlier question with the same ``id``. An
+    edited review whose question is gone is never dropped: it moves to ``orphaned_reviews``
+    with that question's ``text`` and ``start``, and moves back if a later run finds the id
+    again.
+
+    Args:
+        document: The new run, as returned by ``result_to_dict()``.
+        previous: The earlier file, as returned by ``read_questions()``.
+
+    Returns:
+        A deep copy of ``document`` with the reviews carried over; the inputs are unchanged.
+
+    """
+    merged = copy.deepcopy(document)
+    earlier: dict[str, dict[str, Any]] = {}
+    # a live question wins over an orphan left by an older run, so questions go first
+    for entry in [*previous.get("questions", []), *previous.get("orphaned_reviews", [])]:
+        if isinstance(entry.get("review"), dict):
+            earlier.setdefault(entry["id"], entry)
+    for question in merged["questions"]:
+        entry = earlier.pop(question["id"], None)
+        if entry is not None:
+            question["review"] = copy.deepcopy(entry["review"])
+    merged["orphaned_reviews"] = [
+        {"id": e["id"], "text": e["text"], "start": e["start"], "review": e["review"]}
+        for e in copy.deepcopy(list(earlier.values()))
+        if e["review"] != _PENDING_REVIEW
+    ]
+    return merged
+
+
 def write_questions(ctx: Context, path: str | Path) -> None:
-    """Write a finished context to ``path`` as ``questions.json`` (UTF-8)."""
+    """Write a finished context to ``path`` as ``questions.json`` (UTF-8).
+
+    Overwrites ``path``, review edits included; :func:`merge_reviews` keeps them.
+    """
     Path(path).write_text(result_to_json(ctx), encoding="utf-8")
 
 

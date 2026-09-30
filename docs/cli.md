@@ -76,7 +76,10 @@ Without `-o`, output lands next to the input, named after it:
 | `lecture.mp4` | `lecture.questions.json` | `lecture.transcript.json` |
 | `lecture.transcript.json` | `lecture.questions.json` | (needs an `.mp4`) |
 
-A second run overwrites the file. Pass `-o` to keep several versions side by side. The
+A second run replaces the file but keeps its teacher edits: each question's `review` block
+carries over by question id, and edits for questions the new run no longer finds are listed under
+`orphaned_reviews`, with a warning. If the existing file can't be read, `process` stops and leaves
+it as it is. Pass `-o` to keep several versions side by side. The
 questions file format is described in the [README](../README.md#output) and in
 [architecture.md 12.1](architecture.md#121-questionsjson).
 
