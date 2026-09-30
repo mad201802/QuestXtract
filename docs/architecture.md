@@ -636,8 +636,9 @@ label:  >= 0.75 high | >= 0.45 medium | else low
 A question with no answer keeps `0.55 * question_score` and an empty answer span. It is still
 exported: FR6 and FR7 ask for questions with timestamps, not for answered questions.
 
-Gate: `min_confidence` (0.40), swept in the eval report. With the LLM detector, `question_score`
-is the model's own confidence (10.2); the formula and the gate are the same.
+Gate: `min_confidence` (0.40), swept in the eval report. With the LLM detector, the confidence is
+the model's own (10.2), with no answer weighting: the model saw the answer when it labelled the
+question, so weighing it again would count it twice. The gate is the same.
 
 One number the user can reason about (FR10), plus a verdict. No parallel quality score, no risk
 band, no profile-scoped emission gates.
@@ -716,7 +717,8 @@ schema sent as `response_format`:
 Only `content` is kept; the other kinds are counted in `stats.judge_rejected`. The entry maps onto
 the output of section 12 without a schema change:
 
-- `confidence` is the question's score, and 9.2 applies to it as to a rule score.
+- `confidence` is the question's confidence as it is; the gate of 9.2 applies, the answer
+  weighting does not.
 - A non-empty `question` is the question's `text`, with verdict `revise` and the transcript
   sentence as `original_text`; an empty one keeps the sentence, verdict `keep`.
 - The answer is the cited sentences' own text: extractive, no generated answer text.

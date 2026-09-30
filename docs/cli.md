@@ -42,8 +42,9 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint for `--detector llm`, e.g. `http://localhost:11434/v1` for Ollama. Without it, OpenAI is used with the key from `OPENAI_API_KEY`. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
-One thing to know about `-t` today: a question with no answer scores at most `0.55`, so a
-threshold above `0.55` keeps only questions the next sentence answers.
+One thing to know about `-t` with the rules: a question with no answer scores at most `0.55`, so
+a threshold above `0.55` keeps only questions the next sentence answers. With `--detector llm`
+the confidence is the model's own, answered or not.
 
 ### `questxtract transcribe <recording>`
 

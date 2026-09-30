@@ -117,8 +117,9 @@ present, `null` included. Example and field reference:
 [architecture.md 12.1](docs/architecture.md#121-questionsjson); formal schema:
 [questions.schema.json](src/questxtract/questions.schema.json).
 
-`--threshold` gates the final **confidence**: an unanswered question tops out at 0.55, one the
-next sentence answers carries its full question score.
+`--threshold` gates the final **confidence**. With the rules, an unanswered question tops out at
+0.55, and one the next sentence answers carries its full question score; with `--detector llm`,
+it is the model's own confidence.
 
 ### Python API
 

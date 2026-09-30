@@ -114,10 +114,15 @@ def test_a_question_the_rules_missed_is_kept_verbatim(context, sentences, fake_l
     assert pair.question.reasons == ("llm",) and pair.question.question_type == "other"
 
 
-def test_the_threshold_cuts_after_the_llm(context, sentences, fake_llm, tmp_path):
-    """The judge runs before `score`, so `min_confidence` applies to what the model picked."""
+def test_the_threshold_cuts_the_models_own_confidence(context, sentences, fake_llm, tmp_path):
+    """The judge runs before `score`, so `min_confidence` applies to what the model picked, and
+    to its confidence as it is: the model saw the answer, so no answer weighting on top."""
     fake_llm({"questions": [_entry(sentences[1], confidence=0.5)]})
-    assert _run(context, tmp_path).pairs == ()  # 0.55 * 0.5, unanswered, is under 0.40
+    (pair,) = _run(context, tmp_path).pairs
+    assert pair.confidence == 0.5  # unanswered, and not cut to 0.55 * 0.5
+
+    fake_llm({"questions": [_entry(sentences[1], confidence=0.3)]})
+    assert _run(context, tmp_path, from_scratch=True).pairs == ()
 
 
 def test_answers_are_cached_on_the_request(context, sentences, fake_llm, tmp_path):
