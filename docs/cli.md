@@ -40,6 +40,7 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--detector` | `rules` or `llm` | `rules` | How questions are found: fast offline rules, or a language model that reads the transcript. See [Finding questions with an LLM](#finding-questions-with-an-llm). |
 | `--llm-model` | a model name | `gpt-5.6-terra` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
 | `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint for `--detector llm`, e.g. `http://localhost:11434/v1` for Ollama. Without it, OpenAI is used with the key from `OPENAI_API_KEY`. |
+| `--llm-reasoning` | `none`, `low`, `medium`, `high` | `none` | How long a thinking model may think before it judges. Slower, and what small models such as `qwen3.5:9b` need to judge well. Any level but `none` allows each request 10 minutes instead of 2. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
 One thing to know about `-t` with the rules: a question with no answer scores at most `0.55`, so
@@ -142,12 +143,12 @@ questxtract process lecture.mp4 --from-scratch
 
 ## Finding questions with an LLM
 
-`--detector llm` hands question finding to a language model. It reads the transcript a few minutes
-at a time, picks every question actually asked, finds the sentences that answer it, and rewrites a
-messy question into a clean one. The spoken version stays in the file as `original_text`, and the
-model can never add a question that was not spoken: it answers with sentence ids, and any id that
-is not in the transcript is dropped. The rules still run first; their `reasons` stay on the
-questions the model also picks, and the model's picks gain `llm`.
+`--detector llm` hands the decision to a language model. Every sentence ending in `?`, and every
+question the rules found, goes to the model with the lecture around it; it decides which are real
+questions, finds the sentences that answer them, and rewrites a messy question into a clean one.
+The spoken version stays in the file as `original_text`, and the model can never add a question
+that was not spoken: it only judges the sentences it was given, by id. The rules still run first;
+their `reasons` stay on the questions the model keeps, and those gain `llm`.
 
 It needs the `llm` extra: `pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`.
 
@@ -175,13 +176,20 @@ below 24 GB of graphics memory it defaults to 4k and silently cuts longer prompt
 
 ```bash
 OLLAMA_CONTEXT_LENGTH=8192 ollama serve        # in one terminal
-ollama pull qwen3.5:9b                         # once; qwen3.5:4b for a smaller machine
+ollama pull qwen3.6:35b                        # once; needs about 24 GB
 questxtract process lecture.mp4 --detector llm \
+    --llm-url http://localhost:11434/v1 --llm-model qwen3.6:35b
+```
+
+On a smaller machine, `qwen3.5:9b` needs to think first, which makes it slow but good:
+
+```bash
+questxtract process lecture.mp4 --detector llm --llm-reasoning low \
     --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
 ```
 
-Speed depends on the machine: on a CPU, reading a whole lecture takes minutes. Which model finds
-the questions best is measured with `eval`:
+Speed depends on the machine: without thinking, a request takes seconds; with it, minutes, and a
+lecture makes 15 to 25 of them. Which model finds the questions best is measured with `eval`:
 
 ```bash
 questxtract eval tests/data/ --detector llm --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
@@ -218,7 +226,7 @@ from the same folder every time to benefit from it.
 
 | Changing this... | ...transcribes again? |
 |---|---|
-| `-t`, `-o`, `--detector`, `--llm-model`, `--llm-url` | no |
+| `-t`, `-o`, `--detector`, `--llm-model`, `--llm-url`, `--llm-reasoning` | no |
 | `-m` | yes: a different model gives a different transcript |
 | `--from-scratch` | yes, and it recomputes everything else too |
 | the video file itself | yes: the cache is keyed on the file's content |
@@ -245,7 +253,7 @@ A `.json` transcript input never touches the cache. There is nothing expensive l
 | `--detector llm needs OPENAI_API_KEY, or --llm-url for a local server` | Set the key, or pass `--llm-url` for a local server. |
 | `--detector llm needs the LLM extra: ...` | Install `questxtract[llm]`. |
 | `judge: <endpoint>: ...` | The model endpoint failed: it is not running, the key is wrong, or the model name is unknown to it. The message after the endpoint says which. |
-| `judge: <endpoint>: no answer within 120 s` | The model took longer than `timeout_seconds` for one part of the lecture. Common with reasoning turned up; raise `Config(timeout_seconds=...)`. |
+| `judge: <endpoint>: no answer within 120 s, twice` | The model did not answer one request in time, and not on a second try either. With a thinking model, pass `--llm-reasoning`, which allows 10 minutes; otherwise the provider is overloaded, try again later. |
 | `judge: <model> did not return the expected JSON, twice` | The model could not follow the output format. Try a larger model; rerun to try again. |
 
 A missing file or wrong file type is caught before anything runs, and so is `--detector llm`

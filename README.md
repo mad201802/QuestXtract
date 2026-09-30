@@ -82,17 +82,18 @@ with a `segments` key, which is what most engines emit:
 ### With an LLM
 
 The rules are fast and offline, but they miss what they were not written for. `--detector llm`
-lets a language model read the transcript instead: it picks the questions actually asked, finds
-the sentences that answer them, and rewrites a messy question into a clean one, keeping the spoken
-version beside it. It never adds a question that was not spoken. It needs the `llm` extra
+lets a language model decide instead: it judges every sentence ending in `?` in the lecture around
+it, keeps the real questions, finds the sentences that answer them, and rewrites a messy question
+into a clean one, keeping the spoken version beside it. It never adds a question that was not
+spoken. It needs the `llm` extra
 (`pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`) and a model:
 
 ```bash
 # hosted: OpenAI, key from the environment
 OPENAI_API_KEY=sk-... questxtract process lecture.mp4 --detector llm
 
-# local: any OpenAI-compatible server, here Ollama with a small Qwen
-questxtract process lecture.mp4 --detector llm \
+# local: any OpenAI-compatible server, here Ollama with a small Qwen that thinks first
+questxtract process lecture.mp4 --detector llm --llm-reasoning low \
     --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
 ```
 

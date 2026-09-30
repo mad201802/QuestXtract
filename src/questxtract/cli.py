@@ -22,6 +22,9 @@ from .pipeline import STAGES, run
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
 
 _BAR_WIDTH = 10
+# A thinking model takes minutes per request, where one that answers straight away takes
+# seconds: the per-request deadline follows the reasoning level.
+_THINKING_TIMEOUT_SECONDS = 600
 # A redirected stderr on Windows is cp1252, not the UTF-8 console, and the block glyphs
 # raise UnicodeEncodeError there - a crash in the middle of a real run, over decoration.
 _FULL, _EMPTY = ("█", "░") if "utf" in (sys.stderr.encoding or "").lower() else ("#", "-")
@@ -60,7 +63,7 @@ examples:
   questxtract process lecture.transcript.json -o -       existing transcript, print it
   questxtract process lecture.mp4 --detector llm         an LLM picks the questions
   questxtract process lecture.mp4 --detector llm         a local model in Ollama:
-      --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
+      --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b --llm-reasoning low
 """
 
 _TRANSCRIBE_EXAMPLES = """\
@@ -181,8 +184,15 @@ def _with_llm(config: Config, args: argparse.Namespace) -> Config:
 
     """
     config = config.replace(
-        detector=args.detector, judge_model=args.llm_model, base_url=args.llm_url
+        detector=args.detector,
+        judge_model=args.llm_model,
+        base_url=args.llm_url,
+        judge_reasoning_effort=args.llm_reasoning,
     )
+    if args.llm_reasoning not in ("none", ""):
+        config = config.replace(
+            timeout_seconds=max(config.timeout_seconds, _THINKING_TIMEOUT_SECONDS)
+        )
     if config.detector == "llm":
         if importlib.util.find_spec("openai") is None:
             raise ValueError("--detector llm needs the LLM extra: pip install 'questxtract[llm]'")
@@ -311,6 +321,14 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="URL",
         help="an OpenAI-compatible endpoint for --detector llm, e.g. http://localhost:11434/v1 "
         "for Ollama (default: OpenAI, with the key from OPENAI_API_KEY)",
+    )
+    llm.add_argument(
+        "--llm-reasoning",
+        default=defaults.judge_reasoning_effort,
+        metavar="LEVEL",
+        help="how long a thinking model may think before it answers: none, low, medium or high "
+        "(default: %(default)s). Small models such as qwen3.5:9b judge much better with low; "
+        "anything but none also allows each request 10 minutes instead of 2",
     )
 
     process = subs.add_parser(

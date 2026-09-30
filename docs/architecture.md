@@ -656,10 +656,10 @@ near duplicates stay in the output. The LLM detector labels a fragment echo `pro
 ## 10. The LLM layer
 
 One module, one client, two jobs, each off unless asked for: the LLM detector (stage 8, `--detector
-llm`), which picks the questions from the transcript, and the vision captioning of section 6
-(#53). The pipeline produces a complete result without either. A second LLM run, a VLM that brings
-the frames on screen into the question/answer pairs, belongs with the vision stage and is not
-built.
+llm`), which decides which candidate sentences are real questions, and the vision captioning of
+section 6 (#53). The pipeline produces a complete result without either. A second LLM run, a VLM
+that brings the frames on screen into the question/answer pairs, belongs with the vision stage and
+is not built.
 
 ### 10.1 One client, two endpoints
 
@@ -676,7 +676,7 @@ new code. Offline results may be worse, but the path must be *available* on a lo
 
 | Config key | Default | Role |
 |---|---|---|
-| `judge_model` | `gpt-5.6-terra` | the LLM detector; one call per chunk of transcript |
+| `judge_model` | `gpt-5.6-terra` | the LLM detector; one request per group of nearby candidates |
 | `vision_model` | `gpt-5.6-luna` | cost-optimised; tens of board-state calls per lecture |
 
 A local server takes its own model names (`qwen3.5:9b` in Ollama). Swapping a model or pointing at
@@ -684,38 +684,61 @@ a local server is a `Config` change, no code. No abstraction library sits on top
 pydantic-ai, instructor): `base_url` already reaches every server we target, and the output checks
 of 10.3 are ours to write either way ([design_decisions.md](design_decisions.md), D12).
 
-Two settings exist for local servers. `judge_reasoning_effort` (`none`) keeps thinking models from
-spending minutes per chunk; Qwen3.5 in Ollama thinks unless told not to, and `""` leaves the choice
-to the server. Ollama's context length cannot be set per request and is 4k tokens below 24 GB of
-VRAM, and a longer prompt is cut silently, so a chunk and its context (10.2) are sized for an 8k
-context and [cli.md](cli.md) starts Ollama with `OLLAMA_CONTEXT_LENGTH=8192`.
+`judge_reasoning_effort` (`--llm-reasoning`, default `none`) sets how long a thinking model may
+think first; `""` leaves the choice to the server. Thinking costs minutes per request instead of
+seconds, and it is what lets a small model such as Qwen3.5 9B judge well, so the CLI raises the
+per-request deadline to 10 minutes whenever it is on. Ollama's context length cannot be set per
+request and is 4k tokens below 24 GB of VRAM, cutting a longer prompt silently; a request (10.4)
+stays within 8k, and [cli.md](cli.md) starts Ollama with `OLLAMA_CONTEXT_LENGTH=8192`.
 
 ASR stays local: `faster-whisper` gives word timestamps, costs nothing and needs no network.
 
 ### 10.2 What the LLM detector does
 
-With `detector = "llm"`, the judge (stage 8) reads the transcript and replaces the candidates and
-pairs of stages 6 and 7 with the questions it picks. The rules still run first, so a sentence both
-pick keeps the rules' `reasons` and `question_type`.
+With `detector = "llm"`, the judge (stage 8) decides, for every candidate, whether it is a real
+question, and replaces the candidates and pairs of stages 6 and 7 with the ones it keeps.
 
-Input: chunks of whole segments (3.2) up to `judge_chunk_chars` of text, one line per sentence,
-`s_1b88c0 1284s so why does a stable sort matter here`, under a prompt holding the four kinds of
-[annotation_guidelines.md](annotation_guidelines.md) 2 as a version-tagged constant
-(`JUDGE_PROMPT_VERSION`). Output, one entry per question-shaped sentence, constrained by a JSON
-schema sent as `response_format`:
+**Candidates** are every sentence ending in `?` plus the rules' own candidates (7.3), so a
+confirmation tag the rules score under their gate is still judged. A question with neither is out
+of reach; the eval report's `question_mark_rate` tracks how often that could happen. A sentence
+both keep keeps the rules' `reasons` and `question_type`.
+
+**Windows.** A candidate is sent with `judge_window` sentences of lecture on each side. One within
+`judge_window` sentences of the previous candidate joins its request, up to `judge_batch_size`
+candidates, so the excerpt stays one piece of lecture; any other starts a new request. Excerpts
+overlap where candidates are close, so no candidate loses the lecture around it.
+
+**Request.** One line per sentence, candidates marked `>>`:
+
+```
+   s_4a01bc 1279s So we sort by the first key and then by the second.
+>> s_1b88c0 1284s so why does a stable sort matter here
+>> s_77e2d0 1301s [said 23x in this lecture] True?
+```
+
+The repeat count appears from three repeats on: on the labelled set no content question repeats
+that often, while the lecturer's habitual tags do, and the count adapts to each speaker without a
+list. The prompt (`JUDGE_PROMPT_VERSION`) holds the four kinds of
+[annotation_guidelines.md](annotation_guidelines.md) 2, defined by what a question asks about:
+`content` asks about the subject, whoever answers it, since lecturers answer most of their own
+questions. The response is an object keyed by candidate id, its shape fixed by a JSON schema sent
+as `response_format`:
 
 ```json
 {
-  "sentence_id": "s_1b88c0",
-  "kind": "content",
-  "question": "Why does a stable sort matter for multi-key sorting?",
-  "answer_sentence_ids": ["s_3f2a91", "s_7c04de"],
-  "confidence": 0.82
+  "s_1b88c0": {
+    "reason": "Asks why stable sorting matters for sorting by several keys.",
+    "kind": "content",
+    "question": "Why does a stable sort matter for multi-key sorting?",
+    "answer_sentence_ids": ["s_3f2a91", "s_7c04de"],
+    "confidence": 0.82
+  }
 }
 ```
 
-Only `content` is kept; the other kinds are counted in `stats.judge_rejected`. The entry maps onto
-the output of section 12 without a schema change:
+`reason` comes first, so a model without a reasoning mode states its case before it labels. Only
+`content` is kept; the other kinds are counted in `stats.judge_rejected`. A judgement maps onto the
+output of section 12 without a schema change:
 
 - `confidence` is the question's confidence as it is; the gate of 9.2 applies, the answer
   weighting does not.
@@ -724,38 +747,37 @@ the output of section 12 without a schema change:
 - The answer is the cited sentences' own text: extractive, no generated answer text.
 - The question gains the reason `llm`, its pair `llm_answer` or `no_answer_found`.
 
-A question is never split: chunks hold whole sentences, and boundaries fall on segment breaks,
-which are silences of 2 s or more. What a cut would take away is the lecture around a question,
-so each chunk is sent with up to `judge_context_chars` of each neighbouring chunk, marked
-`(context)`. An answer may cite a context line after its question; a question in a context line
-belongs to the neighbour, which judges it, so an entry naming one is left out without counting as
-dropped.
+Why one decision per candidate rather than a list per stretch of transcript: small models judge a
+given sentence far better than they enumerate a long one, and the schema turns completeness into
+something the decoder enforces ([design_decisions.md](design_decisions.md), D13).
 
 ### 10.3 Constraints on the LLM detector
 
-1. **It may not add questions.** Every `sentence_id` must be a sentence of the chunk it was sent;
-   an unknown, duplicate or malformed entry is dropped and counted in `stats.judge_dropped`. This
+1. **It may not add questions.** It judges only the candidates the code chose, by id; a judgement
+   for anything else, or a malformed one, is dropped and counted in `stats.judge_dropped`. This
    enforces requirement 4.5 in code, not only in the prompt.
-2. **An answer is sentences after its question**, in the same chunk. Any other cited id is dropped.
+2. **An answer is later sentences of the excerpt.** The schema lists exactly those ids per
+   candidate, and any other cited id is dropped.
 3. **Three layers of output checks**, because servers differ in how faithfully they apply a
    schema: constrained decoding on the server, then `json.loads` with one repeat of the request,
    then rules 1 and 2. None trusts the layer before it.
-4. **Every sentence ending in `?` comes back with a kind.** A model can end its list early in
-   valid JSON, which no schema catches, so the ones a first answer skipped are asked for once
-   more, by id. Any still missing are counted in `stats.judge_skipped`.
+4. **Every candidate comes back with a kind.** The schema requires each candidate id, so a
+   constrained decoder cannot skip one or stop early. A server that ignores the schema can, so the
+   skipped ones are asked for once more; any still missing are counted in `stats.judge_skipped`.
 5. **It is required once asked for.** The user chose the LLM, so an unreachable endpoint, a bad
-   key, an unknown model, no answer within `timeout_seconds` or invalid JSON twice ends the run
-   with one `error:` line. The deadline covers the whole request: a server may keep the
-   connection alive while the model works (OpenRouter does, with no limit of its own), which a
-   per-read timeout never catches. There is no
-   silent fallback to the rules. Chunks already answered stay cached (10.4), so a re-run resumes.
+   key, an unknown model, invalid JSON twice, or no answer within `timeout_seconds` twice ends the
+   run with one `error:` line; there is no silent fallback to the rules. The deadline covers the
+   whole request: a server may keep the connection alive while the model works (OpenRouter does,
+   with no limit of its own), which a per-read timeout never catches. A stall is usually the
+   provider, so a request is sent once more before it counts as failed. Requests already answered
+   stay cached (10.4), so a re-run resumes.
 
-### 10.4 One call per chunk, cached per request
+### 10.4 Requests, cached per request
 
-A 90-minute lecture is about 20k tokens: one call's worth for a hosted model, but more than a
-local model behind Ollama sees at once. Chunks of whole segments serve both, and a hosted run may
-raise `judge_chunk_chars`. A chunk is several minutes of lecture, which is what lets the model
-tell framing from a real question and find an answer after a digression.
+A lecture makes one request per group of nearby candidates, about 15 to 25 for a lecture of an
+hour or more, each a few thousand characters. `judge_parallel` (1) sends several at once. It stays
+1 by default: a local server queues parallel requests, and the time in the queue would count
+against the deadline; a hosted run can raise it.
 
 Each request is cached under `.questxtract/judge/<sha256 of the request>.json`, keyed on the
 endpoint, the model, the prompt, the schema and the transcript lines. Any change to what the model
@@ -763,11 +785,10 @@ would see asks again, and nothing else does: another `-t` or an `eval` re-run co
 and a `.json` transcript input, which has no source hash, is cached too.
 
 > **Decision.** `questxtract/llm.py`. Config: `detector` (`rules`), `base_url`, `api_key` (from
-> `OPENAI_API_KEY`), `judge_model`, `judge_chunk_chars` (7000), `judge_context_chars` (1500),
-> `judge_reasoning_effort` (`none`),
-> `timeout_seconds` (120). Prompt and schema are module-level constants, so a prompt change is a
-> reviewable diff. Dependency: `openai`, in the optional extra `questxtract[llm]`, imported
-> inside the functions.
+> `OPENAI_API_KEY`), `judge_model`, `judge_window` (10), `judge_batch_size` (8),
+> `judge_parallel` (1), `judge_reasoning_effort` (`none`), `timeout_seconds` (120). Prompt and
+> schema are module-level, so a prompt change is a reviewable diff. Dependency: `openai`, in the
+> optional extra `questxtract[llm]`, imported inside the functions.
 
 ---
 

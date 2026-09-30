@@ -178,8 +178,8 @@ def _excerpt(excerpt: Sequence[Sentence], candidates: set[str], repeats: Counter
     for s in excerpt:
         said = repeats[_form(s.text)] if s.id in candidates else 0
         mark = ">> " if s.id in candidates else "   "
-        # From 3 on: on the labelled set no content question repeats that often, and 61% of
-        # rhetorical ones (habitual tags) do. A real question asked twice is common.
+        # From 3 on: on the labelled set no content question repeats that often, while most
+        # habitual tags do. A real question asked twice is common.
         note = f" [said {said}x in this lecture]" if said >= 3 else ""
         lines.append(f"{mark}{s.id} {s.start:.0f}s{note} {s.text.strip()}")
     return "\n".join(lines)

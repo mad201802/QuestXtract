@@ -298,11 +298,40 @@ llama.cpp, vLLM, LM Studio), so a library on top would add dependencies without 
 new dependency was needed.
 
 *Cost:* an LLM run needs an endpoint: cents per lecture for a hosted model, minutes of local
-compute for a local one, and a context setting for Ollama (architecture.md 10.1). Each chunk
-carries context from its neighbours, so an answer more than `judge_context_chars` past a chunk
-boundary is still lost. Once asked for, the LLM is required: a
+compute for a local one, and a context setting for Ollama (architecture.md 10.1). Once asked
+for, the LLM is required: a
 failed endpoint ends the run instead of falling back to the rules, so the output never silently
 mixes the two.
+
+*Revised by D13:* the model no longer lists the questions of a chunk; it judges candidates the code
+chose, one decision each.
+
+### D13: One decision per candidate, and kinds defined by what a question asks about
+
+*Chose:* the LLM detector judges candidates the code chooses (every sentence ending in `?` plus
+the rules' own), several nearby ones per request, each in a window of the lecture around it (#89,
+architecture.md 10.2). The response schema requires exactly those candidate ids and lets an answer
+cite only later sentences of the excerpt, so a constrained decoder can neither skip a candidate nor
+invent an id. A candidate the lecture repeats three times or more carries its count, and each
+judgement starts with a one-sentence `reason`. The prompt defines the kinds by what a question
+asks about: `content` asks about the subject, whoever answers it.
+
+*Alternative:* D12's first shape, which asked the model for the list of questions in each chunk of
+transcript, with context lines from the neighbouring chunks.
+
+*Why:* on the labelled set the rule candidates already held nearly every content question; the
+small models' errors were judgement, not finding. They ended long lists early, mistyped ids, and,
+as their `reason` showed, called any question the lecturer answers himself rhetorical and a
+student's question restated in full procedural. An ablation separated the two changes: the
+per-candidate shape with the old definitions changed nothing measurable, and the new definitions
+in the old chunked shape did not help either; together they lifted the small models to where the
+large one was. In chunks, the new definitions also let habitual tags ("True?") through, which the
+repeat count keeps out. Numbers: #89's PR.
+
+*Cost:* more requests than chunks, one per group of nearby candidates, so `judge_parallel` exists
+for hosted runs. A question with neither a `?` nor a rule behind it is never judged. Thinking
+helps the smallest models most, at minutes per request. The definitions were written after
+reading misses on the labelled recordings, so they need a held-out recording to confirm them.
 
 ## 4. Requirements traceability (→ report ch. 6)
 

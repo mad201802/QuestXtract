@@ -332,3 +332,21 @@ def test_detector_llm_endpoint_failure_is_one_error_line(
     err = capsys.readouterr().err
     assert f"\nerror: judge: {url}: Connection error." in err and "Traceback" not in err
     assert not (tmp_path / "t.questions.json").exists()
+
+
+def test_llm_reasoning_reaches_the_request_and_allows_a_longer_wait(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A thinking model takes minutes per request: any level but none raises the deadline."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    source = str(_transcript_file(tmp_path))
+
+    def config(*flags: str) -> Config:
+        args = cli.build_parser().parse_args(["process", source, "--detector", "llm", *flags])
+        return cli._with_llm(Config(), args)
+
+    assert config().judge_reasoning_effort == "none"
+    assert config().timeout_seconds == Config().timeout_seconds
+    thinking = config("--llm-reasoning", "low")
+    assert thinking.judge_reasoning_effort == "low"
+    assert thinking.timeout_seconds == 600
