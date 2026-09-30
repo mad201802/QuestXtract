@@ -47,6 +47,11 @@
   clear?", "Are you following?", "How many of you ...?", a bare "Everyone?"), so the rules
   detector stops emitting most of them. "Do you see why ...?" stays a question. (#70)
 
+### Changed
+
+- QTI export includes all questions by default except explicit reviewer rejections; use
+  `--only-keep` or `only_keep=True` for strict verdict filtering. (#67)
+
 ## 0.1.0
 
 First release. QuestXtract turns a lecture recording (`.mp4`) or an ASR transcript (`.json`) into
