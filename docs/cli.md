@@ -37,6 +37,9 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `-t`, `--threshold` | a number, 0 to 1 | `0.4` | Keeps only questions with at least this confidence. Lower gives more questions, including more false ones; higher gives fewer. |
 | `-m`, `--model` | a model name | `turbo` | The Whisper model used to transcribe. Only matters for `.mp4` input. See [Choosing a model](#choosing-a-model). |
 | `--from-scratch` | nothing | off | Ignores cached results and recomputes everything, transcription included. |
+| `--detector` | `rules` or `llm` | `rules` | How questions are found: fast offline rules, or a language model that reads the transcript. See [Finding questions with an LLM](#finding-questions-with-an-llm). |
+| `--llm-model` | a model name | `gpt-5.6-terra` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
+| `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint for `--detector llm`, e.g. `http://localhost:11434/v1` for Ollama. Without it, OpenAI is used with the key from `OPENAI_API_KEY`. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
 One thing to know about `-t` today: a question with no answer scores at most `0.55`, so a
@@ -64,7 +67,9 @@ reads.
 
 `questxtract eval <files|dirs> [--json]` scores the pipeline against the labelled set: recall,
 precision, false positives by kind, a threshold sweep, and every miss
-([tests/data/README.md](../tests/data/README.md)). `questxtract quiz <questions.json>` is
+([tests/data/README.md](../tests/data/README.md)). It takes `--detector`, `--llm-model` and
+`--llm-url` too, so the rules and a model can be compared on the same recordings; the report's
+first line names the detector, the model and the prompt version. `questxtract quiz <questions.json>` is
 reserved for quiz generation; it is not implemented yet (#79) and exits with a one-line error.
 
 ## Where files go
@@ -134,6 +139,52 @@ uv run python scripts/dropped_questions.py lecture.transcript.json -o lecture.qu
 questxtract process lecture.mp4 --from-scratch
 ```
 
+## Finding questions with an LLM
+
+`--detector llm` hands question finding to a language model. It reads the transcript a few minutes
+at a time, picks every question actually asked, finds the sentences that answer it, and rewrites a
+messy question into a clean one. The spoken version stays in the file as `original_text`, and the
+model can never add a question that was not spoken: it answers with sentence ids, and any id that
+is not in the transcript is dropped. The rules still run first; their `reasons` stay on the
+questions the model also picks, and the model's picks gain `llm`.
+
+It needs the `llm` extra: `pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`.
+
+**Hosted (OpenAI).** Put the key in the environment; the default model is `gpt-5.6-terra`, and
+`gpt-5.6-luna` is cheaper. A 90-minute lecture costs cents.
+
+```bash
+export OPENAI_API_KEY=sk-...
+questxtract process lecture.mp4 --detector llm
+questxtract process lecture.mp4 --detector llm --llm-model gpt-5.6-luna
+```
+
+**Local (Ollama).** Any OpenAI-compatible server works (Ollama, llama.cpp's `llama-server`,
+vLLM, LM Studio); pass its URL. With [Ollama](https://ollama.com), give it an 8k context first:
+below 24 GB of graphics memory it defaults to 4k and silently cuts longer prompts.
+
+```bash
+OLLAMA_CONTEXT_LENGTH=8192 ollama serve        # in one terminal
+ollama pull qwen3.5:9b                         # once; qwen3.5:4b for a smaller machine
+questxtract process lecture.mp4 --detector llm \
+    --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
+```
+
+Speed depends on the machine: on a CPU, reading a whole lecture takes minutes. Which model finds
+the questions best is measured with `eval`:
+
+```bash
+questxtract eval tests/data/ --detector llm --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
+```
+
+**Caching.** Every request to the model is cached in `.questxtract/judge/`, keyed on what was sent.
+Another `-t` or a second `eval` makes no calls; a different model, endpoint, transcript or
+prompt asks again (a new questxtract version may change the prompt). `--from-scratch` ignores the cache.
+
+**When the endpoint fails.** You asked for the model, so there is no quiet fallback to the rules:
+the run stops with one `error:` line (see [When something goes wrong](#when-something-goes-wrong)).
+Parts already answered stay cached, so running the same command again picks up where it stopped.
+
 ## Choosing a model
 
 `-m` picks the Whisper model size. Smaller is faster, larger is more accurate.
@@ -157,7 +208,7 @@ from the same folder every time to benefit from it.
 
 | Changing this... | ...transcribes again? |
 |---|---|
-| `-t`, `-o` | no |
+| `-t`, `-o`, `--detector`, `--llm-model`, `--llm-url` | no |
 | `-m` | yes: a different model gives a different transcript |
 | `--from-scratch` | yes, and it recomputes everything else too |
 | the video file itself | yes: the cache is keyed on the file's content |
@@ -181,8 +232,13 @@ A `.json` transcript input never touches the cache. There is nothing expensive l
 | `...: invalid or unreadable MP4 recording` | The file is damaged or not really an MP4. |
 | `Invalid model size '...', expected one of: ...` | Use one of the names listed in the message. |
 | `...: not valid JSON` / `expected a list of segments...` | The `.json` file is not a transcript. |
+| `--detector llm needs OPENAI_API_KEY, or --llm-url for a local server` | Set the key, or pass `--llm-url` for a local server. |
+| `--detector llm needs the LLM extra: ...` | Install `questxtract[llm]`. |
+| `judge: <endpoint>: ...` | The model endpoint failed: it is not running, the key is wrong, or the model name is unknown to it. The message after the endpoint says which. |
+| `judge: <model> did not return the expected JSON, twice` | The model could not follow the output format. Try a larger model; rerun to try again. |
 
-A missing file or wrong file type is caught before anything runs. A damaged recording or one
+A missing file or wrong file type is caught before anything runs, and so is `--detector llm`
+without a key or without the extra. A damaged recording or one
 without audio is caught by the first stage. Either way, a bad input never costs you a
 transcription.
 
