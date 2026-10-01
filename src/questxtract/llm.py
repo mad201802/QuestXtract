@@ -396,8 +396,8 @@ def judge(ctx: Context) -> Context:
     transcript, which a config-only header cannot key.
 
     Raises:
-        ValueError: If ``config.detector`` is neither ``rules`` nor ``llm``, or the model does
-            not return the expected JSON.
+        ValueError: If ``config.detector`` is neither ``rules`` nor ``llm``, the model does
+            not return the expected JSON, or it judged none of the candidates.
         ConnectionError: If the endpoint fails. The user asked for the LLM, so there is no
             silent fallback to the rules.
 
@@ -439,6 +439,13 @@ def judge(ctx: Context) -> Context:
             ctx.stats.update({k: ctx.stats[k] + v for k, v in batch_stats.items()})
     finally:  # on a failure, the requests not yet sent are not sent
         pool.shutdown(wait=True, cancel_futures=True)
+    if positions and ctx.stats["judge_skipped"] == len(positions):
+        # Some skipped is a model's lapse; all of them is a server answering in another shape
+        # (e.g. the judgements wrapped in one more object), and an empty result would hide it.
+        raise ValueError(
+            f"judge: {ctx.config.judge_model} judged none of the {len(positions)} candidates; "
+            "the endpoint may not follow the response format"
+        )
     ctx.pairs = tuple(sorted(pairs, key=lambda p: p.start))  # a follow-up answers out of order
     ctx.candidates = tuple(p.question for p in ctx.pairs)
     ctx.stats["candidates"] = len(ctx.candidates)

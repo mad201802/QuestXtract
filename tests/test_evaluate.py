@@ -9,10 +9,11 @@ from typing import Any
 
 import pytest
 
-from questxtract import Config
+from questxtract import Config, Transcript
 from questxtract.cli import main
 from questxtract.evaluate import evaluate, match, overlap_ratio, overlaps
 from questxtract.llm import JUDGE_PROMPT_VERSION
+from questxtract.sentences import split_sentences
 
 
 def test_overlap_is_measured_against_the_shorter_span() -> None:
@@ -118,7 +119,11 @@ def test_eval_scores_the_llm_detector_and_names_it(
     """#88: `eval --detector llm` runs the same harness over what the model picked."""
     monkeypatch.chdir(tmp_path)  # the LLM cache is cwd-relative
     labels = [{"start": 0.0, "end": 1.5, "text": "What is a field?", "kind": "content"}]
-    client = fake_llm({"questions": []})  # the model finds nothing, so recall drops to 0
+    transcript = Transcript.from_file(_write(tmp_path, labels) / "lec.transcript.json")
+    question = split_sentences(transcript)[0]
+    # The model calls the labelled question rhetorical, so recall drops to 0.
+    verdict = {"reason": "", "kind": "rhetorical", "question": "", "answer_sentence_ids": []}
+    client = fake_llm({question.id: {**verdict, "confidence": 0.9}})
 
     url = ["--llm-url", "http://localhost:11434/v1"]
     assert main(["eval", str(_write(tmp_path, labels)), "--detector", "llm", *url, "--json"]) == 0

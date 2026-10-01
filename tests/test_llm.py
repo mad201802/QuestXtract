@@ -177,7 +177,7 @@ def test_the_threshold_cuts_the_models_own_confidence(context, sentences, fake_l
 def test_a_form_repeated_in_the_lecture_carries_its_count(fake_llm, tmp_path):
     """AC: from three times on, a candidate line says how often the lecturer says it."""
     ctx = _lecture("True? Is it bounded? True? Is it bounded? True?")
-    client = fake_llm({})
+    client = fake_llm({split_sentences(ctx.transcript)[0].id: _judged(kind="rhetorical")})
     _run(ctx, tmp_path, judge_window=0, judge_batch_size=1)
     lines = [r["messages"][1]["content"] for r in client.requests]
     assert sum("[said 3x in this lecture] True?" in line for line in lines) >= 3
@@ -221,8 +221,15 @@ def test_a_candidate_the_answer_skipped_is_asked_for_again(fake_llm, tmp_path):
     assert follow_up["response_format"]["json_schema"]["schema"]["required"] == [two.id]
     assert ctx.stats["judge_skipped"] == 0
 
-    fake_llm({})  # skipped twice: counted, and the run goes on
-    assert _run(ctx, tmp_path, from_scratch=True).stats["judge_skipped"] == 2
+    fake_llm({one.id: _judged()}, {})  # two skipped twice: counted, and the run goes on
+    assert _run(ctx, tmp_path, from_scratch=True).stats["judge_skipped"] == 1
+
+
+def test_a_reply_that_judges_no_candidate_fails_loudly(context, sentences, fake_llm, tmp_path):
+    """A server answering in another shape skips every candidate: an error, not an empty file."""
+    fake_llm({"judgements": {sentences[1].id: _judged()}})
+    with pytest.raises(ValueError, match="judged none of the 1 candidates"):
+        _run(context, tmp_path)
 
 
 def test_invalid_json_is_asked_again_once_then_fails(context, sentences, fake_llm, tmp_path):
@@ -305,9 +312,9 @@ def test_every_request_reports_progress(fake_llm, tmp_path):
     ctx = _lecture("Is one? Is two? Is three?")
     seen: list[float] = []
     ctx.progress = lambda name, fraction: seen.append(fraction) if name == "judge" else None
-    client = fake_llm({})
+    client = fake_llm({split_sentences(ctx.transcript)[0].id: _judged()})
     _run(ctx, tmp_path, judge_window=0, judge_batch_size=1)
-    assert len(client.requests) == 3 * 2  # one per candidate, each asked again when skipped
+    assert len(client.requests) == 1 + 2 * 2  # one per candidate; two and three asked again
     assert seen[0] == 0.0 and max(seen) < 1.0 and len(seen) == 4
 
 

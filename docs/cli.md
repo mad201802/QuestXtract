@@ -255,6 +255,7 @@ A `.json` transcript input never touches the cache. There is nothing expensive l
 | `judge: <endpoint>: ...` | The model endpoint failed: it is not running, the key is wrong, or the model name is unknown to it. The message after the endpoint says which. |
 | `judge: <endpoint>: no answer within 120 s, twice` | The model did not answer one request in time, and not on a second try either. With a thinking model, pass `--llm-reasoning`, which allows 10 minutes; otherwise the provider is overloaded, try again later. |
 | `judge: <model> did not return the expected JSON, twice` | The model could not follow the output format. Try a larger model; rerun to try again. |
+| `judge: <model> judged none of the N candidates; ...` | The endpoint answered, but in a shape other than the one asked for, so no candidate was judged. Check that the server supports structured output (`response_format`); try another model or server. |
 
 A missing file or wrong file type is caught before anything runs, and so is `--detector llm`
 without a key or without the extra. A damaged recording or one
