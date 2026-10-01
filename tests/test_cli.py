@@ -349,4 +349,6 @@ def test_llm_reasoning_reaches_the_request_and_allows_a_longer_wait(
     assert config().timeout_seconds == Config().timeout_seconds
     thinking = config("--llm-reasoning", "low")
     assert thinking.judge_reasoning_effort == "low"
+    with pytest.raises(SystemExit):  # a typo fails at once, not at the provider after ASR
+        config("--llm-reasoning", "hgih")
     assert thinking.timeout_seconds == 600

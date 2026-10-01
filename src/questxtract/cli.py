@@ -324,6 +324,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     llm.add_argument(
         "--llm-reasoning",
+        choices=("none", "low", "medium", "high"),
         default=defaults.judge_reasoning_effort,
         metavar="LEVEL",
         help="how long a thinking model may think before it answers: none, low, medium or high "
