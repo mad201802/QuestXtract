@@ -12,7 +12,8 @@
   such as Ollama with `--llm-url` and `--llm-model`. Requests are cached in
   `.questxtract/judge/`. Needs the `llm` extra. (#88, #89)
 - `--llm-reasoning` lets a thinking model think before it judges (`low`, `medium`, `high`); small
-  models such as Qwen3.5 9B need it. Any level but `none` allows each request 10 minutes. (#89)
+  models such as Qwen3.5 9B need it. `server` sends no setting, for a model without one such as
+  gpt-4o-mini. Any level but `none` allows each request 10 minutes. (#89, #97)
 
 ### Changed (breaking)
 

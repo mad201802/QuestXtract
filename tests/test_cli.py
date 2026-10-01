@@ -352,3 +352,7 @@ def test_llm_reasoning_reaches_the_request_and_allows_a_longer_wait(
     with pytest.raises(SystemExit):  # a typo fails at once, not at the provider after ASR
         config("--llm-reasoning", "hgih")
     assert thinking.timeout_seconds == 600
+    # gpt-4o-mini rejects any reasoning_effort; "" sends none (tests/test_llm.py)
+    server = config("--llm-reasoning", "server")
+    assert server.judge_reasoning_effort == ""
+    assert server.timeout_seconds == 600

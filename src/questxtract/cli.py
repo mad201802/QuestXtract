@@ -187,9 +187,9 @@ def _with_llm(config: Config, args: argparse.Namespace) -> Config:
         detector=args.detector,
         judge_model=args.llm_model,
         base_url=args.llm_url,
-        judge_reasoning_effort=args.llm_reasoning,
+        judge_reasoning_effort="" if args.llm_reasoning == "server" else args.llm_reasoning,
     )
-    if args.llm_reasoning not in ("none", ""):
+    if args.llm_reasoning != "none":
         config = config.replace(
             timeout_seconds=max(config.timeout_seconds, _THINKING_TIMEOUT_SECONDS)
         )
@@ -324,10 +324,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     llm.add_argument(
         "--llm-reasoning",
-        choices=("none", "low", "medium", "high"),
+        choices=("none", "low", "medium", "high", "server"),
         default=defaults.judge_reasoning_effort,
         metavar="LEVEL",
-        help="how long a thinking model may think before it answers: none, low, medium or high "
+        help="how long a thinking model may think before it answers: none, low, medium or high, "
+        "or server to send no setting, for a model without one such as gpt-4o-mini "
         "(default: %(default)s). Small models such as qwen3.5:9b judge much better with low; "
         "anything but none also allows each request 10 minutes instead of 2",
     )
