@@ -22,6 +22,9 @@
   applies to what the model kept, and to the model's own confidence, without the rules' answer
   weighting. `evaluate()` takes an optional `Config`, and its report names the `detector`.
   (#88, #89)
+- A question's `id` in `questions.json` comes from the sentence it was spoken in, not from its
+  text, so it stays the same when `--detector llm` rewords the question or you switch detectors.
+  Every `id` changes once with this release. (#94)
 
 ### Fixed
 

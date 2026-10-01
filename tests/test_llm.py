@@ -63,6 +63,24 @@ def test_the_rules_detector_makes_no_calls(context, monkeypatch):
     assert ctx.pairs[0].verdict == "unjudged"
 
 
+def test_a_question_keeps_its_id_across_detectors_and_rewordings(
+    context, sentences, fake_llm, tmp_path
+):
+    """#94 AC: the same spoken question has one id under `rules`, under `llm`, and under a
+    second LLM run with another model that words it differently, so review edits matched by
+    id stay on it."""
+    rules = run(context, STAGES[2:]).pairs[0].id
+    client = fake_llm(
+        {sentences[1].id: _judged(question="What does a stable sort keep?")},
+        {sentences[1].id: _judged(question="What makes a sort stable?")},
+    )
+    first = _run(context, tmp_path).pairs[0]
+    second = _run(context, tmp_path, judge_model="qwen3.5:9b").pairs[0]
+    assert client.requests[1]["model"] == "qwen3.5:9b"
+    assert first.question.text != second.question.text
+    assert rules == first.id == second.id
+
+
 def test_the_schema_requires_exactly_the_candidates_and_later_answers(
     context, sentences, fake_llm, tmp_path
 ):
