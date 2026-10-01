@@ -11,12 +11,14 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import openai
 import pytest
 
-from questxtract import asr, cli
+from questxtract import Transcript, asr, cli
 from questxtract.cli import main
 from questxtract.config import Config
 from questxtract.pipeline import STAGES
+from questxtract.sentences import split_sentences
 
 _SEGMENTS = [{"text": "Today we cover sorting. What is a stable sort?", "start": 0.0, "end": 3.0}]
 
@@ -257,3 +259,96 @@ def test_help_documents_the_options_with_examples(capsys: pytest.CaptureFixture[
     out = capsys.readouterr().out
     assert "--threshold" in out and "--model" in out and "--from-scratch" in out
     assert "-o -" in out
+
+
+# --- the LLM detector (#88) ---------------------------------------------------
+
+
+def test_detector_llm_without_a_key_or_url_fails_before_transcription(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    video = make_mp4(tmp_path / "lecture.mp4")
+
+    assert main(["process", str(video), "--detector", "llm"]) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("error: ") and "OPENAI_API_KEY" in err and "--llm-url" in err
+    assert fake_asr == [] and "[1/" not in err
+
+
+def test_detector_llm_without_the_extra_says_how_to_install_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli.importlib.util, "find_spec", lambda name: None)
+
+    assert main(["process", str(_transcript_file(tmp_path)), "--detector", "llm"]) == 1
+    assert "pip install 'questxtract[llm]'" in capsys.readouterr().err
+
+
+def test_detector_llm_uses_the_model_and_endpoint_given(
+    tmp_path: Path, fake_llm: Callable[..., Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)  # the LLM cache is cwd-relative
+    source = _transcript_file(tmp_path)
+    (sentence,) = split_sentences(Transcript.from_file(source))
+    judged = {
+        "reason": "",
+        "kind": "content",
+        "question": "",
+        "answer_sentence_ids": [],
+        "confidence": 1.0,
+    }
+    client = fake_llm({sentence.id: judged})
+    url = "http://localhost:11434/v1"
+
+    args = ["process", str(source), "--detector", "llm", "--llm-model", "qwen3.5:9b"]
+    assert main([*args, "--llm-url", url]) == 0
+
+    data = json.loads((tmp_path / "t.questions.json").read_text(encoding="utf-8"))
+    assert data["config"]["judge_model"] == "qwen3.5:9b"
+    assert [q["verdict"] for q in data["questions"]] == ["keep"]
+    assert client.requests[0]["model"] == "qwen3.5:9b"
+
+
+def test_detector_llm_endpoint_failure_is_one_error_line(
+    tmp_path: Path,
+    fake_llm: Callable[..., Any],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No silent fallback to the rules, and no traceback."""
+    monkeypatch.chdir(tmp_path)
+    fake_llm(openai.OpenAIError("Connection error."))
+    source = _transcript_file(tmp_path)
+    url = "http://localhost:11434/v1"
+
+    assert main(["process", str(source), "--detector", "llm", "--llm-url", url]) == 1
+
+    err = capsys.readouterr().err
+    assert f"\nerror: judge: {url}: Connection error." in err and "Traceback" not in err
+    assert not (tmp_path / "t.questions.json").exists()
+
+
+def test_llm_reasoning_reaches_the_request_and_allows_a_longer_wait(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A thinking model takes minutes per request: any level but none raises the deadline."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    source = str(_transcript_file(tmp_path))
+
+    def config(*flags: str) -> Config:
+        args = cli.build_parser().parse_args(["process", source, "--detector", "llm", *flags])
+        return cli._with_llm(Config(), args)
+
+    assert config().judge_reasoning_effort == "none"
+    assert config().timeout_seconds == Config().timeout_seconds
+    thinking = config("--llm-reasoning", "low")
+    assert thinking.judge_reasoning_effort == "low"
+    with pytest.raises(SystemExit):  # a typo fails at once, not at the provider after ASR
+        config("--llm-reasoning", "hgih")
+    assert thinking.timeout_seconds == 600

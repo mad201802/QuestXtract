@@ -6,6 +6,7 @@ Every command and option, with recipes: docs/cli.md.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import sys
 from collections.abc import Callable, Sequence
@@ -21,6 +22,9 @@ from .pipeline import STAGES, run
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
 
 _BAR_WIDTH = 10
+# A thinking model takes minutes per request, where one that answers straight away takes
+# seconds: the per-request deadline follows the reasoning level.
+_THINKING_TIMEOUT_SECONDS = 600
 # A redirected stderr on Windows is cp1252, not the UTF-8 console, and the block glyphs
 # raise UnicodeEncodeError there - a crash in the middle of a real run, over decoration.
 _FULL, _EMPTY = ("█", "░") if "utf" in (sys.stderr.encoding or "").lower() else ("#", "-")
@@ -36,7 +40,7 @@ _STAGE_LABELS = {
     "detect": "Detecting questions",
     "answer": "Finding answers",
     "score": "Scoring",
-    "judge": "Reviewing",
+    "judge": "LLM detection",
 }
 
 _INPUT_KINDS = {".mp4": "an .mp4 recording", ".json": "a .json transcript"}
@@ -57,6 +61,9 @@ examples:
   questxtract process lecture.mp4 -t 0.3                 more questions, less strict
   questxtract process lecture.mp4 -m base                quick run with a small model
   questxtract process lecture.transcript.json -o -       existing transcript, print it
+  questxtract process lecture.mp4 --detector llm         an LLM picks the questions
+  questxtract process lecture.mp4 --detector llm         a local model in Ollama:
+      --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b --llm-reasoning low
 """
 
 _TRANSCRIBE_EXAMPLES = """\
@@ -168,6 +175,32 @@ def _config(args: argparse.Namespace) -> Config:
     return Config().replace(model_size=args.model, from_scratch=args.from_scratch)
 
 
+def _with_llm(config: Config, args: argparse.Namespace) -> Config:
+    """Apply the LLM flags, and check an LLM run can start before anything slow runs.
+
+    Raises:
+        ValueError: If ``--detector llm`` lacks the ``[llm]`` extra, or has neither an API
+            key nor a local endpoint.
+
+    """
+    config = config.replace(
+        detector=args.detector,
+        judge_model=args.llm_model,
+        base_url=args.llm_url,
+        judge_reasoning_effort=args.llm_reasoning,
+    )
+    if args.llm_reasoning not in ("none", ""):
+        config = config.replace(
+            timeout_seconds=max(config.timeout_seconds, _THINKING_TIMEOUT_SECONDS)
+        )
+    if config.detector == "llm":
+        if importlib.util.find_spec("openai") is None:
+            raise ValueError("--detector llm needs the LLM extra: pip install 'questxtract[llm]'")
+        if config.base_url is None and not config.api_key:
+            raise ValueError("--detector llm needs OPENAI_API_KEY, or --llm-url for a local server")
+    return config
+
+
 def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
     """Run ``stages`` under the progress bar, closing its line if anything interrupts it."""
     try:
@@ -184,7 +217,7 @@ def _process(args: argparse.Namespace) -> int:
     source = Path(args.input)
     _check_input(source, (".mp4", ".json"))
     output = _output_path(args.output, source, "questions")
-    config = _config(args).replace(min_confidence=args.threshold)
+    config = _with_llm(_config(args), args).replace(min_confidence=args.threshold)
 
     if source.suffix.lower() == ".json":
         transcript = Transcript.from_file(source)
@@ -218,7 +251,7 @@ def _transcribe(args: argparse.Namespace) -> int:
 def _eval(args: argparse.Namespace) -> int:
     """Score the pipeline against the labelled set."""
     try:
-        report = evaluate(args.paths)
+        report = evaluate(args.paths, _with_llm(Config(), args))
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -268,9 +301,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="ignore cached results and recompute everything, transcription included",
     )
 
+    # How questions are found: `process` and `eval` share these.
+    llm = argparse.ArgumentParser(add_help=False)
+    llm.add_argument(
+        "--detector",
+        choices=("rules", "llm"),
+        default=defaults.detector,
+        help="how questions are found: rules (fast, offline) or llm (a language model reads the "
+        "transcript; needs the questxtract[llm] extra) (default: %(default)s)",
+    )
+    llm.add_argument(
+        "--llm-model",
+        default=defaults.judge_model,
+        metavar="NAME",
+        help="the model for --detector llm, e.g. qwen3.5:9b in Ollama (default: %(default)s)",
+    )
+    llm.add_argument(
+        "--llm-url",
+        metavar="URL",
+        help="an OpenAI-compatible endpoint for --detector llm, e.g. http://localhost:11434/v1 "
+        "for Ollama (default: OpenAI, with the key from OPENAI_API_KEY)",
+    )
+    llm.add_argument(
+        "--llm-reasoning",
+        choices=("none", "low", "medium", "high"),
+        default=defaults.judge_reasoning_effort,
+        metavar="LEVEL",
+        help="how long a thinking model may think before it answers: none, low, medium or high "
+        "(default: %(default)s). Small models such as qwen3.5:9b judge much better with low; "
+        "anything but none also allows each request 10 minutes instead of 2",
+    )
+
     process = subs.add_parser(
         "process",
-        parents=[shared],
+        parents=[shared, llm],
         help="extract questions from a recording or a transcript",
         description="Extract the questions asked in a recording, or in an existing transcript.",
         epilog=_PROCESS_EXAMPLES,
@@ -301,7 +365,7 @@ def build_parser() -> argparse.ArgumentParser:
     transcribe.add_argument("recording", help="an .mp4 recording")
     transcribe.set_defaults(handler=_transcribe)
 
-    evaluation = subs.add_parser("eval", help="score against the labelled set")
+    evaluation = subs.add_parser("eval", parents=[llm], help="score against the labelled set")
     evaluation.add_argument(
         "paths", nargs="+", help="*.labels.jsonl files, or directories holding them"
     )

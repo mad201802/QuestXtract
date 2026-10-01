@@ -113,7 +113,8 @@ _TAG_WORDS = frozenset({"okay", "ok", "right", "true", "yes", "yeah", "correct",
 # on this?"). The comprehension checks do not count when content follows them: "Does that
 # make sense?" is a check-in, "Why does it make sense to sort first?" is a question.
 # ponytail: #70, English phrase list grown from the labelled recordings; the TTK4225 forms are
-# missing. The LLM pass (#46) is the real content filter, this only keeps the obvious ones out.
+# missing. The LLM detector (#88) is the real content filter; this only keeps the obvious
+# ones out.
 _CHECK_INS = re.compile(
     r"\bmakes? sense\b(?! to (?!everyone\b|everybody\b|you\b)| of\b| for\b| in\b| here\b)"
     r"|\bis that clear\b(?! (?:why|what|how|that|whether|if|when|where)\b)"

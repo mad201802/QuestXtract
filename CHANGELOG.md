@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Added
+
+- `--detector llm` on `process` and `eval`: a language model judges every sentence ending in
+  "?" (and every question the rules found) in the lecture around it, keeps the real questions,
+  cites the sentences that answer them and rewrites a messy question, keeping the spoken version
+  as `original_text`. It only judges sentences the code chose, by id, so it never adds a
+  question. Any OpenAI-compatible endpoint works: OpenAI with `OPENAI_API_KEY`, or a local server
+  such as Ollama with `--llm-url` and `--llm-model`. Requests are cached in
+  `.questxtract/judge/`. Needs the `llm` extra. (#88, #89)
+- `--llm-reasoning` lets a thinking model think before it judges (`low`, `medium`, `high`); small
+  models such as Qwen3.5 9B need it. Any level but `none` allows each request 10 minutes. (#89)
+
+### Changed (breaking)
+
+- `Config.judge_enabled` and `Config.judge_max_candidates` are gone. `Config(detector="llm")`
+  turns the LLM on; `judge_window`, `judge_batch_size`, `judge_parallel` and
+  `judge_reasoning_effort` tune it. The `judge` stage runs before `score`, so the threshold
+  applies to what the model kept, and to the model's own confidence, without the rules' answer
+  weighting. `evaluate()` takes an optional `Config`, and its report names the `detector`.
+  (#88, #89)
+
 ### Fixed
 
 - Detection finds the question word after a leading preposition ("For which ...?"), in an earlier

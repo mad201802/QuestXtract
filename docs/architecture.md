@@ -75,15 +75,16 @@ Three consequences that show up repeatedly below:
                               v
   7 answer                    |  adjacent seed -> QAPair[]
                               v
-  8 score                     |  confidence, threshold -> QAPair[]
+  8 judge (optional)          |  --detector llm: an LLM reads the transcript and replaces
+                              |  6 and 7 with the questions and answers it picks -> QAPair[]
                               v
-  9 judge (optional)          |  one LLM pass: keep/revise/reject, refine, find answers
+  9 score                     |  confidence, threshold -> QAPair[]
                               v
  10 export                    |  questions.json (quiz.json is a separate command, 12.3)
 ```
 
-Stages 1-8 are pure Python plus one local model. Stages 5 and 9 are the only ones that touch an
-LLM endpoint, and both are off unless one is configured. Expensive stages are cached and report
+Every other stage is pure Python plus one local model. Stages 5 and 8 are the only ones that touch
+an LLM endpoint, and both are off unless asked for. Expensive stages are cached and report
 progress (section 11).
 
 The `STAGES` list in `pipeline.py` is this sequence, rows 1 to 9, with vision split into `vision`
@@ -91,15 +92,18 @@ and `attach_visual` (11.1). Row 10 is not a stage: export runs on the finished `
 
 ### 1.4 The rule path and the judge
 
-Detection, the adjacent answer seed and the confidence are cheap, inspectable rules. On top of
-them sits **one optional LLM pass** (section 10) that reviews the surviving candidates together,
-refines their wording and finds their answers. The rule path is the offline fallback: a run with
-no endpoint configured still produces candidates, answered only where the adjacent seed found one.
+Detection, the adjacent answer seed and the confidence are cheap, inspectable rules, and the
+default. **The LLM detector** (the judge, section 10) is the alternative a user picks per run with
+`--detector llm`: a text LLM reads the transcript, picks the questions actually asked, finds the
+sentences that answer them and rewrites a messy question into a clean one. The rule path is the
+offline one: a run with no endpoint still produces questions, answered only where the adjacent
+seed found one.
 
 **Hard constraint (requirement 4.5, "the model shall not create questions on their own").** The
-LLM pass may **reject, rescope or rewrite** a candidate, and it must cite the sentence ids it is
-working from. It may never add a candidate. Quiz generation is generative and lives in a separate
-command (12.3), so the boundary is visible in the code and in the output, not only in a prompt.
+LLM detector answers with sentence ids, and every id is checked against the transcript it was
+sent. It may reword a question it found, with the spoken version kept beside it, but never add
+one. Quiz generation is generative and lives in a separate command (12.3), so the boundary is
+visible in the code and in the output, not only in a prompt.
 
 ### 1.5 Thresholds are measured, not assumed
 
@@ -401,8 +405,8 @@ the code.
 Three rules:
 
 **`reasons` is never dropped.** Every rule that fires, positive or negative, appends a stable
-string. This is what makes review possible, makes a wrong result debuggable without a debugger,
-and is the LLM pass's input.
+string. This is what makes review possible and makes a wrong result debuggable without a
+debugger. A question the LLM detector picks keeps the rules' codes for its sentence and gains `llm`.
 
 **Do not drop `None` on serialisation.** The export writes a fixed key set, `null` included, so
 consumers never have to defensively `.get()` a missing field.
@@ -427,7 +431,7 @@ Slides and screencasts are easy (near-duplicate frame dedupe, then text). Chalkb
 and handwriting are hard, and FR4 plus the MIT reference recording put us there. OCR engines
 (Tesseract, PaddleOCR, EasyOCR) are printed-text models: close to useless on chalk, and they
 cannot represent a diagram at all. A VLM reads handwriting, diagrams and slides and emits LaTeX in
-one call, through the same optional client as the LLM pass (section 10), so it adds no
+one call, through the same optional client as the LLM detector (section 10), so it adds no
 dependency. `vision` is one `STAGES` entry, so a local OCR pass or a stub that loads pre-captioned
 frames in tests replaces that one entry.
 
@@ -470,8 +474,9 @@ formulas.
 
 - **Detection** (section 7): a small positive delta when a question shares content words with the
   board state on screen while it was asked (#60).
-- **The LLM pass** (section 10): board text in the prompt, where it matters most: "what does this
-  term mean?" is unanswerable from audio alone.
+- **A second, VLM pass** over the question/answer pairs (not built): the frames on screen go into
+  the prompt, where they matter most: "what does this term mean?" is unanswerable from audio
+  alone.
 
 > **Decision.** `questxtract/vision.py`. Config: `vision_enabled` (False), `vision_fps` (1.0),
 > `vision_model`, `vision_max_states` (80). Offline use points `base_url` at a local
@@ -482,8 +487,7 @@ formulas.
 ## 7. Question detection
 
 Purely lexical and orthographic. No classifier, no prosody. The rules are inspectable and every
-decision leaves a reason code, which is what makes both the review workflow and the LLM pass's
-job possible.
+decision leaves a reason code, which is what makes the review workflow possible.
 
 **Why rules, not a model.** Deciding whether a sentence is interrogative is the easy half and is
 lexical: in meeting speech, lexico-syntactic features carry question detection and pitch only
@@ -493,7 +497,7 @@ detector trained on classroom ASR reaches weighted F1 0.59 (Blanchard et al., SI
 rhetorical questions are identified at F1 0.54 only once the neighbouring utterances are
 features (Bhattasali et al., ACL 2015). With a few hundred labels there is nothing to train on
 anyway. So the rules do the lexical half and keep the known noise out; the content call is the
-LLM pass's (section 10), which sees the context those papers found necessary.
+LLM detector's (section 10), which sees the context those papers found necessary.
 
 ### 7.1 Extraction
 
@@ -561,8 +565,8 @@ Gate: `min_question_score` (0.45). With the confidence of 9.2 and the emission t
 | head, no `?` | 0.40 | no | | |
 
 The tag and check-in lists are English (requirement 4.2), grown from the labelled recordings
-rather than written up front, and deliberately short: they only keep the obvious noise out of
-the LLM pass's input. Tags follow the annotation guidelines, which label them `rhetorical`: a
+rather than written up front, and deliberately short: they only keep the obvious noise out, and
+the content call is the LLM detector's. Tags follow the annotation guidelines, which label them `rhetorical`: a
 penalty with a reason code, not a veto.
 
 **Current results**, default config, `questxtract eval tests/data/`. Update this table in the PR
@@ -585,7 +589,7 @@ NFR2 holds with room, and `question_mark_rate` is 0.99, so 3.1's bet holds. The 
 (*"Do you see it, people?"*, *"Are they clear?"*) missing from the check-in list (#70). 19 hit
 `rhetorical` ones, mostly concept-free framing (*"So how do we do that?"*, #49). 3 hit
 `procedural` ones. None is a confirmation tag, so the tag penalty does its job; the content call
-beyond that is the LLM pass's (#46).
+beyond that is the LLM detector's (section 10).
 
 > **Decision.** `questxtract/detect.py`, cue tables inline as module constants.
 
@@ -598,15 +602,15 @@ near-zero gap (`answer_seed_max_gap_seconds`, 1.0 s) and not itself a question. 
 case, and the highest-precision answer shape we have. Stage 3 splits at the `?`, so a sentence
 never holds its own answer; the seed is the next sentence.
 
-Every answer further away, after a digression or several sentences later, comes from the LLM pass
-(section 10), not from rules. With no endpoint configured, a question keeps its seed or has no
+Every answer further away, after a digression or several sentences later, comes from the LLM
+detector (section 10), not from rules. With no endpoint configured, a question keeps its seed or has no
 answer.
 
 There is **no speaker constraint on pairing**, and not only because we have no speaker layer:
 lectures are full of self-answered questions, and requiring a speaker change would delete the
 single most common QA shape in the corpus - which with off-mic students is *the entire shape*,
-since the lecturer both repeats and answers the student's question. The LLM pass follows the
-same rule.
+since the lecturer both repeats and answers the student's question. The LLM detector follows
+the same rule.
 
 > **Decision.** `questxtract/answer.py`, the adjacent seed only. Why the rules stop there:
 > [design_decisions.md](design_decisions.md), D11.
@@ -617,8 +621,8 @@ same rule.
 
 ### 9.1 Answer scoring (not planned)
 
-No rule-based answer scoring. An answer the adjacent seed found counts as found; judging whether
-an answer is good is the LLM pass's job (10.2), for the same reason as section 8.
+No rule-based answer scoring. An answer the adjacent seed found counts as found; finding a better
+one is the LLM detector's job (10.2), for the same reason as section 8.
 
 ### 9.2 Confidence
 
@@ -632,8 +636,9 @@ label:  >= 0.75 high | >= 0.45 medium | else low
 A question with no answer keeps `0.55 * question_score` and an empty answer span. It is still
 exported: FR6 and FR7 ask for questions with timestamps, not for answered questions.
 
-Gate: `min_confidence` (0.40), swept in the eval report. With the LLM pass on, the final
-confidence moves within a band around this number (10.3).
+Gate: `min_confidence` (0.40), swept in the eval report. With the LLM detector, the confidence is
+the model's own (10.2), with no answer weighting: the model saw the answer when it labelled the
+question, so weighing it again would count it twice. The gate is the same.
 
 One number the user can reason about (FR10), plus a verdict. No parallel quality score, no risk
 band, no profile-scoped emission gates.
@@ -641,7 +646,8 @@ band, no profile-scoped emission gates.
 ### 9.3 Dedupe (not planned)
 
 No rule-based dedupe. Echo pairs (a student asks, the lecturer restates, both get detected) and
-near duplicates are judged by the LLM pass, which sees every candidate in one call (10.4).
+near duplicates stay in the output. The LLM detector labels a fragment echo `procedural`
+(annotation_guidelines.md 2) and sees a stretch of lecture at once (10.4).
 
 > **Decision.** `questxtract/score.py`: confidence and the threshold.
 
@@ -649,9 +655,11 @@ near duplicates are judged by the LLM pass, which sees every candidate in one ca
 
 ## 10. The LLM layer
 
-One module, one client, two jobs: the vision captioning of section 6 and the LLM pass (stage 9)
-here. Off unless an endpoint is configured; the pipeline produces a complete result without it.
-Today only the client exists; both jobs are planned (#46, #53).
+One module, one client, two jobs, each off unless asked for: the LLM detector (stage 8, `--detector
+llm`), which decides which candidate sentences are real questions, and the vision captioning of
+section 6 (#53). The pipeline produces a complete result without either. A second LLM run, a VLM
+that brings the frames on screen into the question/answer pairs, belongs with the vision stage and
+is not built.
 
 ### 10.1 One client, two endpoints
 
@@ -663,70 +671,124 @@ OpenAI(api_key=os.environ["OPENAI_API_KEY"])  # hosted
 OpenAI(api_key="local", base_url="http://localhost:11434/v1")  # local device
 ```
 
-Any local OpenAI-compatible server (vLLM, llama.cpp's server, Ollama) serving a small VLM plugs in
-with no new code. Offline results may be much worse, but the visual path must be *available* on a
-local device.
+Any local OpenAI-compatible server (Ollama, llama.cpp's server, vLLM, LM Studio) plugs in with no
+new code. Offline results may be worse, but the path must be *available* on a local device.
 
 | Config key | Default | Role |
 |---|---|---|
+| `judge_model` | `gpt-5.6-terra` | the LLM detector; one request per group of nearby candidates |
 | `vision_model` | `gpt-5.6-luna` | cost-optimised; tens of board-state calls per lecture |
-| `judge_model` | `gpt-5.6-terra` | balanced; one call per run |
 
-The model ids are placeholders until #46 and #53 wire the calls; check them against the
-provider's model list then. Swapping a model or pointing at a local server is a `Config` change,
-no code. A provider that is not OpenAI-compatible is an `if` in the two places in `llm.py` that
-build a request.
+A local server takes its own model names (`qwen3.5:9b` in Ollama). Swapping a model or pointing at
+a local server is a `Config` change, no code. No abstraction library sits on top (litellm,
+pydantic-ai, instructor): `base_url` already reaches every server we target, and the output checks
+of 10.3 are ours to write either way ([design_decisions.md](design_decisions.md), D12).
+
+`judge_reasoning_effort` (`--llm-reasoning`, default `none`) sets how long a thinking model may
+think first; `""` leaves the choice to the server. Thinking costs minutes per request instead of
+seconds, and it is what lets a small model such as Qwen3.5 9B judge well, so the CLI raises the
+per-request deadline to 10 minutes whenever it is on. Ollama's context length cannot be set per
+request and is 4k tokens below 24 GB of VRAM, cutting a longer prompt silently; a request (10.4)
+stays within 8k, and [cli.md](cli.md) starts Ollama with `OLLAMA_CONTEXT_LENGTH=8192`.
 
 ASR stays local: `faster-whisper` gives word timestamps, costs nothing and needs no network.
 
-### 10.2 What the LLM pass does (planned, #46)
+### 10.2 What the LLM detector does
 
-It filters, refines and answers: keeps, revises or rejects each candidate, rewrites a messy
-question into a clean one, and drafts the answer. Beyond the adjacent seed (section 8), every
-answer comes from this pass, drafted from the transcript and, when vision is on, the board.
+With `detector = "llm"`, the judge (stage 8) decides, for every candidate, whether it is a real
+question, and replaces the candidates and pairs of stages 6 and 7 with the ones it keeps.
 
-One batched call per run. Input: every surviving candidate with its question text, answer text,
-surrounding transcript window, overlapping board-state text and its `reasons`. Output, per
-candidate:
+**Candidates** are every sentence ending in `?` plus the rules' own candidates (7.3), so a
+confirmation tag the rules score under their gate is still judged. A question with neither is out
+of reach; the eval report's `question_mark_rate` tracks how often that could happen. A sentence
+both keep keeps the rules' `reasons` and `question_type`.
+
+**Windows.** A candidate is sent with `judge_window` sentences of lecture on each side. One within
+`judge_window` sentences of the previous candidate joins its request, up to `judge_batch_size`
+candidates, so the excerpt stays one piece of lecture; any other starts a new request. Excerpts
+overlap where candidates are close, so no candidate loses the lecture around it.
+
+**Request.** One line per sentence, candidates marked `>>`:
+
+```
+   s_4a01bc 1279s So we sort by the first key and then by the second.
+>> s_1b88c0 1284s so why does a stable sort matter here
+>> s_77e2d0 1301s [said 23x in this lecture] True?
+```
+
+The repeat count appears from three repeats on: on the labelled set no content question repeats
+that often, while the lecturer's habitual tags do, and the count adapts to each speaker without a
+list. The prompt (`JUDGE_PROMPT_VERSION`) holds the four kinds of
+[annotation_guidelines.md](annotation_guidelines.md) 2, defined by what a question asks about:
+`content` asks about the subject, whoever answers it, since lecturers answer most of their own
+questions. The response is an object keyed by candidate id, its shape fixed by a JSON schema sent
+as `response_format`:
 
 ```json
 {
-  "id": "q_0007",
-  "verdict": "keep",
-  "question_text": "Why does a stable sort matter for multi-key sorting?",
-  "answer_text": "Because the second pass preserves the order of the first.",
-  "answer_sentence_ids": ["s_3f2a91", "s_7c04de"],
-  "confidence": 0.82,
-  "reason": "genuine content question, answered two sentences later by the lecturer"
+  "s_1b88c0": {
+    "reason": "Asks why stable sorting matters for sorting by several keys.",
+    "kind": "content",
+    "question": "Why does a stable sort matter for multi-key sorting?",
+    "answer_sentence_ids": ["s_3f2a91", "s_7c04de"],
+    "confidence": 0.82
+  }
 }
 ```
 
-`verdict` is `keep`, `revise` or `reject`. On `revise` the transcript version stays in the
-output (`original_text`) so a reviewer can see what changed.
+`reason` comes first, so a model without a reasoning mode states its case before it labels. Only
+`content` is kept; the other kinds are counted in `stats.judge_rejected`. A judgement maps onto the
+output of section 12 without a schema change:
 
-### 10.3 Constraints on the LLM pass (planned, #46)
+- `confidence` is the question's confidence as it is; the gate of 9.2 applies, the answer
+  weighting does not.
+- A non-empty `question` is the question's `text`, with verdict `revise` and the transcript
+  sentence as `original_text`; an empty one keeps the sentence, verdict `keep`.
+- The answer is the cited sentences' own text: extractive, no generated answer text.
+- The question gains the reason `llm`, its pair `llm_answer` or `no_answer_found`.
 
-1. **It may not add candidates.** The response is validated against the input id set; unknown ids
-   are dropped and counted. This enforces requirement 4.5 in code, not only in the prompt.
-2. **Answers must cite sentence ids that exist**, and the cited sentences must overlap the returned
-   text. An answer that does not trace back to the transcript is rejected, and the candidate keeps
-   its rule-based answer.
-3. **It moves confidence within a band:** final = `clamp(0.5 * rule_confidence + 0.5 *
-   llm_confidence)`, so a bad batch cannot push a candidate from 0.2 to 0.95.
-4. **It is never required.** A timeout, a rate limit, a malformed response or a missing key logs a
-   warning, marks every candidate `unjudged`, and the run completes on the rules alone.
+Why one decision per candidate rather than a list per stretch of transcript: small models judge a
+given sentence far better than they enumerate a long one, and the schema turns completeness into
+something the decoder enforces ([design_decisions.md](design_decisions.md), D13).
 
-### 10.4 Why one call, not per candidate
+### 10.3 Constraints on the LLM detector
 
-A lecture yields tens of candidates, not thousands. One call sees them together, which is what
-makes echo and near-duplicate judgement possible at all, costs one round trip, and caches as one
-unit keyed on the candidate-set hash.
+1. **It may not add questions.** It judges only the candidates the code chose, by id; a judgement
+   for anything else, or a malformed one, is dropped and counted in `stats.judge_dropped`. This
+   enforces requirement 4.5 in code, not only in the prompt.
+2. **An answer is later sentences of the excerpt.** The schema lists exactly those ids per
+   candidate, and any other cited id is dropped.
+3. **Three layers of output checks**, because servers differ in how faithfully they apply a
+   schema: constrained decoding on the server, then `json.loads` with one repeat of the request,
+   then rules 1 and 2. None trusts the layer before it.
+4. **Every candidate comes back with a kind.** The schema requires each candidate id, so a
+   constrained decoder cannot skip one or stop early. A server that ignores the schema can, so the
+   skipped ones are asked for once more; any still missing are counted in `stats.judge_skipped`.
+5. **It is required once asked for.** The user chose the LLM, so an unreachable endpoint, a bad
+   key, an unknown model, invalid JSON twice, or no answer within `timeout_seconds` twice ends the
+   run with one `error:` line; there is no silent fallback to the rules. The deadline covers the
+   whole request: a server may keep the connection alive while the model works (OpenRouter does,
+   with no limit of its own), which a per-read timeout never catches. A stall is usually the
+   provider, so a request is sent once more before it counts as failed. Requests already answered
+   stay cached (10.4), so a re-run resumes.
 
-> **Decision.** `questxtract/llm.py`. Config: `base_url`, `api_key` (from `OPENAI_API_KEY`),
-> `judge_enabled` (False), `judge_model`, `vision_model`, `judge_max_candidates` (60, chunked
-> above that), `timeout_seconds` (120). Prompts are module-level, version-tagged constants, so a
-> prompt change is a reviewable diff. Dependency: `openai`, in the optional extra
-> `questxtract[llm]`, imported inside the functions.
+### 10.4 Requests, cached per request
+
+A lecture makes one request per group of nearby candidates, about 15 to 25 for a lecture of an
+hour or more, each a few thousand characters. `judge_parallel` (1) sends several at once. It stays
+1 by default: a local server queues parallel requests, and the time in the queue would count
+against the deadline; a hosted run can raise it.
+
+Each request is cached under `.questxtract/judge/<sha256 of the request>.json`, keyed on the
+endpoint, the model, the prompt, the schema and the transcript lines. Any change to what the model
+would see asks again, and nothing else does: another `-t` or an `eval` re-run costs zero calls,
+and a `.json` transcript input, which has no source hash, is cached too.
+
+> **Decision.** `questxtract/llm.py`. Config: `detector` (`rules`), `base_url`, `api_key` (from
+> `OPENAI_API_KEY`), `judge_model`, `judge_window` (10), `judge_batch_size` (8),
+> `judge_parallel` (1), `judge_reasoning_effort` (`none`), `timeout_seconds` (120). Prompt and
+> schema are module-level, so a prompt change is a reviewable diff. Dependency: `openai`, in the
+> optional extra `questxtract[llm]`, imported inside the functions.
 
 ---
 
@@ -784,10 +846,10 @@ a library caller. Flat is what makes `uses=(...)` a tuple of names rather than p
 ### 11.2 One cache
 
 ```
-.questxtract/<source_hash>/
-  transcribe.json      today
-  vision.json          with #59 (plus layout.json and keyframe images)
-  judge.json           with #46
+.questxtract/
+  <source_hash>/transcribe.json   the transcript
+  <source_hash>/vision.json       with #59 (plus layout.json and keyframe images)
+  judge/<request hash>.json       one per LLM detector request (10.4)
 ```
 
 Each entry is written with a header holding the values of the stage's `uses` config fields. The
@@ -799,9 +861,9 @@ bypasses reuse for every stage. Sentences, segments, detection, answers and scor
 an empty `ctx.source_hash` (a caller seeding a transcript directly, say) skips the cache instead of
 sharing one bucket, which would replay one recording's results into another's.
 
-**The LLM pass is the exception to the `uses` rule.** Its entry is keyed on the candidate-set hash
-(10.4), which a config-only header cannot express, so its `cache=` is wired together with that key
-(#46).
+**The LLM detector is the exception to the `uses` rule.** Its input is the transcript, which a
+config-only header cannot key, so it declares no `cache=` and caches each request itself, keyed on
+the request (10.4). `--from-scratch` bypasses it too.
 
 A stage that reads a config field and forgets to list it in `uses` serves stale results: the one
 bug class this design still has. Keep `uses` next to the signature so the two are reviewed
@@ -831,8 +893,8 @@ Vision will report per board state.
 Schema 2.0: a fixed key set, `null` included, in one file. The formal description is
 [`questions.schema.json`](../src/questxtract/questions.schema.json), which ships inside the
 package; the tests validate every export shape against it. The example shows one entry of each
-list, with vision and the LLM pass on (both planned); with them off, `visuals` is empty, `verdict`
-is `unjudged` and both model names are `null`:
+list, with vision (planned) and the LLM detector on; with the rules and no vision, `visuals` is
+empty, `verdict` is `unjudged` and both model names are `null`:
 
 ```json
 {
@@ -881,7 +943,7 @@ is `unjudged` and both model names are `null`:
       "sentence_id": "s_1b88c0",
       "visual_ids": ["v_4c1e09"],
       "verdict": "revise",
-      "reasons": ["mark", "wh", "intra_sentence_qa"],
+      "reasons": ["mark", "wh", "llm", "llm_answer"],
       "review": {"status": "pending", "text": null, "note": null, "metadata": {}}
     }
   ]
@@ -900,7 +962,7 @@ one more top-level list pointing at visual ids.
   sentence belongs to no segment.
 - `answer` is `null` when no answer was found. Its `start`/`end` span its own sentences
   (`sentence_ids`), not the question.
-- `original_text` is set when the LLM pass revised the question, `null` otherwise.
+- `original_text` is set when the LLM detector reworded the question, `null` otherwise.
 - `source` says what the question was read from; only `audio` is produced until vision lands,
   `visual` and `combined` are reserved.
 - `topic` on a segment stays `null` until something produces topics.
@@ -953,8 +1015,8 @@ src/questxtract/
   vision.py        5 vision (planned) and attach_visual, the interval join
   detect.py        6 detect: extraction, vetoes, scoring, cue tables
   answer.py        7 answer: adjacent seed
-  score.py         8 score: confidence, threshold
-  llm.py           9 judge: the OpenAI-compatible client and the LLM pass (planned)
+  llm.py           8 judge: the OpenAI-compatible client and the LLM detector
+  score.py         9 score: confidence, threshold
   export.py        questions.json writer and reader, with questions.schema.json
   filtering.py     time filter, experimental topic filter
   evaluate.py      labelled-set metrics
@@ -978,7 +1040,7 @@ checks it: `grep '@stage'` over the stage modules returns the contents of `STAGE
 `numpy` and `onnxruntime`. `ctranslate2`, `tokenizers`, `huggingface-hub` and `tqdm` arrive
 transitively through faster-whisper.
 
-**Extras:** `[llm]` -> `openai` (the LLM pass and vision: one key, one dependency). The CLI's
+**Extras:** `[llm]` -> `openai` (the LLM detector and vision: one key, one dependency). The CLI's
 progress bar is a few lines of `print`, not `tqdm`.
 
 **No system binaries** (no ffmpeg) and **no torch** (so no CUDA wheels, transformers or pyannote).
@@ -1003,9 +1065,9 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `segments.py` | 4 segments | done | |
 | `vision.py` | 5 vision, attach_visual | capture is a stub that raises when `vision_enabled`; the interval join is done | #59 |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery are not built | #48, #78 |
-| `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM pass | #46 |
-| `score.py` | 8 score | done: confidence and threshold; answer judging and dedupe are the LLM pass's | #46 |
-| `llm.py` | 9 judge | stub: no-op when disabled, raises when `judge_enabled` | #46 |
+| `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
+| `llm.py` | 8 judge | done: the LLM detector (10) | |
+| `score.py` | 9 score | done: confidence and threshold | |
 | `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
 | `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest | |

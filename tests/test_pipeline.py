@@ -18,8 +18,8 @@ DOC_ORDER = [
     "attach_visual",
     "detect",
     "answer",
-    "score",
     "judge",
+    "score",
 ]
 
 

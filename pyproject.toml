@@ -52,6 +52,8 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.13",
     "jsonschema>=4",
+    # The [llm] extra, so the LLM tests run locally as they do in CI (`--all-extras`).
+    "openai>=1.0",
 ]
 
 [tool.uv]
@@ -79,11 +81,6 @@ ignore = ["D203", "D213"]
 python_version = "3.10"
 packages = ["questxtract"]
 strict = true
-
-# The LLM layer is the optional `questxtract[llm]` extra, imported inside the functions.
-[[tool.mypy.overrides]]
-module = ["openai"]
-ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["faster_whisper"]

@@ -30,13 +30,12 @@ turns them into study material. It **extracts** questions, it never invents them
 |---|---|
 | 🎥 **Video in** | `.mp4` recordings, audio track extracted automatically (no system ffmpeg) |
 | 🗣️ **Transcription** | Speech-to-text with faster-whisper, or any ASR engine behind a small interface |
-| ❓ **Question detection** | Question sentences found in the transcript, with a confidence score and the rules that fired |
+| ❓ **Question detection** | Fast offline rules, or an LLM you pick (local in Ollama, or hosted) that reads the transcript; a confidence score and the reasons for every question |
 | ⏱️ **Timestamps** | Every question carries its position in the recording |
 | ✏️ **Human in the loop** | A `review` block per question for teacher edits, never overwritten by the pipeline |
 | 📦 **JSON export** | `questions.json` with a fixed key set and a formal JSON Schema |
 
-Planned: reading the board and slides (#59), an LLM pass that refines questions and finds their
-answers (#46), and quiz generation (#79). What is built today:
+Planned: reading the board and slides (#59) and quiz generation (#79). What is built today:
 [architecture.md 13.3](docs/architecture.md#133-status).
 
 ## Install
@@ -80,12 +79,34 @@ with a `segments` key, which is what most engines emit:
 }
 ```
 
+### With an LLM
+
+The rules are fast and offline, but they miss what they were not written for. `--detector llm`
+lets a language model decide instead: it judges every sentence ending in `?` in the lecture around
+it, keeps the real questions, finds the sentences that answer them, and rewrites a messy question
+into a clean one, keeping the spoken version beside it. It never adds a question that was not
+spoken. It needs the `llm` extra
+(`pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`) and a model:
+
+```bash
+# hosted: OpenAI, key from the environment
+OPENAI_API_KEY=sk-... questxtract process lecture.mp4 --detector llm
+
+# local: any OpenAI-compatible server, here Ollama with a small Qwen that thinks first
+questxtract process lecture.mp4 --detector llm --llm-reasoning low \
+    --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
+```
+
+Answers are cached, so another `-t` costs no calls. Setting up Ollama, choosing a model, and what
+happens when the endpoint fails: [docs/cli.md](docs/cli.md#finding-questions-with-an-llm).
+
 To measure the detector against the labelled reference recordings in `tests/data/`
 ([how they were made](tests/data/README.md)):
 
 ```bash
 questxtract eval tests/data/          # table, sweep, missed questions and false positives
 questxtract eval tests/data/ --json   # the same report, machine-readable
+questxtract eval tests/data/ --detector llm --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
 ```
 
 ### Output
@@ -97,8 +118,9 @@ present, `null` included. Example and field reference:
 [architecture.md 12.1](docs/architecture.md#121-questionsjson); formal schema:
 [questions.schema.json](src/questxtract/questions.schema.json).
 
-`--threshold` gates the final **confidence**: an unanswered question tops out at 0.55, one the
-next sentence answers carries its full question score.
+`--threshold` gates the final **confidence**. With the rules, an unanswered question tops out at
+0.55, and one the next sentence answers carries its full question score; with `--detector llm`,
+it is the model's own confidence.
 
 ### Python API
 
