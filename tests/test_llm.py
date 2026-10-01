@@ -124,7 +124,9 @@ def test_a_later_answer_is_the_text_of_the_cited_sentences(fake_llm, tmp_path):
     """An answer is extractive: the cited sentences' own text, later ones only."""
     ctx = _lecture("What is a stable sort? Let me draw it. Here. It keeps equal keys in order.")
     question, draw, here, answer = split_sentences(ctx.transcript)
-    cited = [answer.id, question.id, "s_000000"]  # an earlier and an unknown id are dropped
+    # An earlier id, an unknown one and a non-string (a server not enforcing the schema) are
+    # dropped.
+    cited = [answer.id, question.id, "s_000000", {"id": answer.id}]
     fake_llm({question.id: _judged(answer_sentence_ids=cited)})
     (pair,) = _run(ctx, tmp_path).pairs
     assert pair.answer_sentence_ids == (answer.id,)

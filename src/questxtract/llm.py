@@ -362,6 +362,9 @@ def _fields(judgement: Any) -> tuple[str, str, list[Any], float] | None:
         or not math.isfinite(confidence)
     ):
         return None
+    # An id is a string; anything else in the list is not trusted as an answer, like an id
+    # that is not a later sentence of the excerpt.
+    answer_ids = [a for a in answer_ids if isinstance(a, str)]
     return str(kind), question, answer_ids, min(1.0, max(0.0, float(confidence)))
 
 
