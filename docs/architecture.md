@@ -550,8 +550,10 @@ Additive, clamped to [0, 1]:
                    "Okay?", "True, you see?", "..., right?" - unless what precedes the tag
                    has its own interrogative head ("Why is this not a field, right?")
   -0.40  check_in  classroom management: "who here", "want to tell me", "your name", ...,
-                   and "is that clear", "make sense" unless content follows them
-                   ("Why does it make sense to ...?" is a question)
+                   checks of the room ("do you see it", "is everything clear", "are you
+                   following", "how many of you", a bare "Everyone?"), and "is that clear",
+                   "make sense", "do you see" unless content follows them
+                   ("Why does it make sense to ...?", "Do you see why ...?" are questions)
 ```
 
 Gate: `min_question_score` (0.45). With the confidence of 9.2 and the emission threshold of 0.40:
@@ -575,19 +577,20 @@ that changes the numbers; issues link here instead of copying them.
 | Recording | Content labels | TP | FP | FN | Recall | Precision | F1 |
 |---|---|---|---|---|---|---|---|
 | MIT 18.100B L1 | 28 | 28 | 1 | 0 | 1.00 | 0.97 | 0.98 |
-| TTK4225 2026-09-14 | 39 | 39 | 26 | 0 | 1.00 | 0.60 | 0.75 |
-| TTK4225 2026-09-15 | 60 | 59 | 49 | 1 | 0.98 | 0.55 | 0.70 |
-| **Pooled** | 127 | 126 | 76 | 1 | **0.99** | 0.62 | 0.77 |
+| TTK4225 2026-09-14 | 39 | 39 | 10 | 0 | 1.00 | 0.80 | 0.89 |
+| TTK4225 2026-09-15 | 60 | 59 | 20 | 1 | 0.98 | 0.75 | 0.85 |
+| **Pooled** | 127 | 126 | 31 | 1 | **0.99** | 0.80 | 0.89 |
 
 NFR2 holds with room, and `question_mark_rate` is 0.99, so 3.1's bet holds. The sweep: recall
-0.99 / precision 0.53 up to a threshold of 0.30, 0.99 / 0.62 from 0.35 to 0.55, 0.45 / 0.66 from
+0.99 / precision 0.55 up to a threshold of 0.30, 0.99 / 0.80 from 0.35 to 0.55, 0.45 / 0.86 from
 0.65 up.
 
 *Missed (1).* The `?`-less cut-off above.
 
-*False positives (76).* 54 hit `check_in` labels, nearly all the TTK4225 lecturer's own forms
-(*"Do you see it, people?"*, *"Are they clear?"*) missing from the check-in list (#70). 19 hit
-`rhetorical` ones, mostly concept-free framing (*"So how do we do that?"*, #49). 3 hit
+*False positives (31).* 19 hit `rhetorical` labels, mostly concept-free framing (*"So how do we
+do that?"*, #49). 9 hit `check_in` ones the list does not hold, elicitations and feelings
+(*"What would you say?"*, *"Do you like that?"*). Every check-in form on the list comes from
+one lecturer's two recordings, so it is re-checked on another (#92). 3 hit
 `procedural` ones. None is a confirmation tag, so the tag penalty does its job; the content call
 beyond that is the LLM detector's (section 10).
 
