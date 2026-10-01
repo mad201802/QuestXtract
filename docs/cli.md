@@ -73,8 +73,9 @@ reads.
 precision, false positives by kind, a threshold sweep, and every miss
 ([tests/data/README.md](../tests/data/README.md)). It takes `--detector`, `--llm-model` and
 `--llm-url` too, so the rules and a model can be compared on the same recordings; the report's
-first line names the detector, the model and the prompt version. `questxtract quiz <questions.json>` is
-reserved for quiz generation; it is not implemented yet (#79) and exits with a one-line error.
+first line names the detector, the model and the prompt version. `questxtract quiz <questions.json>` generates
+quiz content with the separate generative AI step. It is not a serializer or an ExerPlaza
+upload command, and generation is not implemented yet (#79).
 
 ## Configuration files
 

@@ -190,20 +190,18 @@ it is the model's own confidence.
 
 ### Exerplaza quiz export
 
-After reviewing `questions.json`, export the questions marked with `"verdict": "keep"` or
-`"verdict": "revise"`:
+The planned `quiz` command generates quiz content from the questions with the separate AI
+generation step. It is not an alternative JSON serializer:
 
 ```bash
-questxtract quiz questions.json --video-id VIDEO_ID -o exerplaza-quiz.json
+questxtract quiz questions.json -o quiz.json
 ```
 
-This creates one quiz for the source video and maps each approved question to a versioned,
-credential-free Exerplaza exchange payload containing its stable ID, text, optional answer,
-question type, confidence and timestamp. Questions marked `unjudged` can be included for a
-pre-review preview with `--include-unjudged`; `reject` questions are never exported.
-`--video-id` is required unless `questions.json` contains a stable source hash; it prevents
-collisions caused by relying on local filenames.
-The university API and authentication details are not available yet, so this command writes a
+The ExerPlaza mapper is available through the Python API and is intentionally separate from
+this generative command. Its default export includes every question except those with
+`review.status` equal to `deleted` or `false_positive`, including `unjudged` questions while
+the LLM judge is a stub. Its opt-in `only_keep=True` filter exports only `verdict == "keep"`.
+The university API and authentication details are not available yet, so the mapper writes a
 portable JSON hand-off rather than making a network request. The mapping is isolated in
 `questxtract.exerplaza` so the eventual API adapter can be added without changing extraction or
 the review format.

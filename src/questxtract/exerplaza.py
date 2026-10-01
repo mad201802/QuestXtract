@@ -1,6 +1,6 @@
 """Map the reviewed ``questions.json`` export to an Exerplaza quiz payload.
 
-The Exerplaza API is not available yes, so this does not authenticate or make network requests.
+The Exerplaza API is not available yet, so this does not authenticate or make network requests.
 It defines the small, versioned exchange payload used by the CLI for local review and hand-off.
 When the real contract is available, the mapping can be changed here without coupling it to
 question extraction or the review format.
@@ -34,15 +34,20 @@ def _quiz_title(document: dict[str, Any]) -> str:
     return "Video quiz"
 
 
-def _approved_questions(document: dict[str, Any]) -> list[dict[str, Any]]:
+def _selected_questions(document: dict[str, Any], only_keep: bool) -> list[dict[str, Any]]:
     questions = document["questions"]
-    approved: list[dict[str, Any]] = []
+    selected: list[dict[str, Any]] = []
     for question in questions:
         if not isinstance(question, dict):
             raise SchemaError("questions must contain objects")
-        if question.get("verdict") in {"keep", "revise"}:
-            approved.append(question)
-    return approved
+        review = question.get("review")
+        review_status = review.get("status") if isinstance(review, dict) else None
+        if review_status in {"deleted", "false_positive"}:
+            continue
+        if only_keep and question.get("verdict") != "keep":
+            continue
+        selected.append(question)
+    return selected
 
 
 def _video_id(document: dict[str, Any], explicit_id: str | None) -> str:
@@ -91,14 +96,14 @@ def questions_to_exerplaza(
     document: dict[str, Any],
     *,
     video_id: str | None = None,
-    include_unjudged: bool = False,
+    only_keep: bool = False,
 ) -> dict[str, Any]:
     """Map an exported question document to a local Exerplaza quiz payload.
 
-    By default only questions explicitly approved with ``verdict`` equal to ``"keep"``
-    or ``"revise"`` are
-    included.  ``include_unjudged`` is intended for previews before UI review,
-    not for an upload workflow.  ``reject`` questions are never exported.
+    By default every question is included except those explicitly rejected by the reviewer
+    with ``review.status`` equal to ``"deleted"`` or ``"false_positive"``.  ``only_keep``
+    is an opt-in restrictive filter that exports only questions with ``verdict`` equal to
+    ``"keep"``.
     """
     if not isinstance(document, dict) or not isinstance(document.get("questions"), list):
         raise SchemaError("expected an object with a 'questions' list")
@@ -108,22 +113,24 @@ def questions_to_exerplaza(
         source = {}
     resolved_video_id = _video_id(document, video_id)
     title = _quiz_title(document)
-    selected = _approved_questions(document)
-    if include_unjudged:
-        selected.extend(
-            question
-            for question in document["questions"]
-            if isinstance(question, dict) and question.get("verdict") == "unjudged"
-        )
+    selected = _selected_questions(document, only_keep)
 
     mapped_questions: list[dict[str, Any]] = []
     for index, question in enumerate(selected):
         _validate_question(question, index)
         answer = question.get("answer")
+        review = question.get("review")
+        reviewed_text = review.get("text") if isinstance(review, dict) else None
+        question_text = (
+            reviewed_text
+            if question.get("verdict") == "revise" and isinstance(reviewed_text, str)
+            and reviewed_text.strip()
+            else question.get("text")
+        )
         mapped_questions.append(
             {
                 "id": question.get("id"),
-                "question": question.get("text"),
+                "question": question_text,
                 "answer": answer.get("text") if isinstance(answer, dict) else None,
                 "question_type": question.get("question_type"),
                 "timestamp": {
@@ -154,11 +161,11 @@ def read_exerplaza_questions(
     path: str,
     *,
     video_id: str | None = None,
-    include_unjudged: bool = False,
+    only_keep: bool = False,
 ) -> dict[str, Any]:
     """Read ``questions.json`` and return its Exerplaza quiz mapping."""
     return questions_to_exerplaza(
         read_questions(path),
         video_id=video_id,
-        include_unjudged=include_unjudged,
+        only_keep=only_keep,
     )

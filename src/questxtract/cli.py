@@ -311,15 +311,6 @@ def _quiz(args: argparse.Namespace) -> int:
         print(f"error: quiz: {exc}", file=sys.stderr)
         return 1
 
-    if args.output:
-        print(
-            f"{len(quiz['quiz']['questions'])} approved questions -> {args.output}",
-            file=sys.stderr,
-        )
-    else:
-        print(output)
-    return 0
-
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser."""
@@ -447,13 +438,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     quiz = subs.add_parser("quiz", help="export reviewed questions as an Exerplaza quiz")
     quiz.add_argument("questions", help="a questions.json written by `process`")
-    quiz.add_argument("--video-id", help="stable Exerplaza/video identifier")
     quiz.add_argument("-o", "--output", help="write the quiz here")
-    quiz.add_argument(
-        "--include-unjudged",
-        action="store_true",
-        help="include unjudged questions for preview (never required for approved export)",
-    )
     quiz.set_defaults(handler=_quiz)
 
     return parser
