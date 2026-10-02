@@ -111,13 +111,23 @@ _TAG_WORDS = frozenset({"okay", "ok", "right", "true", "yes", "yeah", "correct",
 # Classroom management, not content: labelled check_in or procedural. Matched as whole words
 # of the lower-cased sentence, trailing vocatives allowed ("How much are we together, people,
 # on this?"). The comprehension checks do not count when content follows them: "Does that
-# make sense?" is a check-in, "Why does it make sense to sort first?" is a question.
-# ponytail: #70, English phrase list grown from the labelled recordings; the TTK4225 forms are
-# missing. The LLM detector (#88) is the real content filter; this only keeps the obvious
-# ones out.
+# make sense?" is a check-in, "Why does it make sense to sort first?" is a question, and
+# "Do you see it?" is one while "Do you see why ...?" and "What do you see?" are not. A bare
+# vocative ("Everyone?") is a check-in; a trailing one is not ("What do I get, people?" is
+# content).
+# English, grown from the labelled recordings: the LLM detector (#88) is the real content
+# filter, this only keeps the obvious ones out.
 _CHECK_INS = re.compile(
     r"\bmakes? sense\b(?! to (?!everyone\b|everybody\b|you\b)| of\b| for\b| in\b| here\b)"
-    r"|\bis that clear\b(?! (?:why|what|how|that|whether|if|when|where)\b)"
+    r"|\b(?:is|are) (?:that|it|this|they|these|those|the question|everything) clear\b"
+    r"(?! (?:why|what|how|that|whether|if|when|where)\b)"
+    r"|\bhow clear (?:have i been|is it|was it)\b"
+    r"|(?:(?:^|, |how much )do you see\b|^you see(?= \w))"
+    r"(?! (?:any|why|how|whether|if|which|where|when)\b)"
+    r"|\bare you following\b|\b(?:get|getting|got) the point\b"
+    r"|\bwe are together\b|\bhow are we(?=[,?.!]|$)"
+    r"|\bdo (?:we|you) remember (?:this|that|it)\b|\b(?:have|keep) (?:that|this|it) in mind\b"
+    r"|\bhow many of you\b|^\W*(?:people|everyone|everybody|guys|folks)\W*$"
     r"|\b(?:are we together|you see the point|any (?:other )?questions|who here|want to share"
     r"|want to tell me|your name)\b"
 )
