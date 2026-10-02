@@ -4,6 +4,8 @@
 
 ### Added
 
+- README: setting up the API key safely, the same way on macOS and Windows: the key in the
+  system's password store through `keyring`, and a git-ignored `.env` that only refers to it.
 - `process`, `transcribe` and `eval` read settings from `questxtract.toml` in the working
   directory, or from `--config PATH`. Explicit flags override the file, and omitted values
   retain their defaults. Unknown keys, wrong types and secret-like keys fail with readable

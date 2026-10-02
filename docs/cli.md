@@ -210,20 +210,19 @@ their `reasons` stay on the questions the model keeps, and those gain `llm`.
 
 It needs the `llm` extra: `pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`.
 
-**Hosted (OpenAI).** Put the key in the environment; the default model is `gpt-5.6-terra`, and
-`gpt-5.6-luna` is cheaper. A 90-minute lecture costs cents.
+**Hosted (OpenAI).** Put the key in `OPENAI_API_KEY`, the safe way described in the README
+([Setting up the API key](../README.md#setting-up-the-api-key)), never typed into a command. The
+default model is `gpt-5.6-terra`, and `gpt-5.6-luna` is cheaper. A 90-minute lecture costs cents.
 
 ```bash
-export OPENAI_API_KEY=sk-...
 questxtract process lecture.mp4 --detector llm
 questxtract process lecture.mp4 --detector llm --llm-model gpt-5.6-luna
 ```
 
 **Another hosted provider (OpenRouter and the like).** Anything that speaks the OpenAI API works:
-put that provider's key in `OPENAI_API_KEY` and pass its URL and model name.
+put that provider's key in `OPENAI_API_KEY` (stored the same way) and pass its URL and model name.
 
 ```bash
-export OPENAI_API_KEY=sk-or-...                # the OpenRouter key
 questxtract process lecture.mp4 --detector llm \
     --llm-url https://openrouter.ai/api/v1 --llm-model deepseek/deepseek-v4.1-flash
 ```
