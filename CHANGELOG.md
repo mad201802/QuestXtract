@@ -30,6 +30,9 @@
   ends a sentence ("Unit step function, u. Is it absolutely integrable?"). (#78)
 - `questxtract process` rejects a `--threshold` outside 0 to 1 with a one-line error instead of
   writing a file that fails its own schema. (#85)
+- Detection marks more classroom check-ins as `check_in` ("Do you see it?", "Is everything
+  clear?", "Are you following?", "How many of you ...?", a bare "Everyone?"), so the rules
+  detector stops emitting most of them. "Do you see why ...?" stays a question. (#70)
 
 ## 0.1.0
 
