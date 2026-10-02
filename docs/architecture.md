@@ -688,7 +688,8 @@ pydantic-ai, instructor): `base_url` already reaches every server we target, and
 of 10.3 are ours to write either way ([design_decisions.md](design_decisions.md), D12).
 
 `judge_reasoning_effort` (`--llm-reasoning`, default `none`) sets how long a thinking model may
-think first; `""` leaves the choice to the server. Thinking costs minutes per request instead of
+think first; `""` (`--llm-reasoning server`) sends no setting and leaves the choice to the
+server, for a model without one such as gpt-4o-mini. Thinking costs minutes per request instead of
 seconds, and it is what lets a small model such as Qwen3.5 9B judge well, so the CLI raises the
 per-request deadline to 10 minutes whenever it is on. Ollama's context length cannot be set per
 request and is 4k tokens below 24 GB of VRAM, cutting a longer prompt silently; a request (10.4)
