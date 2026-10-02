@@ -4,6 +4,8 @@
 
 ### Added
 
+- README: setting up the API key safely, the same way on macOS and Windows: the key in the
+  system's password store through `keyring`, and a git-ignored `.env` that only refers to it.
 - `--detector llm` on `process` and `eval`: a language model judges every sentence ending in
   "?" (and every question the rules found) in the lecture around it, keeps the real questions,
   cites the sentences that answer them and rewrites a messy question, keeping the spoken version

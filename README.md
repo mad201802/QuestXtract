@@ -89,8 +89,9 @@ spoken. It needs the `llm` extra
 (`pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`) and a model:
 
 ```bash
-# hosted: OpenAI, key from the environment
-OPENAI_API_KEY=sk-... questxtract process lecture.mp4 --detector llm
+# hosted: OpenAI, key from OPENAI_API_KEY (set it up as below); gpt-4o-mini takes no
+# reasoning setting, hence --llm-reasoning server
+questxtract process lecture.mp4 --detector llm --llm-model gpt-4o-mini --llm-reasoning server
 
 # local: any OpenAI-compatible server, here Ollama with a small Qwen that thinks first
 questxtract process lecture.mp4 --detector llm --llm-reasoning low \
@@ -108,6 +109,67 @@ questxtract eval tests/data/          # table, sweep, missed questions and false
 questxtract eval tests/data/ --json   # the same report, machine-readable
 questxtract eval tests/data/ --detector llm --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
 ```
+
+#### Setting up the API key
+
+A hosted model needs a key; a local server (`--llm-url`) does not. QuestXtract reads it only from
+the `OPENAI_API_KEY` environment variable: there is no config file and no `--api-key` flag, so the
+key never sits in the repository or in your shell history. The setup below keeps it in your
+system's password store (the Keychain on macOS, Credential Manager on Windows) and lets a
+git-ignored `.env` file *refer* to it, so no file anywhere holds the key itself. It is the same on
+macOS and Windows: run it in Terminal on macOS, in **Git Bash** on Windows (it comes with Git for
+Windows), from the repository folder.
+
+1. **Save the key.** Copy the whole key (it starts with `sk-`), then store it from the clipboard:
+
+   ```bash
+   pbpaste | tr -d '[:space:]' | uvx keyring set questxtract-llm openai             # macOS
+   cat /dev/clipboard | tr -d '[:space:]' | uvx keyring set questxtract-llm openai  # Windows
+   ```
+
+   Then empty the clipboard (`pbcopy < /dev/null` on macOS, copy any other text on Windows).
+   Piping the key in avoids typing it into a hidden prompt: macOS's own
+   `security add-generic-password -w` prompt silently cuts a key at 128 characters, and OpenAI
+   keys are longer.
+
+2. **Check it.** This prints only the last three characters; they must match your key's:
+
+   ```bash
+   uvx keyring get questxtract-llm openai | tail -c 4
+   ```
+
+3. **Point `.env` at it.** One line, written once; `.env` is in `.gitignore` and holds no key:
+
+   ```bash
+   echo 'export OPENAI_API_KEY="$(uvx keyring get questxtract-llm openai)"' > .env
+   ```
+
+4. **Load it in every new terminal**, before running `questxtract`:
+
+   ```bash
+   source .env
+   ```
+
+   On macOS the first read may ask whether Python may use the Keychain item: choose *Always
+   Allow*. In PowerShell instead of Git Bash, step 4 is
+   `$env:OPENAI_API_KEY = (uvx keyring get questxtract-llm openai)`.
+
+5. **Test it.** Listing the models costs nothing:
+
+   ```bash
+   uv run python -c "import openai; print(len(openai.OpenAI().models.list().data), 'models visible - the key works')"
+   ```
+
+| Error | Cause | Fix |
+|---|---|---|
+| `--detector llm needs OPENAI_API_KEY, ...` | The key is not loaded in this terminal | `source .env` |
+| `401 ... invalid_api_key` | The stored key is incomplete, or was revoked | Compare its end with the original (step 2) and save it again (step 1); if they match, ask for a new key |
+| `400 ... Unrecognized request argument supplied: reasoning_effort` | The model has no reasoning setting, e.g. `gpt-4o-mini` | Add `--llm-reasoning server` |
+
+**For the project team.** We use the customer's pay-as-you-go OpenAI key with `gpt-4o-mini`. Never
+commit the key, paste it into a chat, issue or pull request, or write it into any file; once it is
+saved, delete the message you received it in. Ask the customer before using another model with it.
+If a key leaks, tell its owner at once so it can be revoked.
 
 ### Output
 
