@@ -343,8 +343,11 @@ class QAPair:
 
     @property
     def id(self) -> str:
-        """Stable identifier, derived from the question's start and text."""
-        digest = hashlib.sha1(f"{self.start:.3f}|{self.question.text}".encode()).hexdigest()
+        """Stable identifier, derived from the sentence the question was spoken in.
+
+        Not from ``question.text``: the LLM detector may reword it, and the id must not move.
+        """
+        digest = hashlib.sha1(self.question.sentence_id.encode()).hexdigest()
         return f"q_{digest[:6]}"
 
 

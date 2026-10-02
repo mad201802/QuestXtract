@@ -108,3 +108,12 @@ def test_qapair_id_is_deterministic():
     a = QAPair(question=candidate, confidence=0.5, start=1.5, end=2.0)
     b = QAPair(question=candidate, confidence=0.9, start=1.5, end=2.0)
     assert a.id == b.id and a.id.startswith("q_")
+
+
+def test_qapair_id_survives_a_rewording():
+    """#94: the LLM detector may reword a question; review edits are matched by its id."""
+    spoken = QuestionCandidate(sentence_id="s_abc", text="So why is it, uh, finite?", score=0.6)
+    reworded = QuestionCandidate(sentence_id="s_abc", text="Why is the area finite?", score=0.9)
+    a = QAPair(question=spoken, confidence=0.5, start=1.5, end=2.0)
+    b = QAPair(question=reworded, confidence=0.9, start=1.5, end=2.0)
+    assert a.id == b.id

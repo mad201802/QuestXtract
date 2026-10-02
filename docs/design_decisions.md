@@ -137,8 +137,8 @@ because the sentence-run meaning is the one every downstream consumer uses.
 
 *Chose:* the export unit is one recording — `{"schema_version", "source", "config", "stats",
 "questions": [...]}` (architecture.md 12.1) — every key always present, `null` included. Each
-question carries an `id` derived from its start and text, and cites the content-hash
-`sentence_id`s it came from.
+question carries an `id` derived from the `sentence_id` it was spoken in, and cites the
+content-hash `sentence_id`s it came from.
 
 *Alternative:* a bare list of questions (M0 behaviour); a `{"lecture", "questions"}` envelope
 (the M1 `LectureResult`).
@@ -148,6 +148,8 @@ re-exports it; the exerplaza integration must *update* the quiz for a video, not
 duplicate. Text is the field being edited, so it cannot be the key. The fixed key set means a
 consumer never has to defensively `.get()` a missing `answer`. Sentence ids being *content
 hashes rather than indices* is what lets a human edit survive a re-transcription (FR5).
+The question `id` first hashed the question's start and text; once `--detector llm` could reword
+the text, the id moved with every rewording, so #94 derived it from the spoken sentence instead.
 
 *Cost:* an ASR re-run that shifts timestamps or words changes ids. We accept this: ids are
 stable per *transcript*, and the transcript is cached (D8) precisely so it is not re-run.
