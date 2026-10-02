@@ -127,6 +127,41 @@ def test_comprehension_checks_do_not_swallow_content_questions():
     assert score_sentence("Is that clear why the limit exists?") == (1.0, ("mark", "aux"))
 
 
+def test_checking_the_room_is_a_check_in():
+    """#70: seeing, clarity, following, being together, remembering, polls, a bare vocative."""
+    for text in (
+        "Do you see it?",
+        "Okay, do you see the difference?",
+        "You see the pole?",
+        "Is everything clear?",
+        "Are they clear, everyone?",
+        "How clear have I been?",
+        "Are you following?",
+        "Did you get the point?",
+        "We are together?",
+        "So, how are we?",
+        "Do you remember this?",
+        "Do you have that in mind?",
+        "How many of you have seen a Bode plot before?",
+        "Everyone?",
+    ):
+        assert "check_in" in score_sentence(text)[1], text
+
+
+def test_checking_the_room_leaves_content_alone():
+    """#70: content after the verb, a wh-word before it, or a vocative alone keep a question."""
+    for text in (
+        "Do you see why the area is finite?",
+        "Do you see any pole on the imaginary axis?",
+        "What do you see here?",
+        "How are we going to compute this?",
+        "Is it clear that f is continuous?",
+        "What do I get, everyone?",
+    ):
+        assert "check_in" not in score_sentence(text)[1], text
+    assert score_sentence("Right, you see?") == (0.2, ("mark", "tag"))
+
+
 def test_check_in_phrases_match_whole_words():
     assert "check_in" not in score_sentence("Is your namespace global?")[1]
 

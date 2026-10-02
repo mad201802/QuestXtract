@@ -23,6 +23,9 @@
   applies to what the model kept, and to the model's own confidence, without the rules' answer
   weighting. `evaluate()` takes an optional `Config`, and its report names the `detector`.
   (#88, #89)
+- A question's `id` in `questions.json` comes from the sentence it was spoken in, not from its
+  text, so it stays the same when `--detector llm` rewords the question or you switch detectors.
+  Every `id` changes once with this release. (#94)
 
 ### Fixed
 
@@ -31,6 +34,9 @@
   ends a sentence ("Unit step function, u. Is it absolutely integrable?"). (#78)
 - `questxtract process` rejects a `--threshold` outside 0 to 1 with a one-line error instead of
   writing a file that fails its own schema. (#85)
+- Detection marks more classroom check-ins as `check_in` ("Do you see it?", "Is everything
+  clear?", "Are you following?", "How many of you ...?", a bare "Everyone?"), so the rules
+  detector stops emitting most of them. "Do you see why ...?" stays a question. (#70)
 
 ## 0.1.0
 
