@@ -841,6 +841,15 @@ with a `None`. `tests/test_pipeline.py` checks that `STAGES` matches 1.3.
 
 **Config.** One flat frozen dataclass in `config.py` with every default, built from CLI flags or by
 a library caller. Flat is what makes `uses=(...)` a tuple of names rather than path expressions.
+For `process`, `transcribe` and `eval`, explicit flags override a flat TOML file, which overrides
+these defaults. `--config PATH` selects the only file to read; otherwise `questxtract.toml` in
+the working directory is read if present. `load_config` checks keys against the dataclass fields
+and values against their annotations. The CLI validates the resulting choices and ranges before
+running stages or writing output. Relative paths remain relative to the working directory.
+`Config.api_key` reads `OPENAI_API_KEY` from the environment first, then from that directory's
+UTF-8 `.env` file. It never stores the key in the dataclass or expands shell expressions.
+Secret-like TOML keys are rejected. Library callers can use `load_config` from `config.py`
+explicitly; constructing `Config()` alone does not read TOML.
 
 > **Decision.** `STAGES`, `run()`, `process()`, the cache and the progress plumbing live in
 > `pipeline.py`, written once in the runner instead of in every expensive stage. The `stage`

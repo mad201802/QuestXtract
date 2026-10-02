@@ -67,6 +67,8 @@ skips transcription. A progress bar renders on stderr, and transcripts are cache
 `process` again with another threshold takes seconds. Every option, the cache, error messages and
 recipes: [docs/cli.md](docs/cli.md).
 
+Save settings in `questxtract.toml`, or choose `--config PATH`; explicit command flags win. See [configuration files](docs/cli.md#configuration-files).
+
 `process` also takes a transcript made by any other ASR engine: a list of segments, or an object
 with a `segments` key, which is what most engines emit:
 
@@ -112,11 +114,13 @@ questxtract eval tests/data/ --detector llm --llm-url http://localhost:11434/v1 
 
 #### Setting up the API key
 
-A hosted model needs a key; a local server (`--llm-url`) does not. QuestXtract reads it only from
-the `OPENAI_API_KEY` environment variable: there is no config file and no `--api-key` flag, so the
-key never sits in the repository or in your shell history. The setup below keeps it in your
-system's password store (the Keychain on macOS, Credential Manager on Windows) and lets a
-git-ignored `.env` file *refer* to it, so no file anywhere holds the key itself. It is the same on
+A hosted model needs a key; a local server (`--llm-url`) does not. QuestXtract reads it from
+the `OPENAI_API_KEY` environment variable, or from a local `.env` (see
+[docs/cli.md](docs/cli.md#api-keys-and-env)); there is no `--api-key` flag and TOML files
+reject secrets, so the key never sits in the repository or in your shell history. The setup
+below keeps it in your system's password store (the Keychain on macOS, Credential Manager on
+Windows) and lets a git-ignored `.env` file *refer* to it, so no file anywhere holds the key
+itself. The environment wins over `.env`, which is why step 4 loads it into the shell. It is the same on
 macOS and Windows: run it in Terminal on macOS, in **Git Bash** on Windows (it comes with Git for
 Windows), from the repository folder.
 

@@ -6,6 +6,11 @@
 
 - README: setting up the API key safely, the same way on macOS and Windows: the key in the
   system's password store through `keyring`, and a git-ignored `.env` that only refers to it.
+- `process`, `transcribe` and `eval` read settings from `questxtract.toml` in the working
+  directory, or from `--config PATH`. Explicit flags override the file, and omitted values
+  retain their defaults. Unknown keys, wrong types and secret-like keys fail with readable
+  errors. `OPENAI_API_KEY` can also come from a local `.env`; the environment takes precedence
+  and the key is never stored in Config, exports or caches. (#99)
 - `--detector llm` on `process` and `eval`: a language model judges every sentence ending in
   "?" (and every question the rules found) in the lecture around it, keeps the real questions,
   cites the sentences that answer them and rewrites a messy question, keeping the spoken version
@@ -31,6 +36,8 @@
 
 ### Fixed
 
+- Provider connection errors mask the active API key if the service echoes it, including
+  in the displayed traceback. (#99)
 - Detection finds the question word after a leading preposition ("For which ...?"), in an earlier
   comma clause ("This area here, is it finite, ...?"), and after a lower-case single letter that
   ends a sentence ("Unit step function, u. Is it absolutely integrable?"). (#78)

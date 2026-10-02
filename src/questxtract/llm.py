@@ -231,6 +231,13 @@ def _ask(
     from openai import OpenAIError  # noqa: PLC0415 - the optional extra, as in client()
 
     endpoint = config.base_url or "OpenAI"
+    api_key = getattr(llm, "api_key", None) or config.api_key
+
+    def failure(detail: str) -> ConnectionError:
+        # Providers may echo credentials in errors; keep diagnostics but hide the key.
+        message = f"judge: {endpoint}: {detail}"
+        return ConnectionError(message.replace(api_key, "[REDACTED]") if api_key else message)
+
     stalled: TimeoutError | None = None
     # Once more after a stall or invalid JSON; the SDK retries HTTP errors itself. A stall is
     # usually the provider: the same model answers in seconds before and after one.
@@ -241,7 +248,7 @@ def _ask(
             stalled = exc
             continue
         except OpenAIError as exc:
-            raise ConnectionError(f"judge: {endpoint}: {exc}") from exc
+            raise failure(str(exc)) from None
         stalled = None
         content = response.choices[0].message.content
         judgements = _parse(content)
@@ -250,7 +257,7 @@ def _ask(
             path.write_text(content, encoding="utf-8")
             return judgements
     if stalled is not None:
-        raise ConnectionError(f"judge: {endpoint}: {stalled}, twice") from stalled
+        raise failure(f"{stalled}, twice") from None
     raise ValueError(f"judge: {config.judge_model} did not return the expected JSON, twice")
 
 
