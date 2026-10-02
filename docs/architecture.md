@@ -1067,7 +1067,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not built | #62 |
 | `sentences.py` | 3 sentences | done | |
 | `segments.py` | 4 segments | done | |
-| `vision.py` | 5 vision, attach_visual | capture is a stub that raises when `vision_enabled`; the interval join is done | #59 |
+| `vision.py` | 5 vision, attach_visual | frame sampling (6.3: `vision_fps`, crop box, grayscale ~480p copy) is done but not called yet; keyframes, captioning and the stage itself raise when `vision_enabled`; the interval join is done | #56, #59 |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery are not built | #48, #78 |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |
