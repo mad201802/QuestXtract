@@ -69,7 +69,8 @@ Five-person course project; milestones, priorities and sprints live on GitHub.
 
 ## Code
 
-- Python >= 3.10: nothing newer (no `typing.Self`, `tomllib`, `except*`).
+- Python >= 3.10: nothing newer (no `typing.Self`, `except*`). For TOML, use
+  `tomllib` only behind a Python >= 3.11 version check, with `tomli` on Python 3.10.
 - Windows is supported: `pathlib` for paths, `encoding="utf-8"` on every open.
 - Public API (`__all__` in `__init__.py`) needs docstrings, type hints and tests.
 

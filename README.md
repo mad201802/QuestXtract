@@ -67,6 +67,8 @@ skips transcription. A progress bar renders on stderr, and transcripts are cache
 `process` again with another threshold takes seconds. Every option, the cache, error messages and
 recipes: [docs/cli.md](docs/cli.md).
 
+Save settings in `questxtract.toml`, or choose `--config PATH`; explicit command flags win. See [configuration files](docs/cli.md#configuration-files).
+
 `process` also takes a transcript made by any other ASR engine: a list of segments, or an object
 with a `segments` key, which is what most engines emit:
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+import traceback
 from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
@@ -265,6 +266,23 @@ def test_an_endpoint_error_is_a_connection_error(context, fake_llm, tmp_path):
     fake_llm(openai.OpenAIError("Connection error."))
     with pytest.raises(ConnectionError, match="judge: http://localhost:11434/v1: Connection error"):
         _run(context, tmp_path, base_url="http://localhost:11434/v1")
+
+
+@pytest.mark.parametrize("error_type", [openai.OpenAIError, TimeoutError])
+def test_provider_error_hides_key_in_message_and_traceback(
+    context, fake_llm, tmp_path, monkeypatch, error_type
+):
+    secret = "sk-fake-provider-error-secret"
+    monkeypatch.setenv("OPENAI_API_KEY", secret)
+    message = f"Request rejected for {secret}; credential {secret} is invalid."
+    fake_llm(error_type(message), error_type(message))
+    with pytest.raises(ConnectionError) as caught:
+        _run(context, tmp_path)
+    assert secret not in str(caught.value)
+    assert "Request rejected for [REDACTED]; credential [REDACTED] is invalid." in str(caught.value)
+    assert secret not in "".join(
+        traceback.format_exception(type(caught.value), caught.value, caught.value.__traceback__)
+    )
 
 
 def test_a_request_that_never_answers_times_out(context, monkeypatch, tmp_path):
