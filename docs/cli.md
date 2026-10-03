@@ -27,6 +27,8 @@ The file you pass in. There are no flags for picking stages.
 
 ## Commands
 
+The defaults below apply when neither a config file nor an explicit flag supplies a value.
+
 ### `questxtract process <input>`
 
 Finds the questions asked in a recording or a transcript and writes them to a questions file.
@@ -40,7 +42,7 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--detector` | `rules` or `llm` | `rules` | How questions are found: fast offline rules, or a language model that reads the transcript. See [Finding questions with an LLM](#finding-questions-with-an-llm). |
 | `--llm-model` | a model name | `gpt-5.6-terra` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
 | `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint for `--detector llm`, e.g. `http://localhost:11434/v1` for Ollama. Without it, OpenAI is used with the key from `OPENAI_API_KEY`. |
-| `--llm-reasoning` | `none`, `low`, `medium`, `high` | `none` | How long a thinking model may think before it judges. Slower, and what small models such as `qwen3.5:9b` need to judge well. Any level but `none` allows each request 10 minutes instead of 2. |
+| `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | How long a thinking model may think before it judges. Slower, and what small models such as `qwen3.5:9b` need to judge well. `server` sends no setting and leaves it to the server, for a model without one such as `gpt-4o-mini`. Any level but `none` allows each request 10 minutes instead of 2. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
 One thing to know about `-t` with the rules: a question with no answer scores at most `0.55`, so
@@ -73,6 +75,62 @@ precision, false positives by kind, a threshold sweep, and every miss
 `--llm-url` too, so the rules and a model can be compared on the same recordings; the report's
 first line names the detector, the model and the prompt version. `questxtract quiz <questions.json>` is
 reserved for quiz generation; it is not implemented yet (#79) and exits with a one-line error.
+
+## Configuration files
+
+`process`, `transcribe` and `eval` accept `--config PATH`. Without that option, they look for
+`questxtract.toml` in the **current working directory**, not next to the recording. If that file
+does not exist, the commands use their defaults. An explicitly selected missing file is an error.
+When `--config` is given, only that file is read, even if `questxtract.toml` also exists.
+
+The precedence is **explicit command flag > file value > Config default**. For example:
+
+```toml
+# questxtract.toml: one flat table, with the names from config.py
+model_size = "small"
+min_confidence = 0.6
+detector = "rules"
+judge_window = 10
+cache_dir = ".questxtract"
+```
+
+```bash
+questxtract process lecture.mp4                    # uses small and threshold 0.6
+questxtract process lecture.mp4 --threshold 0.3    # overrides only the threshold
+questxtract transcribe lecture.mp4 --config other.toml
+questxtract eval tests/data/ --config other.toml
+```
+
+Every `Config` field can be set, including those without flags. Names must match exactly:
+`--model` corresponds to `model_size`, `--threshold` to `min_confidence`, `--llm-model` to
+`judge_model`, `--llm-url` to `base_url`, and `--llm-reasoning` to `judge_reasoning_effort`.
+Use `judge_reasoning_effort = ""` for the equivalent of `--llm-reasoning server`. Any reasoning
+value other than `"none"` raises the request timeout to at least 600 seconds for `process` and
+`eval`, including when it comes from the file.
+
+The file must be UTF-8; a leading BOM from a Windows editor is accepted. No nested sections or
+`[tool.questxtract]` table are read. Integer fields require integers, not `5.5` or `true`;
+float fields also accept integers. TOML has no null: leave an optional key out to retain its
+default. Typos and wrong types are errors. A threshold must be between 0 and 1, and the
+detector must be `rules` or `llm`. Relative `cache_dir` paths are resolved from the **working
+directory**, even when the selected config file lives elsewhere. Changing a setting used by
+a cached stage makes that stage recompute as usual.
+
+### API keys and .env
+
+TOML files must never hold secrets. A key containing `key`, `token`, `secret` or `password`
+(case-insensitive) is rejected without echoing its value. For a hosted LLM, the optional
+`questxtract[llm]` dependency and an API key are still required.
+
+`Config.api_key` uses `OPENAI_API_KEY` from the environment if set. Otherwise, it reads that
+one name from `.env` in the working directory. This file is ignored by Git. The supported
+format is `OPENAI_API_KEY=VALUE`, with optional single or double quotes, blank lines and `#`
+comments. Other variables are ignored; parent and user directories are not searched. The key
+is never stored in Config, logs, cache entries or `questions.json`.
+
+This reader does not run shell commands or expand variables. If your setup uses a password
+store and a shell script to retrieve the key, load it into the environment before running
+QuestXtract. That environment value wins, so the `.env` reader is not used in that case.
 
 ## Where files go
 
@@ -152,20 +210,19 @@ their `reasons` stay on the questions the model keeps, and those gain `llm`.
 
 It needs the `llm` extra: `pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`.
 
-**Hosted (OpenAI).** Put the key in the environment; the default model is `gpt-5.6-terra`, and
-`gpt-5.6-luna` is cheaper. A 90-minute lecture costs cents.
+**Hosted (OpenAI).** Put the key in `OPENAI_API_KEY`, the safe way described in the README
+([Setting up the API key](../README.md#setting-up-the-api-key)), never typed into a command. The
+default model is `gpt-5.6-terra`, and `gpt-5.6-luna` is cheaper. A 90-minute lecture costs cents.
 
 ```bash
-export OPENAI_API_KEY=sk-...
 questxtract process lecture.mp4 --detector llm
 questxtract process lecture.mp4 --detector llm --llm-model gpt-5.6-luna
 ```
 
 **Another hosted provider (OpenRouter and the like).** Anything that speaks the OpenAI API works:
-put that provider's key in `OPENAI_API_KEY` and pass its URL and model name.
+put that provider's key in `OPENAI_API_KEY` (stored the same way) and pass its URL and model name.
 
 ```bash
-export OPENAI_API_KEY=sk-or-...                # the OpenRouter key
 questxtract process lecture.mp4 --detector llm \
     --llm-url https://openrouter.ai/api/v1 --llm-model deepseek/deepseek-v4.1-flash
 ```
@@ -250,9 +307,17 @@ A `.json` transcript input never touches the cache. There is nothing expensive l
 | `...: invalid or unreadable MP4 recording` | The file is damaged or not really an MP4. |
 | `Invalid model size '...', expected one of: ...` | Use one of the names listed in the message. |
 | `...: not valid JSON` / `expected a list of segments...` | The `.json` file is not a transcript. |
-| `--detector llm needs OPENAI_API_KEY, or --llm-url for a local server` | Set the key, or pass `--llm-url` for a local server. |
+| `--detector llm needs OPENAI_API_KEY in the environment or .env, or --llm-url for a local server` | Make the key available in the environment or local `.env`, or pass `--llm-url` for a local server. |
+| `<file>: invalid TOML at line N` | Correct the TOML syntax at the reported line. |
+| `<file>: <key>: expected float, got string` | Use the expected type; numbers must not be quoted. |
+| `<file>: unknown config field(s): ...` | Correct the name to match a field in `config.py`. |
+| `<file>: <key>: secrets belong in OPENAI_API_KEY, not TOML` | Remove the secret from TOML and use the environment or `.env`. |
+| `min_confidence / --threshold must be between 0 and 1` | Correct the effective threshold in the file or command. |
+| `detector must be rules or llm` | Correct the detector name. |
+| `.env: line N: expansion is not supported; ...` | Load the key into the environment using your shell or password store before running the command. |
 | `--detector llm needs the LLM extra: ...` | Install `questxtract[llm]`. |
 | `judge: <endpoint>: ...` | The model endpoint failed: it is not running, the key is wrong, or the model name is unknown to it. The message after the endpoint says which. |
+| `judge: <endpoint>: ... Unrecognized request argument supplied: reasoning_effort` | The model has no reasoning setting, e.g. `gpt-4o-mini`. Pass `--llm-reasoning server`. |
 | `judge: <endpoint>: no answer within 120 s, twice` | The model did not answer one request in time, and not on a second try either. With a thinking model, pass `--llm-reasoning`, which allows 10 minutes; otherwise the provider is overloaded, try again later. |
 | `judge: <model> did not return the expected JSON, twice` | The model could not follow the output format. Try a larger model; rerun to try again. |
 | `judge: <model> judged none of the N candidates; ...` | The endpoint answered, but in a shape other than the one asked for, so no candidate was judged. Check that the server supports structured output (`response_format`); try another model or server. |
@@ -268,5 +333,5 @@ transcription.
   work, but question detection matches English words: the question words (what, why, how) and
   auxiliary verbs (is, can, does). It would find almost nothing beyond sentences ending in `?`.
   Requirement 4.2 assumes English lectures, so no flag is planned. The Python API accepts
-  `Config(language=...)` for experiments.
+  `Config(language=...)` or `language` in the TOML file for experiments.
 - **YouTube URLs**: the CLI takes a local file. Download the video first.

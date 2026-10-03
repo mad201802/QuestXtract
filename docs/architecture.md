@@ -688,7 +688,8 @@ pydantic-ai, instructor): `base_url` already reaches every server we target, and
 of 10.3 are ours to write either way ([design_decisions.md](design_decisions.md), D12).
 
 `judge_reasoning_effort` (`--llm-reasoning`, default `none`) sets how long a thinking model may
-think first; `""` leaves the choice to the server. Thinking costs minutes per request instead of
+think first; `""` (`--llm-reasoning server`) sends no setting and leaves the choice to the
+server, for a model without one such as gpt-4o-mini. Thinking costs minutes per request instead of
 seconds, and it is what lets a small model such as Qwen3.5 9B judge well, so the CLI raises the
 per-request deadline to 10 minutes whenever it is on. Ollama's context length cannot be set per
 request and is 4k tokens below 24 GB of VRAM, cutting a longer prompt silently; a request (10.4)
@@ -840,6 +841,15 @@ with a `None`. `tests/test_pipeline.py` checks that `STAGES` matches 1.3.
 
 **Config.** One flat frozen dataclass in `config.py` with every default, built from CLI flags or by
 a library caller. Flat is what makes `uses=(...)` a tuple of names rather than path expressions.
+For `process`, `transcribe` and `eval`, explicit flags override a flat TOML file, which overrides
+these defaults. `--config PATH` selects the only file to read; otherwise `questxtract.toml` in
+the working directory is read if present. `load_config` checks keys against the dataclass fields
+and values against their annotations. The CLI validates the resulting choices and ranges before
+running stages or writing output. Relative paths remain relative to the working directory.
+`Config.api_key` reads `OPENAI_API_KEY` from the environment first, then from that directory's
+UTF-8 `.env` file. It never stores the key in the dataclass or expands shell expressions.
+Secret-like TOML keys are rejected. Library callers can use `load_config` from `config.py`
+explicitly; constructing `Config()` alone does not read TOML.
 
 > **Decision.** `STAGES`, `run()`, `process()`, the cache and the progress plumbing live in
 > `pipeline.py`, written once in the runner instead of in every expensive stage. The `stage`
@@ -1066,7 +1076,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not built | #62 |
 | `sentences.py` | 3 sentences | done | |
 | `segments.py` | 4 segments | done | |
-| `vision.py` | 5 vision, attach_visual | capture is a stub that raises when `vision_enabled`; the interval join is done | #59 |
+| `vision.py` | 5 vision, attach_visual | frame sampling (6.3: `vision_fps`, crop box, grayscale ~480p copy) is done but not called yet; keyframes, captioning and the stage itself raise when `vision_enabled`; the interval join is done | #56, #59 |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery are not built | #48, #78 |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |
