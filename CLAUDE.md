@@ -86,5 +86,5 @@ Five-person course project; milestones, priorities and sprints live on GitHub.
 
 ## Skills
 
-`/work-issue <N>` (issue to PR), `/eval-detection` (main vs branch metrics),
+`/work-issue <N or idea>` (idea or issue to PR), `/eval-detection` (main vs branch metrics),
 `/label-recording <video> <slug>` (extend `tests/data/`), `/doc-drift` (docs vs code check).
