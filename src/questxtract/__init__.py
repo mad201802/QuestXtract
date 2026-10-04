@@ -25,6 +25,14 @@ from .models import (
 )
 from .pipeline import STAGES, process, run, stage
 from .qti import AssessmentItem, AssessmentOption, AssessmentTest, QtiExportError, export_qti
+from .qti import (
+    Feedback,
+    Interaction,
+    OutcomeDeclaration,
+    Provenance,
+    ResponseDeclaration,
+    ResponseProcessing,
+)
 from .schema import Question
 
 try:
@@ -41,12 +49,18 @@ __all__ = [
     "AssessmentTest",
     "Config",
     "Context",
+    "Feedback",
+    "Interaction",
     "MediaError",
     "QAPair",
     "Question",
     "QuestionCandidate",
     "SchemaError",
     "QtiExportError",
+    "OutcomeDeclaration",
+    "Provenance",
+    "ResponseDeclaration",
+    "ResponseProcessing",
     "Segment",
     "Sentence",
     "Transcript",
