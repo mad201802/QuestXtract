@@ -6,6 +6,8 @@ import pytest
 
 from questxtract.cli import main
 from questxtract.qti import QTI_NS, QtiExportError, questions_to_qti, write_qti_package
+from questxtract.qti_v21 import QTI_NS as QTI_21_NS
+from questxtract.qti_v21 import write_qti_package as write_qti_21_package
 
 
 def _document(*questions):
@@ -29,6 +31,18 @@ def _question(identifier="q_abc123", **overrides):
         "verdict": "keep",
         "visual": {"latex": r"\alpha < \beta"},
     }
+    value.update(overrides)
+    return value
+
+
+def _choice_question(identifier="q_choice", interaction_type="choice_single", **overrides):
+    value = _question(
+        identifier,
+        interaction_type=interaction_type,
+        options=[{"id": "a", "text": "A"}, {"id": "b", "text": "B"}],
+        correct_response={"text": None, "option_ids": ["a"]},
+        points=1,
+    )
     value.update(overrides)
     return value
 
@@ -101,11 +115,47 @@ def test_unsupported_identifier_fails():
         questions_to_qti(_document(_question("bad id")))
 
 
-def test_unsupported_objective_fields_fail():
-    with pytest.raises(QtiExportError, match="choice options"):
-        questions_to_qti(_document(_question(options=[{"identifier": "a", "text": "A"}])))
-    with pytest.raises(QtiExportError, match="correct responses"):
-        questions_to_qti(_document(_question(correct_response="yes")))
+def test_supported_choice_profiles_build_answer_keys_and_points():
+    single = questions_to_qti(_document(_choice_question()))
+    multiple = questions_to_qti(
+        _document(
+            _choice_question(
+                "q_multiple",
+                interaction_type="choice_multiple",
+                correct_response={"text": None, "option_ids": ["a", "b"]},
+            )
+        )
+    )
+    assert single.items[0].interaction.min_choices == 1
+    assert single.items[0].interaction.max_choices == 1
+    assert single.items[0].correct_response == "a"
+    assert single.items[0].score == 1
+    assert multiple.items[0].interaction.min_choices == 1
+    assert multiple.items[0].interaction.max_choices is None
+    assert multiple.items[0].response_declarations[0].correct_values == ("a", "b")
+
+
+def test_unsupported_interaction_and_inconsistent_choice_data_fail():
+    with pytest.raises(QtiExportError, match="unsupported value"):
+        questions_to_qti(_document(_question(interaction_type="numeric")))
+    with pytest.raises(QtiExportError, match="at least two options"):
+        questions_to_qti(_document(_question(interaction_type="choice_single")))
+    with pytest.raises(QtiExportError, match="does not support choice options"):
+        questions_to_qti(_document(_question(options=[{"id": "a", "text": "A"}])))
+    with pytest.raises(QtiExportError, match="expected at least one option"):
+        questions_to_qti(
+            _document(
+                _choice_question(correct_response={"text": None, "option_ids": []})
+            )
+        )
+    with pytest.raises(QtiExportError, match="accepts one option"):
+        questions_to_qti(
+            _document(
+                _choice_question(
+                    correct_response={"text": None, "option_ids": ["a", "b"]}
+                )
+            )
+        )
 
 
 def test_identifiers_are_stable():
@@ -151,6 +201,27 @@ def test_latex_and_special_characters_are_preserved(tmp_path):
         assert paragraph.text == "What is 2 < 3 & 4 > 1?"
         metadata = json.loads(package.read("metadata/questxtract.json"))
         assert metadata["items"]["qti-q_abc123"]["latex"] == r"\alpha < \beta"
+
+
+def test_qti_21_package_has_the_same_complete_layout(tmp_path):
+    output = tmp_path / "questions-2.1.zip"
+    write_qti_21_package(_document(_question(), _question("q_def456")), output)
+    with zipfile.ZipFile(output) as package:
+        assert set(package.namelist()) == {
+            "imsmanifest.xml",
+            "assessmentTest.xml",
+            "metadata/questxtract.json",
+            "items/qti-q_abc123.xml",
+            "items/qti-q_def456.xml",
+        }
+        item_root = ElementTree.fromstring(package.read("items/qti-q_abc123.xml"))
+        assert item_root.tag == f"{{{QTI_21_NS}}}assessmentItem"
+        assert item_root.find(f"{{{QTI_21_NS}}}responseDeclaration") is not None
+        manifest_root = ElementTree.fromstring(package.read("imsmanifest.xml"))
+        resources = list(manifest_root.iter())
+        assert sum(element.tag.endswith("resource") for element in resources) == 3
+        metadata = json.loads(package.read("metadata/questxtract.json"))
+        assert metadata["format"] == "questxtract-qti-2.1"
 
 
 def test_cli_exports_qti_and_reports_invalid_input(tmp_path, capsys):

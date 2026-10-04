@@ -44,6 +44,9 @@
   text, so it stays the same when `--detector llm` rewords the question or you switch detectors.
   Every `id` changes once with this release. (#94)
 
+- Added a version-independent QTI intermediate model with separate QTI 2.1 and 3.0
+  serializers, including choices, answer keys, outcomes, feedback, provenance and metadata.
+
 ### Fixed
 
 - The rules detector counts a contracted wh-word as a question word: "What's ...?", "Where's ...?",
