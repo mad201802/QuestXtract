@@ -10,7 +10,7 @@
 {"start": 165.55, "text": "The area of an exponential in time, this area here, is it finite, infinite, or you do not know?", "kind": "content", "end": 173.47, "split": "blind"}
 {"start": 178.53, "text": "Are we together that it's finite?", "kind": "check_in", "end": 179.61, "split": "blind"}
 {"start": 267.32, "text": "The answer here, what would you answer, people?", "kind": "check_in", "end": 269.24, "split": "blind"}
-{"start": 299.43, "text": "If I do the integral of this stuff here from minus infinity to plus infinity, are we together that this area is going to be infinite?", "kind": "check_in", "end": 306.21, "split": "blind"}
+{"start": 299.43, "text": "If I do the integral of this stuff here from minus infinity to plus infinity, are we together that this area is going to be infinite?", "kind": "content", "end": 306.21, "split": "blind"}
 {"start": 315.78, "text": "Are we together?", "kind": "check_in", "end": 316.7, "split": "blind"}
 {"start": 317.56, "text": "People?", "kind": "check_in", "end": 318.08, "split": "blind"}
 {"start": 362.26, "text": "True?", "kind": "rhetorical", "end": 362.54, "split": "blind"}
@@ -64,7 +64,7 @@
 {"start": 1287.31, "text": "What would you say, people?", "kind": "check_in", "end": 1288.65, "split": "blind"}
 {"start": 1289.53, "text": "Do I get something finite-infinite or better?", "kind": "content", "end": 1292.65, "split": "blind"}
 {"start": 1293.04, "text": "Do I get something that is unbounded, something bounded, or you do not know?", "kind": "content", "end": 1296.4, "split": "blind"}
-{"start": 1304.99, "text": "Unbounded, bounded, unbounded, bounded, or you do not know?", "kind": "check_in", "end": 1308.01, "split": "blind"}
+{"start": 1304.99, "text": "Unbounded, bounded, unbounded, bounded, or you do not know?", "kind": "content", "end": 1308.01, "split": "blind"}
 {"start": 1331.71, "text": "What does it mean?", "kind": "rhetorical", "end": 1332.37, "split": "blind"}
 {"start": 1332.69, "text": "If now is this one, what is this value here?", "kind": "content", "end": 1337.18, "split": "blind"}
 {"start": 1344.14, "text": "True?", "kind": "rhetorical", "end": 1344.6, "split": "blind"}
