@@ -296,13 +296,18 @@ def _quiz(args: argparse.Namespace) -> int:
 
 
 def _qti(args: argparse.Namespace) -> int:
-    """Export approved questions to a QTI 3.0 package."""
+    """Export questions to a QTI package."""
     try:
-        export_qti(args.questions, args.output, only_keep=args.only_keep)
+        export_qti(
+            args.questions,
+            args.output,
+            only_keep=args.only_keep,
+            version=args.qti_version,
+        )
     except (OSError, QtiExportError) as exc:
         print(f"error: qti: {exc}", file=sys.stderr)
         return 1
-    print(f"QTI package -> {args.output}", file=sys.stderr)
+    print(f"QTI {args.qti_version} package -> {args.output}", file=sys.stderr)
     return 0
 
 
@@ -444,9 +449,17 @@ def build_parser() -> argparse.ArgumentParser:
     quiz.add_argument("-o", "--output", help="write the quiz here")
     quiz.set_defaults(handler=_quiz)
 
-    qti = subs.add_parser("qti", help="export questions.json as a QTI 3.0 package")
+    qti = subs.add_parser("qti", help="export questions.json as a QTI package")
     qti.add_argument("questions", help="a questions.json written by `process`")
     qti.add_argument("-o", "--output", required=True, help="write the QTI ZIP package here")
+    qti.add_argument(
+        "--qti-version",
+        "--version",
+        dest="qti_version",
+        choices=("2.1", "3.0"),
+        default="3.0",
+        help="QTI package version (default: %(default)s)",
+    )
     qti.add_argument(
         "--only-keep",
         action="store_true",

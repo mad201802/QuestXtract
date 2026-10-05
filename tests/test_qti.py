@@ -144,17 +144,11 @@ def test_unsupported_interaction_and_inconsistent_choice_data_fail():
         questions_to_qti(_document(_question(options=[{"id": "a", "text": "A"}])))
     with pytest.raises(QtiExportError, match="expected at least one option"):
         questions_to_qti(
-            _document(
-                _choice_question(correct_response={"text": None, "option_ids": []})
-            )
+            _document(_choice_question(correct_response={"text": None, "option_ids": []}))
         )
     with pytest.raises(QtiExportError, match="accepts one option"):
         questions_to_qti(
-            _document(
-                _choice_question(
-                    correct_response={"text": None, "option_ids": ["a", "b"]}
-                )
-            )
+            _document(_choice_question(correct_response={"text": None, "option_ids": ["a", "b"]}))
         )
 
 
@@ -230,7 +224,7 @@ def test_cli_exports_qti_and_reports_invalid_input(tmp_path, capsys):
     source.write_text(json.dumps(_document(_question())), encoding="utf-8")
     assert main(["qti", str(source), "-o", str(output)]) == 0
     assert output.exists()
-    assert "QTI package" in capsys.readouterr().err
+    assert "QTI 3.0 package" in capsys.readouterr().err
     strict_output = tmp_path / "strict.zip"
     source.write_text(
         json.dumps(
@@ -249,3 +243,15 @@ def test_cli_exports_qti_and_reports_invalid_input(tmp_path, capsys):
 
     assert main(["qti", str(tmp_path / "missing.json"), "-o", str(output)]) == 1
     assert capsys.readouterr().err.startswith("error: qti: ")
+
+
+def test_cli_can_select_qti_21(tmp_path):
+    source = tmp_path / "questions.json"
+    output = tmp_path / "questions-2.1.zip"
+    source.write_text(json.dumps(_document(_question())), encoding="utf-8")
+
+    assert main(["qti", str(source), "-o", str(output), "--qti-version", "2.1"]) == 0
+
+    with zipfile.ZipFile(output) as package:
+        root = ElementTree.fromstring(package.read("items/qti-q_abc123.xml"))
+    assert root.tag == f"{{{QTI_21_NS}}}assessmentItem"
