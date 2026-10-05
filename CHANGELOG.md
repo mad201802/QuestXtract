@@ -36,6 +36,8 @@
 
 - Added a version-independent QTI intermediate model with separate QTI 2.1 and 3.0
   serializers, including choices, answer keys, outcomes, feedback, provenance and metadata.
+- Added `questxtract qti --qti-version` to choose between QTI 2.1 and 3.0 packages; QTI 3.0
+  remains the default.
 
 ### Fixed
 

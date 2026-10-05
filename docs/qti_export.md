@@ -5,11 +5,16 @@ shared model contains response declarations, interactions and options, answer ke
 outcome declarations, response processing, feedback, provenance and metadata. XML
 details are isolated in `questxtract.qti_v21` and `questxtract.qti_v3`.
 
-QuestXtract can export records in `questions.json` as a QTI 3.0
-package:
+QuestXtract can export records in `questions.json` as a QTI 3.0 package:
 
 ```console
 questxtract qti questions.json -o questions.qti.zip
+```
+
+QTI 2.1 is also available from the CLI:
+
+```console
+questxtract qti questions.json -o questions-qti-2.1.zip --qti-version 2.1
 ```
 
 Python callers can use `questxtract.qti_v21.write_qti_package` for QTI 2.1 or

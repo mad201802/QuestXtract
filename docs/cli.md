@@ -64,12 +64,14 @@ reads.
 
 ### `questxtract qti <questions.json>`
 
-Exports a questions file as a QTI 3.0 ZIP package. By default, all questions
+Exports a questions file as a QTI ZIP package. QTI 3.0 is the default; use
+`--qti-version 2.1` for platforms that require QTI 2.1. By default, all questions
 are exported except those with reviewer status `deleted` or `false_positive`.
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|
 | `-o`, `--output` | a path | required | Where to write the QTI package. |
+| `--qti-version`, `--version` | `2.1` or `3.0` | `3.0` | QTI package version. |
 | `--only-keep` | nothing | off | Export only questions with verdict `keep`, still honoring reviewer rejections. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
@@ -77,7 +79,7 @@ are exported except those with reviewer status `deleted` or `false_positive`.
 
 | Option | What it does |
 |---|---|
-| `--version` | Prints the installed version. |
+| `--version` | At the top level, prints the installed version; on `qti`, selects the QTI version. |
 | `-h`, `--help` | Without a command, lists the commands; after one, lists that command's options. |
 
 `questxtract eval <files|dirs> [--json]` scores the pipeline against the labelled set: recall,
@@ -193,6 +195,12 @@ almost instantly. It works the other way round too.
 
 ```bash
 questxtract process lecture.transcript.json -o -
+```
+
+**Export for a QTI 2.1 platform**
+
+```bash
+questxtract qti lecture.questions.json -o lecture-qti-2.1.zip --qti-version 2.1
 ```
 
 **See which questions the threshold threw away.** This is a development tool, not a CLI

@@ -219,13 +219,9 @@ def _item_from_record(raw: dict[str, Any], language: str, index: int) -> Assessm
         options.append(AssessmentOption(identifier=option["id"], text=option["text"]))
 
     if kind == "extended_text" and options:
-        raise QtiExportError(
-            f"questions[{index}]: extended_text does not support choice options"
-        )
+        raise QtiExportError(f"questions[{index}]: extended_text does not support choice options")
     if kind in {"choice_single", "choice_multiple"} and len(options) < 2:
-        raise QtiExportError(
-            f"questions[{index}]: {kind} requires at least two options"
-        )
+        raise QtiExportError(f"questions[{index}]: {kind} requires at least two options")
     interaction_type = {
         "choice_single": "choiceInteraction",
         "choice_multiple": "choiceInteraction",
@@ -309,15 +305,16 @@ def export_qti(
     *,
     only_keep: bool = False,
     language: str | None = None,
+    version: str = "3.0",
 ) -> None:
-    """Backward-compatible entry point for the QTI 3.0 serializer."""
-    from .qti_v3 import write_qti_package
+    """Read questions and write a package in the selected QTI version."""
+    writer = _writer_for_version(version)
 
     try:
         document = read_questions(questions_path)
     except (OSError, SchemaError) as exc:
         raise QtiExportError(f"{questions_path}: {exc}") from exc
-    write_qti_package(document, output_path, only_keep=only_keep, language=language)
+    writer(document, output_path, only_keep=only_keep, language=language)
 
 
 # Compatibility exports: the historical ``questxtract.qti`` API is QTI 3.0.
@@ -330,8 +327,19 @@ def write_qti_package(
     *,
     only_keep: bool = False,
     language: str | None = None,
+    version: str = "3.0",
 ) -> None:
-    """Write a QTI 3.0 package using the versioned serializer."""
-    from .qti_v3 import write_qti_package as write_v3
+    """Write a package in the selected QTI version."""
+    writer = _writer_for_version(version)
+    writer(document, path, only_keep=only_keep, language=language)
 
-    write_v3(document, path, only_keep=only_keep, language=language)
+
+def _writer_for_version(version: str) -> Any:
+    """Return the serializer for a supported QTI version."""
+    if version == "2.1":
+        from .qti_v21 import write_qti_package
+    elif version == "3.0":
+        from .qti_v3 import write_qti_package
+    else:
+        raise QtiExportError(f"unsupported QTI version {version!r}; expected 2.1 or 3.0")
+    return write_qti_package
