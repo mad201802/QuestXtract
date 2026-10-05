@@ -6,14 +6,16 @@ One rule governs the shape: **do not drop ``None`` on serialisation.** A fixed k
 emitted, always, ``null`` included, so consumers never have to defensively ``.get()`` a
 missing ``answer``. Segments and board states are listed once and referenced by id. The
 format is also the edit surface (FR5): ``review`` is the one block people own. A re-run does
-not carry those edits over yet; merging them back by question id is #15. Formal description:
+not carry those edits over yet; merging them back by question id is #15. Keyframes travel
+with the file: :func:`write_questions` copies them next to it. Formal description:
 ``questions.schema.json``.
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+import shutil
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -21,15 +23,23 @@ from .models import Context, QAPair, SchemaError, Segment, Sentence, VisualConte
 from .score import confidence_label
 from .vision import overlapping
 
-SCHEMA_VERSION = "2.0"
+SCHEMA_VERSION = "2.1"
 SCHEMA_PATH = Path(__file__).with_name("questions.schema.json")
+KEYFRAMES_DIR = "keyframes"  # next to questions.json; keyframe_path is relative to that file
 
 _CONFIG_KEYS = ("model_size", "language", "min_confidence")
 _SOURCE = "audio"  # questions are only read from speech until the vision milestones (M2/M3)
 
 
-def result_to_dict(ctx: Context) -> dict[str, Any]:
-    """Build the exported representation of a finished context."""
+def result_to_dict(ctx: Context, keyframes: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """Build the exported representation of a finished context.
+
+    Args:
+        ctx: The finished context.
+        keyframes: Where each keyframe was copied, by its cache path; see
+            :func:`write_questions`. Without it, ``keyframe_path`` is the cache path.
+
+    """
     by_id = {s.id: s for s in ctx.sentences}
     return {
         "schema_version": SCHEMA_VERSION,
@@ -46,7 +56,7 @@ def result_to_dict(ctx: Context) -> dict[str, Any]:
         },
         "stats": dict(ctx.stats),
         "segments": [_segment(index, segment) for index, segment in enumerate(ctx.segments)],
-        "visuals": [_visual(state) for state in ctx.visual],
+        "visuals": [_visual(state, keyframes or {}) for state in ctx.visual],
         "questions": [_question(pair, by_id, ctx.segments) for pair in ctx.pairs],
     }
 
@@ -77,13 +87,17 @@ def _segment(index: int, segment: Segment) -> dict[str, Any]:
     }
 
 
-def _visual(state: VisualContext) -> dict[str, Any]:
-    """One board state, listed once however many questions point at it."""
+def _visual(state: VisualContext, keyframes: Mapping[str, str]) -> dict[str, Any]:
+    """One board state, listed once however many questions point at it.
+
+    Only the written path changes; ``id`` stays the state's own, so the ``visual_ids`` of
+    segments and questions keep pointing at it.
+    """
     return {
         "id": state.id,
         "start": state.start,
         "end": state.end,
-        "keyframe_path": state.keyframe_path,
+        "keyframe_path": keyframes.get(state.keyframe_path, state.keyframe_path),
         "description": state.description,
         "text": state.text,
         "latex": state.latex,
@@ -153,14 +167,41 @@ def _answer(pair: QAPair, by_id: dict[str, Sentence]) -> dict[str, Any] | None:
     }
 
 
-def result_to_json(ctx: Context) -> str:
+def result_to_json(ctx: Context, keyframes: Mapping[str, str] | None = None) -> str:
     """Serialise a finished context to the exported JSON format."""
-    return json.dumps(result_to_dict(ctx), indent=2, ensure_ascii=False)
+    return json.dumps(result_to_dict(ctx, keyframes), indent=2, ensure_ascii=False)
 
 
 def write_questions(ctx: Context, path: str | Path) -> None:
-    """Write a finished context to ``path`` as ``questions.json`` (UTF-8)."""
-    Path(path).write_text(result_to_json(ctx), encoding="utf-8")
+    """Write a finished context to ``path`` as ``questions.json`` (UTF-8), with its keyframes.
+
+    Each board state's keyframe is copied to ``keyframes/<visual id><suffix>`` next to
+    ``path``, and ``keyframe_path`` is written relative to ``path``, so the file and its folder
+    can be moved or shared together (architecture.md 12.1).
+
+    Raises:
+        FileNotFoundError: If a board state's keyframe is gone from the cache.
+
+    """
+    path = Path(path)
+    keyframes = _copy_keyframes(ctx.visual, path.parent)
+    path.write_text(result_to_json(ctx, keyframes), encoding="utf-8")
+
+
+def _copy_keyframes(visual: Sequence[VisualContext], folder: Path) -> dict[str, str]:
+    """Copy every keyframe into ``folder/keyframes``; map each cache path to its new one."""
+    copied: dict[str, str] = {}
+    for state in visual:
+        if not state.keyframe_path or state.keyframe_path in copied:
+            continue
+        source = Path(state.keyframe_path)
+        if not source.is_file():
+            raise FileNotFoundError(f"{source}: keyframe of board state {state.id} is missing")
+        name = f"{state.id}{source.suffix}"
+        (folder / KEYFRAMES_DIR).mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, folder / KEYFRAMES_DIR / name)
+        copied[state.keyframe_path] = f"{KEYFRAMES_DIR}/{name}"
+    return copied
 
 
 def read_questions(path: str | Path) -> dict[str, Any]:

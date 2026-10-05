@@ -1,12 +1,13 @@
 import dataclasses
 import json
+from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator, ValidationError
 
 from questxtract import SchemaError, Transcript, VisualContext, read_questions, write_questions
 from questxtract.cli import main
-from questxtract.export import SCHEMA_PATH, _format_hms, result_to_dict
+from questxtract.export import SCHEMA_PATH, _format_hms, result_to_dict, result_to_json
 from questxtract.pipeline import STAGES, run
 from questxtract.vision import attach_visual
 
@@ -190,6 +191,87 @@ def test_write_and_read_questions(tmp_path, finished):
     assert read_questions(out) == json.loads(out.read_text(encoding="utf-8"))
 
 
+def _boards_in_cache(finished):
+    """Give ``finished`` the two BOARDS, with real keyframe files in a cache under the cwd."""
+    frames = Path(".questxtract", "abc123", "frames")
+    frames.mkdir(parents=True)
+    boards = []
+    for board in BOARDS:
+        keyframe = frames / Path(board.keyframe_path).name
+        keyframe.write_bytes(f"image of {board.description or board.latex}".encode())
+        boards.append(dataclasses.replace(board, keyframe_path=str(keyframe)))
+    finished.visual = tuple(boards)
+    return attach_visual(finished)
+
+
+def test_write_questions_copies_keyframes_next_to_the_file(tmp_path, finished, monkeypatch):
+    """#64 AC: every keyframe is under out/, and its relative path opens from another cwd."""
+    monkeypatch.chdir(tmp_path)
+    finished = _boards_in_cache(finished)
+    out = tmp_path / "out" / "questions.json"
+    out.parent.mkdir()
+    write_questions(finished, out)
+    monkeypatch.chdir(tmp_path / ".questxtract")
+    data = read_questions(out)
+    for state, written in zip(finished.visual, data["visuals"], strict=True):
+        assert written["keyframe_path"] == f"keyframes/{state.id}.jpg"
+        assert (out.parent / written["keyframe_path"]).read_bytes() == (
+            tmp_path / state.keyframe_path
+        ).read_bytes()
+    # the ids stay the states' own, so segments and questions still point at them
+    assert [v["id"] for v in data["visuals"]] == data["segments"][0]["visual_ids"]
+
+
+def test_board_states_survive_a_read_edit_write_round_trip(tmp_path, finished, monkeypatch):
+    """#64 AC: editing a question's text and writing the file again leaves `visuals` alone."""
+    monkeypatch.chdir(tmp_path)
+    out = tmp_path / "questions.json"
+    write_questions(_boards_in_cache(finished), out)
+    before = read_questions(out)
+    edited = read_questions(out)
+    edited["questions"][0]["text"] = "What does a stable sort keep in order?"
+    out.write_text(json.dumps(edited, indent=2), encoding="utf-8")
+    after = read_questions(out)
+    assert after["visuals"] == before["visuals"]
+    assert after["questions"][0]["visual_ids"] == before["questions"][0]["visual_ids"]
+
+
+def test_written_board_states_match_the_schema(tmp_path, finished, monkeypatch, validator):
+    monkeypatch.chdir(tmp_path)
+    out = tmp_path / "questions.json"
+    write_questions(_boards_in_cache(finished), out)
+    validator.validate(read_questions(out))
+
+
+def test_without_vision_the_written_file_is_the_plain_export(tmp_path, finished):
+    """#64 AC: with vision off nothing is copied and the file is today's export."""
+    out = tmp_path / "questions.json"
+    write_questions(finished, out)
+    assert out.read_text(encoding="utf-8") == result_to_json(finished)
+    assert not (tmp_path / "keyframes").exists()
+
+
+def test_printing_keeps_cache_paths_and_copies_nothing(tmp_path, finished, monkeypatch):
+    """#64 AC: `-o -` has no folder for keyframes, so they keep their cache paths."""
+    monkeypatch.chdir(tmp_path)
+    finished = _boards_in_cache(finished)
+    data = json.loads(result_to_json(finished))
+    assert [v["keyframe_path"] for v in data["visuals"]] == [
+        s.keyframe_path for s in finished.visual
+    ]
+    assert not (tmp_path / "keyframes").exists()
+
+
+def test_a_missing_keyframe_fails_before_the_file_is_written(tmp_path, finished, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    finished = _boards_in_cache(finished)
+    Path(finished.visual[1].keyframe_path).unlink()
+    out = tmp_path / "questions.json"
+    with pytest.raises(FileNotFoundError, match=finished.visual[1].id):
+        write_questions(finished, out)
+    assert not out.exists()
+
+
 def test_read_questions_accepts_a_newer_minor_and_refuses_another_major(tmp_path, finished):
     out = tmp_path / "q.json"
     data = result_to_dict(finished)
@@ -238,7 +320,7 @@ def test_cli_roundtrip(tmp_path):
     out = tmp_path / "q.json"
     assert main(["process", str(_transcript_file(tmp_path)), "-o", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
-    assert data["schema_version"] == "2.0"
+    assert data["schema_version"] == "2.1"
     # An aux head without a '?' scores 0.4, under the 0.45 detection gate, so it is never a
     # candidate (architecture.md 7.3).
     assert [q["text"] for q in data["questions"]] == ["What is a stable sort?"]

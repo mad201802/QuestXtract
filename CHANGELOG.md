@@ -22,6 +22,12 @@
   models such as Qwen3.5 9B need it. `server` sends no setting, for a model without one such as
   gpt-4o-mini. Any level but `none` allows each request 10 minutes. (#89, #97)
 
+### Changed
+
+- `questions.json` schema 2.1: `keyframe_path` is relative to the JSON file. Writing the file
+  copies each keyframe into a `keyframes/` folder beside it, so the two can be moved or shared
+  together; `-o -` copies nothing and keeps the cache path. (#64)
+
 ### Changed (breaking)
 
 - `Config.judge_enabled` and `Config.judge_max_candidates` are gone. `Config(detector="llm")`

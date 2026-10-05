@@ -903,15 +903,15 @@ Vision will report per board state.
 
 ### 12.1 questions.json
 
-Schema 2.0: a fixed key set, `null` included, in one file. The formal description is
-[`questions.schema.json`](../src/questxtract/questions.schema.json), which ships inside the
-package; the tests validate every export shape against it. The example shows one entry of each
+Schema 2.1: a fixed key set, `null` included, in one file, plus a `keyframes/` folder beside it.
+The formal description is [`questions.schema.json`](../src/questxtract/questions.schema.json),
+which ships inside the package; the tests validate every export shape against it. The example shows one entry of each
 list, with vision (planned) and the LLM detector on; with the rules and no vision, `visuals` is
 empty, `verdict` is `unjudged` and both model names are `null`:
 
 ```json
 {
-  "schema_version": "2.0",
+  "schema_version": "2.1",
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
   "config": {"model_size": "turbo", "language": "en", "min_confidence": 0.4,
              "judge_model": "gpt-5.6-terra", "vision_model": "gpt-5.6-luna"},
@@ -926,7 +926,7 @@ empty, `verdict` is `unjudged` and both model names are `null`:
       "id": "v_4c1e09",
       "start": 1240.0,
       "end": 1402.5,
-      "keyframe_path": ".questxtract/9f2a.../frames/1388.jpg",
+      "keyframe_path": "keyframes/v_4c1e09.jpg",
       "description": "two-column comparison of stable and unstable sort passes",
       "text": "stable: (3,a) (3,b) preserved",
       "latex": null,
@@ -979,6 +979,9 @@ one more top-level list pointing at visual ids.
 - `source` says what the question was read from; only `audio` is produced until vision lands,
   `visual` and `combined` are reserved.
 - `topic` on a segment stays `null` until something produces topics.
+- `keyframe_path` is relative to the JSON file: writing it copies each keyframe from the cache
+  to `keyframes/<visual id>.<ext>` next to it, so the file and that folder move together. Printed
+  to the terminal (`-o -`) there is no folder, nothing is copied, and it is the cache path.
 - `config.min_confidence` is the threshold the file was cut at; `config.judge_model` and
   `config.vision_model` are `null` when that stage was off.
 
