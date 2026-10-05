@@ -985,9 +985,10 @@ one more top-level list pointing at visual ids.
 - `config.min_confidence` is the threshold the file was cut at; `config.judge_model` and
   `config.vision_model` are `null` when that stage was off.
 
-**Versioning.** `schema_version` is `MAJOR.MINOR`. A minor version only adds keys, so a reader must
-ignore keys it does not know; a major version moves or removes something, and `read_questions`
-refuses a file of another major version.
+**Versioning.** `schema_version` is `MAJOR.MINOR`. A minor version adds keys, or changes what a
+value means without changing its type (as `keyframe_path` being relative to the file), so a
+reader must ignore keys it does not know; a major version moves or removes something, and
+`read_questions` refuses a file of another major version.
 
 ### 12.2 Editing (FR5)
 
