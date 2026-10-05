@@ -11,7 +11,8 @@ Both no-op themselves when vision is off, rather than being filtered out by the 
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -22,12 +23,23 @@ from .models import Context, Progress, Segment, VisualContext, stage
 
 _COMPARE_HEIGHT = 480  # architecture.md 6.3: change detection compares frames at about 480p
 _GRAY = np.array([0.299, 0.587, 0.114], dtype=np.float32)  # ITU-R BT.601 luma weights
+_NOISE = 32  # grey levels a pixel must move by to count as changed, above codec noise
 
 Frame = np.ndarray[Any, np.dtype[np.uint8]]
 Crop = tuple[float, float, float, float]  # normalised (x0, y0, x1, y1), from the layout probe
 
 
-@stage("vision", cache="visual", uses=("vision_fps", "vision_model", "vision_max_states"))
+@stage(
+    "vision",
+    cache="visual",
+    uses=(
+        "vision_fps",
+        "vision_model",
+        "vision_max_states",
+        "vision_change_fraction",
+        "vision_change_hold",
+    ),
+)
 def vision(ctx: Context) -> Context:
     """Capture board states from the recording into ``ctx.visual``.
 
@@ -104,6 +116,127 @@ def _for_comparison(frame: Frame) -> Frame:
     blocks = gray[:height, :width].reshape(height // factor, factor, width // factor, factor)
     small: Frame = blocks.mean(axis=(1, 3)).round().astype(np.uint8)
     return small
+
+
+@dataclass(frozen=True, kw_only=True)
+class _View:
+    """One stable view: a slide or board as it stood, with the keyframe that shows it.
+
+    Args:
+        start: First sample of the view, in seconds.
+        end: Where the next view starts, or the end of the last sample.
+        keyframe: The view's sharpest sample, PNG-encoded at full resolution.
+        keyframe_time: When that sample was taken, in seconds.
+
+    """
+
+    start: float
+    end: float
+    keyframe: bytes
+    keyframe_time: float
+
+
+def _views(
+    samples: Iterable[tuple[float, Frame]], *, change: float, hold: int, max_views: int
+) -> list[_View]:
+    """Cut sampled frames into stable views, one keyframe each (architecture.md 6.4).
+
+    A sample belongs to the current view while at most ``change`` of its pixels differ from
+    the view's first sample. A new view starts at the first differing sample, but only once
+    ``hold`` samples in a row differ from the old view and resemble each other: a person
+    walking past never resembles themselves a second later, so they start nothing. Of the
+    samples that match a view, the sharpest is its keyframe, so a frame with someone in
+    front of the board is not chosen. Only a few full frames are held at a time. More than
+    ``max_views`` views are merged, shortest first.
+
+    Raises:
+        ValueError: If ``change`` is not in ``(0, 1)``, or ``hold`` or ``max_views`` is not
+            positive.
+
+    """
+    if not 0 < change < 1 or hold < 1 or max_views < 1:
+        raise ValueError(
+            "vision: vision_change_fraction must be in (0, 1), and vision_change_hold and "
+            "vision_max_states positive"
+        )
+    views: list[_View] = []
+    reference: Frame | None = None  # the current view's first sample, small
+    best: tuple[float, float, Frame] = (0.0, 0.0, np.zeros((1, 1, 3), np.uint8))
+    pending: list[tuple[float, Frame, Frame]] = []  # (time, small, full): a new view forming
+    start = previous = last = 0.0
+    for time, frame in samples:
+        small = _for_comparison(frame)
+        previous, last = last, time
+        if reference is None:
+            reference, start, best = small, time, (_sharpness(small), time, frame)
+        elif _changed(small, reference) <= change:
+            pending = []
+            if (score := _sharpness(small)) > best[0]:
+                best = (score, time, frame)
+        else:
+            if pending and _changed(small, pending[-1][1]) > change:
+                pending = []  # still moving: not a view yet
+            pending.append((time, small, frame))
+            if len(pending) >= hold:
+                views.append(_close(start, pending[0][0], best))
+                start, reference = pending[0][0], pending[0][1]
+                best = max(((_sharpness(s), t, f) for t, s, f in pending), key=lambda b: b[0])
+                pending = []
+    if reference is None:
+        return []
+    views.append(_close(start, last + (last - previous), best))
+    return _merge_shortest(views, max_views)
+
+
+def _changed(before: Frame, after: Frame) -> float:
+    """Share of pixels whose grey level moved by more than the codec noise."""
+    return float((np.abs(before.astype(np.int16) - after.astype(np.int16)) > _NOISE).mean())
+
+
+def _sharpness(gray: Frame) -> float:
+    """Mean gradient: higher for crisp text and lines, lower for blur and empty board."""
+    values = gray.astype(np.float32)
+    return float(np.abs(np.diff(values, axis=0)).mean() + np.abs(np.diff(values, axis=1)).mean())
+
+
+def _close(start: float, end: float, best: tuple[float, float, Frame]) -> _View:
+    """Finish a view, encoding its keyframe only now that it is final."""
+    return _View(start=start, end=end, keyframe=_png(best[2]), keyframe_time=best[1])
+
+
+def _png(frame: Frame) -> bytes:
+    """Encode an RGB frame as PNG, lossless so text stays readable for the model."""
+    picture = av.VideoFrame.from_ndarray(np.ascontiguousarray(frame), format="rgb24")
+    codec = av.CodecContext.create("png", "w")
+    codec.width, codec.height, codec.pix_fmt = picture.width, picture.height, "rgb24"
+    return b"".join(bytes(packet) for packet in [*codec.encode(picture), *codec.encode(None)])
+
+
+def _merge_shortest(views: list[_View], max_views: int) -> list[_View]:
+    """Merge the shortest view into its shorter neighbour until at most ``max_views`` remain.
+
+    The merged view spans both and keeps the keyframe of the longer one.
+    """
+    views = list(views)
+    while len(views) > max_views:
+        i = min(range(len(views)), key=lambda k: _length(views[k]))
+        if i == len(views) - 1 or i > 0 and _length(views[i - 1]) <= _length(views[i + 1]):
+            i -= 1  # merge with the left neighbour
+        left, right = views[i], views[i + 1]
+        kept = left if _length(left) >= _length(right) else right
+        views[i : i + 2] = [
+            _View(
+                start=left.start,
+                end=right.end,
+                keyframe=kept.keyframe,
+                keyframe_time=kept.keyframe_time,
+            )
+        ]
+    return views
+
+
+def _length(view: _View) -> float:
+    return view.end - view.start
 
 
 @stage("attach_visual")
