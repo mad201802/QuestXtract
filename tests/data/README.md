@@ -57,9 +57,9 @@ question-shaped utterance got a `kind` per the guidelines, including `?`-less on
 labels and predictions share one clock. Because the whole recording is labelled from scratch,
 every entry is `"split": "blind"`.
 
-The MIT labels were drafted by an LLM (Claude) from the transcript text and are pending human
-review against the audio; until that review is recorded here, treat their content-vs-rhetorical
-calls as provisional.
+The MIT labels were drafted by an LLM (Claude) from the transcript text. Agnes Ulltveit-Moe
+reviewed them on 2026-10-05 (#93): every `content` label, and every transcript sentence ending
+in `?` (each one carries a label), checked against the guidelines; all 28 `content` labels kept.
 
 **TTK4225 conventions.** The instructor uses a habitual confirmation tag ("True?", "Okay?",
 "...right?") several times a minute. Per `docs/annotation_guidelines.md` section 2, every
@@ -68,10 +68,12 @@ transcribed as a statement is not labelled. Bare framing questions that name no 
 ("What am I doing?", "What does it mean?") are `rhetorical`; the same question naming its
 subject ("If I am times 0.5, what am I doing?") is `content`. Prompts with no question mark
 ("Yes, no, I do not know.", "Together.", "Discuss.") are not labelled; spoken poll options
-that did get a `?` ("One, two, three, four?") are `check_in`.
+that did get a `?` are `check_in` when they name no subject ("One, two, three, four?") and
+`content` when they are answers about the material ("Unbounded, bounded, ..., or you do not
+know?").
 
-Totals: MIT 34 entries (28 content), TTK4225 2026-09-14 114 entries (39 content),
-TTK4225 2026-09-15 166 entries (60 content).
+Totals: MIT 34 entries (28 content), TTK4225 2026-09-14 114 entries (41 content),
+TTK4225 2026-09-15 167 entries (60 content).
 
 **The ground truth is the transcript, not the audio.** A question that never reached the
 transcript cannot be found by any text rule, so it is not labelled. Entries of the #11
