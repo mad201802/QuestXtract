@@ -144,3 +144,11 @@ def test_nfr2_recall_on_the_reference_recordings() -> None:
         "ttk4225_2026_09_15",
     }
     assert report["total"]["recall"] >= 0.5
+
+
+def test_nfr2_recall_on_the_held_out_recordings() -> None:
+    # #92: the same gate on lecturers the rules were never written from. Reported, never tuned
+    # on (tests/data/README.md).
+    report = evaluate([Path(__file__).parent / "data" / "held_out"])
+    assert set(report["recordings"]) == {"mit_6_003_l8"}
+    assert report["total"]["recall"] >= 0.5
