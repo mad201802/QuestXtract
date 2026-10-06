@@ -195,12 +195,26 @@ def merge_reviews(document: dict[str, Any], previous: dict[str, Any]) -> dict[st
     return merged
 
 
-def write_questions(ctx: Context, path: str | Path) -> None:
+def write_questions(
+    ctx: Context, path: str | Path, previous: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Write a finished context to ``path`` as ``questions.json`` (UTF-8).
 
-    Overwrites ``path``, review edits included; :func:`merge_reviews` keeps them.
+    Args:
+        ctx: The finished context.
+        path: Where to write; an existing file there is overwritten.
+        previous: The file this run replaces, as returned by :func:`read_questions`. Its
+            ``review`` edits carry over (:func:`merge_reviews`); without it they are lost.
+
+    Returns:
+        The document written, ``orphaned_reviews`` included.
+
     """
-    Path(path).write_text(result_to_json(ctx), encoding="utf-8")
+    document = result_to_dict(ctx)
+    if previous is not None:
+        document = merge_reviews(document, previous)
+    Path(path).write_text(json.dumps(document, indent=2, ensure_ascii=False), encoding="utf-8")
+    return document
 
 
 def read_questions(path: str | Path) -> dict[str, Any]:

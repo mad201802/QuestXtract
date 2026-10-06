@@ -16,7 +16,7 @@ from typing import Any
 from . import __version__
 from .config import Config, load_config
 from .evaluate import evaluate, format_report
-from .export import merge_reviews, read_questions, result_to_dict
+from .export import read_questions, result_to_json, write_questions
 from .models import Context, SchemaError, Stage, Transcript
 from .pipeline import STAGES, run
 
@@ -269,19 +269,18 @@ def _process(args: argparse.Namespace) -> int:
     else:
         ctx = _run(Context(source=source, config=config), STAGES)
 
-    document = result_to_dict(ctx)
-    if previous is not None:
-        document = merge_reviews(document, previous)
-        orphans = [entry["id"] for entry in document["orphaned_reviews"]]
-        if orphans:
-            print(
-                f"warning: {len(orphans)} edited question(s) not found in this run, "
-                f"review kept under orphaned_reviews: {', '.join(orphans)}",
-                file=sys.stderr,
-            )
-    _write(
-        json.dumps(document, indent=2, ensure_ascii=False), output, f"{len(ctx.pairs)} questions"
-    )
+    if output is None:  # stdout replaces no file, so there are no review edits to keep
+        print(result_to_json(ctx))
+        return 0
+    document = write_questions(ctx, output, previous)
+    orphans = [entry["id"] for entry in document["orphaned_reviews"]]
+    if orphans:
+        print(
+            f"warning: {len(orphans)} edited question(s) not found in this run, "
+            f"review kept under orphaned_reviews: {', '.join(orphans)}",
+            file=sys.stderr,
+        )
+    print(f"{len(ctx.pairs)} questions -> {output}", file=sys.stderr)
     return 0
 
 

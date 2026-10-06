@@ -384,3 +384,14 @@ def test_cli_accepts_the_threshold_bounds(tmp_path, validator, threshold):
     out = tmp_path / "q.json"
     assert main(["process", str(_transcript_file(tmp_path)), "-t", threshold, "-o", str(out)]) == 0
     validator.validate(read_questions(out))
+
+
+def test_write_questions_carries_the_previous_reviews_over(tmp_path, finished):
+    """#15 through the public writer: what it returns is what it wrote."""
+    out = tmp_path / "q.json"
+    write_questions(finished, out)
+    edited = _edit_first_question(out, **EDIT)
+    written = write_questions(finished, out, read_questions(out))
+    assert written == read_questions(out)
+    assert written["questions"][0]["review"] == edited["review"]
+    assert written["orphaned_reviews"] == []
