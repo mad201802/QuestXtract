@@ -9,6 +9,48 @@
   run no longer finds is reported on stderr and kept under a new top-level `orphaned_reviews`
   list (schema 2.1), and moves back if a later run finds it again. An existing file that can't be
   read is left untouched and the run stops. `merge_reviews` does the same merge from Python. (#15)
+- README: setting up the API key safely, the same way on macOS and Windows: the key in the
+  system's password store through `keyring`, and a git-ignored `.env` that only refers to it.
+- `process`, `transcribe` and `eval` read settings from `questxtract.toml` in the working
+  directory, or from `--config PATH`. Explicit flags override the file, and omitted values
+  retain their defaults. Unknown keys, wrong types and secret-like keys fail with readable
+  errors. `OPENAI_API_KEY` can also come from a local `.env`; the environment takes precedence
+  and the key is never stored in Config, exports or caches. (#99)
+- `--detector llm` on `process` and `eval`: a language model judges every sentence ending in
+  "?" (and every question the rules found) in the lecture around it, keeps the real questions,
+  cites the sentences that answer them and rewrites a messy question, keeping the spoken version
+  as `original_text`. It only judges sentences the code chose, by id, so it never adds a
+  question. Any OpenAI-compatible endpoint works: OpenAI with `OPENAI_API_KEY`, or a local server
+  such as Ollama with `--llm-url` and `--llm-model`. Requests are cached in
+  `.questxtract/judge/`. Needs the `llm` extra. (#88, #89)
+- `--llm-reasoning` lets a thinking model think before it judges (`low`, `medium`, `high`); small
+  models such as Qwen3.5 9B need it. `server` sends no setting, for a model without one such as
+  gpt-4o-mini. Any level but `none` allows each request 10 minutes. (#89, #97)
+
+### Changed (breaking)
+
+- `Config.judge_enabled` and `Config.judge_max_candidates` are gone. `Config(detector="llm")`
+  turns the LLM on; `judge_window`, `judge_batch_size`, `judge_parallel` and
+  `judge_reasoning_effort` tune it. The `judge` stage runs before `score`, so the threshold
+  applies to what the model kept, and to the model's own confidence, without the rules' answer
+  weighting. `evaluate()` takes an optional `Config`, and its report names the `detector`.
+  (#88, #89)
+- A question's `id` in `questions.json` comes from the sentence it was spoken in, not from its
+  text, so it stays the same when `--detector llm` rewords the question or you switch detectors.
+  Every `id` changes once with this release. (#94)
+
+### Fixed
+
+- Provider connection errors mask the active API key if the service echoes it, including
+  in the displayed traceback. (#99)
+- Detection finds the question word after a leading preposition ("For which ...?"), in an earlier
+  comma clause ("This area here, is it finite, ...?"), and after a lower-case single letter that
+  ends a sentence ("Unit step function, u. Is it absolutely integrable?"). (#78)
+- `questxtract process` rejects a `--threshold` outside 0 to 1 with a one-line error instead of
+  writing a file that fails its own schema. (#85)
+- Detection marks more classroom check-ins as `check_in` ("Do you see it?", "Is everything
+  clear?", "Are you following?", "How many of you ...?", a bare "Everyone?"), so the rules
+  detector stops emitting most of them. "Do you see why ...?" stays a question. (#70)
 
 ## 0.1.0
 

@@ -127,9 +127,66 @@ def test_comprehension_checks_do_not_swallow_content_questions():
     assert score_sentence("Is that clear why the limit exists?") == (1.0, ("mark", "aux"))
 
 
+def test_checking_the_room_is_a_check_in():
+    """#70: seeing, clarity, following, being together, remembering, polls, a bare vocative."""
+    for text in (
+        "Do you see it?",
+        "Okay, do you see the difference?",
+        "You see the pole?",
+        "Is everything clear?",
+        "Are they clear, everyone?",
+        "How clear have I been?",
+        "Are you following?",
+        "Did you get the point?",
+        "We are together?",
+        "So, how are we?",
+        "Do you remember this?",
+        "Do you have that in mind?",
+        "How many of you have seen a Bode plot before?",
+        "Everyone?",
+    ):
+        assert "check_in" in score_sentence(text)[1], text
+
+
+def test_checking_the_room_leaves_content_alone():
+    """#70: content after the verb, a wh-word before it, or a vocative alone keep a question."""
+    for text in (
+        "Do you see why the area is finite?",
+        "Do you see any pole on the imaginary axis?",
+        "What do you see here?",
+        "How are we going to compute this?",
+        "Is it clear that f is continuous?",
+        "What do I get, everyone?",
+    ):
+        assert "check_in" not in score_sentence(text)[1], text
+    assert score_sentence("Right, you see?") == (0.2, ("mark", "tag"))
+
+
 def test_check_in_phrases_match_whole_words():
     assert "check_in" not in score_sentence("Is your namespace global?")[1]
 
 
 def test_scores_are_rounded():
     assert score_sentence("Okay?") == (0.2, ("mark", "tag"))
+
+
+def test_head_word_found_past_a_preposition_before_a_wh_word():
+    """#78: "For which age ...?" opens on "which"."""
+    sentence = "For which age are we guaranteed that starting here we end up here?"
+    assert score_sentence(sentence) == (1.0, ("mark", "wh"))
+    assert question_type("In what sense is it stable?") == "what"
+    assert score_sentence("In the limit it is stable?")[1] == ("mark",)  # no wh-word after it
+
+
+def test_head_word_found_in_an_earlier_comma_clause():
+    """#78: an inverted auxiliary mid-sentence opens the question."""
+    sentence = "This area here, is it going to be finite, infinite, or you do not know?"
+    assert score_sentence(sentence) == (1.0, ("mark", "aux"))
+    assert question_type(sentence) == "yes_no"
+
+
+def test_an_earlier_clause_needs_the_mark_and_an_auxiliary():
+    # without the '?' the clause walk stays off
+    assert score_sentence("This area here, is it finite, or not.")[1] == ()
+    # a wh-word mid-sentence usually opens a relative clause, so only the last clause counts
+    assert score_sentence("The answer here, what would you answer, people?")[1] == ("mark",)

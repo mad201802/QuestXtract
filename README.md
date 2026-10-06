@@ -30,13 +30,12 @@ turns them into study material. It **extracts** questions, it never invents them
 |---|---|
 | 🎥 **Video in** | `.mp4` recordings, audio track extracted automatically (no system ffmpeg) |
 | 🗣️ **Transcription** | Speech-to-text with faster-whisper, or any ASR engine behind a small interface |
-| ❓ **Question detection** | Question sentences found in the transcript, with a confidence score and the rules that fired |
+| ❓ **Question detection** | Fast offline rules, or an LLM you pick (local in Ollama, or hosted) that reads the transcript; a confidence score and the reasons for every question |
 | ⏱️ **Timestamps** | Every question carries its position in the recording |
 | ✏️ **Human in the loop** | A `review` block per question for teacher edits, kept when the pipeline runs again |
 | 📦 **JSON export** | `questions.json` with a fixed key set and a formal JSON Schema |
 
-Planned: reading the board and slides (#59), an LLM pass that refines questions and finds their
-answers (#46), and quiz generation (#79). What is built today:
+Planned: reading the board and slides (#59) and quiz generation (#79). What is built today:
 [architecture.md 13.3](docs/architecture.md#133-status).
 
 ## Install
@@ -68,6 +67,8 @@ skips transcription. A progress bar renders on stderr, and transcripts are cache
 `process` again with another threshold takes seconds. Every option, the cache, error messages and
 recipes: [docs/cli.md](docs/cli.md).
 
+Save settings in `questxtract.toml`, or choose `--config PATH`; explicit command flags win. See [configuration files](docs/cli.md#configuration-files).
+
 `process` also takes a transcript made by any other ASR engine: a list of segments, or an object
 with a `segments` key, which is what most engines emit:
 
@@ -80,13 +81,99 @@ with a `segments` key, which is what most engines emit:
 }
 ```
 
+### With an LLM
+
+The rules are fast and offline, but they miss what they were not written for. `--detector llm`
+lets a language model decide instead: it judges every sentence ending in `?` in the lecture around
+it, keeps the real questions, finds the sentences that answer them, and rewrites a messy question
+into a clean one, keeping the spoken version beside it. It never adds a question that was not
+spoken. It needs the `llm` extra
+(`pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`) and a model:
+
+```bash
+# hosted: OpenAI, key from OPENAI_API_KEY (set it up as below); gpt-4o-mini takes no
+# reasoning setting, hence --llm-reasoning server
+questxtract process lecture.mp4 --detector llm --llm-model gpt-4o-mini --llm-reasoning server
+
+# local: any OpenAI-compatible server, here Ollama with a small Qwen that thinks first
+questxtract process lecture.mp4 --detector llm --llm-reasoning low \
+    --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
+```
+
+Answers are cached, so another `-t` costs no calls. Setting up Ollama, choosing a model, and what
+happens when the endpoint fails: [docs/cli.md](docs/cli.md#finding-questions-with-an-llm).
+
 To measure the detector against the labelled reference recordings in `tests/data/`
 ([how they were made](tests/data/README.md)):
 
 ```bash
 questxtract eval tests/data/          # table, sweep, missed questions and false positives
 questxtract eval tests/data/ --json   # the same report, machine-readable
+questxtract eval tests/data/ --detector llm --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
 ```
+
+#### Setting up the API key
+
+A hosted model needs a key; a local server (`--llm-url`) does not. QuestXtract reads it from
+the `OPENAI_API_KEY` environment variable, or from a local `.env` (see
+[docs/cli.md](docs/cli.md#api-keys-and-env)); there is no `--api-key` flag and TOML files
+reject secrets, so the key never sits in the repository or in your shell history. The setup
+below keeps it in your system's password store (the Keychain on macOS, Credential Manager on
+Windows) and lets a git-ignored `.env` file *refer* to it, so no file anywhere holds the key
+itself. The environment wins over `.env`, which is why step 4 loads it into the shell. It is the same on
+macOS and Windows: run it in Terminal on macOS, in **Git Bash** on Windows (it comes with Git for
+Windows), from the repository folder.
+
+1. **Save the key.** Copy the whole key (it starts with `sk-`), then store it from the clipboard:
+
+   ```bash
+   pbpaste | tr -d '[:space:]' | uvx keyring set questxtract-llm openai             # macOS
+   cat /dev/clipboard | tr -d '[:space:]' | uvx keyring set questxtract-llm openai  # Windows
+   ```
+
+   Then empty the clipboard (`pbcopy < /dev/null` on macOS, copy any other text on Windows).
+   Piping the key in avoids typing it into a hidden prompt: macOS's own
+   `security add-generic-password -w` prompt silently cuts a key at 128 characters, and OpenAI
+   keys are longer.
+
+2. **Check it.** This prints only the last three characters; they must match your key's:
+
+   ```bash
+   uvx keyring get questxtract-llm openai | tail -c 4
+   ```
+
+3. **Point `.env` at it.** One line, written once; `.env` is in `.gitignore` and holds no key:
+
+   ```bash
+   echo 'export OPENAI_API_KEY="$(uvx keyring get questxtract-llm openai)"' > .env
+   ```
+
+4. **Load it in every new terminal**, before running `questxtract`:
+
+   ```bash
+   source .env
+   ```
+
+   On macOS the first read may ask whether Python may use the Keychain item: choose *Always
+   Allow*. In PowerShell instead of Git Bash, step 4 is
+   `$env:OPENAI_API_KEY = (uvx keyring get questxtract-llm openai)`.
+
+5. **Test it.** Listing the models costs nothing:
+
+   ```bash
+   uv run python -c "import openai; print(len(openai.OpenAI().models.list().data), 'models visible - the key works')"
+   ```
+
+| Error | Cause | Fix |
+|---|---|---|
+| `--detector llm needs OPENAI_API_KEY, ...` | The key is not loaded in this terminal | `source .env` |
+| `401 ... invalid_api_key` | The stored key is incomplete, or was revoked | Compare its end with the original (step 2) and save it again (step 1); if they match, ask for a new key |
+| `400 ... Unrecognized request argument supplied: reasoning_effort` | The model has no reasoning setting, e.g. `gpt-4o-mini` | Add `--llm-reasoning server` |
+
+**For the project team.** We use the customer's pay-as-you-go OpenAI key with `gpt-4o-mini`. Never
+commit the key, paste it into a chat, issue or pull request, or write it into any file; once it is
+saved, delete the message you received it in. Ask the customer before using another model with it.
+If a key leaks, tell its owner at once so it can be revoked.
 
 ### Output
 
@@ -97,8 +184,9 @@ present, `null` included. Example and field reference:
 [architecture.md 12.1](docs/architecture.md#121-questionsjson); formal schema:
 [questions.schema.json](src/questxtract/questions.schema.json).
 
-`--threshold` gates the final **confidence**: an unanswered question tops out at 0.55, one the
-next sentence answers carries its full question score.
+`--threshold` gates the final **confidence**. With the rules, an unanswered question tops out at
+0.55, and one the next sentence answers carries its full question score; with `--detector llm`,
+it is the model's own confidence.
 
 ### Python API
 
@@ -203,7 +291,7 @@ Releases are cut from `main` by pushing a version tag; [release.yml](.github/wor
    git push origin v0.2.0
    ```
 
-The workflow checks that the tag matches `pyproject.toml` and that `CHANGELOG.md` has a section for it, runs lint, mypy and the tests, builds the sdist and wheel, and creates the GitHub Release with that CHANGELOG section as its notes and the built files attached. Nothing is released if any of those steps fails. Check a tag locally first with `python3 scripts/release_notes.py v0.2.0`.
+The workflow checks that the tag matches `pyproject.toml` and that `CHANGELOG.md` has a section for it, runs lint, mypy and the tests, builds the sdist and wheel, and creates the GitHub Release with that CHANGELOG section as its notes and the built files attached. A Release already created by hand for the tag gets the same files and notes. Nothing is released if any of those steps fails. Check a tag locally first with `python3 scripts/release_notes.py v0.2.0`.
 
 PyPI publishing is off until the repository variable `PUBLISH_TO_PYPI` is set to `true` (Settings, Secrets and variables, Actions, Variables). It then needs a PyPI API token scoped to `questxtract`, stored as the `PYPI_API_TOKEN` secret of the repository's `pypi` environment, or this workflow registered as a [trusted publisher](https://docs.pypi.org/trusted-publishers/) on PyPI with the secret unset. A failed upload stops the GitHub Release.
 

@@ -6,6 +6,7 @@ Every command and option, with recipes: docs/cli.md.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import sys
 from collections.abc import Callable, Sequence
@@ -13,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
-from .config import Config
+from .config import Config, load_config
 from .evaluate import evaluate, format_report
 from .export import merge_reviews, read_questions, result_to_dict
 from .models import Context, SchemaError, Stage, Transcript
@@ -22,6 +23,9 @@ from .pipeline import STAGES, run
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
 
 _BAR_WIDTH = 10
+# A thinking model takes minutes per request, where one that answers straight away takes
+# seconds: the per-request deadline follows the reasoning level.
+_THINKING_TIMEOUT_SECONDS = 600
 # A redirected stderr on Windows is cp1252, not the UTF-8 console, and the block glyphs
 # raise UnicodeEncodeError there - a crash in the middle of a real run, over decoration.
 _FULL, _EMPTY = ("█", "░") if "utf" in (sys.stderr.encoding or "").lower() else ("#", "-")
@@ -37,7 +41,7 @@ _STAGE_LABELS = {
     "detect": "Detecting questions",
     "answer": "Finding answers",
     "score": "Scoring",
-    "judge": "Reviewing",
+    "judge": "LLM detection",
 }
 
 _INPUT_KINDS = {".mp4": "an .mp4 recording", ".json": "a .json transcript"}
@@ -58,6 +62,9 @@ examples:
   questxtract process lecture.mp4 -t 0.3                 more questions, less strict
   questxtract process lecture.mp4 -m base                quick run with a small model
   questxtract process lecture.transcript.json -o -       existing transcript, print it
+  questxtract process lecture.mp4 --detector llm         an LLM picks the questions
+  questxtract process lecture.mp4 --detector llm         a local model in Ollama:
+      --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b --llm-reasoning low
 """
 
 _TRANSCRIBE_EXAMPLES = """\
@@ -165,8 +172,54 @@ def _write(text: str, path: Path | None, summary: str) -> None:
 
 
 def _config(args: argparse.Namespace) -> Config:
-    """Apply the flags every command shares over the defaults."""
-    return Config().replace(model_size=args.model, from_scratch=args.from_scratch)
+    """Apply explicit flags over the selected file, which overlays the defaults."""
+    config = load_config(args.config)
+    changes = {
+        field: value
+        for flag, field in (
+            ("model", "model_size"),
+            ("from_scratch", "from_scratch"),
+            ("threshold", "min_confidence"),
+            ("detector", "detector"),
+            ("llm_model", "judge_model"),
+            ("llm_url", "base_url"),
+            ("llm_reasoning", "judge_reasoning_effort"),
+        )
+        if (value := getattr(args, flag, None)) is not None
+    }
+    if changes.get("judge_reasoning_effort") == "server":
+        changes["judge_reasoning_effort"] = ""
+    config = config.replace(**changes)
+    if not 0.0 <= config.min_confidence <= 1.0:
+        raise ValueError("min_confidence / --threshold must be between 0 and 1")
+    if config.detector not in ("rules", "llm"):
+        raise ValueError("detector must be rules or llm")
+    if config.judge_reasoning_effort not in ("", "none", "low", "medium", "high"):
+        raise ValueError("judge_reasoning_effort must be empty, none, low, medium or high")
+    return config
+
+
+def _with_llm(config: Config) -> Config:
+    """Check an LLM run can start before anything slow runs, and allow thinking time.
+
+    Raises:
+        ValueError: If ``--detector llm`` lacks the ``[llm]`` extra, or has neither an API
+            key nor a local endpoint.
+
+    """
+    if config.judge_reasoning_effort != "none":
+        config = config.replace(
+            timeout_seconds=max(config.timeout_seconds, _THINKING_TIMEOUT_SECONDS)
+        )
+    if config.detector == "llm":
+        if importlib.util.find_spec("openai") is None:
+            raise ValueError("--detector llm needs the LLM extra: pip install 'questxtract[llm]'")
+        if config.base_url is None and not config.api_key:
+            raise ValueError(
+                "--detector llm needs OPENAI_API_KEY in the environment or .env, "
+                "or --llm-url for a local server"
+            )
+    return config
 
 
 def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
@@ -201,11 +254,11 @@ def _previous(path: Path | None) -> dict[str, Any] | None:
 
 def _process(args: argparse.Namespace) -> int:
     """Extract questions from a recording (every stage) or a transcript (skips ASR)."""
+    config = _with_llm(_config(args))
     source = Path(args.input)
     _check_input(source, (".mp4", ".json"))
     output = _output_path(args.output, source, "questions")
     previous = _previous(output)
-    config = _config(args).replace(min_confidence=args.threshold)
 
     if source.suffix.lower() == ".json":
         transcript = Transcript.from_file(source)
@@ -238,10 +291,11 @@ def _transcribe(args: argparse.Namespace) -> int:
     Runs the real ingest and transcribe stages, so it shares their cache with ``process``:
     whichever of the two runs second on the same recording skips the ASR.
     """
+    config = _config(args)
     source = Path(args.recording)
     _check_input(source, (".mp4",))
     output = _output_path(args.output, source, "transcript")
-    ctx = _run(Context(source=source, config=_config(args)), STAGES[:_AFTER_TRANSCRIBE])
+    ctx = _run(Context(source=source, config=config), STAGES[:_AFTER_TRANSCRIBE])
     assert ctx.transcript is not None  # noqa: S101 - the transcribe stage always sets it
     text = json.dumps(ctx.transcript.to_dict(), indent=2, ensure_ascii=False)
     _write(text, output, f"{len(ctx.transcript.asr_segments)} segments")
@@ -251,7 +305,7 @@ def _transcribe(args: argparse.Namespace) -> int:
 def _eval(args: argparse.Namespace) -> int:
     """Score the pipeline against the labelled set."""
     try:
-        report = evaluate(args.paths)
+        report = evaluate(args.paths, _with_llm(_config(args)))
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -279,6 +333,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subs = parser.add_subparsers(dest="command", required=True)
 
+    configured = argparse.ArgumentParser(add_help=False)
+    configured.add_argument(
+        "--config",
+        type=Path,
+        metavar="PATH",
+        help="settings file (default: questxtract.toml in the current directory, if present)",
+    )
+
     # Flags every command that can transcribe shares, so both --help pages read the same.
     shared = argparse.ArgumentParser(add_help=False)
     shared.add_argument(
@@ -290,20 +352,55 @@ def build_parser() -> argparse.ArgumentParser:
     shared.add_argument(
         "-m",
         "--model",
-        default=defaults.model_size,
+        default=None,
         metavar="NAME",
         help="Whisper model: tiny, base, small, medium, large-v3 or turbo (default: "
-        "%(default)s); smaller is faster and less accurate. Only used when transcribing",
+        f"{defaults.model_size}); smaller is faster and less accurate. Only used when transcribing",
     )
     shared.add_argument(
         "--from-scratch",
         action="store_true",
+        default=None,
         help="ignore cached results and recompute everything, transcription included",
+    )
+
+    # How questions are found: `process` and `eval` share these.
+    llm = argparse.ArgumentParser(add_help=False)
+    llm.add_argument(
+        "--detector",
+        choices=("rules", "llm"),
+        default=None,
+        help="how questions are found: rules (fast, offline) or llm (a language model reads the "
+        f"transcript; needs the questxtract[llm] extra) (default: {defaults.detector})",
+    )
+    llm.add_argument(
+        "--llm-model",
+        default=None,
+        metavar="NAME",
+        help="the model for --detector llm, e.g. qwen3.5:9b in Ollama "
+        f"(default: {defaults.judge_model})",
+    )
+    llm.add_argument(
+        "--llm-url",
+        metavar="URL",
+        help="an OpenAI-compatible endpoint for --detector llm, e.g. http://localhost:11434/v1 "
+        "for Ollama (default: OpenAI, with the key from OPENAI_API_KEY)",
+    )
+    llm.add_argument(
+        "--llm-reasoning",
+        choices=("none", "low", "medium", "high", "server"),
+        default=None,
+        metavar="LEVEL",
+        help="how long a thinking model may think before it answers: none, low, medium or high, "
+        "or server to send no setting, for a model without one such as gpt-4o-mini "
+        f"(default: {defaults.judge_reasoning_effort}). "
+        "Small models such as qwen3.5:9b judge much better with low; "
+        "anything but none also allows each request 10 minutes instead of 2",
     )
 
     process = subs.add_parser(
         "process",
-        parents=[shared],
+        parents=[configured, shared, llm],
         help="extract questions from a recording or a transcript",
         description="Extract the questions asked in a recording, or in an existing transcript.",
         epilog=_PROCESS_EXAMPLES,
@@ -317,15 +414,15 @@ def build_parser() -> argparse.ArgumentParser:
         "-t",
         "--threshold",
         type=float,
-        default=defaults.min_confidence,
+        default=None,
         metavar="0-1",
-        help="keep questions with at least this confidence (default: %(default)s)",
+        help=f"keep questions with at least this confidence (default: {defaults.min_confidence})",
     )
     process.set_defaults(handler=_process)
 
     transcribe = subs.add_parser(
         "transcribe",
-        parents=[shared],
+        parents=[configured, shared],
         help="transcribe a recording only, into a file `process` reads back",
         description="Transcribe a recording into a transcript file, without extracting questions.",
         epilog=_TRANSCRIBE_EXAMPLES,
@@ -334,7 +431,9 @@ def build_parser() -> argparse.ArgumentParser:
     transcribe.add_argument("recording", help="an .mp4 recording")
     transcribe.set_defaults(handler=_transcribe)
 
-    evaluation = subs.add_parser("eval", help="score against the labelled set")
+    evaluation = subs.add_parser(
+        "eval", parents=[configured, llm], help="score against the labelled set"
+    )
     evaluation.add_argument(
         "paths", nargs="+", help="*.labels.jsonl files, or directories holding them"
     )

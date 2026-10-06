@@ -38,9 +38,10 @@ Five-person course project; milestones, priorities and sprints live on GitHub.
    `uses=(...)`. A missing name means stale cache hits.
 5. Data types are `@dataclass(frozen=True, kw_only=True)`.
 6. `reasons` codes are stable strings, only ever appended. Never drop one.
-7. `questions.json` has a fixed key set, `null` included. Adding keys is a minor
-   `schema_version` bump, moving or removing one is major; update `questions.schema.json` and
-   CHANGELOG.md in the same PR. The pipeline never writes into a question's `review` block.
+7. `questions.json` has a fixed key set, `null` included. Adding keys, or changing what a value
+   means without changing its type, is a minor `schema_version` bump; moving or removing a key
+   is major. Update `questions.schema.json` and CHANGELOG.md in the same PR. The pipeline never
+   writes into a question's `review` block.
 8. The pipeline never invents a question (requirement 4.5). Only a separate, generative command
    may write text that was not spoken.
 
@@ -69,7 +70,8 @@ Five-person course project; milestones, priorities and sprints live on GitHub.
 
 ## Code
 
-- Python >= 3.10: nothing newer (no `typing.Self`, `tomllib`, `except*`).
+- Python >= 3.10: nothing newer (no `typing.Self`, `except*`). For TOML, use
+  `tomllib` only behind a Python >= 3.11 version check, with `tomli` on Python 3.10.
 - Windows is supported: `pathlib` for paths, `encoding="utf-8"` on every open.
 - Public API (`__all__` in `__init__.py`) needs docstrings, type hints and tests.
 
@@ -85,5 +87,5 @@ Five-person course project; milestones, priorities and sprints live on GitHub.
 
 ## Skills
 
-`/work-issue <N>` (issue to PR), `/eval-detection` (main vs branch metrics),
+`/work-issue <N or idea>` (idea or issue to PR), `/eval-detection` (main vs branch metrics),
 `/label-recording <video> <slug>` (extend `tests/data/`), `/doc-drift` (docs vs code check).

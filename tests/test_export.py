@@ -63,9 +63,9 @@ def test_export_emits_a_fixed_key_set_with_nulls_kept(finished):
         "orphaned_reviews",
     }
     assert data["config"]["min_confidence"] == finished.config.min_confidence
-    # judge and vision are off by default, so no model is named as if it ran
+    # the rules detect and vision is off by default, so no model is named as if it ran
     assert data["config"]["judge_model"] is None and data["config"]["vision_model"] is None
-    judged = dataclasses.replace(finished, config=finished.config.replace(judge_enabled=True))
+    judged = dataclasses.replace(finished, config=finished.config.replace(detector="llm"))
     assert result_to_dict(judged)["config"]["judge_model"] == finished.config.judge_model
     question = data["questions"][0]
     assert set(question) == QUESTION_KEYS
@@ -266,8 +266,6 @@ def test_cli_threshold_filters(tmp_path, capsys):
     # Answered with no pause, so the full question score carries: 1.0.
     assert main(["process", str(_transcript_file(tmp_path)), "-t", "0.9", "-o", "-"]) == 0
     assert len(json.loads(capsys.readouterr().out)["questions"]) == 1
-    assert main(["process", str(_transcript_file(tmp_path)), "-t", "1.1", "-o", "-"]) == 0
-    assert json.loads(capsys.readouterr().out)["questions"] == []
 
 
 def test_cli_reports_malformed_transcript_readably(tmp_path, capsys):
@@ -367,3 +365,22 @@ def test_an_existing_file_that_cannot_be_merged_is_left_untouched(tmp_path, caps
     assert main(["process", str(_transcript_file(tmp_path)), "-o", str(out)]) == 1
     assert out.read_text(encoding="utf-8") == "not json"
     assert "not overwriting" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("threshold", ["1.1", "-0.1", "nan"])
+def test_cli_rejects_a_threshold_outside_0_to_1(tmp_path, capsys, threshold):
+    """#85 AC1: exit 1, one line naming the range, no file written."""
+    out = tmp_path / "out" / "q.json"
+    args = ["process", str(_transcript_file(tmp_path)), "-t", threshold, "-o", str(out)]
+    assert main(args) == 1
+    err = capsys.readouterr().err
+    assert "between 0 and 1" in err and len(err.strip().splitlines()) == 1
+    assert not out.parent.exists()
+
+
+@pytest.mark.parametrize("threshold", ["0", "1"])
+def test_cli_accepts_the_threshold_bounds(tmp_path, validator, threshold):
+    """#85 AC2."""
+    out = tmp_path / "q.json"
+    assert main(["process", str(_transcript_file(tmp_path)), "-t", threshold, "-o", str(out)]) == 0
+    validator.validate(read_questions(out))

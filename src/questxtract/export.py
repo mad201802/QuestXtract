@@ -43,7 +43,7 @@ def result_to_dict(ctx: Context) -> dict[str, Any]:
         "config": {
             **{key: getattr(ctx.config, key) for key in _CONFIG_KEYS},
             # null when the stage is off, so the file never names a model that did not run
-            "judge_model": ctx.config.judge_model if ctx.config.judge_enabled else None,
+            "judge_model": ctx.config.judge_model if ctx.config.detector == "llm" else None,
             "vision_model": ctx.config.vision_model if ctx.config.vision_enabled else None,
         },
         "stats": dict(ctx.stats),

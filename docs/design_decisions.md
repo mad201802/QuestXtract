@@ -48,9 +48,10 @@ flowchart LR
         V -.enrich.-> AV[attach_visual]
         AV -.-> D
         D --> AN[7 answer]
-        AN --> SC[8 score]
-        SC -.optional.-> J[9 judge]
-        J --> E[10 export<br>questions.json]
+        AN --> SC[9 score]
+        AN -.optional.-> J[8 judge<br>LLM detector]
+        J -.-> SC
+        SC --> E[10 export<br>questions.json]
         M[(models.py<br>Context + schemas)] -. contract .-> T & S & G & D & AN & SC & J
     end
     E --> UI[Teacher review UI]
@@ -136,8 +137,8 @@ because the sentence-run meaning is the one every downstream consumer uses.
 
 *Chose:* the export unit is one recording — `{"schema_version", "source", "config", "stats",
 "questions": [...]}` (architecture.md 12.1) — every key always present, `null` included. Each
-question carries an `id` derived from its start and text, and cites the content-hash
-`sentence_id`s it came from.
+question carries an `id` derived from the `sentence_id` it was spoken in, and cites the
+content-hash `sentence_id`s it came from.
 
 *Alternative:* a bare list of questions (M0 behaviour); a `{"lecture", "questions"}` envelope
 (the M1 `LectureResult`).
@@ -147,6 +148,8 @@ re-exports it; the exerplaza integration must *update* the quiz for a video, not
 duplicate. Text is the field being edited, so it cannot be the key. The fixed key set means a
 consumer never has to defensively `.get()` a missing `answer`. Sentence ids being *content
 hashes rather than indices* is what lets a human edit survive a re-transcription (FR5).
+The question `id` first hashed the question's start and text; once `--detector llm` could reword
+the text, the id moved with every rewording, so #94 derived it from the spoken sentence instead.
 
 *Cost:* an ASR re-run that shifts timestamps or words changes ids. We accept this: ids are
 stable per *transcript*, and the transcript is cached (D8) precisely so it is not re-run.
@@ -262,6 +265,76 @@ four rule sets into one pass that already had to exist to filter rhetorical ques
 answer is generated text, so it must cite the transcript sentences it comes from (architecture.md
 10.3), and the customer has to accept LLM-drafted answers (#46).
 
+*Revised by D12:* the LLM pass became the LLM detector, which also picks the questions. Its answers
+are extractive, the cited sentences' own text, so no drafted answer text reaches the output.
+
+### D12: An LLM detector the user picks per run, on the `openai` SDK alone
+
+*Chose:* a second detector next to the rules (`--detector llm`, #88). A text LLM reads the
+transcript in chunks of whole segments and answers with sentence ids, which the code checks against
+the transcript (requirement 4.5). It picks the questions, cites the sentences that answer them and
+may reword a messy question; the rules stay the default and the offline path. Local and hosted
+models go through one client, the `openai` SDK with a `base_url`. Output is checked in three
+layers: a JSON schema sent as `response_format` (constrained decoding on OpenAI, Ollama, vLLM and
+llama.cpp), `json.loads` with one repeat, and the id checks in code. It is the first of two LLM
+runs; the second, a VLM that brings the frames on screen into the question/answer pairs, comes
+with the vision stage.
+
+*Alternatives:*
+
+- An LLM judge over the rule candidates only (#46, closed for this): cheaper, but the rules' recall
+  becomes the ceiling, and that ceiling is what varies across lecture types and speakers (the
+  dependence on Whisper's `?`, check-in lists grown from three recordings).
+- litellm for the provider layer: a large dependency tree for providers we do not target, and its
+  versions 1.82.7 and 1.82.8 were a supply-chain compromise on PyPI on 2026-03-24.
+- pydantic-ai or LangChain: agent frameworks, for one request shape.
+- instructor for validated output: re-asks on top of the same SDK, but pulls typer, rich, jinja2,
+  aiohttp, tenacity and more. The SDK's own `.parse()` needs pydantic models at module level, which
+  the base install lacks. The id checks have to be written either way.
+- In-process local models (llama-cpp-python): no prebuilt wheels on PyPI, a risk for the Windows
+  leg of NFR1. Torch runtimes are excluded anyway (architecture.md 13.2).
+
+*Why:* the vision milestones build on the questions, so detection quality matters more than a
+default that is offline in every mode. `base_url` already reaches every server we target (Ollama,
+llama.cpp, vLLM, LM Studio), so a library on top would add dependencies without adding reach. No
+new dependency was needed.
+
+*Cost:* an LLM run needs an endpoint: cents per lecture for a hosted model, minutes of local
+compute for a local one, and a context setting for Ollama (architecture.md 10.1). Once asked
+for, the LLM is required: a
+failed endpoint ends the run instead of falling back to the rules, so the output never silently
+mixes the two.
+
+*Revised by D13:* the model no longer lists the questions of a chunk; it judges candidates the code
+chose, one decision each.
+
+### D13: One decision per candidate, and kinds defined by what a question asks about
+
+*Chose:* the LLM detector judges candidates the code chooses (every sentence ending in `?` plus
+the rules' own), several nearby ones per request, each in a window of the lecture around it (#89,
+architecture.md 10.2). The response schema requires exactly those candidate ids and lets an answer
+cite only later sentences of the excerpt, so a constrained decoder can neither skip a candidate nor
+invent an id. A candidate the lecture repeats three times or more carries its count, and each
+judgement starts with a one-sentence `reason`. The prompt defines the kinds by what a question
+asks about: `content` asks about the subject, whoever answers it.
+
+*Alternative:* D12's first shape, which asked the model for the list of questions in each chunk of
+transcript, with context lines from the neighbouring chunks.
+
+*Why:* on the labelled set the rule candidates already held nearly every content question; the
+small models' errors were judgement, not finding. They ended long lists early, mistyped ids, and,
+as their `reason` showed, called any question the lecturer answers himself rhetorical and a
+student's question restated in full procedural. An ablation separated the two changes: the
+per-candidate shape with the old definitions changed nothing measurable, and the new definitions
+in the old chunked shape did not help either; together they lifted the small models to where the
+large one was. In chunks, the new definitions also let habitual tags ("True?") through, which the
+repeat count keeps out. Numbers: #89's PR.
+
+*Cost:* more requests than chunks, one per group of nearby candidates, so `judge_parallel` exists
+for hosted runs. A question with neither a `?` nor a rule behind it is never judged. Thinking
+helps the smallest models most, at minutes per request. The definitions were written after
+reading misses on the labelled recordings, so they need a held-out recording to confirm them.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |
@@ -271,7 +344,7 @@ answer is generated text, so it must cite the transcript sentences it comes from
 | FR3 transcribe with ASR | `transcribe.py` (#8) → `Transcript` | stub |
 | FR4 extract drawing/animation from video | `vision.py` (M2/M3) | roadmap |
 | FR5 teacher can edit after extraction | package side: fixed-key JSON with content-hash sentence ids (`export.py`); re-runs keep `review` edits by question id (`merge_reviews`); the editing UI itself is a separate app (D6) | partial — export only |
-| FR6 identify question sentences | `detect.py` (#10) | keyword heuristic |
+| FR6 identify question sentences | `detect.py` (#10), or the LLM detector in `llm.py` (#88) | keyword heuristic, or an LLM per run |
 | FR7 start timestamp per question | `QAPair.start`, a slice of the word list — word-accurate by construction, never interpolated (architecture.md 2.5) | done |
 | FR8 export JSON | `export.py`, architecture.md 12.1 (#13) | done |
 | FR9 progress for long recordings | `Progress = Callable[[str, float], None]`, emitted once per stage by the runner (#14) | done for stage granularity |
@@ -281,7 +354,7 @@ answer is generated text, so it must cite the transcript sentences it comes from
 | NFR2 recall ≥ 50 % on labelled set | #11 dataset under `tests/data/`, `evaluate.py` harness (#12) | stub |
 | NFR3 docstrings, type hints, tests, ≥ 70 % coverage | ruff `D` rules, mypy strict, pytest gate | done |
 | NFR4 tested on every PR | GitHub Actions (#19) | done |
-| Constraint: never invent questions | detector extracts verbatim spans; the judge may reject/rescope/rewrite but never add, and is id-validated against its input set; generation is a separate command (architecture.md 1.4, 12.3) | by design |
+| Constraint: never invent questions | the rules extract verbatim spans; the LLM detector answers with sentence ids checked against the transcript, may reword but never add, and the spoken text stays as `original_text`; generation is a separate command (architecture.md 1.4, 10.3, 12.3) | by design |
 
 ## 5. The review and what it changed (→ report ch. 7, ch. 12 "AI")
 
