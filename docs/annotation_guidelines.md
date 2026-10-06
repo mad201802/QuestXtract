@@ -65,8 +65,14 @@ Not about the material at all.
 > "Is this too fast for anyone?"
 > "Are we ready to move on?"
 
-Includes polls ("one or two? show of hands?") — these are `check_in`, not `content`, even
-though a real answer is expected, because the answer is not itself instructional content.
+Includes polls that name no subject matter ("one or two? show of hands?", "One, two, three,
+four?") — these are `check_in`, not `content`, even though a real answer is expected, because
+the answer is not itself instructional content.
+
+A **subject poll**, whose options are themselves answers about the material ("Do I go outside,
+inside, or you do not know?", "Unbounded, bounded, or you do not know?"), is `content`: it asks
+the question the options answer. A repeat of the options as its own sentence is `content` too,
+like any repeated content question.
 
 ### `procedural` — logistics, not lecture content
 
@@ -80,6 +86,16 @@ echoes** - the lecturer repeating a fragment of a student's question back to che
 sorting and what?", "It's faster, but only on average?"). A full restatement of the
 student's question ("So the question was, ..., does that still hold for negative
 numbers?") is not an echo: label it `content`.
+
+### One sentence, two utterances
+
+A label covers one transcript sentence, and `evaluate.py` matches one prediction to one label,
+so a sentence never gets two entries. When one ASR sentence holds a content question and a
+check-in, tag or procedural aside ("If I do the integral of this from minus infinity to plus
+infinity, are we together that this area is going to be infinite?"), label the whole sentence
+`content`, the same rule as a tag closing a content question. A check-in that only asks for
+agreement on an answer just given ("Finite. True. Are we together that it's finite?") holds no
+content question and stays `check_in`.
 
 ## 3. Vetoes — things that look like questions and are not
 

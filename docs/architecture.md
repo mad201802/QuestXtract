@@ -592,15 +592,18 @@ that changes the numbers; issues link here instead of copying them.
 | Recording | Content labels | TP | FP | FN | Recall | Precision | F1 |
 |---|---|---|---|---|---|---|---|
 | MIT 18.100B L1 | 28 | 28 | 1 | 0 | 1.00 | 0.97 | 0.98 |
-| TTK4225 2026-09-14 | 39 | 39 | 10 | 0 | 1.00 | 0.80 | 0.89 |
+| TTK4225 2026-09-14 | 41 | 39 | 10 | 2 | 0.95 | 0.80 | 0.87 |
 | TTK4225 2026-09-15 | 60 | 59 | 20 | 1 | 0.98 | 0.75 | 0.85 |
-| **Pooled** | 127 | 126 | 31 | 1 | **0.99** | 0.80 | 0.89 |
+| **Pooled** | 129 | 126 | 31 | 3 | **0.98** | 0.80 | 0.88 |
 
 NFR2 holds with room, and `question_mark_rate` is 0.99, so 3.1's bet holds. The sweep: recall
-0.99 / precision 0.55 up to a threshold of 0.30, 0.99 / 0.80 from 0.35 to 0.55, 0.45 / 0.86 from
+0.99 / precision 0.56 up to a threshold of 0.30, 0.98 / 0.80 from 0.35 to 0.55, 0.44 / 0.86 from
 0.65 up.
 
-*Missed (1).* The `?`-less cut-off above.
+*Missed (3).* The `?`-less cut-off above, and two content questions that score 0.60 and stay
+unanswered (0.33): a check-in wrapping a content question (*"..., are we together that this
+area is going to be infinite?"*, `check_in` penalty) and a subject poll with no interrogative
+head (*"Unbounded, bounded, ..., or you do not know?"*).
 
 *False positives (31).* 19 hit `rhetorical` labels, mostly concept-free framing (*"So how do we
 do that?"*, #49). 9 hit `check_in` ones the list does not hold, elicitations and feelings
