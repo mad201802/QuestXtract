@@ -482,10 +482,17 @@ ink delta.
 
 ### 6.5 Captioning
 
-One VLM call per board state: the keyframe, the transcript overlapping it, and (in M3) the
-previous state's description and the ink difference. Out: `description`, `text`, `latex`. Cached
-per keyframe hash. `latex` is there because prose does not compile, and the M4 animations need
-formulas.
+One VLM call per board state: the keyframe as a PNG data URL, the transcript overlapping it, and
+(in M3) the previous state's description and the ink difference. Out, under a strict JSON schema
+and checked again in code: `description`, `text`, `latex` (or null) and `confidence`. The prompt
+(`VISION_PROMPT_VERSION`) asks for an empty string rather than a guess. Cached per request, the
+image included (10.4), so no keyframe is sent twice. `latex` is there because prose does not
+compile, and the M4 animations need formulas.
+
+Captioning is **never required**: an endpoint error, a stall or invalid JSON twice, or a
+malformed field leaves that one keyframe out with a warning, and the run goes on. The judge does
+the opposite (10.3, rule 5) because the user asked for it; a board description only enriches
+questions the pipeline already found.
 
 ### 6.6 Consumers
 
@@ -680,9 +687,13 @@ near duplicates stay in the output. The LLM detector labels a fragment echo `pro
 
 ## 10. The LLM layer
 
-One module, one client, two jobs, each off unless asked for: the LLM detector (stage 8, `--detector
-llm`), which decides which candidate sentences are real questions, and the vision captioning of
-section 6 (#53). The pipeline produces a complete result without either. A second LLM run, a VLM
+One client, two jobs, each off unless asked for: the LLM detector (stage 8, `--detector llm`),
+which decides which candidate sentences are real questions, and the vision captioning of section
+6. Each stage keeps its own prompt, schema and output checks. What both send goes through
+`endpoint.py`, which is not a stage, so neither stage imports the other (11.1, rule 1): it builds
+the client and sends a request with a deadline on the whole call, one resend after a stall or
+invalid JSON, the per-request cache of 10.4, and the key hidden in every error. The pipeline
+produces a complete result without either job. A second LLM run, a VLM
 that brings the frames on screen into the question/answer pairs, belongs with the vision stage and
 is not built.
 
@@ -808,9 +819,12 @@ against the deadline; a hosted run can raise it.
 Each request is cached under `.questxtract/judge/<sha256 of the request>.json`, keyed on the
 endpoint, the model, the prompt, the schema and the transcript lines. Any change to what the model
 would see asks again, and nothing else does: another `-t` or an `eval` re-run costs zero calls,
-and a `.json` transcript input, which has no source hash, is cached too.
+and a `.json` transcript input, which has no source hash, is cached too. A vision request (6.5) is
+cached the same way under `.questxtract/vision/`, keyed on the keyframe image instead of transcript
+lines. Only a valid JSON answer is cached; a failed request is asked again on the next run.
 
-> **Decision.** `questxtract/llm.py`. Config: `detector` (`rules`), `base_url`, `api_key` (from
+> **Decision.** `questxtract/llm.py` (the judge), `questxtract/endpoint.py` (client and requests,
+> shared with vision). Config: `detector` (`rules`), `base_url`, `api_key` (from
 > `OPENAI_API_KEY`), `judge_model`, `judge_window` (10), `judge_batch_size` (8),
 > `judge_parallel` (1), `judge_reasoning_effort` (`none`), `timeout_seconds` (120). Prompt and
 > schema are module-level, so a prompt change is a reviewable diff. Dependency: `openai`, in the
@@ -1056,7 +1070,8 @@ src/questxtract/
   vision.py        5 vision (planned) and attach_visual, the interval join
   detect.py        6 detect: extraction, vetoes, scoring, cue tables
   answer.py        7 answer: adjacent seed
-  llm.py           8 judge: the OpenAI-compatible client and the LLM detector
+  llm.py           8 judge: the LLM detector
+  endpoint.py      the OpenAI-compatible client and requests, shared by judge and vision
   score.py         9 score: confidence, threshold
   export.py        questions.json writer and reader, with questions.schema.json
   filtering.py     time filter, experimental topic filter
@@ -1104,10 +1119,11 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not built | #62 |
 | `sentences.py` | 3 sentences | done | |
 | `segments.py` | 4 segments | done | |
-| `vision.py` | 5 vision, attach_visual | frame sampling (6.3) and stable views with one keyframe each (6.4, static) are done but not called yet; captioning and the stage itself raise when `vision_enabled`; the interval join is done | #59 |
+| `vision.py` | 5 vision, attach_visual | frame sampling (6.3), stable views with one keyframe each (6.4, static) and the captioning call (6.5, placeholder prompt) are done but not called yet; the stage itself raises when `vision_enabled`; the interval join is done | #59, #52 |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery are not built | #48, #78 |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |
+| `endpoint.py` | not a stage | done: client and requests for the judge and vision (10) | |
 | `score.py` | 9 score | done: confidence and threshold | |
 | `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
 | `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |
