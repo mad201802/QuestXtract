@@ -32,13 +32,23 @@ def vision(ctx: Context) -> Context:
     """Capture board states from the recording into ``ctx.visual``.
 
     A no-op unless ``config.vision_enabled``, which is false unless an endpoint is
-    configured. The layout probe, frame sampling, de-occlusion, board-state segmentation
+    configured, and for a source with no video track (an MP3, or a transcript): there is no
+    board to read. The layout probe, frame sampling, de-occlusion, board-state segmentation
     and VLM captioning of architecture.md 6.2 to 6.5 are not implemented yet (#59).
     """
-    if not ctx.config.vision_enabled:
+    if not ctx.config.vision_enabled or not _has_video(ctx.source):
         return ctx
     # ponytail: #59, frame sampling, keyframes and VLM captioning (architecture.md 6.2-6.5).
     raise NotImplementedError("vision is not implemented yet (#59); set vision_enabled=False")
+
+
+def _has_video(path: Path) -> bool:
+    """Whether ``path`` is a recording with a video track; ``False`` for anything else."""
+    try:
+        with av.open(str(path)) as container:
+            return bool(container.streams.video)
+    except (av.error.FFmpegError, OSError):
+        return False
 
 
 def overlapping(
