@@ -28,7 +28,7 @@ turns them into study material. It **extracts** questions, it never invents them
 
 | | |
 |---|---|
-| 🎥 **Video in** | `.mp4` recordings, audio track extracted automatically (no system ffmpeg) |
+| 🎥 **Video or audio in** | `.mp4` or `.mp3` recordings, audio track extracted automatically (no system ffmpeg) |
 | 🗣️ **Transcription** | Speech-to-text with faster-whisper, or any ASR engine behind a small interface |
 | ❓ **Question detection** | Fast offline rules, or an LLM you pick (local in Ollama, or hosted) that reads the transcript; a confidence score and the reasons for every question |
 | ⏱️ **Timestamps** | Every question carries its position in the recording |
@@ -62,8 +62,8 @@ questxtract transcribe lecture.mp4             # transcription only -> lecture.t
 questxtract process lecture.transcript.json    # questions from an existing transcript
 ```
 
-The input decides how much runs: an `.mp4` goes through every stage, while a `.json` transcript
-skips transcription. A progress bar renders on stderr, and transcripts are cached, so running
+The input decides how much runs: an `.mp4` or `.mp3` goes through every stage (an audio-only
+recording simply has no board to read), while a `.json` transcript skips transcription. A progress bar renders on stderr, and transcripts are cached, so running
 `process` again with another threshold takes seconds. Every option, the cache, error messages and
 recipes: [docs/cli.md](docs/cli.md).
 
