@@ -11,6 +11,9 @@ Both no-op themselves when vision is off, rather than being filtered out by the 
 
 from __future__ import annotations
 
+import base64
+import math
+import warnings
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,11 +22,53 @@ from typing import Any
 import av
 import numpy as np
 
+from . import endpoint
+from .config import Config
 from .models import Context, Progress, Segment, VisualContext, stage
 
 _COMPARE_HEIGHT = 480  # architecture.md 6.3: change detection compares frames at about 480p
 _GRAY = np.array([0.299, 0.587, 0.114], dtype=np.float32)  # ITU-R BT.601 luma weights
 _NOISE = 32  # grey levels a pixel must move by to count as changed, above codec noise
+
+# The prompt and the schema are module-level, version-tagged, so a prompt change is a reviewable
+# diff. A change to either changes the cache key, so no stale caption is replayed.
+VISION_PROMPT_VERSION = "v0"  # ponytail: #52, placeholder until the spike picks model and prompt
+
+_FIELDS = ("description", "text", "latex", "confidence")
+
+_PROMPT = """\
+You read one keyframe of a university lecture recording: a slide, a blackboard, a whiteboard or
+a tablet page. What the lecturer said while it was on screen comes with it, as context only:
+describe what is shown, not what was said.
+
+Give:
+- description: one or two sentences on what it shows: a slide's topic, a derivation, a diagram.
+- text: the words and symbols written or printed on it, verbatim, in reading order. Leave out
+  what you cannot read; never guess.
+- latex: its formulas as LaTeX, one per line, or null when it shows none.
+- confidence: from 0 to 1, how much of what is shown you could read.
+
+Answer with JSON only.\
+"""
+
+_SCHEMA: dict[str, Any] = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "board",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "description": {"type": "string"},
+                "text": {"type": "string"},
+                "latex": {"type": ["string", "null"]},
+                "confidence": {"type": "number"},
+            },
+            "required": list(_FIELDS),
+            "additionalProperties": False,
+        },
+    },
+}
 
 Frame = np.ndarray[Any, np.dtype[np.uint8]]
 Crop = tuple[float, float, float, float]  # normalised (x0, y0, x1, y1), from the layout probe
@@ -45,12 +90,12 @@ def vision(ctx: Context) -> Context:
 
     A no-op unless ``config.vision_enabled``, which is false unless an endpoint is
     configured, and for a source with no video track (an MP3, or a transcript): there is no
-    board to read. The layout probe, frame sampling, de-occlusion, board-state segmentation
-    and VLM captioning of architecture.md 6.2 to 6.5 are not implemented yet (#59).
+    board to read. Frame sampling, stable views and the captioning call (architecture.md 6.3
+    to 6.5) exist but are not called yet (#59); the layout probe and de-occlusion are not built.
     """
     if not ctx.config.vision_enabled or not _has_video(ctx.source):
         return ctx
-    # ponytail: #59, frame sampling, keyframes and VLM captioning (architecture.md 6.2-6.5).
+    # ponytail: #59, call sampling, views and captioning from the stage (architecture.md 6.3-6.5).
     raise NotImplementedError("vision is not implemented yet (#59); set vision_enabled=False")
 
 
@@ -259,6 +304,62 @@ def _merge_shortest(views: list[_View], max_views: int) -> list[_View]:
 
 def _length(view: _View) -> float:
     return view.end - view.start
+
+
+def _caption(config: Config, png: bytes, speech: str) -> dict[str, Any] | None:
+    """Read one keyframe with the vision model (architecture.md 6.5).
+
+    ``png`` is the keyframe as :class:`_View` holds it; ``speech`` is what was said while its
+    view was on screen. Returns the :class:`VisualContext` fields the model reads, or ``None``
+    with a warning when the call fails or a field is malformed: a board description only
+    enriches questions the pipeline already found, so unlike the judge, vision never ends the
+    run. Cached on the request, image included (:func:`endpoint.ask`).
+
+    Raises:
+        RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
+
+    """
+    image = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+    request: dict[str, Any] = {
+        "model": config.vision_model,
+        "messages": [
+            {"role": "system", "content": _PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": f"Said while on screen: {speech.strip() or '-'}"},
+                    {"type": "image_url", "image_url": {"url": image}},
+                ],
+            },
+        ],
+        "response_format": _SCHEMA,
+    }
+    try:
+        answer = endpoint.ask(config, request, name="vision")
+    except (ConnectionError, ValueError) as exc:
+        warnings.warn(f"vision: keyframe left out: {exc}", UserWarning, stacklevel=2)
+        return None
+    description, text, latex, confidence = (answer.get(k) for k in _FIELDS)
+    if (
+        not isinstance(description, str)
+        or not isinstance(text, str)
+        or not (latex is None or isinstance(latex, str))
+        or isinstance(confidence, bool)
+        or not isinstance(confidence, (int, float))
+        or not math.isfinite(confidence)
+    ):
+        warnings.warn(
+            f"vision: keyframe left out: {config.vision_model} answered with malformed fields",
+            UserWarning,
+            stacklevel=2,
+        )
+        return None
+    return {
+        "description": description.strip(),
+        "text": text.strip(),
+        "latex": (latex or "").strip() or None,
+        "confidence": min(1.0, max(0.0, float(confidence))),
+    }
 
 
 @stage("attach_visual")
