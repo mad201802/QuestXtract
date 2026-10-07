@@ -4,6 +4,9 @@
 
 ### Added
 
+- `process` and `transcribe` accept `.mp3` recordings as well as `.mp4`. A recording without a
+  video track, an MP3 or an audio-only MP4, is transcribed as usual and has no board to read.
+  (#117)
 - README: setting up the API key safely, the same way on macOS and Windows: the key in the
   system's password store through `keyring`, and a git-ignored `.env` that only refers to it.
 - `process`, `transcribe` and `eval` read settings from `questxtract.toml` in the working

@@ -198,7 +198,12 @@ def test_dash_prints_to_stdout_and_a_nested_output_directory_is_created(
     ("command", "name", "exists", "message"),
     [
         ("process", "lecture.mp4", False, "no such file"),
-        ("process", "lecture.mkv", True, "expected an .mp4 recording or a .json transcript"),
+        (
+            "process",
+            "lecture.mkv",
+            True,
+            "expected an .mp4 recording or an .mp3 recording or a .json transcript",
+        ),
         ("transcribe", "lecture.json", True, "expected an .mp4 recording"),
     ],
 )
@@ -555,3 +560,31 @@ def test_dotenv_key_reaches_client_but_not_output_or_cache(
     for path in tmp_path.rglob("*.json"):
         text = path.read_text(encoding="utf-8")
         assert "sk-dotenv" not in text and "sk-environment" not in text
+
+
+def test_process_and_transcribe_take_an_mp3(
+    tmp_path: Path, make_mp3: Callable[..., Path], fake_asr: list[Config]
+) -> None:
+    """#117 AC: an audio-only lecture runs every stage; vision finds no board, no error."""
+    audio = make_mp3(tmp_path / "lecture.mp3")
+
+    assert main(["process", str(audio)]) == 0
+    data = json.loads((tmp_path / "lecture.questions.json").read_text(encoding="utf-8"))
+    assert [q["text"] for q in data["questions"]] == ["What is a stable sort?"]
+    assert data["visuals"] == [] and data["source"]["path"].endswith("lecture.mp3")
+
+    assert main(["transcribe", str(audio), "--from-scratch"]) == 0
+    assert (tmp_path / "lecture.transcript.json").is_file()
+
+
+def test_a_file_that_is_not_a_recording_gets_one_line_and_no_output(
+    tmp_path: Path, fake_asr: list[Config], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#117 AC: not a media file at all: one readable line, nothing written."""
+    fake = tmp_path / "lecture.mp3"
+    fake.write_bytes(b"not really an mp3")
+    assert main(["process", str(fake)]) == 1
+    err = capsys.readouterr().err.strip()
+    errors = [line for line in err.splitlines() if line.startswith("error:")]
+    assert len(errors) == 1 and "invalid or unreadable recording" in errors[0]
+    assert not (tmp_path / "lecture.questions.json").exists()

@@ -1,5 +1,9 @@
 """Stage 1: validate the source, probe the container, hash it for the cache key.
 
+An ``.mp4`` or an ``.mp3`` is accepted; what the file holds decides the rest, not its name: a
+file with only an audio track is transcribed and has no board to read (the vision stage checks
+for a video track itself).
+
 PyAV bundles the FFmpeg libraries, so this is not a subprocess and there is nothing for
 the user to install. There is no separate audio-extraction stage: the ASR backend calls
 :func:`extract_audio` for a temporary WAV (architecture.md 2.1).
@@ -20,37 +24,38 @@ from .models import Context, stage
 
 _HASH_BYTES = 8 * 1024 * 1024  # first and last 8 MiB; full-hashing a 2 GB lecture is wasted I/O
 _AUDIO_RATE = 16_000
+_SUFFIXES = (".mp4", ".mp3")
 
 
 class MediaError(ValueError):
-    """Raised when a recording cannot be opened or does not contain audio."""
+    """Raised when a recording is not an MP4 or MP3, cannot be opened, or has no audio."""
 
 
 def _validate_source(path: Path) -> None:
     """Validate the source path and the supported container type."""
     if not path.is_file():
         raise FileNotFoundError(f"{path}: no such file")
-    if path.suffix.lower() != ".mp4":
-        raise MediaError(f"{path}: unsupported media type; expected an .mp4 recording")
+    if path.suffix.lower() not in _SUFFIXES:
+        raise MediaError(f"{path}: unsupported media type; expected an .mp4 or .mp3 recording")
 
 
 @contextmanager
 def extract_audio(path: Path) -> Iterator[Path]:
-    """Extract an MP4's first audio stream to a temporary 16 kHz mono WAV file.
+    """Extract a recording's first audio stream to a temporary 16 kHz mono WAV file.
 
     The yielded file exists only inside the context manager and is removed when the
     context exits, including when decoding or the consumer raises an exception.
 
     Raises:
         FileNotFoundError: If ``path`` does not exist.
-        MediaError: If the path is not an MP4, cannot be opened, or has no audio.
+        MediaError: If the path is not an MP4 or MP3, cannot be opened, or has no audio.
 
     """
     _validate_source(path)
     try:
         container = av.open(str(path))
     except (av.error.FFmpegError, OSError) as exc:
-        raise MediaError(f"{path}: invalid or unreadable MP4 recording") from exc
+        raise MediaError(f"{path}: invalid or unreadable recording") from exc
 
     with container:
         audio_stream = next(
@@ -111,7 +116,7 @@ def ingest(ctx: Context) -> Context:
 
     Raises:
         FileNotFoundError: If the source does not exist.
-        MediaError: If the source is not a readable MP4 recording.
+        MediaError: If the source is not a readable MP4 or MP3 recording with audio.
 
     """
     _validate_source(ctx.source)
@@ -122,5 +127,5 @@ def ingest(ctx: Context) -> Context:
                 raise MediaError(f"{ctx.source}: recording contains no audio track")
             ctx.duration = float(container.duration / av.time_base) if container.duration else 0.0
     except (av.error.FFmpegError, OSError) as exc:
-        raise MediaError(f"{ctx.source}: invalid or unreadable MP4 recording") from exc
+        raise MediaError(f"{ctx.source}: invalid or unreadable recording") from exc
     return ctx
