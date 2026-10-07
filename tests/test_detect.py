@@ -79,6 +79,41 @@ def test_negated_auxiliaries_open_questions():
     assert score_sentence("Doesn’t the assumption make it harder?")[1] == ("mark", "aux")
 
 
+def test_a_contracted_wh_word_opens_a_question():
+    assert score_sentence("What's a stable sort?") == score_sentence("What is a stable sort?")
+    assert score_sentence("What's a stable sort?") == (1.0, ("mark", "wh"))
+    assert question_type("What's a stable sort?") == "what"
+
+
+def test_each_contracted_wh_word_keeps_its_own_type():
+    for sentence, kind in [
+        ("Where's the pole?", "what"),
+        ("How's it going to grow?", "how"),
+        ("Who's seen a Bode plot?", "what"),
+        ("Why'd the integral diverge?", "why"),
+        ("What're the two cases?", "what"),
+        ("So how'll we bound it?", "how"),
+        ("From where'd the factor come?", "what"),
+    ]:
+        assert "wh" in score_sentence(sentence)[1], sentence
+        assert question_type(sentence) == kind, sentence
+
+
+def test_a_curly_apostrophe_contracts_like_a_straight_one():
+    assert score_sentence("What’s a stable sort?") == score_sentence("What's a stable sort?")
+    assert question_type("What’s a stable sort?") == "what"
+
+
+def test_a_contraction_outside_a_question_is_decided_as_before(sentences):
+    assert "wh" not in score_sentence("That's what I mean?")[1]
+    # Without the '?' a wh-contraction stays under the gate, like the bare wh-word.
+    statement = type(sentences[0])(
+        text="What's more, it is stable.", word_start=15, word_end=20, start=9.0, end=12.0
+    )
+    assert score_sentence(statement.text) == score_sentence("What is more, it is stable.")
+    assert statement.text not in [c.text for c in detect_questions([*sentences, statement])]
+
+
 def test_any_is_not_an_auxiliary():
     assert "aux" not in score_sentence("Any other questions?")[1]
 

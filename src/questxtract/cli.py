@@ -15,7 +15,7 @@ from pathlib import Path
 from . import __version__
 from .config import Config, load_config
 from .evaluate import evaluate, format_report
-from .export import result_to_json
+from .export import result_to_json, write_questions
 from .models import Context, Stage, Transcript
 from .pipeline import STAGES, run
 
@@ -43,11 +43,16 @@ _STAGE_LABELS = {
     "judge": "LLM detection",
 }
 
-_INPUT_KINDS = {".mp4": "an .mp4 recording", ".json": "a .json transcript"}
+_INPUT_KINDS = {
+    ".mp4": "an .mp4 recording",
+    ".mp3": "an .mp3 recording",
+    ".json": "a .json transcript",
+}
 
 _EXAMPLES = """\
 examples:
   questxtract process lecture.mp4               video -> lecture.questions.json
+  questxtract process lecture.mp3               audio only, no board -> lecture.questions.json
   questxtract transcribe lecture.mp4            transcript only -> lecture.transcript.json
   questxtract process lecture.transcript.json   questions from an existing transcript
 
@@ -234,7 +239,7 @@ def _process(args: argparse.Namespace) -> int:
     """Extract questions from a recording (every stage) or a transcript (skips ASR)."""
     config = _with_llm(_config(args))
     source = Path(args.input)
-    _check_input(source, (".mp4", ".json"))
+    _check_input(source, (".mp4", ".mp3", ".json"))
     output = _output_path(args.output, source, "questions")
 
     if source.suffix.lower() == ".json":
@@ -246,7 +251,11 @@ def _process(args: argparse.Namespace) -> int:
     else:
         ctx = _run(Context(source=source, config=config), STAGES)
 
-    _write(result_to_json(ctx), output, f"{len(ctx.pairs)} questions")
+    if output is None:  # stdout has no folder for keyframes, so they keep their cache paths
+        print(result_to_json(ctx))
+    else:
+        write_questions(ctx, output)
+        print(f"{len(ctx.pairs)} questions -> {output}", file=sys.stderr)
     return 0
 
 
@@ -258,7 +267,7 @@ def _transcribe(args: argparse.Namespace) -> int:
     """
     config = _config(args)
     source = Path(args.recording)
-    _check_input(source, (".mp4",))
+    _check_input(source, (".mp4", ".mp3"))
     output = _output_path(args.output, source, "transcript")
     ctx = _run(Context(source=source, config=config), STAGES[:_AFTER_TRANSCRIBE])
     assert ctx.transcript is not None  # noqa: S101 - the transcribe stage always sets it
@@ -373,7 +382,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     process.add_argument(
         "input",
-        help="an .mp4 recording (runs everything) or a .json transcript (skips transcription)",
+        help="an .mp4 or .mp3 recording (runs everything) or a .json transcript (skips "
+        "transcription)",
     )
     process.add_argument(
         "-t",
@@ -393,7 +403,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=_TRANSCRIBE_EXAMPLES,
         formatter_class=raw,
     )
-    transcribe.add_argument("recording", help="an .mp4 recording")
+    transcribe.add_argument("recording", help="an .mp4 or .mp3 recording")
     transcribe.set_defaults(handler=_transcribe)
 
     evaluation = subs.add_parser(
@@ -426,7 +436,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("interrupted", file=sys.stderr)
         return 130
     except (OSError, ValueError) as exc:
-        # Everything a user can cause - a missing or unreadable file, a non-mp4, a recording
+        # Everything a user can cause - a missing or unreadable file, a non-media file, a recording
         # with no audio, a malformed transcript, an unknown model name - arrives as one of
         # these with a readable message; a traceback would only bury it (issue #17).
         print(f"error: {exc}", file=sys.stderr)

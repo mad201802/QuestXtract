@@ -4,6 +4,9 @@
 
 ### Added
 
+- `process` and `transcribe` accept `.mp3` recordings as well as `.mp4`. A recording without a
+  video track, an MP3 or an audio-only MP4, is transcribed as usual and has no board to read.
+  (#117)
 - README: setting up the API key safely, the same way on macOS and Windows: the key in the
   system's password store through `keyring`, and a git-ignored `.env` that only refers to it.
 - `process`, `transcribe` and `eval` read settings from `questxtract.toml` in the working
@@ -22,6 +25,13 @@
   models such as Qwen3.5 9B need it. `server` sends no setting, for a model without one such as
   gpt-4o-mini. Any level but `none` allows each request 10 minutes. (#89, #97)
 
+### Changed
+
+- `questions.json` schema 2.1: `keyframe_path` is relative to the JSON file. Writing the file
+  copies each keyframe into a folder beside it named after the file (`lecture.keyframes/` for
+  `lecture.questions.json`), so the two can be moved or shared together and lectures written to
+  one folder keep their images apart; `-o -` copies nothing and keeps the cache path. (#64)
+
 ### Changed (breaking)
 
 - `Config.judge_enabled` and `Config.judge_max_candidates` are gone. `Config(detector="llm")`
@@ -36,6 +46,9 @@
 
 ### Fixed
 
+- The rules detector counts a contracted wh-word as a question word: "What's ...?", "Where's ...?",
+  "How's ...?", "Who's ...?" (straight or curly apostrophe) now score and are typed like
+  "What is ...?", instead of being dropped when unanswered. (#109)
 - Provider connection errors mask the active API key if the service echoes it, including
   in the displayed traceback. (#99)
 - Detection finds the question word after a leading preposition ("For which ...?"), in an earlier

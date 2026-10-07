@@ -41,6 +41,26 @@ def make_mp4() -> Callable[..., Path]:
     return _make_mp4
 
 
+def _make_mp3(path: Path) -> Path:
+    """Write a tiny real MP3: a tenth of a second of silence."""
+    with av.open(str(path), mode="w", format="mp3") as container:
+        stream = container.add_stream("libmp3lame", rate=16000)
+        stream.layout = "mono"
+        frame = av.AudioFrame(format="s16", layout="mono", samples=1600)
+        frame.sample_rate = 16000
+        frame.planes[0].update(b"\0" * frame.planes[0].buffer_size)
+        for packet in stream.encode(frame):
+            container.mux(packet)
+        for packet in stream.encode():
+            container.mux(packet)
+    return path
+
+
+@pytest.fixture
+def make_mp3() -> Callable[..., Path]:
+    return _make_mp3
+
+
 def _words(spec: list[tuple[str, float, float]]) -> tuple[Word, ...]:
     return tuple(Word(text=t, start=s, end=e) for t, s, e in spec)
 

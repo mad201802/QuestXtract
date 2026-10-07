@@ -21,9 +21,9 @@ The file you pass in. There are no flags for picking stages.
 
 | You pass | What runs |
 |---|---|
-| an `.mp4` recording | everything: check the recording, transcribe it, then find the questions |
+| an `.mp4` or `.mp3` recording | everything: check the recording, transcribe it, then find the questions; a recording without a video track (any `.mp3`, or an audio-only `.mp4`) has no board to read |
 | a `.json` transcript | everything after transcription (much faster: no speech recognition) |
-| anything else | nothing: `error: ...: expected an .mp4 recording or a .json transcript` |
+| anything else | nothing: `error: ...: expected an .mp4 recording or an .mp3 recording or a .json transcript` |
 
 ## Commands
 
@@ -51,7 +51,7 @@ the confidence is the model's own, answered or not.
 
 ### `questxtract transcribe <recording>`
 
-Transcribes an `.mp4` recording into a transcript file, without looking for questions. The file
+Transcribes an `.mp4` or `.mp3` recording into a transcript file, without looking for questions. The file
 it writes is exactly what `process` accepts as input, and what `scripts/dropped_questions.py`
 reads.
 
@@ -140,6 +140,11 @@ Without `-o`, output lands next to the input, named after it:
 |---|---|---|
 | `lecture.mp4` | `lecture.questions.json` | `lecture.transcript.json` |
 | `lecture.transcript.json` | `lecture.questions.json` | (needs an `.mp4`) |
+
+When vision has read the board, the keyframe images are copied into a folder next to the
+questions file and named after it (`lecture.keyframes/` for `lecture.questions.json`); the file
+refers to them by relative path, so move or share the two together. With `-o -` nothing is
+copied and the file points into the cache instead.
 
 A second run overwrites the file. Pass `-o` to keep several versions side by side. The
 questions file format is described in the [README](../README.md#output) and in
@@ -302,9 +307,9 @@ A `.json` transcript input never touches the cache. There is nothing expensive l
 | Message | What to do |
 |---|---|
 | `...: no such file` | Check the path. |
-| `...: expected an .mp4 recording or a .json transcript` | Convert the video to MP4 first, e.g. with ffmpeg. |
+| `...: expected an .mp4 recording or an .mp3 recording or a .json transcript` | Convert the recording to MP4 or MP3 first, e.g. with ffmpeg. |
 | `...: recording contains no audio track` | The file has video only; there is nothing to transcribe. |
-| `...: invalid or unreadable MP4 recording` | The file is damaged or not really an MP4. |
+| `...: invalid or unreadable recording` | The file is damaged, or not really an MP4 or MP3. |
 | `Invalid model size '...', expected one of: ...` | Use one of the names listed in the message. |
 | `...: not valid JSON` / `expected a list of segments...` | The `.json` file is not a transcript. |
 | `--detector llm needs OPENAI_API_KEY in the environment or .env, or --llm-url for a local server` | Make the key available in the environment or local `.env`, or pass `--llm-url` for a local server. |
