@@ -203,3 +203,12 @@ def test_no_samples_no_views():
 def test_views_reject_bad_settings(change, hold, max_views):
     with pytest.raises(ValueError):
         _cut([], change=change, hold=hold, max_views=max_views)
+
+
+def test_the_last_view_ends_at_the_recording_end_and_is_never_empty():
+    """A single sample still gets a view with a length; the caller's end time wins."""
+    (only,) = _cut([(0.0, _slide(0))])
+    assert (only.start, only.end) == (0.0, 1.0)
+    samples = [(float(t), _slide(0)) for t in range(5)]
+    assert _cut(samples)[-1].end == 5.0  # one sample interval after the last sample
+    assert _views(samples, change=0.02, hold=3, max_views=80, end=5.7)[-1].end == 5.7

@@ -137,7 +137,12 @@ class _View:
 
 
 def _views(
-    samples: Iterable[tuple[float, Frame]], *, change: float, hold: int, max_views: int
+    samples: Iterable[tuple[float, Frame]],
+    *,
+    change: float,
+    hold: int,
+    max_views: int,
+    end: float | None = None,
 ) -> list[_View]:
     """Cut sampled frames into stable views, one keyframe each (architecture.md 6.4).
 
@@ -148,6 +153,11 @@ def _views(
     samples that match a view, the sharpest is its keyframe, so a frame with someone in
     front of the board is not chosen. Only a few full frames are held at a time. More than
     ``max_views`` views are merged, shortest first.
+
+    ``hold`` counts samples, so its length in seconds depends on the sampling rate: 3 samples
+    are 3 s at 1 fps but 0.6 s at 5 fps. The last view ends at ``end``, the recording's end
+    time; without it, one sample interval after the last sample (one second when there is a
+    single sample), so no view is ever empty.
 
     Raises:
         ValueError: If ``change`` is not in ``(0, 1)``, or ``hold`` or ``max_views`` is not
@@ -164,9 +174,10 @@ def _views(
     best: tuple[float, float, Frame] = (0.0, 0.0, np.zeros((1, 1, 3), np.uint8))
     pending: list[tuple[float, Frame, Frame]] = []  # (time, small, full): a new view forming
     start = previous = last = 0.0
+    seen = 0
     for time, frame in samples:
         small = _for_comparison(frame)
-        previous, last = last, time
+        previous, last, seen = last, time, seen + 1
         if reference is None:
             reference, start, best = small, time, (_sharpness(small), time, frame)
         elif _changed(small, reference) <= change:
@@ -184,7 +195,8 @@ def _views(
                 pending = []
     if reference is None:
         return []
-    views.append(_close(start, last + (last - previous), best))
+    step = last - previous if seen > 1 else 1.0
+    views.append(_close(start, max(end, last) if end is not None else last + step, best))
     return _merge_shortest(views, max_views)
 
 

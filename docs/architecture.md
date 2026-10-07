@@ -461,9 +461,10 @@ lowest-motion frame per board state and handing it to the VLM as is. No OpenCV, 
 **Static views (M2).** Each sample is compared with the first sample of the current view: the
 share of pixels whose grey level moved by more than the codec noise (32 levels). Above
 `vision_change_fraction` (0.02), a new view starts at that sample, but only once
-`vision_change_hold` (3) samples in a row differ from the old view and resemble each other. A
-lecturer walking past changes from one second to the next, so it never holds; a new slide does,
-and is found within one sample. Each view's keyframe is its sharpest sample (mean gradient) among
+`vision_change_hold` (3) samples in a row, 3 s at the default `vision_fps`, differ from the old
+view and resemble each other. A lecturer walking past changes from one second to the next, so it
+never holds; a new slide does, and is found within one sample. The last view ends at the
+recording's end. Each view's keyframe is its sharpest sample (mean gradient) among
 those that still match it, so a frame with someone in front of the board is not picked. Over
 `vision_max_states` views, the shortest is merged into its shorter neighbour until the cap holds.
 On a tablet lecture the views are page switches and annotations added to the same slide; a

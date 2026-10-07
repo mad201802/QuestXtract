@@ -58,7 +58,7 @@ class Config:
     vision_model: str = "gpt-5.6-luna"
     vision_max_states: int = 80
     vision_change_fraction: float = 0.02  # share of pixels that must change; not read yet, #59
-    vision_change_hold: int = 3  # samples a new view must hold steady; not read yet, #59
+    vision_change_hold: int = 3  # samples (at vision_fps) a new view must hold; not read yet, #59
 
     # --- 7 detection ---
     min_question_score: float = 0.45
