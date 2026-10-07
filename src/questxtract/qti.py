@@ -159,6 +159,13 @@ def questions_to_qti(
     if config is not None and not isinstance(config, dict):
         raise QtiExportError("'config' must be an object")
     default_language = language or str((config or {}).get("language") or "en")
+    visuals: dict[str, dict[str, Any]] = {}
+    raw_visuals = document.get("visuals", [])
+    if not isinstance(raw_visuals, list):
+        raise QtiExportError("'visuals' must be an array")
+    for visual in raw_visuals:
+        if isinstance(visual, dict) and isinstance(visual.get("id"), str):
+            visuals[visual["id"]] = visual
     selected: list[AssessmentItem] = []
     seen: set[str] = set()
     for index, raw in enumerate(document["questions"]):
@@ -168,7 +175,7 @@ def questions_to_qti(
         status = review.get("status") if isinstance(review, dict) else None
         if status in {"deleted", "false_positive"} or (only_keep and raw.get("verdict") != "keep"):
             continue
-        item = _item_from_record(raw, default_language, index)
+        item = _item_from_record(raw, default_language, index, visuals)
         if item.identifier in seen:
             raise QtiExportError(f"duplicate question identifier: {item.identifier}")
         seen.add(item.identifier)
@@ -182,7 +189,12 @@ def questions_to_qti(
     )
 
 
-def _item_from_record(raw: dict[str, Any], language: str, index: int) -> AssessmentItem:
+def _item_from_record(
+    raw: dict[str, Any],
+    language: str,
+    index: int,
+    visuals: dict[str, dict[str, Any]],
+) -> AssessmentItem:
     question_id = raw.get("id")
     prompt = raw.get("text")
     if not isinstance(question_id, str) or not question_id:
@@ -232,7 +244,14 @@ def _item_from_record(raw: dict[str, Any], language: str, index: int) -> Assessm
     correct = raw.get("correct_response")
     if correct is not None and not isinstance(correct, dict):
         raise QtiExportError(f"questions[{index}]: correct responses require an object or null")
-    correct_values = tuple(correct.get("option_ids", ())) if correct else ()
+    raw_correct_values = correct.get("option_ids", []) if correct else []
+    if not isinstance(raw_correct_values, list) or any(
+        not isinstance(value, str) for value in raw_correct_values
+    ):
+        raise QtiExportError(
+            f"questions[{index}].correct_response.option_ids: expected an array of strings"
+        )
+    correct_values = tuple(raw_correct_values)
     if correct and not correct_values:
         raise QtiExportError(
             f"questions[{index}].correct_response.option_ids: expected at least one option"
@@ -257,22 +276,45 @@ def _item_from_record(raw: dict[str, Any], language: str, index: int) -> Assessm
     )
     outcome = (OutcomeDeclaration(identifier="SCORE", default_value="0"),)
     feedback_raw = raw.get("feedback")
-    feedback = (
-        Feedback(**{key: feedback_raw.get(key) for key in ("correct", "incorrect", "general")})
-        if isinstance(feedback_raw, dict)
-        else None
-    )
+    if feedback_raw is not None and not isinstance(feedback_raw, dict):
+        raise QtiExportError(f"questions[{index}].feedback: expected an object or null")
+    if isinstance(feedback_raw, dict):
+        feedback_values = {
+            key: feedback_raw.get(key) for key in ("correct", "incorrect", "general")
+        }
+        if any(
+            value is not None and not isinstance(value, str) for value in feedback_values.values()
+        ):
+            raise QtiExportError(f"questions[{index}].feedback: values must be strings or null")
+        feedback = Feedback(**feedback_values)
+    else:
+        feedback = None
     answer = raw.get("answer")
     if answer is not None and not isinstance(answer, dict):
         raise QtiExportError(f"questions[{index}].answer: expected an object or null")
-    visual = raw.get("visual")
-    if visual is not None and not isinstance(visual, dict):
-        raise QtiExportError(f"questions[{index}].visual: expected an object or null")
+    visual_ids = raw.get("visual_ids", [])
+    if not isinstance(visual_ids, list) or any(not isinstance(value, str) for value in visual_ids):
+        raise QtiExportError(f"questions[{index}].visual_ids: expected an array of strings")
+    latex = next(
+        (
+            visuals[visual_id].get("latex")
+            for visual_id in visual_ids
+            if visual_id in visuals and isinstance(visuals[visual_id].get("latex"), str)
+        ),
+        None,
+    )
+    legacy_visual = raw.get("visual")
+    if (
+        latex is None
+        and isinstance(legacy_visual, dict)
+        and isinstance(legacy_visual.get("latex"), str)
+    ):
+        latex = legacy_visual["latex"]
     provenance = Provenance(
         source_question_id=question_id,
         source_sentence_id=raw.get("sentence_id"),
         source_answer=answer.get("text") if answer else None,
-        latex=visual.get("latex") if visual else None,
+        latex=latex,
     )
     return AssessmentItem(
         identifier=identifier,
