@@ -3,8 +3,10 @@ import zipfile
 from xml.etree import ElementTree
 
 import pytest
+from jsonschema import Draft202012Validator
 
 from questxtract.cli import main
+from questxtract.export import SCHEMA_PATH
 from questxtract.qti import QTI_NS, QtiExportError, questions_to_qti, write_qti_package
 from questxtract.qti_v21 import QTI_NS as QTI_21_NS
 from questxtract.qti_v21 import write_qti_package as write_qti_21_package
@@ -150,6 +152,10 @@ def test_unsupported_interaction_and_inconsistent_choice_data_fail():
         questions_to_qti(
             _document(_choice_question(correct_response={"text": None, "option_ids": ["a", "b"]}))
         )
+    with pytest.raises(QtiExportError, match="array of strings"):
+        questions_to_qti(_document(_choice_question(correct_response={"option_ids": 1})))
+    with pytest.raises(QtiExportError, match="values must be strings"):
+        questions_to_qti(_document(_question(feedback={"correct": 1})))
 
 
 def test_identifiers_are_stable():
@@ -190,11 +196,68 @@ def test_latex_and_special_characters_are_preserved(tmp_path):
     write_qti_package(_document(_question()), output)
     with zipfile.ZipFile(output) as package:
         root = ElementTree.fromstring(package.read("items/qti-q_abc123.xml"))
-        paragraph = root.find(".//p")
+        paragraph = root.find(f".//{{{QTI_NS}}}qti-prompt")
         assert paragraph is not None
         assert paragraph.text == "What is 2 < 3 & 4 > 1?"
         metadata = json.loads(package.read("metadata/questxtract.json"))
         assert metadata["items"]["qti-q_abc123"]["latex"] == r"\alpha < \beta"
+
+
+def test_schema_valid_questions_document_is_accepted_and_uses_visuals(tmp_path):
+    document = {
+        "schema_version": "2.0",
+        "source": {"path": "lecture.mp4", "duration_seconds": 10, "hash": None},
+        "config": {
+            "model_size": "turbo",
+            "language": "en",
+            "min_confidence": 0.5,
+            "judge_model": None,
+            "vision_model": "vision",
+        },
+        "stats": {},
+        "segments": [],
+        "visuals": [
+            {
+                "id": "v_board",
+                "start": 0,
+                "end": 10,
+                "keyframe_path": "frame.png",
+                "description": "",
+                "text": "",
+                "latex": r"\alpha",
+                "confidence": 0.9,
+            }
+        ],
+        "questions": [
+            {
+                "id": "q_abc123",
+                "text": "What is shown?",
+                "original_text": None,
+                "start": 1,
+                "end": 2,
+                "start_hms": "0:01",
+                "end_hms": "0:02",
+                "confidence": 0.8,
+                "confidence_label": "high",
+                "question_type": "what",
+                "source": "audio",
+                "answer": None,
+                "segment_id": None,
+                "sentence_id": "s_abc123",
+                "visual_ids": ["v_board"],
+                "verdict": "keep",
+                "reasons": [],
+                "review": {"status": "pending", "text": None, "note": None, "metadata": {}},
+            }
+        ],
+    }
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    Draft202012Validator(schema).validate(document)
+    output = tmp_path / "schema-compatible.zip"
+    write_qti_package(document, output)
+    with zipfile.ZipFile(output) as package:
+        metadata = json.loads(package.read("metadata/questxtract.json"))
+    assert metadata["items"]["qti-q_abc123"]["latex"] == r"\alpha"
 
 
 def test_qti_21_package_has_the_same_complete_layout(tmp_path):

@@ -24,14 +24,18 @@ from .models import (
     Word,
 )
 from .pipeline import STAGES, process, run, stage
-from .qti import AssessmentItem, AssessmentOption, AssessmentTest, QtiExportError, export_qti
 from .qti import (
+    AssessmentItem,
+    AssessmentOption,
+    AssessmentTest,
     Feedback,
     Interaction,
     OutcomeDeclaration,
     Provenance,
+    QtiExportError,
     ResponseDeclaration,
     ResponseProcessing,
+    export_qti,
 )
 from .schema import Question
 

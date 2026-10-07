@@ -15,6 +15,7 @@ QTI_NS = "http://www.imsglobal.org/xsd/imsqtiasi_v3p0"
 CP_NS = "http://www.imsglobal.org/xsd/qti/qtiv3p0/imscp_v1p1"
 QTI_PREFIX = f"{{{QTI_NS}}}"
 CP_PREFIX = f"{{{CP_NS}}}"
+MATCH_CORRECT_TEMPLATE = "http://www.imsglobal.org/question/qti_v3p0/rptemplates/match_correct"
 ElementTree.register_namespace("qti", QTI_NS)
 ElementTree.register_namespace("cp", CP_NS)
 
@@ -37,7 +38,7 @@ def write_qti_package(
             package.writestr("assessmentTest.xml", _xml_bytes(_test_xml(assessment)))
             package.writestr("imsmanifest.xml", _xml_bytes(_manifest_xml(assessment, paths)))
             package.writestr("metadata/questxtract.json", _metadata_json(assessment))
-    except OSError as exc:
+    except (OSError, TypeError, ValueError) as exc:
         raise QtiExportError(f"{output}: cannot write QTI package ({exc})") from exc
 
 
@@ -64,6 +65,7 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
         {
             "identifier": item.identifier,
             "title": item.title,
+            "adaptive": "false",
             "time-dependent": "false",
             "{http://www.w3.org/XML/1998/namespace}lang": item.language,
         },
@@ -93,11 +95,11 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
             },
         )
         if outcome.default_value is not None:
+            default_value = ElementTree.SubElement(node, f"{QTI_PREFIX}qti-default-value")
             ElementTree.SubElement(
-                node, f"{QTI_PREFIX}qti-default-value"
+                default_value, f"{QTI_PREFIX}qti-value"
             ).text = outcome.default_value
     body = ElementTree.SubElement(root, f"{QTI_PREFIX}qti-item-body")
-    ElementTree.SubElement(body, "p").text = item.prompt
     interaction_name = {
         "extendedTextInteraction": "extended-text-interaction",
         "choiceInteraction": "choice-interaction",
@@ -119,6 +121,7 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
             ),
         },
     )
+    ElementTree.SubElement(interaction, f"{QTI_PREFIX}qti-prompt").text = item.prompt
     for option in item.options:
         ElementTree.SubElement(
             interaction,
@@ -144,7 +147,7 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
             root,
             f"{QTI_PREFIX}qti-response-processing",
             {
-                "template": item.response_processing.template or "",
+                "template": MATCH_CORRECT_TEMPLATE,
             },
         )
     return root

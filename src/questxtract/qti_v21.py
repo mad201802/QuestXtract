@@ -15,6 +15,7 @@ QTI_NS = "http://www.imsglobal.org/xsd/imsqti_v2p1"
 CP_NS = "http://www.imsglobal.org/xsd/imscp_v1p1"
 QTI_PREFIX = f"{{{QTI_NS}}}"
 CP_PREFIX = f"{{{CP_NS}}}"
+MATCH_CORRECT_TEMPLATE = "http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"
 ElementTree.register_namespace("", QTI_NS)
 ElementTree.register_namespace("cp", CP_NS)
 
@@ -37,7 +38,7 @@ def write_qti_package(
             package.writestr("assessmentTest.xml", _xml_bytes(_test_xml(assessment)))
             package.writestr("imsmanifest.xml", _xml_bytes(_manifest_xml(assessment, paths)))
             package.writestr("metadata/questxtract.json", _metadata_json(assessment))
-    except OSError as exc:
+    except (OSError, TypeError, ValueError) as exc:
         raise QtiExportError(f"{output}: cannot write QTI 2.1 package ({exc})") from exc
 
 
@@ -94,9 +95,10 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
             },
         )
         if outcome.default_value is not None:
-            ElementTree.SubElement(node, f"{QTI_PREFIX}defaultValue").text = outcome.default_value
+            default_value = ElementTree.SubElement(node, f"{QTI_PREFIX}defaultValue")
+            ElementTree.SubElement(default_value, f"{QTI_PREFIX}value").text = outcome.default_value
     body = ElementTree.SubElement(root, f"{QTI_PREFIX}itemBody")
-    ElementTree.SubElement(body, "p").text = item.prompt
+    ElementTree.SubElement(body, f"{QTI_PREFIX}p").text = item.prompt
     interaction = ElementTree.SubElement(
         body,
         f"{QTI_PREFIX}{item.interaction.interaction_type}",
@@ -139,7 +141,7 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
             root,
             f"{QTI_PREFIX}responseProcessing",
             {
-                "template": item.response_processing.template or "",
+                "template": MATCH_CORRECT_TEMPLATE,
             },
         )
     return root

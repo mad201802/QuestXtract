@@ -432,16 +432,6 @@ def build_parser() -> argparse.ArgumentParser:
     evaluation.add_argument("--json", action="store_true", help="machine-readable, for CI")
     evaluation.set_defaults(handler=_eval)
 
-    qti = subs.add_parser("qti", help="export approved questions.json as a QTI 3.0 package")
-    qti.add_argument("questions", help="a questions.json written by `process`")
-    qti.add_argument("-o", "--output", required=True, help="output QTI .zip package")
-    qti.add_argument(
-        "--include-unjudged",
-        action="store_true",
-        help="also export questions whose verdict is unjudged",
-    )
-    qti.set_defaults(handler=_qti)
-
     quiz = subs.add_parser(
         "quiz", help="generate quiz.json from questions.json (not implemented yet)"
     )
