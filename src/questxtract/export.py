@@ -25,7 +25,6 @@ from .vision import overlapping
 
 SCHEMA_VERSION = "2.1"
 SCHEMA_PATH = Path(__file__).with_name("questions.schema.json")
-KEYFRAMES_DIR = "keyframes"  # next to questions.json; keyframe_path is relative to that file
 
 _CONFIG_KEYS = ("model_size", "language", "min_confidence")
 _SOURCE = "audio"  # questions are only read from speech until the vision milestones (M2/M3)
@@ -175,21 +174,35 @@ def result_to_json(ctx: Context, keyframes: Mapping[str, str] | None = None) -> 
 def write_questions(ctx: Context, path: str | Path) -> None:
     """Write a finished context to ``path`` as ``questions.json`` (UTF-8), with its keyframes.
 
-    Each board state's keyframe is copied to ``keyframes/<visual id><suffix>`` next to
-    ``path``, and ``keyframe_path`` is written relative to ``path``, so the file and its folder
-    can be moved or shared together (architecture.md 12.1).
+    Each board state's keyframe is copied into a folder next to ``path``, named after it
+    (``lecture.questions.json`` gets ``lecture.keyframes/<visual id><suffix>``), and
+    ``keyframe_path`` is written relative to ``path``, so the file and its folder can be moved
+    or shared together, and lectures written to one folder keep their images apart
+    (architecture.md 12.1).
 
     Raises:
         FileNotFoundError: If a board state's keyframe is gone from the cache.
 
     """
     path = Path(path)
-    keyframes = _copy_keyframes(ctx.visual, path.parent, Path(ctx.config.cache_dir))
+    cache = Path(ctx.config.cache_dir)
+    keyframes = _copy_keyframes(ctx.visual, path.parent, _keyframes_dir(path), cache)
     path.write_text(result_to_json(ctx, keyframes), encoding="utf-8")
 
 
-def _copy_keyframes(visual: Sequence[VisualContext], folder: Path, cache: Path) -> dict[str, str]:
-    """Copy every keyframe into ``folder/keyframes``; map each cache path to its new one.
+def _keyframes_dir(path: str | Path) -> str:
+    """Name of the keyframe folder that :func:`write_questions` puts next to ``path``.
+
+    ``lecture.questions.json`` and ``lecture.json`` both get ``lecture.keyframes``.
+    """
+    stem = Path(path).name.removesuffix(".json").removesuffix(".questions")
+    return f"{stem}.keyframes"
+
+
+def _copy_keyframes(
+    visual: Sequence[VisualContext], folder: Path, name: str, cache: Path
+) -> dict[str, str]:
+    """Copy every keyframe into ``folder/name``; map each cache path to its new one.
 
     A relative ``keyframe_path`` is relative to the cache directory (#59), so a cached run
     reused from another working directory still finds its images.
@@ -201,10 +214,10 @@ def _copy_keyframes(visual: Sequence[VisualContext], folder: Path, cache: Path) 
         source = cache / state.keyframe_path  # an absolute keyframe_path stays as it is
         if not source.is_file():
             raise FileNotFoundError(f"{source}: keyframe of board state {state.id} is missing")
-        name = f"{state.id}{source.suffix}"
-        (folder / KEYFRAMES_DIR).mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, folder / KEYFRAMES_DIR / name)
-        copied[state.keyframe_path] = f"{KEYFRAMES_DIR}/{name}"
+        image = f"{state.id}{source.suffix}"
+        (folder / name).mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, folder / name / image)
+        copied[state.keyframe_path] = f"{name}/{image}"
     return copied
 
 

@@ -25,8 +25,9 @@
 ### Changed
 
 - `questions.json` schema 2.1: `keyframe_path` is relative to the JSON file. Writing the file
-  copies each keyframe into a `keyframes/` folder beside it, so the two can be moved or shared
-  together; `-o -` copies nothing and keeps the cache path. (#64)
+  copies each keyframe into a folder beside it named after the file (`lecture.keyframes/` for
+  `lecture.questions.json`), so the two can be moved or shared together and lectures written to
+  one folder keep their images apart; `-o -` copies nothing and keeps the cache path. (#64)
 
 ### Changed (breaking)
 

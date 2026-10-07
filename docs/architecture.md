@@ -906,7 +906,7 @@ Vision will report per board state.
 
 ### 12.1 questions.json
 
-Schema 2.1: a fixed key set, `null` included, in one file, plus a `keyframes/` folder beside it.
+Schema 2.1: a fixed key set, `null` included, in one file, plus a keyframe folder beside it.
 The formal description is [`questions.schema.json`](../src/questxtract/questions.schema.json),
 which ships inside the package; the tests validate every export shape against it. The example shows one entry of each
 list, with vision (planned) and the LLM detector on; with the rules and no vision, `visuals` is
@@ -929,7 +929,7 @@ empty, `verdict` is `unjudged` and both model names are `null`:
       "id": "v_4c1e09",
       "start": 1240.0,
       "end": 1402.5,
-      "keyframe_path": "keyframes/v_4c1e09.jpg",
+      "keyframe_path": "lecture.keyframes/v_4c1e09.png",
       "description": "two-column comparison of stable and unstable sort passes",
       "text": "stable: (3,a) (3,b) preserved",
       "latex": null,
@@ -983,7 +983,8 @@ one more top-level list pointing at visual ids.
   `visual` and `combined` are reserved.
 - `topic` on a segment stays `null` until something produces topics.
 - `keyframe_path` is relative to the JSON file: writing it copies each keyframe from the cache
-  to `keyframes/<visual id>.<ext>` next to it, so the file and that folder move together. Printed
+  into a folder named after it (`lecture.questions.json` gets `lecture.keyframes/<visual id>.<ext>`),
+  so the file and that folder move together and lectures in one folder keep their images apart. Printed
   to the terminal (`-o -`) there is no folder, nothing is copied, and it is relative to the cache
   directory, where the vision stage keeps keyframes.
 - `config.min_confidence` is the threshold the file was cut at; `config.judge_model` and

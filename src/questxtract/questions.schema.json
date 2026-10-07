@@ -55,7 +55,7 @@
         "id": {"type": "string", "pattern": "^v_"},
         "start": {"$ref": "#/$defs/seconds"},
         "end": {"$ref": "#/$defs/seconds"},
-        "keyframe_path": {"type": "string", "description": "The keyframe image, relative to this file (keyframes/<id>.<ext>) when written to a file; relative to the cache directory when printed. Empty when there is none."},
+        "keyframe_path": {"type": "string", "description": "The keyframe image, relative to this file (<name>.keyframes/<id>.<ext>) when written to a file; relative to the cache directory when printed. Empty when there is none."},
         "description": {"type": "string"},
         "text": {"type": "string"},
         "latex": {"type": ["string", "null"]},

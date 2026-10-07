@@ -217,7 +217,7 @@ def test_write_questions_copies_keyframes_next_to_the_file(tmp_path, finished, m
     monkeypatch.chdir(tmp_path / ".questxtract")
     data = read_questions(out)
     for state, written in zip(finished.visual, data["visuals"], strict=True):
-        assert written["keyframe_path"] == f"keyframes/{state.id}.jpg"
+        assert written["keyframe_path"] == f"questions.keyframes/{state.id}.jpg"
         assert (out.parent / written["keyframe_path"]).read_bytes() == (
             tmp_path / ".questxtract" / state.keyframe_path
         ).read_bytes()
@@ -238,6 +238,18 @@ def test_keyframes_are_found_through_the_cache_from_any_working_directory(
     out.parent.mkdir()
     write_questions(finished, out)
     assert all((out.parent / v["keyframe_path"]).is_file() for v in read_questions(out)["visuals"])
+
+
+def test_two_lectures_in_one_folder_keep_their_keyframes_apart(tmp_path, finished, monkeypatch):
+    """Each output gets its own keyframe folder, so equal image names never overwrite."""
+    monkeypatch.chdir(tmp_path)
+    finished = _boards_in_cache(finished)
+    write_questions(finished, tmp_path / "monday.questions.json")
+    write_questions(finished, tmp_path / "tuesday.json")
+    monday = read_questions(tmp_path / "monday.questions.json")["visuals"][0]["keyframe_path"]
+    tuesday = read_questions(tmp_path / "tuesday.json")["visuals"][0]["keyframe_path"]
+    assert monday.startswith("monday.keyframes/") and tuesday.startswith("tuesday.keyframes/")
+    assert (tmp_path / monday).is_file() and (tmp_path / tuesday).is_file()
 
 
 def test_board_states_survive_a_read_edit_write_round_trip(tmp_path, finished, monkeypatch):
