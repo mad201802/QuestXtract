@@ -460,10 +460,25 @@ lowest-motion frame per board state and handing it to the VLM as is. No OpenCV, 
 
 ### 6.4 Board states
 
-Count ink pixels per sampled frame after an adaptive threshold. A rising curve means writing, a
-sharp drop is an erase, and the local maximum before a drop is the completed board: the keyframe.
-The recording is cut into **board states** between erase events, roughly 20 to 60 per lecture.
-On slides the same curve works unchanged: a slide change is a large ink delta.
+**Static views (M2).** Each sample is compared with the first sample of the current view: the
+share of pixels whose grey level moved by more than the codec noise (32 levels). Above
+`vision_change_fraction` (0.02), a new view starts at that sample, but only once
+`vision_change_hold` (3) samples in a row, 3 s at the default `vision_fps`, differ from the old
+view and resemble each other. A lecturer walking past changes from one second to the next, so it
+never holds; a new slide does, and is found within one sample. The last view ends at the
+recording's end. Each view's keyframe is its sharpest sample (mean gradient) among
+those that still match it, so a frame with someone in front of the board is not picked. Over
+`vision_max_states` views, the shortest is merged into its shorter neighbour until the cap holds.
+On a tablet lecture the views are page switches and annotations added to the same slide; a
+panning chalkboard camera adds a view per pan, which the cap absorbs until motion gating (6.3)
+lands. A lecturer standing still in front of the board for the whole hold is a view of its own
+until de-occlusion.
+
+**Ink curve (planned, M3).** Count ink pixels per sampled frame after an adaptive threshold. A
+rising curve means writing, a sharp drop is an erase, and the local maximum before a drop is the
+completed board: the keyframe. The recording is cut into **board states** between erase events,
+roughly 20 to 60 per lecture. On slides the same curve works unchanged: a slide change is a large
+ink delta.
 
 ### 6.5 Captioning
 
@@ -481,7 +496,8 @@ formulas.
   alone.
 
 > **Decision.** `questxtract/vision.py`. Config: `vision_enabled` (False), `vision_fps` (1.0),
-> `vision_model`, `vision_max_states` (80). Offline use points `base_url` at a local
+> `vision_model`, `vision_max_states` (80), `vision_change_fraction` (0.02),
+> `vision_change_hold` (3 samples). Offline use points `base_url` at a local
 > OpenAI-compatible server (10.1); worse quality there is accepted.
 
 ---
@@ -1088,7 +1104,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not built | #62 |
 | `sentences.py` | 3 sentences | done | |
 | `segments.py` | 4 segments | done | |
-| `vision.py` | 5 vision, attach_visual | frame sampling (6.3: `vision_fps`, crop box, grayscale ~480p copy) is done but not called yet; keyframes, captioning and the stage itself raise when `vision_enabled`; the interval join is done | #56, #59 |
+| `vision.py` | 5 vision, attach_visual | frame sampling (6.3) and stable views with one keyframe each (6.4, static) are done but not called yet; captioning and the stage itself raise when `vision_enabled`; the interval join is done | #59 |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery are not built | #48, #78 |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |
