@@ -49,10 +49,28 @@ def test_vision_no_ops_when_disabled(context):
     assert vision(context) is context
 
 
-def test_vision_refuses_when_enabled_but_unimplemented(context):
+def test_vision_refuses_when_enabled_but_unimplemented(context, tmp_path, make_mp4):
+    context.source = make_mp4(tmp_path / "lecture.mp4", audio=False)  # has a video track
     context.config = context.config.replace(vision_enabled=True)
     with pytest.raises(NotImplementedError, match="#59"):
         vision(context)
+
+
+@pytest.mark.parametrize("name", ["lecture.mp3", "audio_only.mp4", "lecture.transcript.json"])
+def test_vision_has_nothing_to_read_without_a_video_track(
+    context, tmp_path, make_mp3, make_mp4, name
+):
+    """#117 AC: an MP3, an MP4 holding only audio, or a transcript: no board, no error."""
+    path = tmp_path / name
+    if name.endswith(".mp3"):
+        make_mp3(path)
+    elif name.endswith(".mp4"):
+        make_mp4(path)  # audio only
+    else:
+        path.write_text("{}", encoding="utf-8")
+    context.source = path
+    context.config = context.config.replace(vision_enabled=True)
+    assert vision(context) is context and context.visual == ()
 
 
 def _video(path, seconds=10, rate=25, size=(320, 240)):
