@@ -36,6 +36,9 @@
 
 ### Fixed
 
+- The rules detector counts a contracted wh-word as a question word: "What's ...?", "Where's ...?",
+  "How's ...?", "Who's ...?" (straight or curly apostrophe) now score and are typed like
+  "What is ...?", instead of being dropped when unanswered. (#109)
 - Provider connection errors mask the active API key if the service echoes it, including
   in the displayed traceback. (#99)
 - Detection finds the question word after a leading preposition ("For which ...?"), in an earlier

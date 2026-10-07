@@ -16,6 +16,8 @@ from collections.abc import Sequence
 from .models import Context, QuestionCandidate, Sentence, stage
 
 _WH_WORDS = frozenset({"who", "what", "when", "where", "why", "how", "which", "whose", "whom"})
+# A wh-word with a contracted verb is still that wh-word: "What's ...?", "Who'd ...?".
+_WH_CONTRACTIONS = frozenset({"s", "re", "d", "ll", "ve"})
 _AUX_WORDS = frozenset(
     {
         "is",
@@ -230,9 +232,15 @@ def _opener(clause: str) -> str:
         if preamble is None:
             break
         words = words[len(preamble) :]
-    if len(words) > 1 and words[0] in _PREPOSITIONS and words[1] in _WH_WORDS:
-        return words[1]
-    return words[0] if words else ""
+    if len(words) > 1 and words[0] in _PREPOSITIONS and _uncontract(words[1]) in _WH_WORDS:
+        return _uncontract(words[1])
+    return _uncontract(words[0]) if words else ""
+
+
+def _uncontract(word: str) -> str:
+    """Return the wh-word in a contraction ("what's" -> "what"), or ``word`` unchanged."""
+    base, _, suffix = word.partition("'")
+    return base if base in _WH_WORDS and suffix in _WH_CONTRACTIONS else word
 
 
 def detect_questions(
