@@ -4,6 +4,9 @@
 
 ### Added
 
+- `process` and `transcribe` accept `.mp3` recordings as well as `.mp4`. A recording without a
+  video track, an MP3 or an audio-only MP4, is transcribed as usual and has no board to read.
+  (#117)
 - README: setting up the API key safely, the same way on macOS and Windows: the key in the
   system's password store through `keyring`, and a git-ignored `.env` that only refers to it.
 - `process`, `transcribe` and `eval` read settings from `questxtract.toml` in the working
@@ -43,6 +46,9 @@
 
 ### Fixed
 
+- The rules detector counts a contracted wh-word as a question word: "What's ...?", "Where's ...?",
+  "How's ...?", "Who's ...?" (straight or curly apostrophe) now score and are typed like
+  "What is ...?", instead of being dropped when unanswered. (#109)
 - Provider connection errors mask the active API key if the service echoes it, including
   in the displayed traceback. (#99)
 - Detection finds the question word after a leading preposition ("For which ...?"), in an earlier

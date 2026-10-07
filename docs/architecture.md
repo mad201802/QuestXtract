@@ -57,7 +57,7 @@ Three consequences that show up repeatedly below:
 ### 1.3 Stage order
 
 ```
-                      .mp4 recording
+                 .mp4 or .mp3 recording
                               |
   1 ingest                    |  validate, probe via PyAV, hash for cache key
                               v
@@ -126,7 +126,9 @@ to install. That matters for NFR1 (Linux, macOS **and Windows**): "install ffmpe
 PATH" is the single most common install failure in this class of tool, and we do not have that
 step.
 
-Only `.mp4` is accepted today. There is no separate audio-extraction stage: the faster-whisper
+An `.mp4` or an `.mp3` is accepted, and what the file holds decides the rest: a recording without
+a video track (any MP3, or an audio-only MP4) is transcribed as usual, and the vision stage finds
+no board to read in it. There is no separate audio-extraction stage: the faster-whisper
 backend (`asr.py`) calls `media.extract_audio`, which decodes the first audio track with PyAV into
 a temporary 16 kHz mono WAV and deletes it when transcription ends. The WAV never reaches the
 cache, and there is no system binary in the dependency list.
@@ -514,7 +516,8 @@ the last clause with any head (*"If you have the data, does that mean ...?"*), a
 only with an auxiliary (*"This area here, is it finite, infinite, ...?"*), since a wh-word there
 usually opens a relative clause. Without the `?` the clause rule stays off, or every *", which
 is ..."* would read as a wh-question. Contractions stay whole, so negated auxiliaries (*"Don't
-we ...?"*) open questions.
+we ...?"*) open questions; a wh-word with a contracted verb (*"What's"*, *"Who'd"*, *"How'll"*)
+counts as the wh-word.
 
 **The answer seed.** The sentence right after the question, when the silence before it is at most
 `answer_seed_max_gap_seconds` (1.0 s) and it is not itself a question; tags and check-ins get no
