@@ -516,7 +516,8 @@ the last clause with any head (*"If you have the data, does that mean ...?"*), a
 only with an auxiliary (*"This area here, is it finite, infinite, ...?"*), since a wh-word there
 usually opens a relative clause. Without the `?` the clause rule stays off, or every *", which
 is ..."* would read as a wh-question. Contractions stay whole, so negated auxiliaries (*"Don't
-we ...?"*) open questions.
+we ...?"*) open questions; a wh-word with a contracted verb (*"What's"*, *"Who'd"*, *"How'll"*)
+counts as the wh-word.
 
 **The answer seed.** The sentence right after the question, when the silence before it is at most
 `answer_seed_max_gap_seconds` (1.0 s) and it is not itself a question; tags and check-ins get no
