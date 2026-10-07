@@ -15,7 +15,7 @@ from pathlib import Path
 from . import __version__
 from .config import Config, load_config
 from .evaluate import evaluate, format_report
-from .export import result_to_json
+from .export import result_to_json, write_questions
 from .models import Context, Stage, Transcript
 from .pipeline import STAGES, run
 
@@ -251,7 +251,11 @@ def _process(args: argparse.Namespace) -> int:
     else:
         ctx = _run(Context(source=source, config=config), STAGES)
 
-    _write(result_to_json(ctx), output, f"{len(ctx.pairs)} questions")
+    if output is None:  # stdout has no folder for keyframes, so they keep their cache paths
+        print(result_to_json(ctx))
+    else:
+        write_questions(ctx, output)
+        print(f"{len(ctx.pairs)} questions -> {output}", file=sys.stderr)
     return 0
 
 
