@@ -184,17 +184,21 @@ def write_questions(ctx: Context, path: str | Path) -> None:
 
     """
     path = Path(path)
-    keyframes = _copy_keyframes(ctx.visual, path.parent)
+    keyframes = _copy_keyframes(ctx.visual, path.parent, Path(ctx.config.cache_dir))
     path.write_text(result_to_json(ctx, keyframes), encoding="utf-8")
 
 
-def _copy_keyframes(visual: Sequence[VisualContext], folder: Path) -> dict[str, str]:
-    """Copy every keyframe into ``folder/keyframes``; map each cache path to its new one."""
+def _copy_keyframes(visual: Sequence[VisualContext], folder: Path, cache: Path) -> dict[str, str]:
+    """Copy every keyframe into ``folder/keyframes``; map each cache path to its new one.
+
+    A relative ``keyframe_path`` is relative to the cache directory (#59), so a cached run
+    reused from another working directory still finds its images.
+    """
     copied: dict[str, str] = {}
     for state in visual:
         if not state.keyframe_path or state.keyframe_path in copied:
             continue
-        source = Path(state.keyframe_path)
+        source = cache / state.keyframe_path  # an absolute keyframe_path stays as it is
         if not source.is_file():
             raise FileNotFoundError(f"{source}: keyframe of board state {state.id} is missing")
         name = f"{state.id}{source.suffix}"

@@ -984,7 +984,8 @@ one more top-level list pointing at visual ids.
 - `topic` on a segment stays `null` until something produces topics.
 - `keyframe_path` is relative to the JSON file: writing it copies each keyframe from the cache
   to `keyframes/<visual id>.<ext>` next to it, so the file and that folder move together. Printed
-  to the terminal (`-o -`) there is no folder, nothing is copied, and it is the cache path.
+  to the terminal (`-o -`) there is no folder, nothing is copied, and it is relative to the cache
+  directory, where the vision stage keeps keyframes.
 - `config.min_confidence` is the threshold the file was cut at; `config.judge_model` and
   `config.vision_model` are `null` when that stage was off.
 

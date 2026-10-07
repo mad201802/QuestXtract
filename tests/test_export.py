@@ -192,14 +192,17 @@ def test_write_and_read_questions(tmp_path, finished):
 
 
 def _boards_in_cache(finished):
-    """Give ``finished`` the two BOARDS, with real keyframe files in a cache under the cwd."""
-    frames = Path(".questxtract", "abc123", "frames")
-    frames.mkdir(parents=True)
+    """Give ``finished`` the two BOARDS, with real keyframe files in the cache under the cwd.
+
+    Their ``keyframe_path`` is relative to the cache directory, as the vision stage stores it.
+    """
+    cache = Path(finished.config.cache_dir)
     boards = []
     for board in BOARDS:
-        keyframe = frames / Path(board.keyframe_path).name
-        keyframe.write_bytes(f"image of {board.description or board.latex}".encode())
-        boards.append(dataclasses.replace(board, keyframe_path=str(keyframe)))
+        keyframe = Path("abc123", "frames", Path(board.keyframe_path).name)
+        (cache / keyframe).parent.mkdir(parents=True, exist_ok=True)
+        (cache / keyframe).write_bytes(f"image of {board.description or board.latex}".encode())
+        boards.append(dataclasses.replace(board, keyframe_path=keyframe.as_posix()))
     finished.visual = tuple(boards)
     return attach_visual(finished)
 
@@ -216,10 +219,25 @@ def test_write_questions_copies_keyframes_next_to_the_file(tmp_path, finished, m
     for state, written in zip(finished.visual, data["visuals"], strict=True):
         assert written["keyframe_path"] == f"keyframes/{state.id}.jpg"
         assert (out.parent / written["keyframe_path"]).read_bytes() == (
-            tmp_path / state.keyframe_path
+            tmp_path / ".questxtract" / state.keyframe_path
         ).read_bytes()
     # the ids stay the states' own, so segments and questions still point at them
     assert [v["id"] for v in data["visuals"]] == data["segments"][0]["visual_ids"]
+
+
+def test_keyframes_are_found_through_the_cache_from_any_working_directory(
+    tmp_path, finished, monkeypatch
+):
+    """#59: keyframe_path is relative to the cache, so a run reused from elsewhere still copies."""
+    finished.config = finished.config.replace(cache_dir=str(tmp_path / "cache"))
+    monkeypatch.chdir(tmp_path)
+    finished = _boards_in_cache(finished)
+    (tmp_path / "elsewhere").mkdir()
+    monkeypatch.chdir(tmp_path / "elsewhere")
+    out = tmp_path / "out" / "questions.json"
+    out.parent.mkdir()
+    write_questions(finished, out)
+    assert all((out.parent / v["keyframe_path"]).is_file() for v in read_questions(out)["visuals"])
 
 
 def test_board_states_survive_a_read_edit_write_round_trip(tmp_path, finished, monkeypatch):
@@ -265,7 +283,7 @@ def test_printing_keeps_cache_paths_and_copies_nothing(tmp_path, finished, monke
 def test_a_missing_keyframe_fails_before_the_file_is_written(tmp_path, finished, monkeypatch):
     monkeypatch.chdir(tmp_path)
     finished = _boards_in_cache(finished)
-    Path(finished.visual[1].keyframe_path).unlink()
+    (Path(finished.config.cache_dir) / finished.visual[1].keyframe_path).unlink()
     out = tmp_path / "questions.json"
     with pytest.raises(FileNotFoundError, match=finished.visual[1].id):
         write_questions(finished, out)
