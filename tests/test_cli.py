@@ -526,7 +526,7 @@ def test_eval_receives_file_settings_and_reasoning_timeout(tmp_path, monkeypatch
 def test_dotenv_key_reaches_client_but_not_output_or_cache(
     tmp_path, monkeypatch, fake_llm, environment_key
 ):
-    from questxtract import llm
+    from questxtract import endpoint
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -535,7 +535,7 @@ def test_dotenv_key_reaches_client_but_not_output_or_cache(
     Path(".env").write_text('OPENAI_API_KEY="sk-dotenv"', encoding="utf-8")
     source = _transcript_file(tmp_path)
     (sentence,) = split_sentences(Transcript.from_file(source))
-    real_client = llm.client
+    real_client = endpoint.client
     fake = fake_llm(
         {
             sentence.id: {
@@ -554,7 +554,7 @@ def test_dotenv_key_reaches_client_but_not_output_or_cache(
         return fake
 
     monkeypatch.setattr(openai, "OpenAI", openai_client)
-    monkeypatch.setattr(llm, "client", real_client)
+    monkeypatch.setattr(endpoint, "client", real_client)
     assert main(["process", str(source), "--detector", "llm"]) == 0
     assert received == [environment_key or "sk-dotenv"]
     for path in tmp_path.rglob("*.json"):

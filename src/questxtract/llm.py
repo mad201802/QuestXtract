@@ -12,17 +12,14 @@ spoken. Quiz generation is generative and lives in a separate command (architect
 
 from __future__ import annotations
 
-import hashlib
-import json
 import math
 import re
-import threading
 from collections import Counter
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 from typing import Any
 
+from . import endpoint
 from .config import Config
 from .models import Context, QAPair, QuestionCandidate, Sentence, stage
 
@@ -81,27 +78,6 @@ Answer with JSON only: an object with one key per candidate id, in order, each h
 five fields, e.g. {"s_1a2b3c": {"reason": "...", "kind": "...", "question": "",
 "answer_sentence_ids": [], "confidence": 0.0}}. Judge only the candidates, never other lines.\
 """
-
-
-def client(config: Config) -> Any:
-    """Build the OpenAI-compatible client.
-
-    ``base_url`` is what makes the offline story work without a second code path: any local
-    OpenAI-compatible server (Ollama, llama.cpp, vLLM, LM Studio) plugs in with zero new code.
-
-    Raises:
-        RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
-
-    """
-    try:
-        from openai import OpenAI  # noqa: PLC0415 - imported lazily so the base install is light
-    except ImportError as exc:  # pragma: no cover - depends on the optional extra
-        raise RuntimeError("the LLM layer needs `pip install questxtract[llm]`") from exc
-    return OpenAI(
-        api_key=config.api_key or "local",
-        base_url=config.base_url,
-        timeout=config.timeout_seconds,
-    )
 
 
 def _form(text: str) -> str:
@@ -197,12 +173,12 @@ def _ask(
 
     Returns the judgements by candidate id. ``again`` marks a follow-up for candidates a first
     answer left out; it also keeps that request from being byte-identical to the first one,
-    whose cached answer would otherwise come back instead. The cache key is the whole request,
-    so any change to the transcript, the sentence split, the prompt, the model or the endpoint
-    asks again, and nothing else does.
+    whose cached answer would otherwise come back instead. The cache key is the whole request
+    (:func:`endpoint.ask`), so any change to the transcript, the sentence split, the prompt,
+    the model or the endpoint asks again, and nothing else does.
 
     Raises:
-        ConnectionError: If the endpoint fails after the SDK's own retries, or times out.
+        ConnectionError: If the endpoint fails after the SDK's own retries, or times out twice.
         ValueError: If the model answers with something other than a JSON object twice.
 
     """
@@ -220,84 +196,7 @@ def _ask(
     }
     if config.judge_reasoning_effort:
         request["reasoning_effort"] = config.judge_reasoning_effort
-    key = json.dumps([config.base_url, request], sort_keys=True)
-    path = Path(config.cache_dir) / "judge" / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
-    if not config.from_scratch and path.is_file():
-        cached = _parse(path.read_text(encoding="utf-8"))
-        if cached is not None:  # a damaged entry is asked again
-            return cached
-
-    llm = client(config)  # first: without the extra, it raises the install hint
-    from openai import OpenAIError  # noqa: PLC0415 - the optional extra, as in client()
-
-    endpoint = config.base_url or "OpenAI"
-    api_key = getattr(llm, "api_key", None) or config.api_key
-
-    def failure(detail: str) -> ConnectionError:
-        # Providers may echo credentials in errors; keep diagnostics but hide the key.
-        message = f"judge: {endpoint}: {detail}"
-        return ConnectionError(message.replace(api_key, "[REDACTED]") if api_key else message)
-
-    stalled: TimeoutError | None = None
-    # Once more after a stall or invalid JSON; the SDK retries HTTP errors itself. A stall is
-    # usually the provider: the same model answers in seconds before and after one.
-    for _ in range(2):
-        try:
-            response = _create(llm, request, config.timeout_seconds)
-        except TimeoutError as exc:
-            stalled = exc
-            continue
-        except OpenAIError as exc:
-            raise failure(str(exc)) from None
-        stalled = None
-        content = response.choices[0].message.content
-        judgements = _parse(content)
-        if judgements is not None:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content, encoding="utf-8")
-            return judgements
-    if stalled is not None:
-        raise failure(f"{stalled}, twice") from None
-    raise ValueError(f"judge: {config.judge_model} did not return the expected JSON, twice")
-
-
-def _create(llm: Any, request: dict[str, Any], seconds: float) -> Any:
-    """Make one request, with a deadline on the whole call.
-
-    The SDK's timeout is per read, and a server that keeps the connection alive while the model
-    works never trips it: OpenRouter sends filler bytes, with no overall limit, so a stalled
-    request would hang the run. The call runs in a daemon thread and is abandoned past the
-    deadline; the process does not wait for it on exit.
-
-    Raises:
-        TimeoutError: If no answer arrived within ``seconds``, the SDK's retries included.
-
-    """
-    outcome: list[Any] = []
-
-    def call() -> None:
-        try:
-            outcome.append(llm.chat.completions.create(**request))
-        except Exception as exc:  # re-raised in the caller's thread below
-            outcome.append(exc)
-
-    worker = threading.Thread(target=call, daemon=True)
-    worker.start()
-    worker.join(seconds)
-    if not outcome:
-        raise TimeoutError(f"no answer within {seconds:g} s")
-    if isinstance(outcome[0], Exception):
-        raise outcome[0]
-    return outcome[0]
-
-
-def _parse(content: str | None) -> dict[str, Any] | None:
-    """Return a response's judgements by candidate id, or ``None`` when it is no JSON object."""
-    try:
-        data = json.loads(content or "")
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
+    return endpoint.ask(config, request, name="judge")
 
 
 def _pairs(

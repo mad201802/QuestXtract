@@ -38,6 +38,21 @@ def test_grep_at_stage_returns_the_contents_of_stages():
     assert sorted(names) == sorted(DOC_ORDER)
 
 
+def test_stages_never_import_each_other():
+    """Contract rule 1 (architecture.md 11.1): code both stages need lives in a non-stage
+    module, as the judge and vision share endpoint.py (#53)."""
+    sources = {
+        path.stem: text
+        for path in SRC.glob("*.py")
+        if path.name not in {"models.py", "pipeline.py"}
+        and "@stage(" in (text := path.read_text(encoding="utf-8"))
+    }
+    for name, text in sources.items():
+        for module, names in re.findall(r"^from \.(\w*) import (.+)$", text, re.M):
+            used = {module} if module else {n.strip() for n in names.split(",")}
+            assert not used & sources.keys(), f"{name}.py imports the stage {used & sources.keys()}"
+
+
 def test_run_accepts_a_custom_stage_list(context):
     """The `stages=` keyword is the entire plugin system (architecture.md 11.1)."""
 
