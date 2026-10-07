@@ -141,6 +141,11 @@ Without `-o`, output lands next to the input, named after it:
 | `lecture.mp4` | `lecture.questions.json` | `lecture.transcript.json` |
 | `lecture.transcript.json` | `lecture.questions.json` | (needs an `.mp4`) |
 
+When vision has read the board, the keyframe images are copied into a folder next to the
+questions file and named after it (`lecture.keyframes/` for `lecture.questions.json`); the file
+refers to them by relative path, so move or share the two together. With `-o -` nothing is
+copied and the file points into the cache instead.
+
 A second run overwrites the file. Pass `-o` to keep several versions side by side. The
 questions file format is described in the [README](../README.md#output) and in
 [architecture.md 12.1](architecture.md#121-questionsjson).
