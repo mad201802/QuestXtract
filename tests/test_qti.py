@@ -133,8 +133,82 @@ def test_supported_choice_profiles_build_answer_keys_and_points():
     assert single.items[0].correct_response == "a"
     assert single.items[0].score == 1
     assert multiple.items[0].interaction.min_choices == 1
-    assert multiple.items[0].interaction.max_choices is None
+    assert multiple.items[0].interaction.max_choices == 2
     assert multiple.items[0].response_declarations[0].correct_values == ("a", "b")
+
+
+def test_multiple_choice_max_choices_is_serialized(tmp_path):
+    output = tmp_path / "multiple.zip"
+    write_qti_package(
+        _document(
+            _choice_question(
+                interaction_type="choice_multiple",
+                correct_response={"text": None, "option_ids": ["a", "b"]},
+            )
+        ),
+        output,
+    )
+    with zipfile.ZipFile(output) as package:
+        root = ElementTree.fromstring(package.read("items/qti-q_choice.xml"))
+    interaction = root.find(f".//{{{QTI_NS}}}qti-choice-interaction")
+    assert interaction is not None
+    assert interaction.attrib["max-choices"] == "2"
+
+
+def test_feedback_xml_has_qti3_schema_shape_and_order(tmp_path):
+    output = tmp_path / "feedback.zip"
+    write_qti_package(
+        _document(
+            _choice_question(
+                feedback={"correct": "Correct!", "incorrect": "Try again."},
+            )
+        ),
+        output,
+    )
+    with zipfile.ZipFile(output) as package:
+        root = ElementTree.fromstring(package.read("items/qti-q_choice.xml"))
+
+    outcome = root.find(f"{{{QTI_NS}}}qti-outcome-declaration[@identifier='FEEDBACK']")
+    assert outcome is not None
+    assert outcome.attrib["base-type"] == "identifier"
+    response_processing = root.find(f"{{{QTI_NS}}}qti-response-processing")
+    feedback = root.findall(f"{{{QTI_NS}}}qti-modal-feedback")
+    assert response_processing is not None
+    children = list(root)
+    assert children.index(feedback[0]) > children.index(response_processing)
+    assert {node.attrib["outcome-identifier"] for node in feedback} == {"FEEDBACK"}
+    assert {node.attrib["show-hide"] for node in feedback} == {"show"}
+    assert all(node.find(f"{{{QTI_NS}}}qti-content-body") is not None for node in feedback)
+    processing = root.find(f"{{{QTI_NS}}}qti-response-processing")
+    assert processing is not None
+    assert processing.find(f".//{{{QTI_NS}}}qti-correct[@identifier='RESPONSE']") is not None
+    set_values = processing.findall(f".//{{{QTI_NS}}}qti-set-outcome-value")
+    assert {
+        (node.attrib["identifier"], node.find(f"{{{QTI_NS}}}qti-base-value").text)
+        for node in set_values
+    } == {
+        ("SCORE", "1"),
+        ("SCORE", "0"),
+        ("FEEDBACK", "correct"),
+        ("FEEDBACK", "incorrect"),
+    }
+
+
+def test_revise_review_text_is_exported():
+    assessment = questions_to_qti(
+        _document(
+            _question(
+                verdict="revise",
+                review={
+                    "status": "pending",
+                    "text": "Edited wording",
+                    "note": None,
+                    "metadata": {},
+                },
+            )
+        )
+    )
+    assert assessment.items[0].prompt == "Edited wording"
 
 
 def test_unsupported_interaction_and_inconsistent_choice_data_fail():

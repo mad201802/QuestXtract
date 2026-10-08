@@ -30,9 +30,11 @@ The current profile supports:
 
 - extended text interactions;
 - single- and multiple-choice interactions;
+- multiple-choice interactions allow selecting up to all available options;
 - response declarations and optional answer keys;
 - outcome declarations and response processing;
-- feedback and QuestXtract provenance metadata.
+- feedback and QuestXtract provenance metadata. Reviewer wording edits in `review.text` are
+  exported when non-empty.
 
 `question_type` remains the linguistic QuestXtract classification
 (`what`, `why`, `how`, `yes_no`, or `other`). It is stored in the package

@@ -201,6 +201,9 @@ def _item_from_record(
         raise QtiExportError(f"questions[{index}].id: expected a non-empty string")
     if not isinstance(prompt, str) or not prompt.strip():
         raise QtiExportError(f"questions[{index}].text: expected a non-empty string")
+    review = raw.get("review")
+    if isinstance(review, dict) and isinstance(review.get("text"), str) and review["text"].strip():
+        prompt = review["text"]
     identifier = f"qti-{question_id}"
     if not _XML_ID.fullmatch(identifier):
         raise QtiExportError(f"questions[{index}].id: invalid XML identifier {question_id!r}")
@@ -274,7 +277,7 @@ def _item_from_record(
             correct_values=correct_values,
         ),
     )
-    outcome = (OutcomeDeclaration(identifier="SCORE", default_value="0"),)
+    outcome_declarations = [OutcomeDeclaration(identifier="SCORE", default_value="0")]
     feedback_raw = raw.get("feedback")
     if feedback_raw is not None and not isinstance(feedback_raw, dict):
         raise QtiExportError(f"questions[{index}].feedback: expected an object or null")
@@ -289,6 +292,14 @@ def _item_from_record(
         feedback = Feedback(**feedback_values)
     else:
         feedback = None
+    if feedback is not None and any(value is not None for value in feedback_values.values()):
+        outcome_declarations.append(
+            OutcomeDeclaration(
+                identifier="FEEDBACK",
+                base_type="identifier",
+                default_value="general",
+            )
+        )
     answer = raw.get("answer")
     if answer is not None and not isinstance(answer, dict):
         raise QtiExportError(f"questions[{index}].answer: expected an object or null")
@@ -327,10 +338,16 @@ def _item_from_record(
             interaction_type=interaction_type,
             response_identifier="RESPONSE",
             min_choices=1 if options else None,
-            max_choices=1 if options and kind == "choice_single" else None,
+            max_choices=(
+                1
+                if options and kind == "choice_single"
+                else len(options)
+                if kind == "choice_multiple"
+                else None
+            ),
         ),
         options=tuple(options),
-        outcome_declarations=outcome,
+        outcome_declarations=tuple(outcome_declarations),
         response_processing=(
             ResponseProcessing(template="match_correct") if correct_values else None
         ),

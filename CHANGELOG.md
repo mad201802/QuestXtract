@@ -51,6 +51,10 @@
 
 ### Fixed
 
+- QTI multiple-choice and feedback XML now conforms to the QTI 3.0 item structure: multiple
+  choice interactions declare their maximum, feedback uses a dedicated identifier outcome and
+  content body, and response processing precedes modal feedback. Non-empty reviewer wording
+  edits are exported. (#67)
 - The rules detector counts a contracted wh-word as a question word: "What's ...?", "Where's ...?",
   "How's ...?", "Who's ...?" (straight or curly apostrophe) now score and are typed like
   "What is ...?", instead of being dropped when unanswered. (#109)

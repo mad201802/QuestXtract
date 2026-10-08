@@ -124,6 +124,26 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
                 "identifier": option.identifier,
             },
         ).text = option.text
+    if item.response_processing is not None:
+        processing = ElementTree.SubElement(root, f"{QTI_PREFIX}responseProcessing")
+        feedback_enabled = any(
+            outcome.identifier == "FEEDBACK" for outcome in item.outcome_declarations
+        )
+        if not feedback_enabled:
+            processing.set("template", MATCH_CORRECT_TEMPLATE)
+        else:
+            correct_feedback = _feedback_identifier(item, "correct")
+            incorrect_feedback = _feedback_identifier(item, "incorrect")
+            condition = ElementTree.SubElement(processing, f"{QTI_PREFIX}responseCondition")
+            response_if = ElementTree.SubElement(condition, f"{QTI_PREFIX}responseIf")
+            match = ElementTree.SubElement(response_if, f"{QTI_PREFIX}match")
+            ElementTree.SubElement(match, f"{QTI_PREFIX}variable", {"identifier": "RESPONSE"})
+            ElementTree.SubElement(match, f"{QTI_PREFIX}correct", {"identifier": "RESPONSE"})
+            _set_outcome(response_if, "SCORE", "float", "1")
+            _set_outcome(response_if, "FEEDBACK", "identifier", correct_feedback)
+            response_else = ElementTree.SubElement(condition, f"{QTI_PREFIX}responseElse")
+            _set_outcome(response_else, "SCORE", "float", "0")
+            _set_outcome(response_else, "FEEDBACK", "identifier", incorrect_feedback)
     if item.feedback is not None:
         for identifier, text in (
             ("correct", item.feedback.correct),
@@ -131,20 +151,39 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
             ("general", item.feedback.general),
         ):
             if text is not None:
-                ElementTree.SubElement(
+                feedback_node = ElementTree.SubElement(
                     root,
                     f"{QTI_PREFIX}modalFeedback",
-                    {"identifier": identifier, "outcomeIdentifier": "SCORE"},
-                ).text = text
-    if item.response_processing is not None:
-        ElementTree.SubElement(
-            root,
-            f"{QTI_PREFIX}responseProcessing",
-            {
-                "template": MATCH_CORRECT_TEMPLATE,
-            },
-        )
+                    {"identifier": identifier, "outcomeIdentifier": "FEEDBACK", "showHide": "show"},
+                )
+                ElementTree.SubElement(feedback_node, f"{QTI_PREFIX}p").text = text
     return root
+
+
+def _set_outcome(
+    parent: ElementTree.Element,
+    identifier: str,
+    base_type: str,
+    value: str,
+) -> None:
+    node = ElementTree.SubElement(
+        parent,
+        f"{QTI_PREFIX}setOutcomeValue",
+        {"identifier": identifier},
+    )
+    ElementTree.SubElement(node, f"{QTI_PREFIX}baseValue", {"baseType": base_type}).text = value
+
+
+def _feedback_identifier(item: AssessmentItem, preferred: str) -> str:
+    """Return a feedback identifier that has a corresponding modal element."""
+    feedback = item.feedback
+    if feedback is None:
+        return "none"
+    if getattr(feedback, preferred) is not None:
+        return preferred
+    if feedback.general is not None:
+        return "general"
+    return "none"
 
 
 def _test_xml(assessment: AssessmentTest) -> ElementTree.Element:
