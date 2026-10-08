@@ -437,6 +437,13 @@ one call, through the same optional client as the LLM detector (section 10), so 
 dependency. `vision` is one `STAGES` entry, so a local OCR pass or a stub that loads pre-captioned
 frames in tests replaces that one entry.
 
+**Preliminary: model and prompt (spike #52).** No model is chosen yet, so `vision_model` stays
+the placeholder default. The spike compares a hosted model, an open model served through a
+local OpenAI-compatible endpoint and a classic OCR engine on hand-picked frames of each
+lecture type, and this paragraph is replaced by its recommendation and the reason for it. Prompt
+v0 and its output schema, matching `VisualContext`, are in
+[`tests/data/vision/`](../tests/data/vision/README.md).
+
 ### 6.2 Layout probe
 
 Recordings mix layouts (single camera, speaker plus screenshare, blackboard only,
