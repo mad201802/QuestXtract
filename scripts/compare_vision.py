@@ -8,9 +8,12 @@ cached and nothing touches the pipeline.
 
 Usage: uv run python scripts/compare_vision.py tests/data/vision/*.png \\
            -m gpt-4o -m gpt-5.6-luna@none -o spike-results/
-The key is read from OPENAI_API_KEY only. A model is ``name`` or ``name@reasoning`` (the
-reasoning_effort to send, e.g. ``none``); without ``@``, no setting is sent, which models
-without a reasoning mode such as gpt-4o need. Writes DIR/results.jsonl, one line per call.
+The key is read from OPENAI_API_KEY, or from the variable ``--key-env`` names (for an
+Idun key: ``--key-env IDUN_API_KEY --base-url https://llm.hpc.ntnu.no/v1``). A model is
+``name`` or ``name@reasoning`` (the reasoning_effort to send, e.g. ``none``); without ``@``,
+no setting is sent, which models without a reasoning mode such as gpt-4o need. Writes
+DIR/results.jsonl, one line per call. ``--transcript T.json`` adds the words spoken within
+``--window`` seconds of each frame (its second is the number in the file name).
 ``--price name=IN,OUT`` (USD per million tokens) adds a cost per call.
 """
 
@@ -20,6 +23,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -56,6 +60,17 @@ def _check(answer: Any) -> str | None:
     return None
 
 
+def _speech(transcript: dict[str, Any], seconds: float, window: float) -> str:
+    """Return the words spoken within ``window`` seconds either side of ``seconds``."""
+    words = [
+        w["word"]
+        for segment in transcript["segments"]
+        for w in segment["words"]
+        if seconds - window <= w["start"] <= seconds + window
+    ]
+    return " ".join("".join(words).split()) or "-"
+
+
 def _request(
     model: str, reasoning: str | None, prompt: str, png: bytes, detail: str | None, schema: Any
 ) -> dict[str, Any]:
@@ -86,15 +101,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-m", "--model", action="append", required=True, help="name[@reasoning]")
     parser.add_argument("-o", "--output", type=Path, default=Path("spike-results"))
     parser.add_argument("--base-url", default=None, help="OpenAI-compatible endpoint")
+    parser.add_argument(
+        "--key-env", default="OPENAI_API_KEY", help="environment variable holding the key"
+    )
     parser.add_argument("--kind", choices=_KINDS, default="blackboard", help="frame kind")
+    parser.add_argument(
+        "--transcript", type=Path, default=None, help="transcript JSON: send the speech too"
+    )
+    parser.add_argument(
+        "--window", type=float, default=20.0, help="seconds of speech either side of a frame"
+    )
     parser.add_argument("--detail", choices=("low", "high", "auto"), default=None)
     parser.add_argument("--timeout", type=float, default=120.0, help="seconds per call")
     parser.add_argument("--price", action="append", default=[], help="name=IN,OUT per 1M tokens")
     args = parser.parse_args(argv)
 
-    key = os.environ.get("OPENAI_API_KEY") or ("local" if args.base_url else "")
+    key = os.environ.get(args.key_env) or ("local" if args.base_url else "")
     if not key:
-        print("error: set OPENAI_API_KEY in the environment", file=sys.stderr)
+        print(f"error: set {args.key_env} in the environment", file=sys.stderr)
         return 1
     try:
         from openai import OpenAI  # noqa: PLC0415 - the optional questxtract[llm] extra
@@ -102,11 +126,9 @@ def main(argv: list[str] | None = None) -> int:
         print("error: needs the openai package (`uv sync --dev`)", file=sys.stderr)
         return 1
 
-    prompt = (
-        (_VISION / "prompt_v0.txt")
-        .read_text(encoding="utf-8")
-        .replace("{kind}", args.kind)
-        .replace("{speech}", "-")
+    template = (_VISION / "prompt_v0.txt").read_text(encoding="utf-8").replace("{kind}", args.kind)
+    transcript = (
+        json.loads(args.transcript.read_text(encoding="utf-8")) if args.transcript else None
     )
     schema = json.loads((_VISION / "prompt_v0.schema.json").read_text(encoding="utf-8"))
     prices = {}
@@ -121,12 +143,25 @@ def main(argv: list[str] | None = None) -> int:
     with out.open("a", encoding="utf-8") as sink:
         for frame in args.frames:
             png = frame.read_bytes()
+            speech = "-"
+            if transcript:
+                found = re.search(r"_(\d+(?:\.\d+)?)\.png$", frame.name)
+                if not found:
+                    print(f"error: no second in the name of {frame.name}", file=sys.stderr)
+                    return 1
+                speech = _speech(transcript, float(found.group(1)), args.window)
+            prompt = template.replace("{speech}", speech)
             for spec in args.model:
                 model, sep, reasoning = spec.partition("@")
                 request = _request(
                     model, reasoning if sep else None, prompt, png, args.detail, schema
                 )
-                row: dict[str, Any] = {"frame": frame.name, "model": spec, "detail": args.detail}
+                row: dict[str, Any] = {
+                    "frame": frame.name,
+                    "model": spec,
+                    "detail": args.detail,
+                    "speech": speech if transcript else None,
+                }
                 started = time.monotonic()
                 try:
                     response = client.chat.completions.create(**request)
