@@ -13,9 +13,9 @@ from collections.abc import Sequence
 
 from .models import Context, QAPair, QuestionCandidate, Sentence, stage
 
-# A confirmation tag or a check-in is not asking for content, so whatever follows it is the
-# lecture carrying on, not its answer.
-_UNSEEDED = frozenset({"tag", "check_in"})
+# A confirmation tag, check-in or framing question is not asking for content, so whatever
+# follows it is the lecture carrying on, not its answer.
+_UNSEEDED = frozenset({"tag", "check_in", "framing"})
 
 
 def adjacent_seed(
