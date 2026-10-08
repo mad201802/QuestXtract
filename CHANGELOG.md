@@ -55,6 +55,9 @@
   choice interactions declare their maximum, feedback uses a dedicated identifier outcome and
   content body, and response processing precedes modal feedback. Non-empty reviewer wording
   edits are exported. (#67)
+- The rules detector penalises framing questions without content words ("So how do we do
+  that?") and excludes their adjacent answer seeds, so they stay below the default output
+  threshold. Questions naming a concept and questions with negation remain eligible. (#49)
 - The rules detector counts a contracted wh-word as a question word: "What's ...?", "Where's ...?",
   "How's ...?", "Who's ...?" (straight or curly apostrophe) now score and are typed like
   "What is ...?", instead of being dropped when unanswered. (#109)
