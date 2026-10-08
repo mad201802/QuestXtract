@@ -7,9 +7,9 @@ checked against ``prompt_v0.schema.json``, with latency and token counts. Nothin
 cached and nothing touches the pipeline.
 
 Usage: uv run python scripts/compare_vision.py tests/data/vision/*.png \\
-           -m gpt-4o -m gpt-5.6-luna:none -o spike-results/
-The key is read from OPENAI_API_KEY only. A model is ``name`` or ``name:reasoning`` (the
-reasoning_effort to send, e.g. ``none``); without ``:``, no setting is sent, which models
+           -m gpt-4o -m gpt-5.6-luna@none -o spike-results/
+The key is read from OPENAI_API_KEY only. A model is ``name`` or ``name@reasoning`` (the
+reasoning_effort to send, e.g. ``none``); without ``@``, no setting is sent, which models
 without a reasoning mode such as gpt-4o need. Writes DIR/results.jsonl, one line per call.
 ``--price name=IN,OUT`` (USD per million tokens) adds a cost per call.
 """
@@ -83,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
     """Send every frame to every model and write the results."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("frames", nargs="+", type=Path, help="PNG frames")
-    parser.add_argument("-m", "--model", action="append", required=True, help="name[:reasoning]")
+    parser.add_argument("-m", "--model", action="append", required=True, help="name[@reasoning]")
     parser.add_argument("-o", "--output", type=Path, default=Path("spike-results"))
     parser.add_argument("--base-url", default=None, help="OpenAI-compatible endpoint")
     parser.add_argument("--kind", choices=_KINDS, default="blackboard", help="frame kind")
@@ -122,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
         for frame in args.frames:
             png = frame.read_bytes()
             for spec in args.model:
-                model, sep, reasoning = spec.partition(":")
+                model, sep, reasoning = spec.partition("@")
                 request = _request(
                     model, reasoning if sep else None, prompt, png, args.detail, schema
                 )
