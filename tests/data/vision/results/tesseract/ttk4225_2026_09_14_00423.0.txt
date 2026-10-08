@@ -1,0 +1,17 @@
+sot eomomus ok +f
+
+Question 4
+
+Is the signal x(t)
+
+Potential ans
+1
+
+poem ee f
+
+Il: No, because it is not a decaying exponential.
+III: Yes, because it is symmetric about t = 0
+
+IV: No, because it is not periodic.
+
+V: I do not know.

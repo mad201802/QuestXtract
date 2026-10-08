@@ -38,6 +38,22 @@ hand-picked. Re-run it on a recording to see every candidate:
 uv run python scripts/extract_keyframes.py lecture.mp4 -o keyframes/ --max-views 400
 ```
 
+## Results
+
+Raw answers of the model comparison, one line per call: `results/<run>/results.jsonl`, written by
+`scripts/compare_vision.py` (frame, model, seconds, token counts, the answer or the error).
+`results/tesseract/` holds the OCR text. The comparison and its caveats are on #52.
+
+| Run | Models | Frames |
+|---|---|---|
+| `auto`, `low` | OpenAI, image detail auto and low | MIT |
+| `openai-ttk-360p` | OpenAI | TTK |
+| `idun-mit`, `idun-ttk-360p`, `idun-ttk-720p` | Qwen3.8-27B, Mistral Medium 3.5, Kimi K2.6 instant, on Idun's hosted service | MIT, TTK at 640x360, TTK at 1280x720 (not committed) |
+| `idun-mit-speech`, `idun-ttk-360p-speech`, `idun-ttk-720p-speech` | the same, with the words spoken within 20 s of each frame | as above |
+| `idun-large-models` | Kimi K2.6, DeepSeek-V4-Flash-Vision-Exp, GLM-5.3-Flash | MIT and TTK at 360p |
+| `idun-mistral-repeat` | Mistral Medium 3.5, three repeats | two TTK frames at 720p |
+| `qwen3-vl-2b-instruct-local` | Qwen3-VL 2B through Ollama | MIT |
+
 ## Licences
 
 Frames are derived from the recording and carry its licence, not the repository's MIT licence
