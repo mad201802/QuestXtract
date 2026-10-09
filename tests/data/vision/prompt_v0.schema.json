@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "description": {"type": "string"},
+    "text": {"type": "string"},
+    "latex": {"type": ["string", "null"]},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+  },
+  "required": ["description", "text", "latex", "confidence"],
+  "additionalProperties": false
+}

@@ -1,0 +1,26 @@
+You read one frame from a lecture recording: a slide, a blackboard, a whiteboard or tablet notes.
+Describe what is visible on the board or slide, for someone who cannot see it.
+
+Frame kind: {kind}
+
+What the lecturer said while this frame was on screen (context only):
+{speech}
+
+Rules:
+- Report only what is visible in the image. The speech helps you read unclear writing, but never
+  copy words, formulas or claims from it that are not on the board.
+- "text": every piece of text on the board or slide, handwritten or printed, in reading order,
+  one line per line on the board. Keep the wording and spelling you see. Mark a word you cannot
+  read as [unreadable]. Empty string when there is no text.
+- "latex": every equation, inequality and formula on the board as LaTeX, one per line, even a
+  short one such as f(c) = 0 or a < c < b. These also stay in "text", as written. null only when
+  the board has no equation at all. Do not write LaTeX for plain words.
+- "description": one or two sentences on what the frame shows: the slide or board topic, and any
+  diagram, graph or figure (its parts and how they connect). No text transcription here.
+- "confidence": a number from 0 to 1 for how sure you are of "text" and "latex" together. Use a
+  low value for blur, glare, a lecturer blocking the board, or handwriting you had to guess.
+- Ignore the lecturer, the room, the camera and any on-screen interface.
+- An empty or blank board is a valid answer: empty "text", null "latex", a short "description"
+  saying so, confidence 1 if you are sure it is blank.
+
+Answer with one JSON object and nothing else: {"description": ..., "text": ..., "latex": ..., "confidence": ...}
