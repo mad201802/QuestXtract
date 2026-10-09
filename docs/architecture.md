@@ -437,6 +437,19 @@ one call, through the same optional client as the LLM detector (section 10), so 
 dependency. `vision` is one `STAGES` entry, so a local OCR pass or a stub that loads pre-captioned
 frames in tests replaces that one entry.
 
+**Model and prompt (spike #52).** The default `vision_model` is `gpt-5.6-luna` at the API's
+default image detail. Of the hosted models compared on chalkboard and tablet frames, it is the
+cheapest that stays under the customer's cost per lecture, it fills `latex` on every formula
+frame, and it reads about as well as models that cost an order of magnitude more (`gpt-4o`,
+`gpt-4o-mini`). `detail: low` is not used: it garbles handwriting. A classic OCR engine
+(Tesseract) reads printed slide text partly and no handwriting or chalk. Printed slides read as
+well at 640x360 as at 720p, at half the image tokens; chalk was only tried at 720p. An open
+model reaches the same endpoint through `base_url` (10.1): the strongest one measured is Qwen3.8-27B
+on Idun's hosted service, while a 2B model on a laptop reads worse and leaves `latex` empty.
+Prompt v0 and its output schema, matching `VisualContext`, are in
+[`tests/data/vision/`](../tests/data/vision/README.md); the comparison, its caveats (a few frames,
+one run per model) and the raw answers are on #52 and in `tests/data/vision/results/`.
+
 ### 6.2 Layout probe
 
 Recordings mix layouts (single camera, speaker plus screenshare, blackboard only,
@@ -543,9 +556,9 @@ we ...?"*) open questions; a wh-word with a contracted verb (*"What's"*, *"Who'd
 counts as the wh-word.
 
 **The answer seed.** The sentence right after the question, when the silence before it is at most
-`answer_seed_max_gap_seconds` (1.0 s) and it is not itself a question; tags and check-ins get no
-seed. On the reference recordings about 4 in 5 seeds of labelled content questions are real
-answers up to 1.0 s, about half beyond it. Details in section 8.
+`answer_seed_max_gap_seconds` (1.0 s) and it is not itself a question; tags, check-ins and framing
+questions get no seed. On the reference recordings about 4 in 5 seeds of labelled content
+questions are real answers up to 1.0 s, about half beyond it. Details in section 8.
 
 **Not built, and why.** Two paths have no labelled failure behind them:
 
@@ -566,7 +579,7 @@ need no veto: without a `?`, a question word alone stays under the gate (7.3).
 
 ### 7.3 Scoring
 
-Additive, clamped to [0, 1]:
+Additive, clamped to [0, 1], with `framing` subtracted from the bounded score:
 
 ```
   +0.60  mark      ends in '?'
@@ -580,6 +593,8 @@ Additive, clamped to [0, 1]:
                    following", "how many of you", a bare "Everyone?"), and "is that clear",
                    "make sense", "do you see" unless content follows them
                    ("Why does it make sense to ...?", "Do you see why ...?" are questions)
+  -0.40  framing   a marked interrogative with no content word after stopword removal:
+                   "So how do we do that?", "So what did it do?"
 ```
 
 Gate: `min_question_score` (0.45). With the confidence of 9.2 and the emission threshold of 0.40:
@@ -589,6 +604,7 @@ Gate: `min_question_score` (0.45). With the confidence of 9.2 and the emission t
 | `?` and a head | 1.00 | yes | 0.55, kept | 1.00, kept |
 | `?` only | 0.60 | yes | 0.33, dropped | 0.60, kept |
 | check-in with `?` and a head | 0.60 | yes, reason kept | 0.33, dropped | never seeded |
+| framing with `?` and a head | 0.60 | yes, reason kept | 0.33, dropped | never seeded |
 | tag | 0.20 | no | | |
 | head, no `?` | 0.40 | no | | |
 
@@ -597,18 +613,26 @@ rather than written up front, and deliberately short: they only keep the obvious
 the content call is the LLM detector's. Tags follow the annotation guidelines, which label them `rhetorical`: a
 penalty with a reason code, not a veto.
 
+Framing examines the whole sentence, so "The field, what is it?" keeps its content word.
+The stopwords are wh-words, positive auxiliaries, discourse markers, prepositions,
+pronouns, articles and a few fillers; negation (`not`, "can't"), numbers and ordinary
+verbs stay as content signals. "What could happen?", "Can it be?" and "How much?" remain
+questions. Wh contractions are normalized ("What's" to "what"). Tags and check-ins do not
+also receive `framing`. Applying this penalty after bounding the score ensures a sentence
+with both `wh` and `aux` signals is still penalised.
+
 **Current results**, default config, `questxtract eval tests/data/`. Update this table in the PR
 that changes the numbers; issues link here instead of copying them.
 
 | Recording | Content labels | TP | FP | FN | Recall | Precision | F1 |
 |---|---|---|---|---|---|---|---|
-| MIT 18.100B L1 | 28 | 28 | 1 | 0 | 1.00 | 0.97 | 0.98 |
+| MIT 18.100B L1 | 28 | 28 | 0 | 0 | 1.00 | 1.00 | 1.00 |
 | TTK4225 2026-09-14 | 41 | 39 | 10 | 2 | 0.95 | 0.80 | 0.87 |
-| TTK4225 2026-09-15 | 60 | 59 | 20 | 1 | 0.98 | 0.75 | 0.85 |
-| **Pooled** | 129 | 126 | 31 | 3 | **0.98** | 0.80 | 0.88 |
+| TTK4225 2026-09-15 | 60 | 59 | 18 | 1 | 0.98 | 0.77 | 0.86 |
+| **Pooled** | 129 | 126 | 28 | 3 | **0.98** | 0.82 | 0.89 |
 
 NFR2 holds with room, and `question_mark_rate` is 0.99, so 3.1's bet holds. The sweep: recall
-0.99 / precision 0.56 up to a threshold of 0.30, 0.98 / 0.80 from 0.35 to 0.55, 0.44 / 0.86 from
+0.99 / precision 0.56 up to a threshold of 0.30, 0.98 / 0.82 from 0.35 to 0.55, 0.44 / 0.86 from
 0.65 up.
 
 *Missed (3).* The `?`-less cut-off above, and two content questions that score 0.60 and stay
@@ -616,10 +640,11 @@ unanswered (0.33): a check-in wrapping a content question (*"..., are we togethe
 area is going to be infinite?"*, `check_in` penalty) and a subject poll with no interrogative
 head (*"Unbounded, bounded, ..., or you do not know?"*).
 
-*False positives (31).* 19 hit `rhetorical` labels, mostly concept-free framing (*"So how do we
-do that?"*, #49). 9 hit `check_in` ones the list does not hold, elicitations and feelings
-(*"What would you say?"*, *"Do you like that?"*). Every check-in form on the list comes from
-one lecturer's two recordings, so it is re-checked on another (#92). 3 hit
+*False positives (28).* 18 hit `rhetorical` labels, including questions with ordinary verbs
+that the conservative framing rule keeps (*"What does it mean?"*, *"What am I doing?"*).
+8 hit `check_in` ones the list does not hold, such as elicitations (*"What would you say?"*).
+Every check-in form on the list comes from one lecturer's two recordings, so it is re-checked
+on another (#92). 2 hit
 `procedural` ones. None is a confirmation tag, so the tag penalty does its job; the content call
 beyond that is the LLM detector's (section 10).
 
@@ -633,6 +658,9 @@ One rule, the **adjacent seed**: the sentence immediately after the question's o
 near-zero gap (`answer_seed_max_gap_seconds`, 1.0 s) and not itself a question. The Socratic
 case, and the highest-precision answer shape we have. Stage 3 splits at the `?`, so a sentence
 never holds its own answer; the seed is the next sentence.
+
+Tags, check-ins and framing candidates get no seed: the following sentence is the lecture
+continuing rather than an answer to a content question.
 
 Every answer further away, after a digression or several sentences later, comes from the LLM
 detector (section 10), not from rules. With no endpoint configured, a question keeps its seed or has no

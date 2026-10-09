@@ -134,11 +134,33 @@ _CHECK_INS = re.compile(
     r"|want to tell me|your name)\b"
 )
 
+# Only function words: ordinary verbs, negation and numbers remain content signals.
+# In particular, "be", "one" and "much" stay out: "Can it be?", "This one, what
+# is it?" and "How much?" are content questions in the reference recordings.
+_FRAMING_STOPWORDS = (
+    _WH_WORDS
+    | frozenset(word for word in _AUX_WORDS if "'" not in word)
+    | _DISCOURSE_MARKERS
+    | _PREPOSITIONS
+    | frozenset(
+        "a an the i me my mine myself we us our ours ourselves you your yours yourself "
+        "yourselves he him his himself she her hers herself it its itself they them their "
+        "theirs themselves this that these those if whether exactly right".split()
+    )
+)
+
 # A head word without a '?' stays under the 0.45 gate: on the reference recordings every such
 # sentence was a statement ("What I mean is ...", "So when we ...").
 # ponytail: #48, recovering a question the ASR left unpunctuated needs a second, independent
 # gate (a local answer slot, architecture.md 7.1); add it when a labelled question is lost to it.
-_SCORES = {"mark": 0.6, "wh": 0.4, "aux": 0.4, "tag": -0.4, "check_in": -0.4}
+_SCORES = {
+    "mark": 0.6,
+    "wh": 0.4,
+    "aux": 0.4,
+    "tag": -0.4,
+    "check_in": -0.4,
+    "framing": -0.4,
+}
 
 
 def score_sentence(sentence: str) -> tuple[float, tuple[str, ...]]:
@@ -161,6 +183,15 @@ def score_sentence(sentence: str) -> tuple[float, tuple[str, ...]]:
     if _CHECK_INS.search(sentence.casefold().replace("\u2019", "'")):
         reasons.append("check_in")
     score = min(1.0, max(0.0, sum((_SCORES[r] for r in reasons), 0.0)))
+    if (
+        "mark" in reasons
+        and ("wh" in reasons or "aux" in reasons)
+        and not {"tag", "check_in"} & set(reasons)
+        and all(_uncontract(word) in _FRAMING_STOPWORDS for word in _words(sentence))
+    ):
+        reasons.append("framing")
+        # Penalise the bounded score even when both wh and aux signals fired.
+        score = max(0.0, score + _SCORES["framing"])
     return round(score, 2), tuple(reasons)
 
 

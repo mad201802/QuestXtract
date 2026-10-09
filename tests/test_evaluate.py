@@ -39,10 +39,10 @@ def _write(tmp_path: Path, labels: list[dict[str, object]]) -> Path:
         ("field?", 0.8, 1.5),
         ("Okay,", 3.0, 3.4),
         ("so", 3.4, 3.6),
-        ("how", 3.6, 3.9),
+        ("why", 3.6, 3.9),
         ("do", 3.9, 4.0),
         ("we", 4.0, 4.2),
-        ("do", 4.2, 4.4),
+        ("make", 4.2, 4.4),
         ("that?", 4.4, 5.0),
         ("Is", 7.0, 7.2),
         ("it", 7.2, 7.4),
@@ -74,7 +74,7 @@ def _write(tmp_path: Path, labels: list[dict[str, object]]) -> Path:
 def test_evaluate_scores_content_and_breaks_down_false_positives(tmp_path: Path) -> None:
     labels = [
         {"start": 0.0, "end": 1.5, "text": "What is a field?", "kind": "content", "split": "blind"},
-        {"start": 3.6, "end": 5.0, "text": "how do we do that?", "kind": "rhetorical"},
+        {"start": 3.6, "end": 5.0, "text": "why do we make that?", "kind": "rhetorical"},
         {"start": 7.0, "end": 9.0, "text": "Is it closed under division", "kind": "content"},
     ]
     report = evaluate([_write(tmp_path, labels)])

@@ -1,3 +1,5 @@
+import pytest
+
 from questxtract.detect import detect_questions, question_type, score_sentence
 
 
@@ -225,3 +227,45 @@ def test_an_earlier_clause_needs_the_mark_and_an_auxiliary():
     assert score_sentence("This area here, is it finite, or not.")[1] == ()
     # a wh-word mid-sentence usually opens a relative clause, so only the last clause counts
     assert score_sentence("The answer here, what would you answer, people?")[1] == ("mark",)
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "So how do we do that?",
+        "So what did it do?",
+        "So exactly what, was that right?",
+        "What's that?",
+        "What’s that?",
+        "This, is it that, or what?",
+    ),
+)
+def test_framing_questions_without_content_words_are_penalised(text: str) -> None:
+    score, reasons = score_sentence(text)
+    assert "framing" in reasons
+    assert "mark" in reasons
+    assert score == 0.6
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "What is a field?",
+        "What could happen?",
+        "Can it do that or can it not do that?",
+        "Why is this not a field, right?",
+        "The field, what is it?",
+        "If I am times 0.5, what am I doing?",
+        "This area here, is it going to be finite, infinite, or you do not know?",
+        "Can it be?",
+        "This one, what is it?",
+        "How much?",
+        "What do I get?",
+        "Can't it do that?",
+        "Can’t it do that?",
+    ),
+)
+def test_framing_penalty_leaves_content_questions_alone(text: str) -> None:
+    score, reasons = score_sentence(text)
+    assert "framing" not in reasons
+    assert score == 1.0

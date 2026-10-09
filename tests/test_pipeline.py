@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from questxtract import STAGES, Context, run, stage
+from questxtract import STAGES, Context, Transcript, Word, run, stage
+from questxtract.export import result_to_dict
 from questxtract.pipeline import stage_info
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "questxtract"
@@ -142,3 +143,45 @@ def test_cache_roundtrips_dataclasses(tmp_path, context):
 
     context.visual = ()
     assert run(context, [captured]).visual == (state,)
+
+
+def _timed_transcript(text: str) -> Transcript:
+    words = tuple(
+        Word(text=word, start=i * 0.25, end=(i + 1) * 0.25) for i, word in enumerate(text.split())
+    )
+    return Transcript(words=words, duration=words[-1].end)
+
+
+@pytest.mark.parametrize("following", ("", "We use the same method."))
+@pytest.mark.parametrize(
+    "question",
+    (
+        "So how do we do that?",
+        "So what did it do?",
+        "So exactly what, was that right?",
+        "This, is it that, or what?",
+    ),
+)
+def test_framing_question_is_not_emitted(context: Context, question: str, following: str) -> None:
+    context.transcript = _timed_transcript(f"{question} {following}".strip())
+    finished = run(context, STAGES[2:])
+    assert result_to_dict(finished)["questions"] == []
+
+
+@pytest.mark.parametrize(
+    ("question", "answer"),
+    (
+        ("What is a field?", "It is an algebraic structure with addition and multiplication."),
+        ("What could happen?", "The signal could grow."),
+        ("Can it do that or can it not do that?", "It can do that."),
+    ),
+)
+def test_framing_penalty_keeps_self_answered_content_questions(
+    context: Context, question: str, answer: str
+) -> None:
+    context.transcript = _timed_transcript(f"{question} {answer}")
+    finished = run(context, STAGES[2:])
+    questions = result_to_dict(finished)["questions"]
+    assert len(questions) == 1
+    assert questions[0]["text"] == question
+    assert questions[0]["answer"]["text"] == answer
