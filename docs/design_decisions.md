@@ -335,6 +335,24 @@ for hosted runs. A question with neither a `?` nor a rule behind it is never jud
 helps the smallest models most, at minutes per request. The definitions were written after
 reading misses on the labelled recordings, so they need a held-out recording to confirm them.
 
+### D14: One endpoint module for the judge and vision, and vision is never required
+
+*Chose:* the client and the request code both model calls need (a deadline on the whole call, one
+resend, the per-request cache, the key hidden in errors) live in `endpoint.py`, which is not a
+stage. Each stage keeps its own prompt, schema and output checks (#53, architecture.md 10). A
+failed vision call leaves that one keyframe out with a warning; a failed judge request ends the
+run.
+
+*Alternative:* the vision call beside the judge in `llm.py`, as #53 first planned and PR #81
+built.
+
+*Why:* `llm.py` is the judge stage, so `vision.py` would have to import another stage, against
+pipeline rule 1 (architecture.md 11.1). The judge is required once the user picks it (D12); a
+board description only enriches questions the pipeline already found, so one unreadable keyframe
+is no reason to stop a run of up to 80 calls.
+
+*Cost:* one more module. A vision cache key hashes the whole keyframe, up to a few MB per request.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |

@@ -7,7 +7,7 @@ from typing import Any
 import av
 import pytest
 
-from questxtract import Config, Context, Sentence, Transcript, Word, llm
+from questxtract import Config, Context, Sentence, Transcript, Word, endpoint
 
 
 def _make_mp4(path: Path, *, audio: bool = True) -> Path:
@@ -132,11 +132,11 @@ class FakeLLM:
 
 @pytest.fixture
 def fake_llm(monkeypatch: pytest.MonkeyPatch) -> Callable[..., FakeLLM]:
-    """Install a :class:`FakeLLM` as the LLM client: the LLM detector without a network."""
+    """Install a :class:`FakeLLM` as the endpoint's client: the judge and vision, no network."""
 
     def install(*replies: Any) -> FakeLLM:
         client = FakeLLM(replies)
-        monkeypatch.setattr(llm, "client", lambda config: client)
+        monkeypatch.setattr(endpoint, "client", lambda config: client)
         return client
 
     return install

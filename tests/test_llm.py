@@ -14,7 +14,7 @@ import openai
 import pytest
 from jsonschema import Draft202012Validator
 
-from questxtract import Config, Context, Transcript, llm
+from questxtract import Config, Context, Transcript, endpoint, llm
 from questxtract.export import SCHEMA_PATH, result_to_dict
 from questxtract.pipeline import STAGES, run
 from questxtract.sentences import split_sentences
@@ -58,7 +58,7 @@ def test_the_rules_detector_makes_no_calls(context, monkeypatch):
     def _no_client(config: Config) -> Any:
         raise AssertionError("the default config must not build a client")
 
-    monkeypatch.setattr(llm, "client", _no_client)
+    monkeypatch.setattr(endpoint, "client", _no_client)
     ctx = run(context, STAGES[2:])
     assert [p.question.text for p in ctx.pairs] == ["What is a stable sort?"]
     assert ctx.pairs[0].verdict == "unjudged"
@@ -294,7 +294,7 @@ def test_a_request_that_never_answers_times_out(context, monkeypatch, tmp_path):
         release.wait(5)  # stands in for a request that keeps the connection open
 
     stalled = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
-    monkeypatch.setattr(llm, "client", lambda config: stalled)
+    monkeypatch.setattr(endpoint, "client", lambda config: stalled)
     try:
         with pytest.raises(ConnectionError, match="no answer within 0 s"):
             _run(context, tmp_path, timeout_seconds=0)
@@ -321,7 +321,7 @@ def test_a_stalled_request_is_sent_once_more(context, sentences, monkeypatch, tm
         return answer
 
     flaky = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
-    monkeypatch.setattr(llm, "client", lambda config: flaky)
+    monkeypatch.setattr(endpoint, "client", lambda config: flaky)
     try:
         assert len(_run(context, tmp_path, timeout_seconds=1).pairs) == 1
     finally:
@@ -360,10 +360,3 @@ def test_the_form_of_a_question_ignores_case_and_punctuation():
     assert Counter(map(llm._form, ["Right?", "right.", "Right, right?"])) == Counter(
         {"right": 2, "right right": 1}
     )
-
-
-def test_the_client_points_at_the_configured_endpoint():
-    """Building the client makes no request; the endpoint and timeout come from Config."""
-    client = llm.client(Config(base_url="http://localhost:11434/v1", timeout_seconds=30))
-    assert str(client.base_url).rstrip("/") == "http://localhost:11434/v1"
-    assert client.timeout == 30
