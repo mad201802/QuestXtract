@@ -9,6 +9,7 @@ final, and this file changes with them. Findings go on the issue and a summary i
 | File | What it is |
 |---|---|
 | `prompt_v0.txt` | Captioning prompt v0. `{kind}` is the frame kind (slides, blackboard, whiteboard, tablet, unknown); `{speech}` is the transcript overlapping the frame, as context only. |
+| `prompt_v1.txt` | Prompt v0 with a stricter `latex` instruction (every equation, even a short one). It did not change how often the models fill `latex`, so v0 stays. |
 | `prompt_v0.schema.json` | The JSON the model must return: `description`, `text`, `latex` (or `null`), `confidence`, matching `VisualContext` in `models.py`. |
 | `mit_18_100b_l1_<seconds>.png` | Test frames from the MIT lecture, named by the second of the recording they were taken at (table below). `ttk4225_2026_09_14_<seconds>.png` are the same for the TTK4225 lecture (640x360, tablet notes over slides). Diagram frames from a third recording are not committed. |
 
@@ -52,6 +53,7 @@ Raw answers of the model comparison, one line per call: `results/<run>/results.j
 | `idun-mit-speech`, `idun-ttk-360p-speech`, `idun-ttk-720p-speech` | the same, with the words spoken within 20 s of each frame | as above |
 | `idun-large-models` | Kimi K2.6, DeepSeek-V4-Flash-Vision-Exp, GLM-5.3-Flash | MIT and TTK at 360p |
 | `idun-mistral-repeat` | Mistral Medium 3.5, three repeats | two TTK frames at 720p |
+| `idun-prompt-v1`, `openai-prompt-v1` | Qwen3.8-27B, Mistral Medium 3.5, Kimi K2.6 instant, GLM-5.3-Flash on Idun; gpt-5.6-luna and gpt-4.1-mini on OpenAI, all with `prompt_v1.txt` | MIT and TTK at 360p |
 | `qwen3-vl-2b-instruct-local` | Qwen3-VL 2B through Ollama | MIT |
 
 ## Licences

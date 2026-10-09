@@ -102,6 +102,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("-o", "--output", type=Path, default=Path("spike-results"))
     parser.add_argument("--base-url", default=None, help="OpenAI-compatible endpoint")
     parser.add_argument(
+        "--prompt", default="prompt_v0.txt", help="prompt file in tests/data/vision"
+    )
+    parser.add_argument(
         "--key-env", default="OPENAI_API_KEY", help="environment variable holding the key"
     )
     parser.add_argument("--kind", choices=_KINDS, default="blackboard", help="frame kind")
@@ -126,7 +129,7 @@ def main(argv: list[str] | None = None) -> int:
         print("error: needs the openai package (`uv sync --dev`)", file=sys.stderr)
         return 1
 
-    template = (_VISION / "prompt_v0.txt").read_text(encoding="utf-8").replace("{kind}", args.kind)
+    template = (_VISION / args.prompt).read_text(encoding="utf-8").replace("{kind}", args.kind)
     transcript = (
         json.loads(args.transcript.read_text(encoding="utf-8")) if args.transcript else None
     )
