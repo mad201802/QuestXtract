@@ -54,6 +54,8 @@ Raw answers of the model comparison, one line per call: `results/<run>/results.j
 | `idun-large-models` | Kimi K2.6, DeepSeek-V4-Flash-Vision-Exp, GLM-5.3-Flash | MIT and TTK at 360p |
 | `idun-mistral-repeat` | Mistral Medium 3.5, three repeats | two TTK frames at 720p |
 | `idun-prompt-v1`, `openai-prompt-v1` | Qwen3.8-27B, Mistral Medium 3.5, Kimi K2.6 instant, GLM-5.3-Flash on Idun; gpt-5.6-luna and gpt-4.1-mini on OpenAI, all with `prompt_v1.txt` | MIT and TTK at 360p |
+| `claude-hand-graded` | Claude Sonnet 5.5 reading each frame itself and answering in the prompt v0 format. **Not independent**: the same reader wrote the reference text the other models are scored against. | MIT and TTK |
+| `claude-independent-agent` | A fresh Claude agent with no context, given only the prompt and the frames, told to open nothing else | MIT and TTK |
 | `qwen3-vl-2b-instruct-local` | Qwen3-VL 2B through Ollama | MIT |
 
 ## Licences
