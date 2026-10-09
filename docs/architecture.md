@@ -505,7 +505,9 @@ compile, and the M4 animations need formulas.
 Captioning is **never required**: an endpoint error, a stall or invalid JSON twice, or a
 malformed field leaves that one keyframe out with a warning, and the run goes on. The judge does
 the opposite (10.3, rule 5) because the user asked for it; a board description only enriches
-questions the pipeline already found.
+questions the pipeline already found. A setting that cannot be used, such as an unreadable `.env`,
+is not a bad keyframe: it would drop every one the same way, so it stops the run as it does for the
+judge.
 
 ### 6.6 Consumers
 
@@ -849,7 +851,8 @@ endpoint, the model, the prompt, the schema and the transcript lines. Any change
 would see asks again, and nothing else does: another `-t` or an `eval` re-run costs zero calls,
 and a `.json` transcript input, which has no source hash, is cached too. A vision request (6.5) is
 cached the same way under `.questxtract/vision/`, keyed on the keyframe image instead of transcript
-lines. Only a valid JSON answer is cached; a failed request is asked again on the next run.
+lines. Only a valid JSON answer is cached; a failed request is asked again on the next run. A cache entry that cannot be read
+is asked again, and a cache that cannot be written costs only the saving: the answer is returned.
 
 > **Decision.** `questxtract/llm.py` (the judge), `questxtract/endpoint.py` (client and requests,
 > shared with vision). Config: `detector` (`rules`), `base_url`, `api_key` (from

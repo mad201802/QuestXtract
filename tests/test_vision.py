@@ -319,3 +319,38 @@ def test_without_the_llm_extra_the_install_hint_is_raised(monkeypatch, tmp_path)
     monkeypatch.setattr(endpoint, "client", missing)
     with pytest.raises(RuntimeError, match=r"questxtract\[llm\]"):
         _caption(Config(cache_dir=str(tmp_path)), PNG, "")
+
+
+def test_a_setting_that_cannot_be_used_is_raised_not_dropped(monkeypatch, tmp_path, recwarn):
+    """An unreadable .env is a user error that would drop every keyframe the same way, so it
+    is not turned into a warning per keyframe; only what the endpoint or model did is."""
+
+    def unusable(config):
+        raise ValueError(".env: line 1: expansion is not supported")
+
+    monkeypatch.setattr(endpoint, "client", unusable)
+    with pytest.raises(ValueError, match="expansion is not supported"):
+        _caption(Config(cache_dir=str(tmp_path)), PNG, "")
+    assert not recwarn.list
+
+
+def test_a_cache_that_cannot_be_written_still_returns_the_answer(fake_llm, tmp_path, recwarn):
+    """The answer is already paid for: a read-only or full cache only costs a repeat request."""
+    blocker = tmp_path / "cache"
+    blocker.write_text("a file where the cache folder should go", encoding="utf-8")
+    client = fake_llm(_board())
+    fields = _caption(Config(cache_dir=str(blocker)), PNG, "")
+    assert fields is not None and fields["text"] == "Stable sort"
+    assert len(client.requests) == 1
+    assert not recwarn.list
+
+
+def test_a_cache_entry_that_is_not_text_is_asked_again(fake_llm, tmp_path):
+    config = Config(cache_dir=str(tmp_path))
+    client = fake_llm(_board())
+    assert _caption(config, PNG, "") is not None
+    (entry,) = (tmp_path / "vision").glob("*.json")
+    entry.write_bytes(b"\xff\xfe\x00 not utf-8")
+    assert _caption(config, PNG, "") is not None
+    assert len(client.requests) == 2
+    assert entry.read_text(encoding="utf-8").startswith("{")  # replaced by the new answer

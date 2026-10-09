@@ -16,6 +16,15 @@ from typing import Any
 from .config import Config
 
 
+class InvalidAnswer(ValueError):
+    """The model answered, twice, with something other than the JSON object asked for.
+
+    A ``ValueError`` so existing callers keep working. It is its own type so a caller that
+    tolerates a bad answer (vision) does not also tolerate a setup error, such as an unreadable
+    ``.env``, which is a plain ``ValueError`` raised before any request.
+    """
+
+
 def client(config: Config) -> Any:
     """Build the OpenAI-compatible client.
 
@@ -42,18 +51,23 @@ def ask(config: Config, request: dict[str, Any], *, name: str) -> dict[str, Any]
 
     The cache key is the endpoint plus the whole request, so any change to what the model
     would see asks again, and nothing else does. Entries live under ``cache_dir/<name>/``;
-    ``name`` also prefixes every error. Only a valid answer is cached.
+    ``name`` also prefixes every error. Only a valid answer is cached, and a cache that cannot
+    be read or written only costs a repeat request: the answer already paid for is returned.
 
     Raises:
         RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
         ConnectionError: If the endpoint fails after the SDK's own retries, or times out twice.
-        ValueError: If the model answers with something other than a JSON object twice.
+        InvalidAnswer: If the model answers with something other than a JSON object twice.
+        ValueError: If the settings cannot be used, such as an unreadable ``.env``.
 
     """
     key = json.dumps([config.base_url, request], sort_keys=True)
     path = Path(config.cache_dir) / name / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
     if not config.from_scratch and path.is_file():
-        cached = _parse(path.read_text(encoding="utf-8"))
+        try:
+            cached = _parse(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            cached = None
         if cached is not None:  # a damaged entry is asked again
             return cached
 
@@ -83,12 +97,15 @@ def ask(config: Config, request: dict[str, Any], *, name: str) -> dict[str, Any]
         content = response.choices[0].message.content
         answer = _parse(content)
         if answer is not None:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content, encoding="utf-8")
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            except OSError:
+                pass  # a read-only or full cache loses the saving, not the answer just paid for
             return answer
     if stalled is not None:
         raise failure(f"{stalled}, twice") from None
-    raise ValueError(f"{name}: {request['model']} did not return the expected JSON, twice")
+    raise InvalidAnswer(f"{name}: {request['model']} did not return the expected JSON, twice")
 
 
 def _create(llm: Any, request: dict[str, Any], seconds: float) -> Any:

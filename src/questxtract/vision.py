@@ -32,7 +32,7 @@ _NOISE = 32  # grey levels a pixel must move by to count as changed, above codec
 
 # The prompt and the schema are module-level, version-tagged, so a prompt change is a reviewable
 # diff. A change to either changes the cache key, so no stale caption is replayed.
-VISION_PROMPT_VERSION = "v0"  # ponytail: #52, placeholder until the spike picks model and prompt
+VISION_PROMPT_VERSION = "v0"  # ponytail: #59, swap in prompt v0 (tests/data/vision/prompt_v0.txt)
 
 _FIELDS = ("description", "text", "latex", "confidence")
 
@@ -313,10 +313,13 @@ def _caption(config: Config, png: bytes, speech: str) -> dict[str, Any] | None:
     view was on screen. Returns the :class:`VisualContext` fields the model reads, or ``None``
     with a warning when the call fails or a field is malformed: a board description only
     enriches questions the pipeline already found, so unlike the judge, vision never ends the
-    run. Cached on the request, image included (:func:`endpoint.ask`).
+    run. Cached on the request, image included (:func:`endpoint.ask`). Only what the endpoint or
+    the model did wrong is tolerated; a setting that cannot be used, such as an unreadable
+    ``.env``, is a user error that would drop every keyframe the same way, so it is raised.
 
     Raises:
         RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
+        ValueError: If the settings cannot be used, such as an unreadable ``.env``.
 
     """
     image = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
@@ -336,7 +339,7 @@ def _caption(config: Config, png: bytes, speech: str) -> dict[str, Any] | None:
     }
     try:
         answer = endpoint.ask(config, request, name="vision")
-    except (ConnectionError, ValueError) as exc:
+    except (ConnectionError, endpoint.InvalidAnswer) as exc:
         warnings.warn(f"vision: keyframe left out: {exc}", UserWarning, stacklevel=2)
         return None
     description, text, latex, confidence = (answer.get(k) for k in _FIELDS)
