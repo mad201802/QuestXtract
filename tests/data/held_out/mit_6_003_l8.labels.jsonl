@@ -1,0 +1,53 @@
+{"start": 63.36, "text": "Questions or comments about the exam?", "kind": "check_in", "end": 65.14, "split": "blind"}
+{"start": 68.27, "text": "I'm sorry?", "kind": "procedural", "end": 69.03, "split": "blind"}
+{"start": 93.29, "text": "Other questions about the exam?", "kind": "check_in", "end": 94.93, "split": "blind"}
+{"start": 322.09, "text": "Figure out what is the third response of this system to that signal.", "kind": "content", "end": 329.15, "split": "blind"}
+{"start": 388.5, "text": "So what's the answer?", "kind": "check_in", "end": 389.74, "split": "blind"}
+{"start": 447.1, "text": "So what's the answer y of 3?", "kind": "content", "end": 448.78, "split": "blind"}
+{"start": 483.23, "text": "Combined with the initial zeros, we get the answer is 0, right?", "kind": "rhetorical", "end": 489.87, "split": "blind"}
+{"start": 506.19, "text": "At time 3, it goes to 2, right?", "kind": "rhetorical", "end": 508.57, "split": "blind"}
+{"start": 508.69, "text": "This is all obvious, right?", "kind": "rhetorical", "end": 509.75, "split": "blind"}
+{"start": 776.52, "text": "How do you implement this superposition thing?", "kind": "content", "end": 779.2, "split": "blind"}
+{"start": 884.23, "text": "Being a signal, I can ask, what's the nth sample look like?", "kind": "content", "end": 887.71, "split": "blind"}
+{"start": 1012.77, "text": "What are we doing?", "kind": "rhetorical", "end": 1013.57, "split": "blind"}
+{"start": 1017.48, "text": "What happens when you take x of n and convolve it with h of n?", "kind": "content", "end": 1020.24, "split": "blind"}
+{"start": 1022.33, "text": "OK, all we need to do is this formula, right?", "kind": "rhetorical", "end": 1024.93, "split": "blind"}
+{"start": 1027.87, "text": "What's that formula say?", "kind": "rhetorical", "end": 1029.21, "split": "blind"}
+{"start": 1256.2, "text": "Find which plot below, 1, 2, 3, 4, or none of the above, shows the result of convolving the two functions shown above.", "kind": "content", "end": 1263.48, "split": "blind"}
+{"start": 1378.16, "text": "So which one's right?", "kind": "check_in", "end": 1379.26, "split": "blind"}
+{"start": 1379.4, "text": "1, 2, 3, 4, or 5?", "kind": "check_in", "end": 1381.34, "split": "blind"}
+{"start": 1398.22, "text": "So how do I think about this?", "kind": "rhetorical", "end": 1399.6, "split": "blind"}
+{"start": 1401.28, "text": "What's the way that I should think about convolving those?", "kind": "content", "end": 1404.0, "split": "blind"}
+{"start": 1414.03, "text": "Can somebody tell me a more intuitive, insightful way of thinking about what would be the result of convolving those top two functions?", "kind": "content", "end": 1421.37, "split": "blind"}
+{"start": 1421.87, "text": "Tell me a property of the result of convolving.", "kind": "content", "end": 1424.17, "split": "blind"}
+{"start": 1437.56, "text": "What's the answer at n equals 1?", "kind": "content", "end": 1439.74, "split": "blind"}
+{"start": 1449.71, "text": "Imagine for the moment, that was intended to be a hint, right?", "kind": "rhetorical", "end": 1453.85, "split": "blind"}
+{"start": 1471.57, "text": "What would happen?", "kind": "rhetorical", "end": 1472.65, "split": "blind"}
+{"start": 1472.65, "text": "How would I compute the answer when I convolve that sequence with itself at 0?", "kind": "content", "end": 1478.13, "split": "blind"}
+{"start": 1488.1, "text": "How much overlap is there?", "kind": "content", "end": 1489.58, "split": "blind"}
+{"start": 1493.86, "text": "What's the answer at n equals 0?", "kind": "content", "end": 1495.6, "split": "blind"}
+{"start": 1499.54, "text": "1, right?", "kind": "rhetorical", "end": 1501.16, "split": "blind"}
+{"start": 1516.52, "text": "What's the answer at y equals 1?", "kind": "content", "end": 1517.88, "split": "blind"}
+{"start": 1546.12, "text": "Multiply in sum, what's the answer?", "kind": "content", "end": 1547.86, "split": "blind"}
+{"start": 2032.4, "text": "So to show your mastery of such things, what signal would result if you convolved e to the minus t u of t with e to the minus t u of t?", "kind": "content", "end": 2044.04, "split": "blind"}
+{"start": 2159.21, "text": "Yes?", "kind": "check_in", "end": 2159.69, "split": "blind"}
+{"start": 2161.06, "text": "So which waveform best represents the convolution of the top two signals?", "kind": "content", "end": 2165.96, "split": "blind"}
+{"start": 2176.78, "text": "How do you get 4?", "kind": "content", "end": 2177.54, "split": "blind"}
+{"start": 2185.51, "text": "So what would I do?", "kind": "rhetorical", "end": 2189.3, "split": "blind"}
+{"start": 2189.8, "text": "What would be my first step?", "kind": "content", "end": 2192.28, "split": "blind"}
+{"start": 2224.24, "text": "Now shift, what do I shift?", "kind": "content", "end": 2225.94, "split": "blind"}
+{"start": 2226.1, "text": "Which one do I shift?", "kind": "content", "end": 2227.06, "split": "blind"}
+{"start": 2227.16, "text": "Which way?", "kind": "content", "end": 2227.46, "split": "blind"}
+{"start": 2227.6, "text": "Yeah?", "kind": "procedural", "end": 2227.7, "split": "blind"}
+{"start": 2232.52, "text": "Is there a value at t from 0?", "kind": "content", "end": 2234.26, "split": "blind"}
+{"start": 2257.82, "text": "What would happen if I integrated a function that is zero everywhere except at a point?", "kind": "content", "end": 2263.22, "split": "blind"}
+{"start": 2271.6, "text": "What's the integral of a function that differs from zero at a single point?", "kind": "content", "end": 2275.7, "split": "blind"}
+{"start": 2285.67, "text": "What kind of a function would that not be true for?", "kind": "content", "end": 2287.93, "split": "blind"}
+{"start": 2346.79, "text": "Does that all make sense?", "kind": "check_in", "end": 2347.79, "split": "blind"}
+{"start": 2353.6, "text": "So now what do I get when t gets a little bit bigger than 0?", "kind": "content", "end": 2356.94, "split": "blind"}
+{"start": 2357.9, "text": "What's the result of convolving when the time is slightly bigger than time 0?", "kind": "content", "end": 2363.06, "split": "blind"}
+{"start": 2369.43, "text": "So I have to shift one of those, right?", "kind": "rhetorical", "end": 2371.55, "split": "blind"}
+{"start": 2380.84, "text": "So now what happens when I multiply?", "kind": "content", "end": 2382.52, "split": "blind"}
+{"start": 2387.0, "text": "So as for small t, for t on the order of epsilon, how does the integral grow with t?", "kind": "content", "end": 2395.64, "split": "blind"}
+{"start": 2414.58, "text": "For t small, how will the function grow?", "kind": "content", "end": 2416.8, "split": "blind"}
+{"start": 2770.96, "text": "It just says if you had an ideal point of light, what would the image look like?", "kind": "rhetorical", "end": 2776.4, "split": "blind"}
