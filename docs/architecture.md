@@ -437,12 +437,18 @@ one call, through the same optional client as the LLM detector (section 10), so 
 dependency. `vision` is one `STAGES` entry, so a local OCR pass or a stub that loads pre-captioned
 frames in tests replaces that one entry.
 
-**Preliminary: model and prompt (spike #52).** No model is chosen yet, so `vision_model` stays
-the placeholder default. The spike compares a hosted model, an open model served through a
-local OpenAI-compatible endpoint and a classic OCR engine on hand-picked frames of each
-lecture type, and this paragraph is replaced by its recommendation and the reason for it. Prompt
-v0 and its output schema, matching `VisualContext`, are in
-[`tests/data/vision/`](../tests/data/vision/README.md).
+**Model and prompt (spike #52).** The default `vision_model` is `gpt-5.6-luna` at the API's
+default image detail. Of the hosted models compared on chalkboard and tablet frames, it is the
+cheapest that stays under the customer's cost per lecture, it fills `latex` on every formula
+frame, and it reads about as well as models that cost an order of magnitude more (`gpt-4o`,
+`gpt-4o-mini`). `detail: low` is not used: it garbles handwriting. A classic OCR engine
+(Tesseract) reads printed slide text partly and no handwriting or chalk. Printed slides read as
+well at 640x360 as at 720p, at half the image tokens; chalk was only tried at 720p. An open
+model reaches the same endpoint through `base_url` (10.1): the strongest one measured is Qwen3.8-27B
+on Idun's hosted service, while a 2B model on a laptop reads worse and leaves `latex` empty.
+Prompt v0 and its output schema, matching `VisualContext`, are in
+[`tests/data/vision/`](../tests/data/vision/README.md); the comparison, its caveats (a few frames,
+one run per model) and the raw answers are on #52 and in `tests/data/vision/results/`.
 
 ### 6.2 Layout probe
 
