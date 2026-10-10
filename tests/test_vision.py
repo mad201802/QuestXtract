@@ -1,13 +1,16 @@
+import base64
 import inspect
 
 import av
 import numpy as np
+import openai
 import pytest
 
-from questxtract import VisualContext
+from questxtract import Config, VisualContext, endpoint
 from questxtract.segments import segments as segments_stage
 from questxtract.sentences import sentences as sentences_stage
 from questxtract.vision import (
+    _caption,
     _for_comparison,
     _merge_shortest,
     _sample_frames,
@@ -230,3 +233,124 @@ def test_the_last_view_ends_at_the_recording_end_and_is_never_empty():
     samples = [(float(t), _slide(0)) for t in range(5)]
     assert _cut(samples)[-1].end == 5.0  # one sample interval after the last sample
     assert _views(samples, change=0.02, hold=3, max_views=80, end=5.7)[-1].end == 5.7
+
+
+# --- the vision call (#53) ---
+
+PNG = b"\x89PNG keyframe"  # only sent, never decoded
+
+
+def _board(**fields):
+    return {
+        "description": "A slide on sorting.",
+        "text": "Stable sort",
+        "latex": None,
+        "confidence": 0.8,
+        **fields,
+    }
+
+
+@pytest.mark.parametrize(("latex", "kept"), [(" x^2 ", "x^2"), ("", None), (None, None)])
+def test_a_keyframe_is_read_into_board_fields(fake_llm, tmp_path, latex, kept):
+    """AC: valid JSON gives the VisualContext fields; the request carries the model, the
+    prompt, the speech and the image as a PNG data URL."""
+    client = fake_llm(_board(description=" A slide. ", latex=latex, confidence=1.4))
+    config = Config(cache_dir=str(tmp_path), vision_model="qwen3-vl")
+    fields = _caption(config, PNG, " so we sort ")
+    assert fields == {
+        "description": "A slide.",
+        "text": "Stable sort",
+        "latex": kept,
+        "confidence": 1.0,
+    }
+    assert VisualContext(start=0.0, end=5.0, **fields).latex == kept
+    (request,) = client.requests
+    assert request["model"] == "qwen3-vl"
+    assert request["response_format"]["json_schema"]["strict"] is True
+    system, user = request["messages"]
+    assert "never guess" in system["content"]
+    assert user["content"] == [
+        {"type": "text", "text": "Said while on screen: so we sort"},
+        {
+            "type": "image_url",
+            "image_url": {"url": "data:image/png;base64," + base64.b64encode(PNG).decode()},
+        },
+    ]
+
+
+@pytest.mark.parametrize(
+    "replies",
+    [
+        (openai.OpenAIError("Connection error."),),
+        (TimeoutError("no answer within 120 s"),),  # a stall, twice
+        ("not json", "[]"),
+        (_board(text=None),),
+        (_board(latex=3),),
+        (_board(confidence="high"),),
+        (_board(confidence=True),),
+        (_board(confidence=float("nan")),),
+    ],
+)
+def test_a_failed_reading_leaves_the_keyframe_out_with_a_warning(fake_llm, tmp_path, replies):
+    """AC: vision is never required, so no failure escapes; the run goes on without it."""
+    fake_llm(*replies)
+    with pytest.warns(UserWarning, match="vision: keyframe left out") as caught:
+        assert _caption(Config(cache_dir=str(tmp_path)), PNG, "") is None
+    assert len(caught) == 1
+
+
+def test_a_keyframe_read_once_is_not_sent_again(fake_llm, tmp_path):
+    """AC: cached on the request, image included; a failed call is not cached."""
+    config = Config(cache_dir=str(tmp_path))
+    client = fake_llm(openai.OpenAIError("Connection error."), _board())
+    with pytest.warns(UserWarning):
+        assert _caption(config, PNG, "") is None
+    assert _caption(config, PNG, "") == _caption(config, PNG, "") is not None
+    assert len(client.requests) == 2
+    assert len(list((tmp_path / "vision").glob("*.json"))) == 1
+    _caption(config, PNG + b"another board", "")
+    assert len(client.requests) == 3
+
+
+def test_without_the_llm_extra_the_install_hint_is_raised(monkeypatch, tmp_path):
+    def missing(config):
+        raise RuntimeError("the LLM layer needs `pip install questxtract[llm]`")
+
+    monkeypatch.setattr(endpoint, "client", missing)
+    with pytest.raises(RuntimeError, match=r"questxtract\[llm\]"):
+        _caption(Config(cache_dir=str(tmp_path)), PNG, "")
+
+
+def test_a_setting_that_cannot_be_used_is_raised_not_dropped(monkeypatch, tmp_path, recwarn):
+    """An unreadable .env is a user error that would drop every keyframe the same way, so it
+    is not turned into a warning per keyframe; only what the endpoint or model did is."""
+
+    def unusable(config):
+        raise ValueError(".env: line 1: expansion is not supported")
+
+    monkeypatch.setattr(endpoint, "client", unusable)
+    with pytest.raises(ValueError, match="expansion is not supported"):
+        _caption(Config(cache_dir=str(tmp_path)), PNG, "")
+    assert not recwarn.list
+
+
+def test_a_cache_that_cannot_be_written_still_returns_the_answer(fake_llm, tmp_path, recwarn):
+    """The answer is already paid for: a read-only or full cache only costs a repeat request."""
+    blocker = tmp_path / "cache"
+    blocker.write_text("a file where the cache folder should go", encoding="utf-8")
+    client = fake_llm(_board())
+    fields = _caption(Config(cache_dir=str(blocker)), PNG, "")
+    assert fields is not None and fields["text"] == "Stable sort"
+    assert len(client.requests) == 1
+    assert not recwarn.list
+
+
+def test_a_cache_entry_that_is_not_text_is_asked_again(fake_llm, tmp_path):
+    config = Config(cache_dir=str(tmp_path))
+    client = fake_llm(_board())
+    assert _caption(config, PNG, "") is not None
+    (entry,) = (tmp_path / "vision").glob("*.json")
+    entry.write_bytes(b"\xff\xfe\x00 not utf-8")
+    assert _caption(config, PNG, "") is not None
+    assert len(client.requests) == 2
+    assert entry.read_text(encoding="utf-8").startswith("{")  # replaced by the new answer

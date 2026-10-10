@@ -1,0 +1,10 @@
+goFtTsomemns of -Peomunn
+
+Theorem: an LTI system is BIBO stable if and only if its impulse response
+is absolutely integrable
+
+h(t)BIBO stable if and only if [- Ih(r)| dr < +00
+
+o xa)
+h®& ~ Ch (sot) kro
+

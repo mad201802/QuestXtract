@@ -1,3 +1,4 @@
+import ast
 import re
 from pathlib import Path
 
@@ -37,6 +38,53 @@ def test_grep_at_stage_returns_the_contents_of_stages():
         for m in re.findall(r'@stage\(\s*"([a-z_]+)"', path.read_text(encoding="utf-8"))
     ]
     assert sorted(names) == sorted(DOC_ORDER)
+
+
+def _imported_modules(tree: ast.AST) -> set[str]:
+    """The package module every import in ``tree`` reaches, whatever its form: relative or
+    absolute, aliased, and inside a function as well as at the top."""
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            parts = (node.module or "").split(".")
+            if node.level:  # from .x import y, from . import x
+                found |= {parts[0]} if node.module else {a.name for a in node.names}
+            elif parts[0] == "questxtract":  # absolute: questxtract.x, or questxtract import x
+                found |= {parts[1]} if len(parts) > 1 else {a.name for a in node.names}
+        elif isinstance(node, ast.Import):
+            found |= {a.name.split(".")[1] for a in node.names if a.name.startswith("questxtract.")}
+    return found
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "from .llm import _ask",
+        "from . import llm",
+        "from . import llm as judge",
+        "def f():\n    from .llm import _ask",
+        "from questxtract.llm import _ask",
+        "from questxtract import llm",
+        "import questxtract.llm",
+        "import questxtract.llm as judge",
+    ],
+)
+def test_the_import_check_sees_every_form_of_import(code):
+    assert _imported_modules(ast.parse(code)) == {"llm"}
+
+
+def test_stages_never_import_each_other():
+    """Contract rule 1 (architecture.md 11.1): code both stages need lives in a non-stage
+    module, as the judge and vision share endpoint.py (#53)."""
+    sources = {
+        path.stem: text
+        for path in SRC.glob("*.py")
+        if path.name not in {"models.py", "pipeline.py"}
+        and "@stage(" in (text := path.read_text(encoding="utf-8"))
+    }
+    for name, text in sources.items():
+        used = _imported_modules(ast.parse(text)) & sources.keys()
+        assert not used, f"{name}.py imports the stage {used}"
 
 
 def test_run_accepts_a_custom_stage_list(context):

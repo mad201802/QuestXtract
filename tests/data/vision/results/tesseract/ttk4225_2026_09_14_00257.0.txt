@@ -1,0 +1,12 @@
+got evomeomusob-
+
+Question 3
+
+Is the signal x(t) = sin(t) absolutely integrable over (20, 00)?
+Potential answers:
+I: Yes, because it is periodic
+II: No, because [” sin(t)|dt diverges.
+III: Yes, because its amplitude is bounded.
+
+IV: No, because it is not a decaying signal.
+V: I do not know.
