@@ -25,6 +25,11 @@
   models such as Qwen3.5 9B need it. `server` sends no setting, for a model without one such as
   gpt-4o-mini. Any level but `none` allows each request 10 minutes. (#89, #97)
 
+- `questions.json` schema 2.2: `config` records how the file was made, so two saved runs can be
+  told apart: `detector` (`rules` or `llm`), `judge_prompt_version` (e.g. `v5`) and
+  `judge_reasoning_effort` (the `--llm-reasoning` level, `""` for `server`). The last two are
+  `null` with the rules detector. Files from schema 2.0 and 2.1 still read. (#114)
+
 ### Changed
 
 - `questions.json` schema 2.1: `keyframe_path` is relative to the JSON file. Writing the file
