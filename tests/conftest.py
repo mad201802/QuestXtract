@@ -10,6 +10,18 @@ import pytest
 from questxtract import Config, Context, Sentence, Transcript, Word, endpoint
 
 
+@pytest.fixture(autouse=True)
+def _isolated_from_the_developer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Keep the developer's OPENAI_API_KEY, .env and questxtract.toml out of every test.
+
+    Each test runs in its own empty ``tmp_path`` with no key in the environment, so the
+    cwd-relative reads (``.env``, ``questxtract.toml``, the ``.questxtract`` cache) see
+    nothing of the checkout. Build paths to test files from ``__file__``, never the cwd.
+    """
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+
 def _make_mp4(path: Path, *, audio: bool = True) -> Path:
     """Write a tiny real MP4: a tenth of a second of silence, or a single video frame."""
     with av.open(str(path), mode="w", format="mp4") as container:
