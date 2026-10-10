@@ -7,6 +7,7 @@ for faster-whisper, while ingest still probes a real (tiny) MP4.
 from __future__ import annotations
 
 import json
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -588,3 +589,65 @@ def test_a_file_that_is_not_a_recording_gets_one_line_and_no_output(
     errors = [line for line in err.splitlines() if line.startswith("error:")]
     assert len(errors) == 1 and "invalid or unreadable recording" in errors[0]
     assert not (tmp_path / "lecture.questions.json").exists()
+
+
+# --- qti (#67) ----------------------------------------------------------------
+
+
+def test_qti_exports_what_process_wrote(
+    tmp_path: Path, fake_asr: list[Config], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A real questions.json, not a hand-built one, becomes one text-entry item per question."""
+    transcript = tmp_path / "lecture.transcript.json"
+    transcript.write_text(json.dumps({"segments": _SEGMENTS}), encoding="utf-8")
+    assert main(["process", str(transcript), "-o", "lecture.questions.json"]) == 0
+    capsys.readouterr()
+
+    assert main(["qti", "lecture.questions.json", "-o", "lecture.zip"]) == 0
+
+    assert capsys.readouterr().err == "QTI 3.0 package -> lecture.zip\n"
+    with zipfile.ZipFile(tmp_path / "lecture.zip") as package:
+        items = [name for name in package.namelist() if name.startswith("items/")]
+        assert len(items) == 1
+        assert b"qti-extended-text-interaction" in package.read(items[0])
+
+
+def test_qti_only_keep_drops_other_verdicts(tmp_path: Path) -> None:
+    def question(identifier: str, verdict: str) -> dict[str, Any]:
+        return {"id": identifier, "text": "Why?", "verdict": verdict, "sentence_id": "s_a"}
+
+    source = tmp_path / "questions.json"
+    document = {
+        "schema_version": "2.1",
+        "segments": [],
+        "visuals": [],
+        "questions": [question("q_keep", "keep"), question("q_revise", "revise")],
+    }
+    source.write_text(json.dumps(document), encoding="utf-8")
+
+    assert main(["qti", str(source), "-o", str(tmp_path / "all.zip")]) == 0
+    assert main(["qti", str(source), "-o", str(tmp_path / "kept.zip"), "--only-keep"]) == 0
+
+    with zipfile.ZipFile(tmp_path / "all.zip") as package:
+        assert "items/qti-q_revise.xml" in package.namelist()
+    with zipfile.ZipFile(tmp_path / "kept.zip") as package:
+        assert "items/qti-q_keep.xml" in package.namelist()
+        assert "items/qti-q_revise.xml" not in package.namelist()
+
+
+def test_qti_bad_input_gets_one_line_and_no_output(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    output = tmp_path / "out.zip"
+
+    assert main(["qti", str(tmp_path / "missing.json"), "-o", str(output)]) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("error: qti: ") and err.count("\n") == 1
+    assert not output.exists()
+
+
+def test_qti_version_flag_is_the_program_version_only(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit):
+        main(["qti", "questions.json", "-o", "out.zip", "--version"])
+    assert "unrecognized arguments: --version" in capsys.readouterr().err

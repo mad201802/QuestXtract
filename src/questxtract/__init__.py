@@ -24,19 +24,8 @@ from .models import (
     Word,
 )
 from .pipeline import STAGES, process, run, stage
-from .qti import (
-    AssessmentItem,
-    AssessmentOption,
-    AssessmentTest,
-    Feedback,
-    Interaction,
-    OutcomeDeclaration,
-    Provenance,
-    QtiExportError,
-    ResponseDeclaration,
-    ResponseProcessing,
-    export_qti,
-)
+from .qti import QtiExportError
+from .qti_v3 import export_qti
 from .schema import Question
 
 try:
@@ -48,23 +37,14 @@ __all__ = [
     "STAGES",
     "AsrBackend",
     "AsrSegment",
-    "AssessmentItem",
-    "AssessmentOption",
-    "AssessmentTest",
     "Config",
     "Context",
-    "Feedback",
-    "Interaction",
     "MediaError",
     "QAPair",
+    "QtiExportError",
     "Question",
     "QuestionCandidate",
     "SchemaError",
-    "QtiExportError",
-    "OutcomeDeclaration",
-    "Provenance",
-    "ResponseDeclaration",
-    "ResponseProcessing",
     "Segment",
     "Sentence",
     "Transcript",

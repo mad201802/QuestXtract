@@ -1,4 +1,4 @@
-"""Command line interface: ``process``, ``transcribe``, ``eval`` and ``quiz``.
+"""Command line interface: ``process``, ``transcribe``, ``eval``, ``quiz`` and ``qti``.
 
 Every command and option, with recipes: docs/cli.md.
 """
@@ -18,7 +18,8 @@ from .evaluate import evaluate, format_report
 from .export import result_to_json, write_questions
 from .models import Context, Stage, Transcript
 from .pipeline import STAGES, run
-from .qti import QtiExportError, export_qti
+from .qti import QtiExportError
+from .qti_v3 import export_qti
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
 
@@ -296,18 +297,13 @@ def _quiz(args: argparse.Namespace) -> int:
 
 
 def _qti(args: argparse.Namespace) -> int:
-    """Export questions to a QTI package."""
+    """Export questions.json as a QTI 3.0 package."""
     try:
-        export_qti(
-            args.questions,
-            args.output,
-            only_keep=args.only_keep,
-            version=args.qti_version,
-        )
-    except (OSError, QtiExportError) as exc:
+        export_qti(args.questions, args.output, only_keep=args.only_keep)
+    except QtiExportError as exc:
         print(f"error: qti: {exc}", file=sys.stderr)
         return 1
-    print(f"QTI {args.qti_version} package -> {args.output}", file=sys.stderr)
+    print(f"QTI 3.0 package -> {args.output}", file=sys.stderr)
     return 0
 
 
@@ -439,17 +435,9 @@ def build_parser() -> argparse.ArgumentParser:
     quiz.add_argument("-o", "--output", help="write the quiz here")
     quiz.set_defaults(handler=_quiz)
 
-    qti = subs.add_parser("qti", help="export questions.json as a QTI package")
+    qti = subs.add_parser("qti", help="export questions.json as a QTI 3.0 package")
     qti.add_argument("questions", help="a questions.json written by `process`")
     qti.add_argument("-o", "--output", required=True, help="write the QTI ZIP package here")
-    qti.add_argument(
-        "--qti-version",
-        "--version",
-        dest="qti_version",
-        choices=("2.1", "3.0"),
-        default="3.0",
-        help="QTI package version (default: %(default)s)",
-    )
     qti.add_argument(
         "--only-keep",
         action="store_true",
