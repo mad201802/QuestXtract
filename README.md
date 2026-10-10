@@ -34,6 +34,7 @@ turns them into study material. It **extracts** questions, it never invents them
 | ⏱️ **Timestamps** | Every question carries its position in the recording |
 | ✏️ **Human in the loop** | A `review` block per question for teacher edits, never overwritten by the pipeline |
 | 📦 **JSON export** | `questions.json` with a fixed key set and a formal JSON Schema |
+| 🎓 **LMS export** | `questxtract qti` writes the questions as a QTI 3.0 package an LMS can import |
 
 Planned: reading the board and slides (#59) and quiz generation (#79). What is built today:
 [architecture.md 13.3](docs/architecture.md#133-status).

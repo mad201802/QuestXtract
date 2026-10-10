@@ -64,22 +64,22 @@ reads.
 
 ### `questxtract qti <questions.json>`
 
-Exports a questions file as a QTI ZIP package. QTI 3.0 is the default; use
-`--qti-version 2.1` for platforms that require QTI 2.1. By default, all questions
-are exported except those with reviewer status `deleted` or `false_positive`.
+Exports a questions file as a QTI 3.0 ZIP package for an LMS. Every question becomes a
+text-entry item that a person scores, in the reviewer's wording (`review.text`) where there is
+one. By default every question is exported except those a reviewer marked `deleted` or
+`false_positive`. The same questions file always gives the same ZIP, byte for byte.
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|
-| `-o`, `--output` | a path | required | Where to write the QTI package. |
-| `--qti-version`, `--version` | `2.1` or `3.0` | `3.0` | QTI package version. |
-| `--only-keep` | nothing | off | Export only questions with verdict `keep`, still honoring reviewer rejections. |
-| `-h`, `--help` | nothing | | Shows the options and examples. |
+| `-o`, `--output` | a path | required | Where to write the ZIP. Its folder must exist. |
+| `--only-keep` | nothing | off | Exports only questions with verdict `keep`; reviewer rejections stay out. |
+| `-h`, `--help` | nothing | | Shows the options. |
 
 ### Everywhere
 
 | Option | What it does |
 |---|---|
-| `--version` | At the top level, prints the installed version; on `qti`, selects the QTI version. |
+| `--version` | Prints the installed version. |
 | `-h`, `--help` | Without a command, lists the commands; after one, lists that command's options. |
 
 `questxtract eval <files|dirs> [--json]` scores the pipeline against the labelled set: recall,
@@ -202,10 +202,11 @@ almost instantly. It works the other way round too.
 questxtract process lecture.transcript.json -o -
 ```
 
-**Export for a QTI 2.1 platform**
+**Export for an LMS (QTI 3.0)**
 
 ```bash
-questxtract qti lecture.questions.json -o lecture-qti-2.1.zip --qti-version 2.1
+questxtract qti lecture.questions.json -o lecture.qti.zip               # all but rejected
+questxtract qti lecture.questions.json -o lecture.qti.zip --only-keep   # verdict keep only
 ```
 
 **See which questions the threshold threw away.** This is a development tool, not a CLI

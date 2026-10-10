@@ -4,6 +4,11 @@
 
 ### Added
 
+- `questxtract qti questions.json -o lecture.zip` (and `export_qti()`) writes a QTI 3.0 package an
+  LMS can import: one text-entry item per question, scored by a person, in the reviewer's wording
+  where there is one. Every question is exported except those a reviewer marked `deleted` or
+  `false_positive`; `--only-keep` exports only verdict `keep`. The same input gives the same ZIP,
+  byte for byte. (#67)
 - `process` and `transcribe` accept `.mp3` recordings as well as `.mp4`. A recording without a
   video track, an MP3 or an audio-only MP4, is transcribed as usual and has no board to read.
   (#117)
@@ -44,17 +49,8 @@
   text, so it stays the same when `--detector llm` rewords the question or you switch detectors.
   Every `id` changes once with this release. (#94)
 
-- Added a version-independent QTI intermediate model with separate QTI 2.1 and 3.0
-  serializers, including choices, answer keys, outcomes, feedback, provenance and metadata.
-- Added `questxtract qti --qti-version` to choose between QTI 2.1 and 3.0 packages; QTI 3.0
-  remains the default.
-
 ### Fixed
 
-- QTI multiple-choice and feedback XML now conforms to the QTI 3.0 item structure: multiple
-  choice interactions declare their maximum, feedback uses a dedicated identifier outcome and
-  content body, and response processing precedes modal feedback. Non-empty reviewer wording
-  edits are exported. (#67)
 - The rules detector penalises framing questions without content words ("So how do we do
   that?") and excludes their adjacent answer seeds, so they stay below the default output
   threshold. Questions naming a concept and questions with negation remain eligible. (#49)
@@ -71,11 +67,6 @@
 - Detection marks more classroom check-ins as `check_in` ("Do you see it?", "Is everything
   clear?", "Are you following?", "How many of you ...?", a bare "Everyone?"), so the rules
   detector stops emitting most of them. "Do you see why ...?" stays a question. (#70)
-
-### Changed
-
-- QTI export includes all questions by default except explicit reviewer rejections; use
-  `--only-keep` or `only_keep=True` for strict verdict filtering. (#67)
 
 ## 0.1.0
 

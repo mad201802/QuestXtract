@@ -18,8 +18,9 @@ In: a lecture video. Out: a JSON file of the questions that were actually asked,
 timestamp, a confidence, an answer span where the lecture contains one, and enough provenance to
 jump back to the exact seconds in the recording.
 
-The package's job stops there. Everything downstream - the editor, the quiz UI, the LMS glue -
-lives in a wrapper around it. That boundary is why the package may reach the network at all
+The package's job stops at files: that JSON, and an LMS package made from it (section 12.4).
+Everything downstream - the editor, the quiz UI, the upload and the rest of the LMS glue - lives
+in a wrapper around it. That boundary is why the package may reach the network at all
 (section 10): the caller decides whether to configure an endpoint, not us.
 
 The central difficulty, which every design decision below follows from: **a lecture is not a
@@ -1052,6 +1053,39 @@ A different command producing a different file: `questxtract quiz questions.json
 It is the only part of the system allowed to write text that was not spoken, and keeping it out
 of the extraction pipeline is what keeps requirement 4.5 checkable.
 
+### 12.4 QTI 3.0 package
+
+`questxtract qti questions.json -o lecture.zip` turns a questions file into a 1EdTech QTI 3.0
+content package an LMS can import: `qti.py` builds the model, `qti_v3.py` writes the XML and the
+ZIP. Items come from quiz.json (planned, #79); until then `qti` reads questions.json and writes
+text-entry items.
+
+```text
+items/qti-<question id>.xml    one qti-assessment-item per question, in document order
+assessmentTest.xml             one linear test part and section referencing every item
+imsmanifest.xml                the content package manifest
+metadata/questxtract.json      provenance: question and sentence ids, answer, confidence
+```
+
+- **Selection.** Every question except those whose `review.status` is `deleted` or
+  `false_positive`; `--only-keep` further keeps only `verdict == "keep"`. A non-empty
+  `review.text` replaces the spoken text.
+- **XML.** Items and the test use the default namespace `imsqtiasi_v3p0` with an
+  `xsi:schemaLocation` to the 3.0 XSD, as every official example does, never prefixes. The
+  manifest uses the QTI 3.0 content-package namespace and `schemaversion` `3.0.0`, the only value
+  the implementation guide and the 3.0.0 CP XSD allow. Every file but the manifest is a resource;
+  the JSON sidecar is `type="extension"`.
+- **Scoring.** Every item declares `SCORE` (float, default `0.0`) and `MAXSCORE` (its points, or
+  `1.0`). With points above zero, `SCORE` carries `normal-maximum` and `normal-minimum`. An item
+  with an answer key gets explicit response processing from the Core subset: a match against the
+  correct response sets `SCORE` to `MAXSCORE`, otherwise to `0.0`. The `match_correct` template
+  is not used, because it always scores 1. An item without an answer key (every item today) has
+  `external-scored="human"` and no response processing.
+- **Feedback.** With feedback, a `FEEDBACK` identifier outcome is set to `correct` or `incorrect`
+  by the same condition, and `qti-modal-feedback` elements follow the response processing.
+- **Determinism.** The same input gives the same bytes: entries are written in a fixed order with
+  the date 1980-01-01, deflate, Unix permissions `0644` and no clock or platform data.
+
 ---
 
 ## 13. Module layout and dependencies
@@ -1060,7 +1094,7 @@ of the extraction pipeline is what keeps requirement 4.5 checkable.
 
 ```
 src/questxtract/
-  __init__.py      public API: process(), run(), STAGES, read/write, filters
+  __init__.py      public API: process(), run(), STAGES, read/write, filters, export_qti()
   models.py        Word, AsrSegment, Transcript, Sentence, Segment, VisualContext,
                    QuestionCandidate, QAPair, Context, SchemaError, the @stage decorator
   config.py        one flat frozen Config dataclass, every default
@@ -1074,11 +1108,13 @@ src/questxtract/
   llm.py           8 judge: the OpenAI-compatible client and the LLM detector
   score.py         9 score: confidence, threshold
   export.py        questions.json writer and reader, with questions.schema.json
+  qti.py           QTI model and the questions.json mapping
+  qti_v3.py        QTI 3.0 XML and the ZIP package
   filtering.py     time filter, experimental topic filter
   evaluate.py      labelled-set metrics
   schema.py        Question, a standalone shape the pipeline does not produce
   pipeline.py      STAGES, run(), process(), cache, progress
-  cli.py           process / transcribe / eval / quiz
+  cli.py           process / transcribe / eval / quiz / qti
 
 tests/            flat, one test module per source module, plus conftest.py
 ```
@@ -1127,7 +1163,8 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
 | `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest | |
-| `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
+| `qti.py`, `qti_v3.py` | not a stage | QTI 3.0 package; choice items from quiz.json not built | #79 |
+| `cli.py` | not a stage | `process`, `transcribe`, `eval` and `qti` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
 running list of what this document describes and the code does not yet do.
@@ -1144,6 +1181,7 @@ Explicit boundaries, so the package does not grow into them by accident.
   is a separate application. This package's part is that its JSON round-trips (section 12.2).
 - **exerplaza.com upload** is likewise a separate consumer of the exported JSON. Nothing in
   `questxtract` talks to exerplaza directly.
+- **No LMS upload**; `qti` only writes a ZIP (section 12.4).
 - **The labelled dataset** is test
   material under `tests/data/`, not an importable subpackage. The *harness* that reads it is
   `evaluate.py` (section 4), because NFR2 is a CI gate and the threshold sweep is library code.
