@@ -380,9 +380,12 @@ class StageInfo:
     name: str
     cache: str | None
     uses: tuple[str, ...]
+    version: str = ""
 
 
-def stage(name: str, *, cache: str | None = None, uses: tuple[str, ...] = ()) -> Callable[[_F], _F]:
+def stage(
+    name: str, *, cache: str | None = None, uses: tuple[str, ...] = (), version: str = ""
+) -> Callable[[_F], _F]:
     """Tag a function as a pipeline stage.
 
     Lives here rather than in ``pipeline`` so the stage modules can import it without a
@@ -395,11 +398,13 @@ def stage(name: str, *, cache: str | None = None, uses: tuple[str, ...] = ()) ->
         uses: ``Config`` field names whose values form the cache header (architecture.md 11.2).
             Keep this next to the signature: a stage that gains a config field and forgets
             to list it here is the one invalidation bug this design still has.
+        version: What else the cached result depends on that is not a ``Config`` field, such as
+            a prompt version; part of the cache header, so changing it recomputes.
 
     """
 
     def decorate(fn: _F) -> _F:
-        fn.stage = StageInfo(name=name, cache=cache, uses=uses)  # type: ignore[attr-defined]
+        fn.stage = StageInfo(name=name, cache=cache, uses=uses, version=version)  # type: ignore[attr-defined]
         return fn
 
     return decorate

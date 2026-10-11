@@ -30,12 +30,13 @@ turns them into study material. It **extracts** questions, it never invents them
 |---|---|
 | 🎥 **Video or audio in** | `.mp4` or `.mp3` recordings, audio track extracted automatically (no system ffmpeg) |
 | 🗣️ **Transcription** | Speech-to-text with faster-whisper, or any ASR engine behind a small interface |
+| 🖼️ **Board and slides** | Optional: a vision model reads each slide or board view into text, LaTeX and a description, linked to the questions asked while it was on screen |
 | ❓ **Question detection** | Fast offline rules, or an LLM you pick (local in Ollama, or hosted) that reads the transcript; a confidence score and the reasons for every question |
 | ⏱️ **Timestamps** | Every question carries its position in the recording |
 | ✏️ **Human in the loop** | A `review` block per question for teacher edits, never overwritten by the pipeline |
 | 📦 **JSON export** | `questions.json` with a fixed key set and a formal JSON Schema |
 
-Planned: reading the board and slides (#59) and quiz generation (#79). What is built today:
+Planned: quiz generation (#79). What is built today:
 [architecture.md 13.3](docs/architecture.md#133-status).
 
 ## Install

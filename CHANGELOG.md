@@ -4,6 +4,14 @@
 
 ### Added
 
+- Vision: with `vision_enabled = true` (in `questxtract.toml`) and a recording with a video
+  track, the slides or board are read. Each stable view's keyframe goes to `vision_model`,
+  together with what was said while it was on screen, and comes back as a board state in
+  `visuals` (text, LaTeX, a description and a confidence), linked to its segments through
+  `visual_ids`, with the keyframe copied beside the file. Readings and keyframes are cached, so a
+  re-run sends nothing. A failed reading leaves its view out with a warning; when the first
+  three fail, the rest are not sent. Needs the `llm` extra and an API key, or `base_url` for a
+  local server. (#59)
 - `process` and `transcribe` accept `.mp3` recordings as well as `.mp4`. A recording without a
   video track, an MP3 or an audio-only MP4, is transcribed as usual and has no board to read.
   (#117)

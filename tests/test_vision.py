@@ -1,19 +1,26 @@
 import base64
 import inspect
+from pathlib import Path
 
 import av
 import numpy as np
 import openai
 import pytest
 
-from questxtract import Config, VisualContext, endpoint
+from questxtract import Config, Context, VisualContext, endpoint
+from questxtract.export import result_to_dict, write_questions
+from questxtract.pipeline import _header, run, stage_info
 from questxtract.segments import segments as segments_stage
 from questxtract.sentences import sentences as sentences_stage
 from questxtract.vision import (
+    _PROMPT,
+    VISION_PROMPT_VERSION,
     _caption,
     _for_comparison,
     _merge_shortest,
     _sample_frames,
+    _speech,
+    _store,
     _View,
     _views,
     attach_visual,
@@ -50,13 +57,6 @@ def test_attach_visual_joins_states_to_the_segments_they_overlap(context):
 
 def test_vision_no_ops_when_disabled(context):
     assert vision(context) is context
-
-
-def test_vision_refuses_when_enabled_but_unimplemented(context, tmp_path, make_mp4):
-    context.source = make_mp4(tmp_path / "lecture.mp4", audio=False)  # has a video track
-    context.config = context.config.replace(vision_enabled=True)
-    with pytest.raises(NotImplementedError, match="#59"):
-        vision(context)
 
 
 @pytest.mark.parametrize("name", ["lecture.mp3", "audio_only.mp4", "lecture.transcript.json"])
@@ -253,7 +253,7 @@ def _board(**fields):
 @pytest.mark.parametrize(("latex", "kept"), [(" x^2 ", "x^2"), ("", None), (None, None)])
 def test_a_keyframe_is_read_into_board_fields(fake_llm, tmp_path, latex, kept):
     """AC: valid JSON gives the VisualContext fields; the request carries the model, the
-    prompt, the speech and the image as a PNG data URL."""
+    prompt with the speech, and the image as a PNG data URL."""
     client = fake_llm(_board(description=" A slide. ", latex=latex, confidence=1.4))
     config = Config(cache_dir=str(tmp_path), vision_model="qwen3-vl")
     fields = _caption(config, PNG, " so we sort ")
@@ -268,9 +268,11 @@ def test_a_keyframe_is_read_into_board_fields(fake_llm, tmp_path, latex, kept):
     assert request["model"] == "qwen3-vl"
     assert request["response_format"]["json_schema"]["strict"] is True
     system, user = request["messages"]
-    assert "never guess" in system["content"]
+    # As prompt v0 was measured (#52): the filled-in prompt as system, the image alone as user.
+    assert system["content"] == _PROMPT.replace("{kind}", "unknown").replace(
+        "{speech}", "so we sort"
+    )
     assert user["content"] == [
-        {"type": "text", "text": "Said while on screen: so we sort"},
         {
             "type": "image_url",
             "image_url": {"url": "data:image/png;base64," + base64.b64encode(PNG).decode()},
@@ -354,3 +356,145 @@ def test_a_cache_entry_that_is_not_text_is_asked_again(fake_llm, tmp_path):
     assert _caption(config, PNG, "") is not None
     assert len(client.requests) == 2
     assert entry.read_text(encoding="utf-8").startswith("{")  # replaced by the new answer
+
+
+def test_the_prompt_is_prompt_v0():
+    """The prompt chosen in #52, word for word; a change needs a new version and file."""
+    assert VISION_PROMPT_VERSION == "v0"
+    v0 = Path(__file__).parent / "data" / "vision" / "prompt_v0.txt"
+    assert _PROMPT == v0.read_text(encoding="utf-8").rstrip("\n")
+
+
+# --- the vision stage (#59) ---
+
+
+def _slides(path, count, seconds=3, rate=10):
+    """``count`` slides, ``seconds`` each, nothing moving."""
+    with av.open(str(path), "w", format="mp4") as container:
+        stream = container.add_stream("mpeg4", rate=rate)
+        stream.width, stream.height, stream.pix_fmt = 320, 240, "yuv420p"
+        for i in range(count * seconds * rate):
+            picture = _slide(i // (seconds * rate))
+            for packet in stream.encode(av.VideoFrame.from_ndarray(picture, format="rgb24")):
+                container.mux(packet)
+        for packet in stream.encode():
+            container.mux(packet)
+    return path
+
+
+def _lecture(context, video, cache, **config):
+    """A cacheable context for ``video``, with the fixture's 9 s of speech and vision on."""
+    return Context(
+        source=video,
+        source_hash="abc123",
+        transcript=context.transcript,
+        duration=12.0,
+        config=Config(cache_dir=str(cache), **{"vision_enabled": True, **config}),
+    )
+
+
+VISION_STAGES = (sentences_stage, segments_stage, vision, attach_visual)
+
+
+def test_vision_reads_one_board_state_per_slide(context, fake_llm, tmp_path):
+    """#59 AC: a slides video gives one state per slide with its time on screen; each keyframe
+    is in the cache under a path relative to it, and the export links states to segments."""
+    client = fake_llm(_board())
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    ctx = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+
+    assert [(round(s.start), round(s.end)) for s in ctx.visual] == [(0, 4), (4, 8), (8, 12)]
+    assert {s.text for s in ctx.visual} == {"Stable sort"}
+    assert len(client.requests) == 3
+    for state in ctx.visual:
+        assert state.keyframe_path.startswith("abc123/keyframes/")
+        assert (tmp_path / "cache" / state.keyframe_path).read_bytes()[1:4] == b"PNG"
+    first = client.requests[0]["messages"][0]["content"]
+    assert "Today we cover sorting. What is a stable sort?" in first  # said during slide 0
+    assert "keeps equal elements" not in first  # said during slide 1
+
+    assert result_to_dict(ctx)["segments"][0]["visual_ids"] == [s.id for s in ctx.visual]
+    write_questions(ctx, tmp_path / "out" / "lecture.questions.json")
+    assert len(list((tmp_path / "out" / "lecture.keyframes").iterdir())) == 3
+
+
+def test_a_second_run_sends_nothing(context, fake_llm, tmp_path):
+    """#59 AC: a re-run with the same settings reads the stage cache: zero calls."""
+    client = fake_llm(_board())
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    first = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    again = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert again.visual == first.visual
+    assert len(client.requests) == 3
+
+
+def test_turning_vision_on_after_a_run_without_it_reads_the_board(context, fake_llm, tmp_path):
+    """The empty result of a run with vision off is not reused once vision is on."""
+    client = fake_llm(_board())
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    off = run(_lecture(context, video, tmp_path / "cache", vision_enabled=False), VISION_STAGES)
+    assert off.visual == () and not client.requests
+    on = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert len(on.visual) == 3
+
+
+def test_the_cache_is_keyed_on_the_prompt_the_switch_and_the_endpoint():
+    header = _header(Config(), stage_info(vision))
+    assert header["version"] == VISION_PROMPT_VERSION
+    assert {"vision_enabled", "vision_model", "base_url"} <= header.keys()
+
+
+def test_a_failed_reading_leaves_only_its_slide_out(context, fake_llm, tmp_path):
+    client = fake_llm(_board(), openai.OpenAIError("Connection error."), _board())
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    with pytest.warns(UserWarning, match="keyframe left out"):
+        ctx = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert [round(s.start) for s in ctx.visual] == [0, 8]
+    assert len(client.requests) == 3
+
+
+def test_when_the_first_readings_all_fail_the_rest_are_not_sent(context, fake_llm, tmp_path):
+    """Milos on #59: a wrong model name or key would otherwise pay for every keyframe."""
+    client = fake_llm(openai.OpenAIError("model not found"))
+    video = _slides(tmp_path / "lecture.mp4", count=4)
+    with pytest.warns(UserWarning) as caught:
+        ctx = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert ctx.visual == ()
+    assert len(client.requests) == 3
+    assert "the first 3 keyframes could not be read" in str(caught[-1].message)
+
+
+def test_failures_after_a_reading_do_not_stop_the_rest(context, fake_llm, tmp_path):
+    client = fake_llm(_board(), openai.OpenAIError("Connection error."))
+    video = _slides(tmp_path / "lecture.mp4", count=4)
+    with pytest.warns(UserWarning, match="keyframe left out"):
+        ctx = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert len(ctx.visual) == 1
+    assert len(client.requests) == 4
+
+
+def test_vision_reports_its_progress(context, fake_llm, tmp_path):
+    fake_llm(_board())
+    ctx = _lecture(context, _slides_with_a_walker(tmp_path / "lecture.mp4"), tmp_path / "cache")
+    seen = []
+    run(ctx, VISION_STAGES, progress=lambda name, fraction: seen.append((name, fraction)))
+    fractions = [f for name, f in seen if name == "vision"]
+    assert fractions == sorted(fractions) and 0.0 <= fractions[0] and fractions[-1] <= 1.0
+    assert any(f > 0.5 for f in fractions)  # the reading half, not only the sampling
+
+
+def test_the_speech_for_a_view_is_what_overlaps_it_cut_at_a_word(sentences):
+    assert _speech(sentences, 0.0, 4.0) == "Today we cover sorting. What is a stable sort?"
+    assert _speech(sentences, 20.0, 30.0) == ""
+    long = [type(sentences[0])(text="word " * 400, word_start=0, word_end=1, start=0, end=1)]
+    cut = _speech(long, 0.0, 1.0)
+    assert cut.endswith("word ...") and len(cut) <= 1504
+
+
+def test_a_keyframe_is_stored_once_by_its_content(tmp_path):
+    config = Config(cache_dir=str(tmp_path))
+    path = _store(PNG, config, "abc123")
+    assert path == _store(PNG, config, "abc123") != _store(PNG + b"other", config, "abc123")
+    assert (tmp_path / path).read_bytes() == PNG
+    (tmp_path / "blocked").write_text("a file where the cache should be", encoding="utf-8")
+    assert _store(PNG, Config(cache_dir=str(tmp_path / "blocked")), "abc123") == ""
