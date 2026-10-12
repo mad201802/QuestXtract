@@ -163,10 +163,9 @@ def _cut(ctx: Context) -> list[_View]:
         if report:
             report("vision", fraction / 2)  # sampling is the first half of the stage
 
-    origin = _audio_start(ctx.source)
     samples = _sample_frames(ctx.source, config.vision_fps, progress=sampling)
     views = _views(
-        ((max(0.0, time - origin), frame) for time, frame in samples),
+        _from_audio_start(samples, _audio_start(ctx.source)),
         change=config.vision_change_fraction,
         hold=config.vision_change_hold,
         max_views=config.vision_max_states,
@@ -193,21 +192,54 @@ def _cut(ctx: Context) -> list[_View]:
     return views
 
 
+def _from_audio_start(
+    samples: Iterable[tuple[float, Frame]], origin: float
+) -> Iterator[tuple[float, Frame]]:
+    """Shift sample times so that zero is the audio start, the transcript's clock.
+
+    What was on screen before the audio starts is never spoken about, so those samples are
+    dropped, except the last one: the board visible when the audio starts, at time zero. Every
+    other sample keeps its own, later time, so no view can end where it starts.
+    """
+    before: Frame | None = None
+    for time, frame in samples:
+        shifted = time - origin
+        if shifted < 0:
+            before = frame
+            continue
+        if before is not None:
+            if shifted > 0:
+                yield 0.0, before
+            before = None
+        yield shifted, frame
+    if before is not None:  # the picture ends before the audio starts
+        yield 0.0, before
+
+
 def _load_views(path: Path, header: dict[str, Any], cache: Path) -> list[_View] | None:
-    """Read cached views, or ``None`` when they are missing, stale or damaged."""
+    """Read cached views, or ``None`` when they are missing, stale or damaged.
+
+    A keyframe is named by the start of its content hash (:func:`_store`), so one whose bytes
+    no longer match its name, such as a write cut short, makes the whole entry stale.
+    """
     try:
         stored = json.loads(path.read_text(encoding="utf-8"))
         if stored.get("config") != header:
             return None
-        return [
-            _View(
-                start=entry["start"],
-                end=entry["end"],
-                keyframe=(cache / entry["keyframe"]).read_bytes(),
-                keyframe_time=entry["keyframe_time"],
+        views = []
+        for entry in stored["views"]:
+            keyframe = (cache / entry["keyframe"]).read_bytes()
+            if _content_name(keyframe) != PurePosixPath(entry["keyframe"]).name:
+                return None
+            views.append(
+                _View(
+                    start=entry["start"],
+                    end=entry["end"],
+                    keyframe=keyframe,
+                    keyframe_time=entry["keyframe_time"],
+                )
             )
-            for entry in stored["views"]
-        ]
+        return views
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
 
@@ -241,21 +273,30 @@ def _speech(sentences: Sequence[Sentence], start: float, end: float) -> str:
 def _store(png: bytes, config: Config, source_hash: str) -> str:
     """Write a keyframe into the cache; return its path relative to ``cache_dir`` (#59).
 
-    Named by its content, so a re-run writes nothing new. Relative to the cache, so a cached
-    result still finds its images from another working directory and board-state ids do not
-    depend on where the cache lives. ``""`` when the cache cannot be written: the reading is
-    kept, only the image is missing.
+    Named by its content, so a re-run writes nothing new, and a file whose bytes do not match
+    its name is written again. Written through a temporary file, so an interrupted write
+    leaves no half image under the real name. Relative to the cache, so a cached result still
+    finds its images from another working directory and board-state ids do not depend on where
+    the cache lives. ``""`` when the cache cannot be written: the reading is kept, only the
+    image is missing.
     """
-    relative = PurePosixPath(source_hash or "unhashed", "keyframes")
-    relative /= f"{hashlib.sha256(png).hexdigest()[:16]}.png"
+    name = _content_name(png)
+    relative = PurePosixPath(source_hash or "unhashed", "keyframes", name)
     path = Path(config.cache_dir) / relative
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        if not path.is_file():
-            path.write_bytes(png)
+        if not path.is_file() or _content_name(path.read_bytes()) != name:
+            partial = path.with_suffix(".tmp")
+            partial.write_bytes(png)
+            partial.replace(path)
     except OSError:
         return ""
     return relative.as_posix()
+
+
+def _content_name(png: bytes) -> str:
+    """Return a keyframe's file name: the start of its SHA-256, so the name checks the content."""
+    return f"{hashlib.sha256(png).hexdigest()[:16]}.png"
 
 
 def has_video(path: Path) -> bool:
@@ -509,7 +550,9 @@ def _caption(config: Config, png: bytes, speech: str) -> dict[str, Any] | None:
 
 def _readable(answer: dict[str, Any]) -> bool:
     """Whether an answer has every board field with a usable type; nothing else is cached."""
-    description, text, latex, confidence = (answer.get(k) for k in _FIELDS)
+    if not all(key in answer for key in _FIELDS):
+        return False  # a missing "latex" is not null: the schema asks for every key
+    description, text, latex, confidence = (answer[k] for k in _FIELDS)
     return (
         isinstance(description, str)
         and isinstance(text, str)

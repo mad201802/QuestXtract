@@ -509,7 +509,10 @@ need formulas.
 Each keyframe is written to the cache as `<source_hash>/keyframes/<content hash>.png`, and `keyframe_path` holds that path relative to `cache_dir`: a cached result stays
 valid from another working directory, and the board-state id does not depend on where the cache
 lives. Frame times count from the start of the audio stream, the transcript's zero, so a file
-whose streams do not start at zero keeps its board states beside the right speech. Writing `questions.json` copies the images beside it (12.1).
+whose streams do not start at zero keeps its board states beside the right speech; of what was on
+screen before the audio starts, only the board visible at its start is kept. A keyframe whose
+bytes no longer match its content-hash name, such as an interrupted write, is sampled again.
+Writing `questions.json` copies the images beside it (12.1).
 
 Captioning is **never required**: an endpoint error, a stall or invalid JSON twice, or a
 malformed field leaves that one keyframe out with a warning, counted in `stats.vision_failed`, and

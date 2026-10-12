@@ -589,3 +589,68 @@ def test_a_keyframe_is_stored_once_by_its_content(tmp_path):
     assert (tmp_path / path).read_bytes() == PNG
     (tmp_path / "blocked").write_text("a file where the cache should be", encoding="utf-8")
     assert _store(PNG, Config(cache_dir=str(tmp_path / "blocked")), "abc123") == ""
+
+
+# --- Jesper's review of PR #131 ---
+
+
+def test_an_answer_without_latex_is_rejected_not_cached(fake_llm, tmp_path):
+    """A missing key breaks the schema: left out with a warning, never a crash or a cache hit."""
+    config = Config(cache_dir=str(tmp_path))
+    answer = _board()
+    del answer["latex"]
+    fake_llm(answer)
+    with pytest.warns(UserWarning, match="keyframe left out"):
+        assert _caption(config, PNG, "") is None
+    assert not list((tmp_path / "vision").glob("*.json"))
+
+
+def _late_audio_lecture(path, audio_start=5.0, rate=10):
+    """10 s of video from 0 s: a title card until 1 s, then a slide; audio from ``audio_start``."""
+    with av.open(str(path), "w", format="mp4") as container:
+        video = container.add_stream("mpeg4", rate=rate)
+        video.width, video.height, video.pix_fmt = 320, 240, "yuv420p"
+        audio = container.add_stream("aac", rate=8000)
+        audio.layout = "mono"
+        for i in range(10 * rate):
+            frame = av.VideoFrame.from_ndarray(_slide(0 if i < rate else 2), format="rgb24")
+            frame.pts = i
+            for packet in video.encode(frame):
+                container.mux(packet)
+        for i in range(40):
+            sound = av.AudioFrame(format="fltp", layout="mono", samples=1024)
+            sound.sample_rate = 8000
+            sound.pts = int(audio_start * 8000) + i * 1024
+            sound.planes[0].update(np.zeros(1024, np.float32).tobytes())
+            for packet in audio.encode(sound):
+                container.mux(packet)
+        for stream in (video, audio):
+            for packet in stream.encode():
+                container.mux(packet)
+    return path
+
+
+def test_what_was_on_screen_before_the_audio_makes_no_empty_view(context, fake_llm, tmp_path):
+    """Jesper on PR #131: a title card before the audio starts must not leave a 0-0 view."""
+    client = fake_llm(_board())
+    video = _late_audio_lecture(tmp_path / "late.mp4")
+    ctx = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    (state,) = ctx.visual  # only the slide on screen once the audio runs
+    assert state.start == 0.0 and state.end > state.start
+    assert ctx.segments[0].visual == (state,)
+    assert len(client.requests) == 1
+
+
+def test_a_damaged_keyframe_in_the_cache_is_sampled_again(context, fake_llm, tmp_path):
+    """Jesper on PR #131: a cut-short PNG is not sent to the model; it is replaced."""
+    fake_llm(_board())
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    first = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    damaged = tmp_path / "cache" / first.visual[0].keyframe_path
+    good = damaged.read_bytes()
+    damaged.write_bytes(good[:8])
+
+    client = fake_llm(_board())
+    again = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert again.visual == first.visual and not client.requests  # same images, so cache hits
+    assert damaged.read_bytes() == good
