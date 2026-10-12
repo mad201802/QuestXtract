@@ -69,7 +69,7 @@ Three consequences that show up repeatedly below:
                               v
   4 segments                  |  gap/duration/length breaks -> Segment[]
                               v
-  5 vision (optional)         |  layout probe -> 1 fps frames -> board states -> VLM
+  5 vision (optional)         |  1 fps frames -> stable views -> VLM per keyframe
                               v
   6 detect                    |  lexical scoring + vetoes -> QuestionCandidate[]
                               v
@@ -506,13 +506,14 @@ difference join it. Out, under a strict JSON schema and checked again in code: `
 keyframe is sent twice. `latex` is there because prose does not compile, and the M4 animations
 need formulas.
 
-Each keyframe that was read is written to the cache as `<source_hash>/keyframes/<content
-hash>.png`, and `keyframe_path` holds that path relative to `cache_dir`: a cached result stays
+Each keyframe is written to the cache as `<source_hash>/keyframes/<content hash>.png`, and `keyframe_path` holds that path relative to `cache_dir`: a cached result stays
 valid from another working directory, and the board-state id does not depend on where the cache
-lives. Writing `questions.json` copies the images beside it (12.1).
+lives. Frame times count from the start of the audio stream, the transcript's zero, so a file
+whose streams do not start at zero keeps its board states beside the right speech. Writing `questions.json` copies the images beside it (12.1).
 
 Captioning is **never required**: an endpoint error, a stall or invalid JSON twice, or a
-malformed field leaves that one keyframe out with a warning, and the run goes on. When the
+malformed field leaves that one keyframe out with a warning, counted in `stats.vision_failed`, and
+the run goes on. None of these is cached, so the next run asks again. When the
 first three readings fail and none has succeeded, the rest are not sent: a wrong model name, key
 or endpoint would fail every call the same way, and each one costs. The judge does
 the opposite (10.3, rule 5) because the user asked for it; a board description only enriches
@@ -939,15 +940,14 @@ explicitly; constructing `Config()` alone does not read TOML.
 ```
 .questxtract/
   <source_hash>/transcribe.json   the transcript
-  <source_hash>/vision.json       the board states (6.5)
+  <source_hash>/views.json        the stable views of the recording (6.4)
   <source_hash>/keyframes/        their keyframe images, named by content hash
   vision/<request hash>.json      one per keyframe request (10.4)
   judge/<request hash>.json       one per LLM detector request (10.4)
 ```
 
-Each entry is written with a header holding the values of the stage's `uses` config fields,
-plus its `version` when the stage declares one: what else the result depends on that is not a
-config field, such as the vision prompt. The runner reuses an entry when the header matches and recomputes when it does not; `--from-scratch`
+Each entry is written with a header holding the values of the stage's `uses` config fields. The
+runner reuses an entry when the header matches and recomputes when it does not; `--from-scratch`
 bypasses reuse for every stage. Sentences, segments, detection, answers and scoring declare no
 `cache` and always recompute: caching a 20 ms stage buys nothing and costs an invalidation bug.
 
@@ -958,6 +958,11 @@ sharing one bucket, which would replay one recording's results into another's.
 **The LLM detector is the exception to the `uses` rule.** Its input is the transcript, which a
 config-only header cannot key, so it declares no `cache=` and caches each request itself, keyed on
 the request (10.4). `--from-scratch` bypasses it too.
+
+**Vision is the second exception.** Each reading depends on the transcript (the speech is in the
+prompt) and may fail, and a stage-level entry would replay both a stale reading and a failed
+one. So `vision` declares no `cache=`: it caches the sampled views itself in `views.json`, keyed
+on the sampling settings, and each reading per request, only once the answer is valid (6.5).
 
 A stage that reads a config field and forgets to list it in `uses` serves stale results: the one
 bug class this design still has. Keep `uses` next to the signature so the two are reviewed

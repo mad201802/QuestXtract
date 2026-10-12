@@ -7,9 +7,10 @@ import numpy as np
 import openai
 import pytest
 
-from questxtract import Config, Context, VisualContext, endpoint
+from questxtract import Config, Context, Transcript, VisualContext, Word, endpoint
+from questxtract import vision as vision_module
 from questxtract.export import result_to_dict, write_questions
-from questxtract.pipeline import _header, run, stage_info
+from questxtract.pipeline import run
 from questxtract.segments import segments as segments_stage
 from questxtract.sentences import sentences as sentences_stage
 from questxtract.vision import (
@@ -438,10 +439,99 @@ def test_turning_vision_on_after_a_run_without_it_reads_the_board(context, fake_
     assert len(on.visual) == 3
 
 
-def test_the_cache_is_keyed_on_the_prompt_the_switch_and_the_endpoint():
-    header = _header(Config(), stage_info(vision))
-    assert header["version"] == VISION_PROMPT_VERSION
-    assert {"vision_enabled", "vision_model", "base_url"} <= header.keys()
+def test_readings_that_failed_are_asked_again_on_the_next_run(context, fake_llm, tmp_path):
+    """Jesper on PR #128: a run with the endpoint down must not cache an empty result."""
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    fake_llm(openai.OpenAIError("Connection error."))
+    with pytest.warns(UserWarning):
+        down = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert down.visual == () and down.stats["vision_failed"] == 3
+    client = fake_llm(_board())
+    up = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert len(up.visual) == 3 and up.stats["vision_failed"] == 0
+    assert len(client.requests) == 3
+
+
+def test_a_rejected_answer_is_not_cached(fake_llm, tmp_path):
+    """A malformed answer counts as invalid JSON: asked once more, never replayed."""
+    config = Config(cache_dir=str(tmp_path))
+    fake_llm(_board(confidence="high"))
+    with pytest.warns(UserWarning, match="keyframe left out"):
+        assert _caption(config, PNG, "") is None
+    assert not list((tmp_path / "vision").glob("*.json"))
+    client = fake_llm(_board())
+    assert _caption(config, PNG, "") is not None
+    assert len(client.requests) == 1
+
+
+def test_a_new_transcript_reads_the_board_again(context, fake_llm, tmp_path):
+    """The speech is part of every request, so other speech is another reading."""
+    client = fake_llm(_board())
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    other = _lecture(context, video, tmp_path / "cache")
+    other.transcript = Transcript(
+        words=(Word(text="Something", start=0.5, end=1.0), Word(text="else.", start=1.0, end=1.5)),
+        duration=12.0,
+    )
+    run(other, VISION_STAGES)
+    assert len(client.requests) == 6  # every slide had other speech, so all three again
+
+
+def test_the_views_are_cached_so_a_second_run_samples_nothing(
+    context, fake_llm, tmp_path, monkeypatch
+):
+    fake_llm(_board())
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    first = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+
+    def no_sampling(*args, **kwargs):
+        raise AssertionError("sampled again")
+
+    monkeypatch.setattr(vision_module, "_sample_frames", no_sampling)
+    assert run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES).visual == first.visual
+    changed = _lecture(context, video, tmp_path / "cache", vision_change_hold=2)
+    with pytest.raises(AssertionError, match="sampled again"):
+        run(changed, VISION_STAGES)  # other sampling settings cut again
+
+
+def _offset_lecture(path, offset=10.0, rate=10):
+    """4 s of one slide whose video and audio streams both start at ``offset`` seconds."""
+    with av.open(str(path), "w", format="mp4") as container:
+        video = container.add_stream("mpeg4", rate=rate)
+        video.width, video.height, video.pix_fmt = 320, 240, "yuv420p"
+        audio = container.add_stream("aac", rate=8000)
+        audio.layout = "mono"
+        for i in range(4 * rate):
+            frame = av.VideoFrame.from_ndarray(_slide(0), format="rgb24")
+            frame.pts = int(offset * rate) + i
+            for packet in video.encode(frame):
+                container.mux(packet)
+        for i in range(32):
+            sound = av.AudioFrame(format="fltp", layout="mono", samples=1024)
+            sound.sample_rate = 8000
+            sound.pts = int(offset * 8000) + i * 1024
+            sound.planes[0].update(np.zeros(1024, np.float32).tobytes())
+            for packet in audio.encode(sound):
+                container.mux(packet)
+        for stream in (video, audio):
+            for packet in stream.encode():
+                container.mux(packet)
+    return path
+
+
+def test_board_states_share_the_transcript_clock(context, fake_llm, tmp_path):
+    """Jesper on PR #128: frame times count from the audio start, like the word times."""
+    client = fake_llm(_board())
+    video = _offset_lecture(tmp_path / "trimmed.mp4")
+    with av.open(str(video)) as container:  # the file really starts late
+        stream = container.streams.video[0]
+        assert stream.start_time * stream.time_base > 9
+    ctx = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    (state,) = ctx.visual
+    assert state.start < 1.0
+    assert ctx.segments[0].visual == (state,)
+    assert "Today we cover sorting." in client.requests[0]["messages"][0]["content"]
 
 
 def test_a_failed_reading_leaves_only_its_slide_out(context, fake_llm, tmp_path):
@@ -450,6 +540,7 @@ def test_a_failed_reading_leaves_only_its_slide_out(context, fake_llm, tmp_path)
     with pytest.warns(UserWarning, match="keyframe left out"):
         ctx = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
     assert [round(s.start) for s in ctx.visual] == [0, 8]
+    assert ctx.stats["vision_failed"] == 1
     assert len(client.requests) == 3
 
 
@@ -459,7 +550,7 @@ def test_when_the_first_readings_all_fail_the_rest_are_not_sent(context, fake_ll
     video = _slides(tmp_path / "lecture.mp4", count=4)
     with pytest.warns(UserWarning) as caught:
         ctx = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
-    assert ctx.visual == ()
+    assert ctx.visual == () and ctx.stats["vision_failed"] == 4  # three failed, one not sent
     assert len(client.requests) == 3
     assert "the first 3 keyframes could not be read" in str(caught[-1].message)
 
