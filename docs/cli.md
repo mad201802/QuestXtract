@@ -77,7 +77,11 @@ reads.
 precision, false positives by kind, a threshold sweep, and every miss
 ([tests/data/README.md](../tests/data/README.md)). It takes `--detector`, `--llm-model` and
 `--llm-url` too, so the rules and a model can be compared on the same recordings; the report's
-first line names the detector, the model and the prompt version. `questxtract quiz <questions.json>` is
+first line names the detector, the model and the prompt version. With `--vision`, it scores the
+vision model (`vision_model`, at `--llm-url` if given) on the labelled keyframes in
+`tests/data/vision/` instead: character error rate and formula recall per lecture type, then
+every frame, worst first ([tests/data/vision/README.md](../tests/data/vision/README.md)). It calls
+the model once per frame and caches the answers. `questxtract quiz <questions.json>` is
 reserved for quiz generation; it is not implemented yet (#79) and exits with a one-line error.
 
 ## Configuration files
@@ -317,7 +321,7 @@ A `.json` transcript input never touches the cache. There is nothing expensive l
 | `...: invalid or unreadable recording` | The file is damaged, or not really an MP4 or MP3. |
 | `Invalid model size '...', expected one of: ...` | Use one of the names listed in the message. |
 | `...: not valid JSON` / `expected a list of segments...` | The `.json` file is not a transcript. |
-| `--detector llm needs OPENAI_API_KEY in the environment or .env, or --llm-url for a local server` | Make the key available in the environment or local `.env`, or pass `--llm-url` for a local server. |
+| `--detector llm needs OPENAI_API_KEY in the environment or .env, or --llm-url (base_url) for a local server` | Make the key available in the environment or local `.env`, or pass `--llm-url` for a local server. |
 | `<file>: invalid TOML at line N` | Correct the TOML syntax at the reported line. |
 | `<file>: <key>: expected float, got string` | Use the expected type; numbers must not be quoted. |
 | `<file>: unknown config field(s): ...` | Correct the name to match a field in `config.py`. |

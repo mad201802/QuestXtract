@@ -383,6 +383,35 @@ the reference recordings, in well under a second.
 > **Decision.** `questxtract/evaluate.py`. The report includes a threshold sweep over
 > `min_confidence`, so the NFR2 tradeoff is visible rather than assumed.
 
+### 4.4 Vision
+
+The vision model (section 6) is scored the same way, on labelled keyframes instead of labelled
+questions: `tests/data/vision/<name>.frames.jsonl`, one line per frame with its lecture type
+(`slides`, `blackboard`, `whiteboard` or `tablet`), the text on the board, each formula as LaTeX
+and a line on any diagram. The set spans several lecturers per type, because QuestXtract has to
+read any teacher's board, not only the reference recordings'. Sources, licences and labelling
+conventions: [`tests/data/vision/README.md`](../tests/data/vision/README.md).
+
+```bash
+questxtract eval --vision tests/data/vision/    # vision_model, per lecture type
+```
+
+Each frame goes to `vision_model` as the vision stage sends a keyframe (6.5: prompt v0, kind
+`unknown`, no speech), cached per request. Per frame: the **character error rate** of `text`
+(edits per label character, casefolded and with whitespace collapsed, capped at 1) and
+**formula recall**, a labelled formula counting as found when some stretch of the answer's
+`latex` is within one edit per four characters of it after removing spacing and sizing commands.
+A frame the model cannot read scores as an empty answer. The report gives both per lecture type
+and in total, then every frame, worst first.
+
+CI checks the labels (every type has at least 5 frames, every frame exists), not the scores: they
+need a real model.
+
+> **Decision.** Character error rate, the standard measure for reading text from images, written
+> out in a few lines rather than added as a dependency. Formulas are matched loosely, because two
+> correct LaTeX spellings of one formula differ in spacing and braces. `diagram` is labelled but
+> not scored: comparing two descriptions needs a judge, not an edit distance.
+
 ---
 
 ## 5. Data model
@@ -1215,7 +1244,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `score.py` | 9 score | done: confidence and threshold | |
 | `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
 | `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |
-| `evaluate.py` | not a stage | done; NFR2 gated in pytest | |
+| `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --vision` (4.4) | |
 | `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the

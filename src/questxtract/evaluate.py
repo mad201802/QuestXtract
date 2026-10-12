@@ -10,11 +10,15 @@ overlap first, so one long sentence cannot satisfy two labels.
 
 The labelled *dataset* lives under ``tests/data/<name>.labels.jsonl``, next to the
 ``<name>.transcript.json`` it is timed against; this module is the code that reads it.
+
+:func:`evaluate_vision` does the same for the vision model, against the labelled keyframes in
+``tests/data/vision/<name>.frames.jsonl`` (architecture.md 4.4).
 """
 
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
@@ -24,12 +28,18 @@ from .config import Config
 from .llm import JUDGE_PROMPT_VERSION
 from .models import Context, Transcript, Word
 from .pipeline import STAGES, run
+from .vision import VISION_PROMPT_VERSION, _caption
 
 _MIN_OVERLAP = 0.5
 _AFTER_TRANSCRIBE = 2  # stages 1 and 2 are skipped: the transcript is committed
 _SWEEP = tuple(round(i * 0.05, 2) for i in range(21))
 
 Span = tuple[float, float]
+
+KINDS = ("slides", "blackboard", "whiteboard", "tablet")  # lecture types, as prompt v0 names them
+_FORMULA_MAX_ERROR = 0.25  # edits per character at which a labelled formula still counts as read
+# Spacing and sizing LaTeX that changes how a formula looks, not what it says.
+_LATEX_NOISE = re.compile(r"\\(?:(?:left|right|displaystyle|q?quad)(?![a-zA-Z])|[,;:! ])|\$")
 
 
 def overlap_ratio(prediction: Span, label: Span) -> float:
@@ -95,7 +105,7 @@ def evaluate(paths: Sequence[str | Path], config: Config | None = None) -> dict[
     threshold = config.min_confidence
     runs: dict[str, tuple[list[dict[str, Any]], list[dict[str, Any]], tuple[Word, ...]]] = {}
     skipped: list[str] = []
-    for labels_path in _label_files(paths):
+    for labels_path in _label_files(paths, "*.labels.jsonl"):
         name = labels_path.name.removesuffix(".labels.jsonl")
         transcript_path = labels_path.with_name(f"{name}.transcript.json")
         if not transcript_path.is_file():
@@ -161,12 +171,12 @@ def format_report(report: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _label_files(paths: Sequence[str | Path]) -> list[Path]:
+def _label_files(paths: Sequence[str | Path], pattern: str) -> list[Path]:
     out: list[Path] = []
     for raw in paths:
         path = Path(raw)
         if path.is_dir():
-            out += sorted(path.glob("*.labels.jsonl"))
+            out += sorted(path.glob(pattern))
         elif path.is_file():
             out.append(path)
         else:
@@ -271,3 +281,173 @@ def _metrics(c: dict[str, Any]) -> dict[str, Any]:
 
 def _ratio(numerator: float, denominator: float) -> float:
     return numerator / denominator if denominator else 0.0
+
+
+def character_error_rate(predicted: str, reference: str) -> float:
+    """Edits per reference character to turn ``predicted`` into ``reference``, in ``[0, 1]``.
+
+    Both are casefolded and their whitespace collapsed first: line breaks and spacing on a board
+    are not something to read wrong. Capped at 1, so one answer full of invented text cannot
+    outweigh the rest of a mean. An empty reference scores 0 against an empty answer, else 1.
+    """
+    predicted, reference = _plain(predicted), _plain(reference)
+    if not reference:
+        return 0.0 if not predicted else 1.0
+    return min(1.0, _distance(predicted, reference) / len(reference))
+
+
+def formula_found(formula: str, latex: str | None) -> bool:
+    r"""Whether a labelled ``formula`` is in a model's ``latex`` answer.
+
+    Both are normalised (whitespace, ``\left``/``\right``, spacing commands and ``$`` removed,
+    ``\dfrac`` and ``\tfrac`` read as ``\frac``), and the formula counts as found when some
+    stretch of the answer is within one edit per four of its characters: the answer may hold
+    several formulas on one line, and a brace more or less is not a misreading.
+    """
+    needle, haystack = _latex(formula), _latex(latex or "")
+    if not needle:
+        return True
+    return _substring_distance(needle, haystack) <= _FORMULA_MAX_ERROR * len(needle)
+
+
+def evaluate_vision(paths: Sequence[str | Path], config: Config | None = None) -> dict[str, Any]:
+    """Score the vision model against every labelled keyframe under ``paths``.
+
+    ``paths`` are ``*.frames.jsonl`` files or directories holding them; each line names a PNG
+    beside the file. Every frame is read with ``config.vision_model`` as the vision stage reads
+    a keyframe (same prompt, frame kind ``unknown``, no speech), cached per request, so a second
+    run makes no calls. A frame the model could not read counts as an empty answer.
+
+    Returns:
+        The report: the ``model`` and ``prompt`` version, metrics per lecture type under
+        ``kinds`` and pooled under ``total`` (frames, failed readings, mean character error
+        rate, formulas labelled and found, formula recall), and the score of every frame.
+
+    Raises:
+        FileNotFoundError: If a path or a labelled frame does not exist.
+        ValueError: If a label line is malformed, or no frame is labelled under ``paths``.
+
+    """
+    config = config or Config()
+    frames: list[dict[str, Any]] = []
+    for labels_path in _label_files(paths, "*.frames.jsonl"):
+        for number, label in enumerate(_read_labels(labels_path), 1):
+            _check_frame(label, f"{labels_path}:{number}")
+            png = labels_path.with_name(label["frame"])
+            if not png.is_file():
+                raise FileNotFoundError(f"{labels_path}:{number}: no frame {png.name} beside it")
+            answer = _caption(config, png.read_bytes(), "")
+            text = answer["text"] if answer else ""
+            latex = answer["latex"] if answer else None
+            frames.append(
+                {
+                    "frame": label["frame"],
+                    "kind": label["kind"],
+                    "failed": answer is None,
+                    "cer": round(character_error_rate(text, label["text"]), 3),
+                    "formulas": len(label["latex"]),
+                    "missed": [f for f in label["latex"] if not formula_found(f, latex)],
+                }
+            )
+    if not frames:
+        raise ValueError(f"no labelled frame in a *.frames.jsonl under {paths}")
+    return {
+        "model": config.vision_model,
+        "prompt": VISION_PROMPT_VERSION,
+        "kinds": {
+            kind: _vision_metrics([f for f in frames if f["kind"] == kind])
+            for kind in KINDS
+            if any(f["kind"] == kind for f in frames)
+        },
+        "total": _vision_metrics(frames),
+        "frames": frames,
+    }
+
+
+def format_vision_report(report: dict[str, Any]) -> str:
+    """Render :func:`evaluate_vision`'s report as a table per lecture type, then per frame."""
+    rows = [*report["kinds"].items(), ("TOTAL", report["total"])]
+    lines = [
+        f"vision model {report['model']} (prompt {report['prompt']})",
+        f"{'lecture type':<14}{'frames':>7}{'failed':>7}{'CER':>7}{'formulas':>10}{'found':>7}"
+        f"{'recall':>8}",
+    ]
+    for name, m in rows:
+        recall = "-" if m["formula_recall"] is None else f"{m['formula_recall']:.2f}"
+        lines.append(
+            f"{name:<14}{m['frames']:>7}{m['failed']:>7}{m['cer']:>7.2f}{m['formulas']:>10}"
+            f"{m['formulas_found']:>7}{recall:>8}"
+        )
+    lines += ["", "per frame, worst text first:"]
+    for f in sorted(report["frames"], key=lambda f: -f["cer"]):
+        found = f"{f['formulas'] - len(f['missed'])}/{f['formulas']}"
+        failed = "  FAILED" if f["failed"] else ""
+        lines.append(f"  {f['cer']:.2f}  {found:>5}  {f['kind']:<10} {f['frame']}{failed}")
+        lines += [f"        missed: {formula}" for formula in f["missed"]]
+    return "\n".join(lines)
+
+
+def _check_frame(label: Any, where: str) -> None:
+    """Raise ``ValueError`` naming ``where`` unless ``label`` is one well-formed frame label."""
+    problem = None
+    if not isinstance(label, dict):
+        problem = "not a JSON object"
+    elif not isinstance(label.get("frame"), str) or Path(label["frame"]).name != label["frame"]:
+        problem = "frame must be a file name beside the labels"
+    elif label.get("kind") not in KINDS:
+        problem = f"kind must be one of {', '.join(KINDS)}"
+    elif not isinstance(label.get("text"), str):
+        problem = "text must be a string"
+    elif not isinstance(label.get("latex"), list) or not all(
+        isinstance(x, str) and x.strip() for x in label["latex"]
+    ):
+        problem = "latex must be a list of formulas"
+    elif not (label.get("diagram") is None or isinstance(label["diagram"], str)):
+        problem = "diagram must be a string or null"
+    if problem:
+        raise ValueError(f"{where}: {problem}")
+
+
+def _vision_metrics(frames: list[dict[str, Any]]) -> dict[str, Any]:
+    formulas = sum(f["formulas"] for f in frames)
+    found = formulas - sum(len(f["missed"]) for f in frames)
+    return {
+        "frames": len(frames),
+        "failed": sum(f["failed"] for f in frames),
+        "cer": round(sum(f["cer"] for f in frames) / len(frames), 3),
+        "formulas": formulas,
+        "formulas_found": found,
+        "formula_recall": round(found / formulas, 3) if formulas else None,
+    }
+
+
+def _plain(text: str) -> str:
+    return " ".join(text.casefold().split())
+
+
+def _latex(formula: str) -> str:
+    formula = _LATEX_NOISE.sub("", formula)
+    formula = re.sub(r"\\[dt]frac(?![a-zA-Z])", r"\\frac", formula)
+    return "".join(formula.split())
+
+
+def _distance(a: str, b: str) -> int:
+    """Count the edits between two strings: insertions, deletions and substitutions."""
+    previous = list(range(len(b) + 1))
+    for i, x in enumerate(a, 1):
+        current = [i]
+        for j, y in enumerate(b, 1):
+            current.append(min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (x != y)))
+        previous = current
+    return previous[-1]
+
+
+def _substring_distance(needle: str, haystack: str) -> int:
+    """Count the fewest edits that turn some stretch of ``haystack`` into ``needle``."""
+    previous = [0] * (len(haystack) + 1)  # a match may start anywhere in the haystack
+    for i, x in enumerate(needle, 1):
+        current = [i]
+        for j, y in enumerate(haystack, 1):
+            current.append(min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (x != y)))
+        previous = current
+    return min(previous)

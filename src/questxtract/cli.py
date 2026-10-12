@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import __version__
 from .config import Config, load_config
-from .evaluate import evaluate, format_report
+from .evaluate import evaluate, evaluate_vision, format_report, format_vision_report
 from .export import result_to_json, write_questions
 from .models import Context, Stage, Transcript
 from .pipeline import STAGES, run
@@ -220,14 +220,19 @@ def _with_llm(config: Config) -> Config:
             timeout_seconds=max(config.timeout_seconds, _THINKING_TIMEOUT_SECONDS)
         )
     if config.detector == "llm":
-        if importlib.util.find_spec("openai") is None:
-            raise ValueError("--detector llm needs the LLM extra: pip install 'questxtract[llm]'")
-        if config.base_url is None and not config.api_key:
-            raise ValueError(
-                "--detector llm needs OPENAI_API_KEY in the environment or .env, "
-                "or --llm-url for a local server"
-            )
+        _check_endpoint(config, "--detector llm")
     return config
+
+
+def _check_endpoint(config: Config, what: str) -> None:
+    """Raise ``ValueError`` if ``what`` cannot reach a model: no extra, or no key nor endpoint."""
+    if importlib.util.find_spec("openai") is None:
+        raise ValueError(f"{what} needs the LLM extra: pip install 'questxtract[llm]'")
+    if config.base_url is None and not config.api_key:
+        raise ValueError(
+            f"{what} needs OPENAI_API_KEY in the environment or .env, "
+            "or --llm-url (base_url) for a local server"
+        )
 
 
 # Vision flags (#61). The vision design is still moving in M3 (ink curve #133, layout probe #57,
@@ -257,15 +262,7 @@ def _with_vision(config: Config, source: Path) -> Config:
     if not has_video(source):
         print(f"note: {source.name} has no video, so the board is not read", file=sys.stderr)
         return config.replace(vision_enabled=False)
-    if importlib.util.find_spec("openai") is None:
-        raise ValueError(
-            "--vision / vision_enabled needs the LLM extra: pip install 'questxtract[llm]'"
-        )
-    if config.base_url is None and not config.api_key:
-        raise ValueError(
-            "--vision / vision_enabled needs OPENAI_API_KEY in the environment or .env, "
-            "or --llm-url (base_url) for a local server"
-        )
+    _check_endpoint(config, "--vision / vision_enabled")
     return config
 
 
@@ -321,13 +318,21 @@ def _transcribe(args: argparse.Namespace) -> int:
 
 
 def _eval(args: argparse.Namespace) -> int:
-    """Score the pipeline against the labelled set."""
+    """Score the pipeline, or with ``--vision`` the vision model, against the labelled set."""
     try:
-        report = evaluate(args.paths, _with_llm(_config(args)))
+        config = _with_llm(_config(args))
+        if args.vision:
+            _check_endpoint(config, "eval --vision")
+            report = evaluate_vision(args.paths, config)
+        else:
+            report = evaluate(args.paths, config)
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    print(json.dumps(report, indent=2) if args.json else format_report(report))
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(format_vision_report(report) if args.vision else format_report(report))
     return 0
 
 
@@ -470,7 +475,15 @@ def build_parser() -> argparse.ArgumentParser:
         "eval", parents=[configured, llm], help="score against the labelled set"
     )
     evaluation.add_argument(
-        "paths", nargs="+", help="*.labels.jsonl files, or directories holding them"
+        "paths",
+        nargs="+",
+        help="*.labels.jsonl files, or directories holding them (with --vision: *.frames.jsonl)",
+    )
+    evaluation.add_argument(
+        "--vision",
+        action="store_true",
+        help="score the vision model (vision_model, at --llm-url) on the labelled keyframes "
+        "instead of question detection; calls the model once per frame, then caches",
     )
     evaluation.add_argument("--json", action="store_true", help="machine-readable, for CI")
     evaluation.set_defaults(handler=_eval)

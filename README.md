@@ -111,6 +111,7 @@ To measure the detector against the labelled reference recordings in `tests/data
 questxtract eval tests/data/          # table, sweep, missed questions and false positives
 questxtract eval tests/data/ --json   # the same report, machine-readable
 questxtract eval tests/data/ --detector llm --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
+questxtract eval --vision tests/data/vision/   # how well vision_model reads slides and boards
 ```
 
 #### Setting up the API key

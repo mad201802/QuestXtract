@@ -37,6 +37,9 @@ data file.
 These three are the calibration recordings the design is built around (architecture.md 1.2).
 Additional recordings can be added the same way; add a row here for each.
 
+Labelled keyframes for scoring the vision model, from these and other lectures, are in
+[`vision/`](vision/README.md), with their own sources and licences.
+
 ### Held-out recordings
 
 | Slug | Recording | URL | Regime |

@@ -11,7 +11,18 @@ import pytest
 
 from questxtract import Config, Transcript
 from questxtract.cli import main
-from questxtract.evaluate import evaluate, match, overlap_ratio, overlaps
+from questxtract.evaluate import (
+    KINDS,
+    _check_frame,
+    character_error_rate,
+    evaluate,
+    evaluate_vision,
+    format_vision_report,
+    formula_found,
+    match,
+    overlap_ratio,
+    overlaps,
+)
 from questxtract.llm import JUDGE_PROMPT_VERSION
 from questxtract.sentences import split_sentences
 
@@ -152,3 +163,187 @@ def test_nfr2_recall_on_the_held_out_recordings() -> None:
     report = evaluate([Path(__file__).parent / "data" / "held_out"])
     assert set(report["recordings"]) == {"mit_6_003_l8"}
     assert report["total"]["recall"] >= 0.5
+
+
+VISION = Path(__file__).parent / "data" / "vision"
+
+
+@pytest.mark.parametrize(
+    ("predicted", "reference", "rate"),
+    [
+        ("Stable sort", "Stable sort", 0.0),
+        ("stable   SORT\n", "Stable sort", 0.0),  # case and spacing are not misreadings
+        ("Stable sart", "Stable sort", 1 / 11),
+        ("", "Stable sort", 1.0),
+        ("Stable sort, and much more invented text", "Stable sort", 1.0),  # capped at 1
+        ("", "", 0.0),
+        ("x", "", 1.0),
+    ],
+)
+def test_character_error_rate(predicted: str, reference: str, rate: float) -> None:
+    assert character_error_rate(predicted, reference) == pytest.approx(rate)
+
+
+@pytest.mark.parametrize(
+    ("formula", "latex", "found"),
+    [
+        (r"\frac{1}{1+t^2}", r"\left( \dfrac{1}{1 + t^2} \right)", True),
+        (r"\int_0^1 f \, dx", r"$\int_0^1 f\,dx$", True),
+        (r"y = \sum w_i x_i", "a = b\ny = \\sum w_i x_i\nc = d", True),  # among others
+        (r"y = \sum w_i x_i", r"y = \sum w_i x_{i}", True),  # a brace more is not a misreading
+        (r"y = \sum w_i x_i", r"y = \prod v_j z_j", False),
+        (r"x(t) = \sin(t)", None, False),
+        (r"\leftarrow", r"\rightarrow", False),  # \left inside a command name is not spacing
+        (r"\quad", None, True),  # nothing left to find once spacing is removed
+    ],
+)
+def test_formula_found(formula: str, latex: str | None, found: bool) -> None:
+    assert formula_found(formula, latex) is found
+
+
+def _frames(folder: Path, name: str, labels: list[dict[str, Any]]) -> Path:
+    folder.mkdir(parents=True, exist_ok=True)
+    for label in labels:
+        (folder / label["frame"]).write_bytes(b"\x89PNG " + label["frame"].encode())
+    path = folder / f"{name}.frames.jsonl"
+    path.write_text("".join(json.dumps(x) + "\n" for x in labels), encoding="utf-8")
+    return path
+
+
+def _frame(frame: str, kind: str, text: str, latex: list[str]) -> dict[str, Any]:
+    return {"frame": frame, "kind": kind, "text": text, "latex": latex, "diagram": None}
+
+
+def _board(text: str, latex: str | None) -> dict[str, Any]:
+    return {"description": "A board.", "text": text, "latex": latex, "confidence": 0.9}
+
+
+def test_vision_accuracy_is_reported_per_lecture_type(
+    tmp_path: Path, fake_llm: Callable[..., Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC #58: scored against a model, the labelled set gives accuracy per lecture type."""
+    monkeypatch.chdir(tmp_path)  # the vision cache is cwd-relative
+    _frames(
+        tmp_path / "set",
+        "lec",
+        [
+            _frame("lec_1.png", "slides", "Stable sort", ["x^2"]),
+            _frame("lec_2.png", "blackboard", "f(c) = 0", ["f(c) = 0", "a < c < b"]),
+            _frame("lec_3.png", "blackboard", "Not cont.", []),
+        ],
+    )
+    client = fake_llm(
+        _board("Stable sort", "x^2"),
+        _board("f(c) = O", "f(c) = 0"),
+        TimeoutError("no answer"),  # the third frame cannot be read: an empty answer
+    )
+
+    with pytest.warns(UserWarning, match="vision: keyframe left out"):
+        report = evaluate_vision([tmp_path / "set"], Config(vision_model="qwen3-vl"))
+
+    assert report["model"] == "qwen3-vl" and report["prompt"] == "v0"
+    assert list(report["kinds"]) == ["slides", "blackboard"]  # in KINDS order
+    assert report["kinds"]["slides"] == {
+        "frames": 1,
+        "failed": 0,
+        "cer": 0.0,
+        "formulas": 1,
+        "formulas_found": 1,
+        "formula_recall": 1.0,
+    }
+    board = report["kinds"]["blackboard"]
+    assert board["frames"] == 2 and board["failed"] == 1
+    assert board["cer"] == pytest.approx((0.125 + 1.0) / 2, abs=1e-3)
+    assert (board["formulas"], board["formulas_found"], board["formula_recall"]) == (2, 1, 0.5)
+    assert report["total"]["frames"] == 3 and report["total"]["formula_recall"] == 0.667
+    assert report["frames"][1]["missed"] == ["a < c < b"]
+    # The frame went to the model as the vision stage sends a keyframe, with no speech.
+    system, user = client.requests[0]["messages"]
+    assert "Frame kind: unknown" in system["content"] and "-" in system["content"]
+    assert user["content"][0]["image_url"]["url"].startswith("data:image/png;base64,")
+
+    table = format_vision_report(report)
+    assert "slides" in table and "blackboard" in table and "TOTAL" in table
+    assert "FAILED" in table and "missed: a < c < b" in table
+
+
+def test_vision_eval_reads_each_frame_once(
+    tmp_path: Path, fake_llm: Callable[..., Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _frames(tmp_path, "lec", [_frame("lec_1.png", "tablet", "h(t)", [])])
+    client = fake_llm(_board("h(t)", None))
+    first = evaluate_vision([tmp_path])
+    assert evaluate_vision([tmp_path / "lec.frames.jsonl"]) == first
+    assert len(client.requests) == 1  # the second run is answered from the cache
+
+
+@pytest.mark.parametrize(
+    ("label", "problem"),
+    [
+        ([], "not a JSON object"),
+        (_frame("../x.png", "slides", "", []), "frame must be a file name"),
+        (_frame("a.png", "lecture", "", []), "kind must be one of"),
+        ({**_frame("a.png", "slides", "", []), "text": None}, "text must be"),
+        (_frame("a.png", "slides", "", "x^2"), "latex must be a list"),  # type: ignore[arg-type]
+        (_frame("a.png", "slides", "", [" "]), "latex must be a list"),
+        ({**_frame("a.png", "slides", "", []), "diagram": 3}, "diagram must be"),
+    ],
+)
+def test_a_malformed_frame_label_names_its_line(label: Any, problem: str) -> None:
+    with pytest.raises(ValueError, match=f"lec.frames.jsonl:2: {problem}"):
+        _check_frame(label, "lec.frames.jsonl:2")
+
+
+def test_vision_eval_rejects_a_missing_frame_or_an_empty_set(tmp_path: Path) -> None:
+    path = _frames(tmp_path, "lec", [_frame("lec_1.png", "slides", "", [])])
+    (tmp_path / "lec_1.png").unlink()
+    with pytest.raises(FileNotFoundError, match="lec.frames.jsonl:1: no frame lec_1.png"):
+        evaluate_vision([path])
+    (tmp_path / "empty").mkdir()
+    with pytest.raises(ValueError, match="no labelled frame"):
+        evaluate_vision([tmp_path / "empty"])
+
+
+def test_cli_eval_vision_prints_the_table_and_json(
+    tmp_path: Path,
+    fake_llm: Callable[..., Any],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _frames(tmp_path, "lec", [_frame("lec_1.png", "whiteboard", "MLPs", [])])
+    fake_llm(_board("MLPs", None))
+    url = ["--llm-url", "http://localhost:11434/v1"]
+    assert main(["eval", "--vision", str(tmp_path), *url]) == 0
+    assert "whiteboard" in capsys.readouterr().out
+    assert main(["eval", "--vision", str(tmp_path), *url, "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["kinds"]["whiteboard"]["cer"] == 0.0
+
+
+def test_cli_eval_vision_needs_a_model_to_ask(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["eval", "--vision", str(tmp_path)]) == 1
+    assert "eval --vision needs OPENAI_API_KEY" in capsys.readouterr().err
+
+
+def test_the_labelled_keyframes_cover_every_lecture_type() -> None:
+    """AC #58: every keyframe is tagged, and every lecture type has at least 5 frames."""
+    counts = dict.fromkeys(KINDS, 0)
+    for path in sorted(VISION.glob("*.frames.jsonl")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for number, line in enumerate(lines, 1):
+            label = json.loads(line)
+            _check_frame(label, f"{path.name}:{number}")
+            assert (VISION / label["frame"]).is_file(), label["frame"]
+            assert label["frame"].startswith(path.name.removesuffix(".frames.jsonl") + "_")
+            counts[label["kind"]] += 1
+    assert all(n >= 5 for n in counts.values()), counts
+
+
+def test_every_labelled_recording_has_its_source_in_the_readme() -> None:
+    """AC #58: only shareable recordings, each listed with its source and licence."""
+    readme = (VISION / "README.md").read_text(encoding="utf-8")
+    for path in VISION.glob("*.frames.jsonl"):
+        assert f"`{path.name.removesuffix('.frames.jsonl')}`" in readme, path.name

@@ -1,49 +1,163 @@
-# Vision spike material (preliminary)
+# Labelled keyframes for the vision model
 
-Issue #52. Work in progress: the frames, the comparison and the recommended model are not
-final, and this file changes with them. Findings go on the issue and a summary in
-[`docs/architecture.md`](../../../docs/architecture.md) 6.1.
+Ground truth for `questxtract eval --vision` (#58): 30 keyframes from six lectures, each labelled
+with the text on the board, its formulas as LaTeX and a line on any diagram, so the vision model
+can be scored the way `tests/data/*.labels.jsonl` score question detection. The prompt and the
+raw answers of the model comparison (#52) live here too.
 
-## Contents
+```bash
+uv run questxtract eval --vision tests/data/vision/              # gpt-5.6-luna, needs OPENAI_API_KEY
+uv run questxtract eval --vision tests/data/vision/ --llm-url URL # any OpenAI-compatible endpoint
+```
+
+The model is `vision_model` (set it in `questxtract.toml`); each frame is sent as the vision
+stage sends a keyframe (prompt v0, frame kind `unknown`, no speech) and the answer is cached, so a
+second run makes no calls. CI never runs it: it needs a real model. CI does check the labels
+(`tests/test_evaluate.py`): every line is well formed, its PNG exists, and every lecture type has
+at least 5 frames.
+
+## Layout
+
+```text
+tests/data/vision/
+  <recording-name>.frames.jsonl      one file per recording, one line per labelled frame
+  <recording-name>_<seconds>.png     the frames, named by the second they were taken at
+  prompt_v0.txt, prompt_v1.txt       the captioning prompts of #52
+  prompt_v0.schema.json              the JSON the model must return
+  results/<run>/results.jsonl        raw answers of the #52 comparison
+```
+
+Slugs follow `tests/data/README.md`: a short, stable name per recording.
+
+## Schema
+
+```json
+{"frame": "mit_18_404j_l1_02009.0.png", "kind": "slides", "text": "Regular Languages – Examples\n...", "latex": ["L(M_1) = \\{w \\mid w \\text{ contains substring } 11\\} = A"], "diagram": "The state diagram of automaton M1: ..."}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `frame` | string | PNG file name beside the labels |
+| `kind` | string | lecture type: `slides`, `blackboard`, `whiteboard` or `tablet` (handwriting on a tablet, or paper under a document camera); the frame kinds prompt v0 names |
+| `text` | string | every piece of text a careful reader can make out at full resolution, in reading order, one line per line on the board; `""` for a blank board |
+| `latex` | list of strings | each formula on the board, once, as LaTeX; `[]` when there is none |
+| `diagram` | string or null | one line on any diagram, graph or figure; `null` when there is none |
+
+**Conventions.**
+
+- `text` keeps the spelling on the board ("independet" stays). Formulas are also in `text`, typed
+  plainly (`x^2`, `∫`, `≤`, `lim_{x→-2}`).
+- Words cut off at the edge of the frame are written as far as they are visible ("ukushima").
+  Writing too small or smudged to read is left out, as is ghosted chalk from an erased board.
+- Text inside a diagram (state names, axis labels, edge labels) belongs to `diagram`, not
+  `text`.
+- Not board content, so left out: the lecturer, the room and its signs, video overlays (a
+  university logo, the presenter's name tag, a webcam column), and the drawing app's toolbar
+  and status bar. Text printed on a slide, its footer included, is board content.
+- No frame shows a student's face.
+
+**Status.** The labels were drafted by an LLM (Claude) reading each frame at full resolution, and
+are provisional until a human has checked them against the frames, as for `../held_out/`.
+
+## Scoring
+
+Per frame, `evaluate.py` computes:
+
+- **CER**, the character error rate of the model's `text` against the label: edits (insert,
+  delete, substitute) per label character after casefolding and collapsing whitespace, capped
+  at 1. 0 is a perfect reading, 1 is nothing right.
+- **Formula recall**: a labelled formula counts as found when some stretch of the model's `latex`
+  is within one edit per four characters of it, after removing whitespace, `$`, `\left`,
+  `\right`, `\displaystyle` and spacing commands, and reading `\dfrac`/`\tfrac` as `\frac`.
+
+A frame the model could not read counts as an empty answer and is listed as failed. The report
+gives the mean CER and pooled formula recall per lecture type and in total, then every frame,
+worst first, with the formulas it missed. `diagram` is not scored yet: it is there for a human
+or an LLM judge to compare against.
+
+## Frames
+
+| Lecture type | Frames | From |
+|---|---|---|
+| `blackboard` | 9 | `mit_18_100b_l1` (5), `mit_6_042j_2010_l1` (4) |
+| `tablet` | 9 | `ttk4225_2026_09_14` (5), `math231_2020_r2` (4) |
+| `slides` | 6 | `mit_18_404j_l1` |
+| `whiteboard` | 6 | `uw_machine_intelligence_l13` |
+
+They are keyframes the vision stage's own sampling chooses, written by
+`scripts/extract_keyframes.py` (the stable-view detection of architecture.md 6.4), then
+hand-picked for range: blank and full boards, wide shots with small writing, a lecturer in front
+of the board, ghosted chalk, diagrams, tables and dense formulas. Re-run it on a recording to see
+every candidate:
+
+```bash
+uv run python scripts/extract_keyframes.py lecture.mp4 -o keyframes/ --max-views 400
+```
+
+| Frame | What it tests |
+|---|---|
+| `mit_18_100b_l1_00072.0` | A nearly blank board being wiped: the empty-board answer |
+| `mit_18_100b_l1_00746.0` | Handwriting and two hand-drawn graphs, lecturer partly in front |
+| `mit_18_100b_l1_01507.0` | Wide shot of six boards at once, small writing |
+| `mit_18_100b_l1_02898.0` | Formulas over ghosted chalk from erased boards, camera zoomed on one board |
+| `mit_18_100b_l1_03415.0` | Inequalities and logic arrows, dust and smudges, lecturer pointing |
+| `mit_6_042j_2010_l1_01001.0` | Large numbers and a formula, lecturer writing in front of it, 640x480 |
+| `mit_6_042j_2010_l1_01470.0` | Long handwritten sentences, close-up |
+| `mit_6_042j_2010_l1_01812.0` | A truth table being started over ghosted chalk |
+| `mit_6_042j_2010_l1_02061.0` | Wide shot: a full truth table and a quantified statement, small |
+| `ttk4225_2026_09_14_00257.0` | Printed question slide with a hand-drawn sinusoid (640x360) |
+| `ttk4225_2026_09_14_00423.0` | Printed question with an integral and handwritten boxes and a sketch |
+| `ttk4225_2026_09_14_00758.0` | Printed theorem and formula with handwriting below |
+| `ttk4225_2026_09_14_01265.0` | Handwritten `h(t) = 1/(1+t)`, a graph and a diagram, app toolbar visible |
+| `ttk4225_2026_09_14_01731.0` | Messy handwriting and sketches, app toolbar visible |
+| `math231_2020_r2_00018.0` | Handwritten announcements with highlighting, webcam column |
+| `math231_2020_r2_00180.0` | A limit problem with a fraction, started |
+| `math231_2020_r2_00306.0` | The same page with three lines of working |
+| `math231_2020_r2_00410.0` | Scrolled page: chained limits of fractions, cut off at the top |
+| `mit_18_404j_l1_00264.0` | Text-only slide, two columns, presenter inset |
+| `mit_18_404j_l1_01009.0` | State diagram, set notation and a check-in label |
+| `mit_18_404j_l1_01365.0` | Formal definition with Greek letters and a transition table |
+| `mit_18_404j_l1_01785.0` | Dense definitions with subscripts |
+| `mit_18_404j_l1_02009.0` | Set-builder notation and a state diagram |
+| `mit_18_404j_l1_03284.0` | Proof with products of sets, a struck-out formula and a diagram |
+| `uw_machine_intelligence_l13_00571.0` | A diagram half hidden by the lecturer, cut-off words |
+| `uw_machine_intelligence_l13_01366.0` | A handwritten comparison table |
+| `uw_machine_intelligence_l13_02881.0` | Integral, sum and 3x3 matrices in blue and red, lecturer in front |
+| `uw_machine_intelligence_l13_03420.0` | Matrices and a neuron diagram, lecturer covering part |
+| `uw_machine_intelligence_l13_03811.0` | Two boards: formulas and 3D volume sketches |
+| `uw_machine_intelligence_l13_04659.0` | A pipeline of box sketches with short labels |
+
+## Sources and licences
+
+Frames and labels are derived from the recording and carry its licence, not the repository's MIT
+licence (same rule as `tests/data/README.md`). Only a recording whose licence allows
+redistributing derivatives is used; a public YouTube upload alone is not enough.
+
+| Slug | Recording | URL | Type | Licence |
+|---|---|---|---|---|
+| `mit_18_100b_l1` | MIT 18.100B Real Analysis, Lecture 1 | https://www.youtube.com/watch?v=BWvjy0a1Ffg | blackboard | CC BY-NC-SA 4.0, attribution: MIT OpenCourseWare, 18.100B Real Analysis |
+| `mit_6_042j_2010_l1` | MIT 6.042J Mathematics for Computer Science, Fall 2010, Lecture 1, Tom Leighton | https://www.youtube.com/watch?v=L3LMbpZIKhQ | blackboard | CC BY-NC-SA, attribution: MIT OpenCourseWare, 6.042J Fall 2010. A clip in the video that OCW marks as not covered is not used. |
+| `ttk4225_2026_09_14` | TTK4225, 2026-09-14, P03·12 | https://www.youtube.com/watch?v=ufmTACqiE78 | tablet | the lecturer's own recording, committed with the lecturer's (Damiano's) permission |
+| `math231_2020_r2` | Recitation 2 Recording for Math 231, Fall 2020, Linda Green | https://www.youtube.com/watch?v=8XYYUsFnl4A | tablet | CC BY (YouTube's Creative Commons Attribution licence), attribution: Linda Green |
+| `mit_18_404j_l1` | MIT 18.404J Theory of Computation, Fall 2020, Lecture 1, Michael Sipser | https://www.youtube.com/watch?v=9syvZr-9xwk | slides | CC BY-NC-SA, attribution: MIT OpenCourseWare, 18.404J Fall 2020. OCW notes that some content in the video is not covered; only the lecturer's own slides are used. |
+| `uw_machine_intelligence_l13` | Machine Intelligence, Lecture 13 (Convolutional Neural Networks), Kimia Lab, University of Waterloo | https://www.youtube.com/watch?v=AVwS3VpMGlo | whiteboard | CC BY (YouTube's Creative Commons Attribution licence), attribution: Kimia Lab |
+
+A Brian Douglas video (diagrams) was used locally in #52 for measuring and is never committed: it
+has the standard YouTube licence.
+
+## Prompt and spike results (#52)
 
 | File | What it is |
 |---|---|
 | `prompt_v0.txt` | Captioning prompt v0. `{kind}` is the frame kind from the layout probe (slides, blackboard, whiteboard, handwriting, screencast, unknown); `{speech}` is the transcript overlapping the frame, as context only. |
 | `prompt_v1.txt` | Prompt v0 with a stricter `latex` instruction (every equation, even a short one). It did not change how often the models fill `latex`, so v0 stays. |
 | `prompt_v0.schema.json` | The JSON the model must return: `description`, `text`, `latex` (or `null`), `confidence`, matching `VisualContext` in `models.py`. |
-| `mit_18_100b_l1_<seconds>.png` | Test frames from the MIT lecture, named by the second of the recording they were taken at (table below). `ttk4225_2026_09_14_<seconds>.png` are the same for the TTK4225 lecture (640x360, tablet notes over slides). Diagram frames from a third recording are not committed. |
-
-| Frame | What it tests |
-|---|---|
-| `mit_18_100b_l1_00072.0.png` | A nearly blank board being wiped: the empty-board answer |
-| `mit_18_100b_l1_00746.0.png` | Handwriting and two hand-drawn graphs, lecturer partly in front |
-| `mit_18_100b_l1_01507.0.png` | Wide shot of six boards at once, small writing |
-| `mit_18_100b_l1_02898.0.png` | Formulas over ghosted chalk from erased boards, camera zoomed on one board |
-| `mit_18_100b_l1_03415.0.png` | Inequalities and logic arrows, dust and smudges, lecturer pointing |
-| `ttk4225_2026_09_14_00257.0.png` | Printed question slide with a hand-drawn sinusoid |
-| `ttk4225_2026_09_14_00423.0.png` | Printed question with an integral and handwritten boxes and a sketch |
-| `ttk4225_2026_09_14_00758.0.png` | Printed theorem and formula with handwriting below |
-| `ttk4225_2026_09_14_01265.0.png` | Handwritten `h(t) = 1/(1+t)`, a graph and a diagram, app toolbar visible |
-| `ttk4225_2026_09_14_01731.0.png` | Messy handwriting and sketches, app toolbar visible |
-
-## Frames
-
-About 15 keyframes across lecture types: slides, chalkboard, tablet handwriting and at least one
-diagram-heavy frame. Whiteboard is not covered.
-
-They are keyframes the vision stage's own sampling would choose, written by
-`scripts/extract_keyframes.py` (the stable-view detection of architecture.md 6.4), then
-hand-picked. Re-run it on a recording to see every candidate:
-
-```bash
-uv run python scripts/extract_keyframes.py lecture.mp4 -o keyframes/ --max-views 400
-```
-
-## Results
 
 Raw answers of the model comparison, one line per call: `results/<run>/results.jsonl`, written by
-`scripts/compare_vision.py` (frame, model, seconds, token counts, the answer or the error).
-`results/tesseract/` holds the OCR text. The comparison and its caveats are on #52.
+`scripts/compare_vision.py` (frame, model, seconds, token counts, the answer or the error), over
+the ten MIT 18.100B and TTK4225 frames. `results/tesseract/` holds the OCR text. The comparison
+and its caveats are on #52; the summary is in
+[`docs/architecture.md`](../../../docs/architecture.md) 6.1.
 
 | Run | Models | Frames |
 |---|---|---|
@@ -57,16 +171,3 @@ Raw answers of the model comparison, one line per call: `results/<run>/results.j
 | `claude-hand-graded` | Claude Sonnet 5.5 reading each frame itself and answering in the prompt v0 format. **Not independent**: the same reader wrote the reference text the other models are scored against. | MIT and TTK |
 | `claude-independent-agent` | A fresh Claude agent with no context, given only the prompt and the frames, told to open nothing else | MIT and TTK |
 | `qwen3-vl-2b-instruct-local` | Qwen3-VL 2B through Ollama | MIT |
-
-## Licences
-
-Frames are derived from the recording and carry its licence, not the repository's MIT licence
-(same rule as `tests/data/README.md`).
-
-| Recording | Frames committed? | Licence |
-|---|---|---|
-| MIT 18.100B Real Analysis, L1 | yes, 5 frames | CC BY-NC-SA 4.0, attribution: MIT OpenCourseWare, 18.100B Real Analysis |
-| TTK4225 2026-09-14 | yes, 5 frames | the lecturer's own recordings, committed with the lecturer's (Damiano's) permission |
-| Brian Douglas video (diagrams) | no | standard YouTube licence: used locally for measuring, never committed |
-
-Only commit a frame of a recording whose licence allows redistributing derivatives.
