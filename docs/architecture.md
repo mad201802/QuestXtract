@@ -488,7 +488,7 @@ panning chalkboard camera adds a view per pan, which the cap absorbs until motio
 lands. A lecturer standing still in front of the board for the whole hold is a view of its own
 until de-occlusion.
 
-**Ink curve (planned, M3).** Count ink pixels per sampled frame after an adaptive threshold. A
+**Ink curve (planned, #133).** Count ink pixels per sampled frame after an adaptive threshold. A
 rising curve means writing, a sharp drop is an erase, and the local maximum before a drop is the
 completed board: the keyframe. The recording is cut into **board states** between erase events,
 roughly 20 to 60 per lecture. On slides the same curve works unchanged: a slide change is a large
@@ -496,15 +496,14 @@ ink delta.
 
 ### 6.5 Captioning
 
-One VLM call per view, sent as prompt v0 was measured on #52: the prompt
-(`VISION_PROMPT_VERSION`), filled in with the frame kind (`unknown` until 6.2) and what was said
-while the view was on screen (up to 1500 characters), as the system message, and the keyframe
-alone, as a PNG data URL, as the user message. In M3 the previous state's description and the ink
-difference join it. Out, under a strict JSON schema and checked again in code: `description`,
-`text`, `latex` (or null) and `confidence`. The prompt asks for what is visible only, with
-`[unreadable]` for a word it cannot read. Cached per request, the image included (10.4), so no
-keyframe is sent twice. `latex` is there because prose does not compile, and the M4 animations
-need formulas.
+One VLM call per view, sent as prompt v0 was measured on #52: the prompt (`VISION_PROMPT_VERSION`),
+filled in with the frame kind (`unknown` until 6.2) and what was said while the view was on screen
+(up to 1500 characters), as the system message, and the keyframe alone, as a PNG data URL, as the
+user message. The previous state's description and the ink difference are to join it (planned,
+#137). Out, under a strict JSON schema and checked again in code: `description`, `text`, `latex`
+(or null) and `confidence`. The prompt asks for what is visible only, with `[unreadable]` for a
+word it cannot read. Cached per request, the image included (10.4), so no keyframe is sent twice.
+`latex` is there because prose does not compile, and the M4 animations need formulas.
 
 Each keyframe that was read is written to the cache as `<source_hash>/keyframes/<content
 hash>.png`, and `keyframe_path` holds that path relative to `cache_dir`: a cached result stays
@@ -1164,7 +1163,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not built | #62 |
 | `sentences.py` | 3 sentences | done | |
 | `segments.py` | 4 segments | done | |
-| `vision.py` | 5 vision, attach_visual | done: frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5) and the interval join; the layout probe, de-occlusion and the ink curve are not built | #57 |
+| `vision.py` | 5 vision, attach_visual | done: frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5) and the interval join; the layout probe, de-occlusion and the ink curve are not built | #57, #127, #133 |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery are not built | #48, #78 |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |
