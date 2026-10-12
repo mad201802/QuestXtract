@@ -12,11 +12,12 @@ Both no-op themselves when vision is off, rather than being filtered out by the 
 from __future__ import annotations
 
 import base64
+import hashlib
 import math
 import warnings
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import av
@@ -24,7 +25,7 @@ import numpy as np
 
 from . import endpoint
 from .config import Config
-from .models import Context, Progress, Segment, VisualContext, stage
+from .models import Context, Progress, Segment, Sentence, VisualContext, stage
 
 _COMPARE_HEIGHT = 480  # architecture.md 6.3: change detection compares frames at about 480p
 _GRAY = np.array([0.299, 0.587, 0.114], dtype=np.float32)  # ITU-R BT.601 luma weights
@@ -32,23 +33,40 @@ _NOISE = 32  # grey levels a pixel must move by to count as changed, above codec
 
 # The prompt and the schema are module-level, version-tagged, so a prompt change is a reviewable
 # diff. A change to either changes the cache key, so no stale caption is replayed.
-VISION_PROMPT_VERSION = "v0"  # ponytail: #59, swap in prompt v0 (tests/data/vision/prompt_v0.txt)
+VISION_PROMPT_VERSION = "v0"  # tests/data/vision/prompt_v0.txt, chosen in #52
+_KIND = "unknown"  # what the frame shows; slides, blackboard, ... once the layout probe exists
+_SPEECH_CHARS = 1500  # the speech sent with one keyframe: its own view's words, kept short
+_GIVE_UP_AFTER = 3  # failed readings in a row, before any success, that stop the captioning
 
 _FIELDS = ("description", "text", "latex", "confidence")
 
 _PROMPT = """\
-You read one keyframe of a university lecture recording: a slide, a blackboard, a whiteboard or
-a tablet page. What the lecturer said while it was on screen comes with it, as context only:
-describe what is shown, not what was said.
+You read one frame from a lecture recording: a slide, a blackboard, a whiteboard or tablet notes.
+Describe what is visible on the board or slide, for someone who cannot see it.
 
-Give:
-- description: one or two sentences on what it shows: a slide's topic, a derivation, a diagram.
-- text: the words and symbols written or printed on it, verbatim, in reading order. Leave out
-  what you cannot read; never guess.
-- latex: its formulas as LaTeX, one per line, or null when it shows none.
-- confidence: from 0 to 1, how much of what is shown you could read.
+Frame kind: {kind}
 
-Answer with JSON only.\
+What the lecturer said while this frame was on screen (context only):
+{speech}
+
+Rules:
+- Report only what is visible in the image. The speech helps you read unclear writing, but never
+  copy words, formulas or claims from it that are not on the board.
+- "text": every piece of text on the board or slide, handwritten or printed, in reading order,
+  one line per line on the board. Keep the wording and spelling you see. Mark a word you cannot
+  read as [unreadable]. Empty string when there is no text.
+- "latex": the formulas on the board as LaTeX, one formula per line. null when there is no
+  formula. Do not write LaTeX for plain words.
+- "description": one or two sentences on what the frame shows: the slide or board topic, and any
+  diagram, graph or figure (its parts and how they connect). No text transcription here.
+- "confidence": a number from 0 to 1 for how sure you are of "text" and "latex" together. Use a
+  low value for blur, glare, a lecturer blocking the board, or handwriting you had to guess.
+- Ignore the lecturer, the room, the camera and any on-screen interface.
+- An empty or blank board is a valid answer: empty "text", null "latex", a short "description"
+  saying so, confidence 1 if you are sure it is blank.
+
+Answer with one JSON object and nothing else: \
+{"description": ..., "text": ..., "latex": ..., "confidence": ...}\
 """
 
 _SCHEMA: dict[str, Any] = {
@@ -78,25 +96,90 @@ Crop = tuple[float, float, float, float]  # normalised (x0, y0, x1, y1), from th
     "vision",
     cache="visual",
     uses=(
+        "vision_enabled",
         "vision_fps",
         "vision_model",
         "vision_max_states",
         "vision_change_fraction",
         "vision_change_hold",
+        "base_url",
     ),
+    version=VISION_PROMPT_VERSION,
 )
 def vision(ctx: Context) -> Context:
-    """Capture board states from the recording into ``ctx.visual``.
+    """Capture board states from the recording into ``ctx.visual`` (architecture.md 6.3 to 6.5).
 
-    A no-op unless ``config.vision_enabled``, which is false unless an endpoint is
-    configured, and for a source with no video track (an MP3, or a transcript): there is no
-    board to read. Frame sampling, stable views and the captioning call (architecture.md 6.3
-    to 6.5) exist but are not called yet (#59); the layout probe and de-occlusion are not built.
+    A no-op unless ``config.vision_enabled``, and for a source with no video track (an MP3, or
+    a transcript): there is no board to read. Otherwise the recording is sampled at
+    ``vision_fps`` and cut into stable views, one keyframe each; each keyframe is read by
+    ``vision_model`` together with what was said while its view was on screen, and stored in
+    the cache. A reading that fails leaves that one view out with a warning; when the first
+    readings all fail, the rest are not sent. The layout probe and de-occlusion are not built.
     """
     if not ctx.config.vision_enabled or not _has_video(ctx.source):
         return ctx
-    # ponytail: #59, call sampling, views and captioning from the stage (architecture.md 6.3-6.5).
-    raise NotImplementedError("vision is not implemented yet (#59); set vision_enabled=False")
+    config, report = ctx.config, ctx.progress
+
+    def sampling(_: str, fraction: float) -> None:
+        if report:
+            report("vision", fraction / 2)  # sampling is the first half of the stage
+
+    views = _views(
+        _sample_frames(ctx.source, config.vision_fps, progress=sampling),
+        change=config.vision_change_fraction,
+        hold=config.vision_change_hold,
+        max_views=config.vision_max_states,
+        end=ctx.duration or None,
+    )
+    visual: list[VisualContext] = []
+    failed = 0
+    for index, view in enumerate(views):
+        if report:
+            report("vision", 0.5 + 0.5 * index / len(views))
+        fields = _caption(config, view.keyframe, _speech(ctx.sentences, view.start, view.end))
+        if fields is None:
+            failed += 1
+            if not visual and failed >= _GIVE_UP_AFTER:
+                warnings.warn(
+                    f"vision: the first {failed} keyframes could not be read, so the rest are "
+                    "not sent; check vision_model, the API key and the endpoint",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                break
+            continue
+        path = _store(view.keyframe, config, ctx.source_hash)
+        visual.append(VisualContext(start=view.start, end=view.end, keyframe_path=path, **fields))
+    ctx.visual = tuple(visual)
+    return ctx
+
+
+def _speech(sentences: Sequence[Sentence], start: float, end: float) -> str:
+    """Return what was said while a view was on screen, cut to ``_SPEECH_CHARS`` at a word."""
+    text = " ".join(s.text.strip() for s in sentences if s.start < end and s.end > start)
+    if len(text) <= _SPEECH_CHARS:
+        return text
+    return text[:_SPEECH_CHARS].rsplit(" ", 1)[0] + " ..."
+
+
+def _store(png: bytes, config: Config, source_hash: str) -> str:
+    """Write a keyframe into the cache; return its path relative to ``cache_dir`` (#59).
+
+    Named by its content, so a re-run writes nothing new. Relative to the cache, so a cached
+    result still finds its images from another working directory and board-state ids do not
+    depend on where the cache lives. ``""`` when the cache cannot be written: the reading is
+    kept, only the image is missing.
+    """
+    relative = PurePosixPath(source_hash or "unhashed", "keyframes")
+    relative /= f"{hashlib.sha256(png).hexdigest()[:16]}.png"
+    path = Path(config.cache_dir) / relative
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.is_file():
+            path.write_bytes(png)
+    except OSError:
+        return ""
+    return relative.as_posix()
 
 
 def _has_video(path: Path) -> bool:
@@ -323,17 +406,14 @@ def _caption(config: Config, png: bytes, speech: str) -> dict[str, Any] | None:
 
     """
     image = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+    # As prompt v0 was measured in #52: the prompt, with its kind and speech filled in, as the
+    # system message, and the image alone as the user message.
+    prompt = _PROMPT.replace("{kind}", _KIND).replace("{speech}", speech.strip() or "-")
     request: dict[str, Any] = {
         "model": config.vision_model,
         "messages": [
-            {"role": "system", "content": _PROMPT},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": f"Said while on screen: {speech.strip() or '-'}"},
-                    {"type": "image_url", "image_url": {"url": image}},
-                ],
-            },
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": [{"type": "image_url", "image_url": {"url": image}}]},
         ],
         "response_format": _SCHEMA,
     }
