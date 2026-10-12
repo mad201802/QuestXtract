@@ -4,6 +4,12 @@
 
 ### Added
 
+- Vision finds the slides or board first: three frames from across the recording go to
+  `vision_model` in one request, which answers where the content is and what kind it is
+  (`slides`, `blackboard`, `whiteboard`, `handwriting`, `screencast` or `unknown`). Frames are
+  cropped to that region, so the lecturer's camera or a screenshare frame no longer starts new
+  board states, and the kind goes into the captioning prompt. One answer holds for the whole
+  recording. When the probe fails, vision reads the full frame as before, with a warning. (#57)
 - Vision: with `vision_enabled = true` (in `questxtract.toml`) and a recording with a video
   track, the slides or board are read. Each stable view's keyframe goes to `vision_model`,
   together with what was said while it was on screen, and comes back as a board state in

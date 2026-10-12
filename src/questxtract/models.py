@@ -297,6 +297,25 @@ class VisualContext:
 
 
 @dataclass(frozen=True, kw_only=True)
+class Layout:
+    """Where the lecture content sits in the frame, and what it is (architecture.md 6.2).
+
+    One answer for the whole recording, from the layout probe. The defaults, the full frame
+    and ``unknown``, are what vision uses when the probe is off or fails.
+
+    Args:
+        content_region: The content's box as fractions of the frame, ``(x0, y0, x1, y1)``
+            from the top-left corner.
+        kind: ``slides``, ``blackboard``, ``whiteboard``, ``handwriting`` (tablet or paper),
+            ``screencast`` or ``unknown``.
+
+    """
+
+    content_region: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
+    kind: str = "unknown"
+
+
+@dataclass(frozen=True, kw_only=True)
 class QuestionCandidate:
     """A sentence that detection believes is a question (architecture.md 7).
 
@@ -364,6 +383,7 @@ class Context:
     transcript: Transcript | None = None
     sentences: tuple[Sentence, ...] = ()
     segments: tuple[Segment, ...] = ()
+    layout: Layout = field(default_factory=Layout)  # the full frame until the probe says else
     visual: tuple[VisualContext, ...] = ()  # board states; joined to segments by attach_visual
     candidates: tuple[QuestionCandidate, ...] = ()
     pairs: tuple[QAPair, ...] = ()

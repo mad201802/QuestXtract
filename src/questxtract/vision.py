@@ -1,11 +1,14 @@
 """Stage 5: optional enrichment of the audio with what is on the board.
 
-Two stages, not one, because of architecture.md 11.1 rule 4: capture is expensive and caches
-as ``vision.json``, while the interval join is eight lines and always recomputes. Nailing
-one board state to one segment at capture time would bake in a wrong join that every
-consumer inherits.
+Three stages. ``layout`` asks the model once where the content is and what it is (6.2), so
+``vision`` can crop to it and tell the captioning prompt which kind of frame it reads.
 
-Both no-op themselves when vision is off, rather than being filtered out by the runner
+Capture and the join are two stages, not one, because of architecture.md 11.1 rule 4:
+capture is expensive and caches as ``vision.json``, while the interval join is eight lines
+and always recomputes. Nailing one board state to one segment at capture time would bake in
+a wrong join that every consumer inherits.
+
+All three no-op themselves when vision is off, rather than being filtered out by the runner
 (rule 3).
 """
 
@@ -25,7 +28,7 @@ import numpy as np
 
 from . import endpoint
 from .config import Config
-from .models import Context, Progress, Segment, Sentence, VisualContext, stage
+from .models import Context, Layout, Progress, Segment, Sentence, VisualContext, stage
 
 _COMPARE_HEIGHT = 480  # architecture.md 6.3: change detection compares frames at about 480p
 _GRAY = np.array([0.299, 0.587, 0.114], dtype=np.float32)  # ITU-R BT.601 luma weights
@@ -34,7 +37,6 @@ _NOISE = 32  # grey levels a pixel must move by to count as changed, above codec
 # The prompt and the schema are module-level, version-tagged, so a prompt change is a reviewable
 # diff. A change to either changes the cache key, so no stale caption is replayed.
 VISION_PROMPT_VERSION = "v0"  # tests/data/vision/prompt_v0.txt, chosen in #52
-_KIND = "unknown"  # what the frame shows; slides, blackboard, ... once the layout probe exists
 _SPEECH_CHARS = 1500  # the speech sent with one keyframe: its own view's words, kept short
 _GIVE_UP_AFTER = 3  # failed readings in a row, before any success, that stop the captioning
 
@@ -91,6 +93,160 @@ _SCHEMA: dict[str, Any] = {
 Frame = np.ndarray[Any, np.dtype[np.uint8]]
 Crop = tuple[float, float, float, float]  # normalised (x0, y0, x1, y1), from the layout probe
 
+_FULL_FRAME: Crop = (0.0, 0.0, 1.0, 1.0)
+_KINDS = ("slides", "blackboard", "whiteboard", "handwriting", "screencast", "unknown")
+_PROBE_AT = (0.2, 0.5, 0.8)  # where in the recording the probe's three frames are taken
+_PROBE_WIDTH = 640  # the region is in fractions, so a small frame shows it as well
+_REGION_PAD = 0.02  # VLM boxes are loose; a margin keeps the board's edges in the crop
+_REGION_MIN_AREA = 0.1  # a smaller box is more likely a misreading than the content
+
+_LAYOUT_PROMPT = """\
+You see three frames taken from across one lecture recording. Find where the lecture content is:
+the slides, the board or the written notes.
+
+Rules:
+- "content_region": the box around the content as [x0, y0, x1, y1], fractions of the frame's
+  width and height measured from its top-left corner, each from 0 to 1. Leave out the lecturer's
+  camera, the room around the board, and on-screen interface such as toolbars, a video-call
+  window or a taskbar. Give one box that holds the content in all three frames. If the content
+  fills the frame, answer [0, 0, 1, 1].
+- "kind": what the content is.
+  "slides": prepared slides with printed text and figures.
+  "blackboard": chalk on a blackboard.
+  "whiteboard": marker on a whiteboard.
+  "handwriting": writing on a tablet or on paper under a camera, also over slides.
+  "screencast": a computer screen with code, a terminal or an application.
+  "unknown": none of these, or you cannot tell.
+
+Answer with one JSON object and nothing else: {"content_region": [x0, y0, x1, y1], "kind": ...}\
+"""
+
+_LAYOUT_SCHEMA: dict[str, Any] = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "layout",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "content_region": {"type": "array", "items": {"type": "number"}},
+                "kind": {"type": "string", "enum": list(_KINDS)},
+            },
+            "required": ["content_region", "kind"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+
+@stage("layout")
+def layout(ctx: Context) -> Context:
+    """Find where the content is and what kind it is, once per recording (architecture.md 6.2).
+
+    A no-op unless ``config.vision_enabled``, and for a source with no video track. Three
+    frames from across the recording go to ``vision_model`` in one request; the answer sets
+    ``ctx.layout``. Any failure of the endpoint, the model or the recording leaves the full
+    frame and ``unknown`` with a warning: the probe only sharpens vision, so it never ends the
+    run. Not stage-cached: the request is cached by :func:`endpoint.ask`, which keeps only a
+    valid answer, so a probe that failed is asked again on the next run.
+
+    Raises:
+        RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
+        ValueError: If the settings cannot be used, such as an unreadable ``.env``.
+
+    """
+    if not ctx.config.vision_enabled or not _has_video(ctx.source):
+        return ctx
+    try:
+        frames = _probe_frames(ctx.source)
+    except (av.error.FFmpegError, OSError) as exc:
+        return _fallback(ctx, f"the recording could not be read: {exc}")
+    if not frames:
+        return _fallback(ctx, "the recording has no frame to show")
+    images = [{"type": "image_url", "image_url": {"url": _data_url(png)}} for png in frames]
+    request: dict[str, Any] = {
+        "model": ctx.config.vision_model,
+        "messages": [
+            {"role": "system", "content": _LAYOUT_PROMPT},
+            {"role": "user", "content": images},
+        ],
+        "response_format": _LAYOUT_SCHEMA,
+    }
+    try:
+        answer = endpoint.ask(ctx.config, request, name="layout")
+    except (ConnectionError, endpoint.InvalidAnswer) as exc:
+        return _fallback(ctx, str(exc))
+    found = _layout_from(answer)
+    if found is None:
+        return _fallback(ctx, f"{ctx.config.vision_model} answered with a malformed layout")
+    ctx.layout = found
+    return ctx
+
+
+def _fallback(ctx: Context, why: str) -> Context:
+    warnings.warn(
+        f"vision: layout probe failed, using the full frame: {why}", UserWarning, stacklevel=3
+    )
+    ctx.layout = Layout()
+    return ctx
+
+
+def _probe_frames(path: Path) -> list[bytes]:
+    """Take the frames at ``_PROBE_AT`` of the recording, as PNG, ``_PROBE_WIDTH`` wide at most.
+
+    Seeks to each one rather than decoding the whole recording. Without a known duration,
+    only the first frame.
+    """
+    pngs: list[bytes] = []
+    with av.open(str(path)) as container:
+        stream = container.streams.video[0]
+        duration = container.duration / av.time_base if container.duration else 0.0
+        for fraction in _PROBE_AT if duration else (0.0,):
+            target = duration * fraction
+            container.seek(int(target * av.time_base))  # to the keyframe at or before it
+            for frame in container.decode(stream):
+                if frame.time is not None and frame.time + 1e-6 < target:
+                    continue
+                width = min(frame.width, _PROBE_WIDTH)
+                height = round(frame.height * width / frame.width / 2) * 2 or 2
+                picture: Frame = frame.reformat(width=width, height=height).to_ndarray(
+                    format="rgb24"
+                )
+                pngs.append(_png(picture))
+                break
+    return pngs
+
+
+def _layout_from(answer: dict[str, Any]) -> Layout | None:
+    """Return the :class:`Layout` an answer gives, or ``None`` when it is malformed.
+
+    The box is padded by ``_REGION_PAD`` on each side, within the frame. A box smaller than
+    ``_REGION_MIN_AREA`` of the frame is not trusted: the kind is kept, the crop is not.
+    """
+    region, kind = answer.get("content_region"), answer.get("kind")
+    if kind not in _KINDS or not isinstance(region, list) or len(region) != 4:
+        return None
+    if not all(
+        isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in region
+    ):
+        return None
+    x0, y0, x1, y1 = (float(v) for v in region)
+    if not (0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1):
+        return None
+    if (x1 - x0) * (y1 - y0) < _REGION_MIN_AREA:
+        return Layout(kind=str(kind))
+    padded = (
+        max(0.0, x0 - _REGION_PAD),
+        max(0.0, y0 - _REGION_PAD),
+        min(1.0, x1 + _REGION_PAD),
+        min(1.0, y1 + _REGION_PAD),
+    )
+    return Layout(content_region=padded, kind=str(kind))
+
+
+def _data_url(png: bytes) -> str:
+    return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+
 
 @stage(
     "vision",
@@ -114,7 +270,9 @@ def vision(ctx: Context) -> Context:
     ``vision_fps`` and cut into stable views, one keyframe each; each keyframe is read by
     ``vision_model`` together with what was said while its view was on screen, and stored in
     the cache. A reading that fails leaves that one view out with a warning; when the first
-    readings all fail, the rest are not sent. The layout probe and de-occlusion are not built.
+    readings all fail, the rest are not sent. Frames are cropped to the ``layout`` stage's
+    ``content_region`` and its ``kind`` goes into the prompt; one answer holds for the whole
+    recording. De-occlusion is not built.
     """
     if not ctx.config.vision_enabled or not _has_video(ctx.source):
         return ctx
@@ -124,8 +282,10 @@ def vision(ctx: Context) -> Context:
         if report:
             report("vision", fraction / 2)  # sampling is the first half of the stage
 
+    region = ctx.layout.content_region
+    crop = None if region == _FULL_FRAME else region
     views = _views(
-        _sample_frames(ctx.source, config.vision_fps, progress=sampling),
+        _sample_frames(ctx.source, config.vision_fps, crop=crop, progress=sampling),
         change=config.vision_change_fraction,
         hold=config.vision_change_hold,
         max_views=config.vision_max_states,
@@ -136,7 +296,8 @@ def vision(ctx: Context) -> Context:
     for index, view in enumerate(views):
         if report:
             report("vision", 0.5 + 0.5 * index / len(views))
-        fields = _caption(config, view.keyframe, _speech(ctx.sentences, view.start, view.end))
+        speech = _speech(ctx.sentences, view.start, view.end)
+        fields = _caption(config, view.keyframe, speech, kind=ctx.layout.kind)
         if fields is None:
             failed += 1
             if not visual and failed >= _GIVE_UP_AFTER:
@@ -389,26 +550,29 @@ def _length(view: _View) -> float:
     return view.end - view.start
 
 
-def _caption(config: Config, png: bytes, speech: str) -> dict[str, Any] | None:
+def _caption(
+    config: Config, png: bytes, speech: str, *, kind: str = "unknown"
+) -> dict[str, Any] | None:
     """Read one keyframe with the vision model (architecture.md 6.5).
 
     ``png`` is the keyframe as :class:`_View` holds it; ``speech`` is what was said while its
-    view was on screen. Returns the :class:`VisualContext` fields the model reads, or ``None``
-    with a warning when the call fails or a field is malformed: a board description only
-    enriches questions the pipeline already found, so unlike the judge, vision never ends the
-    run. Cached on the request, image included (:func:`endpoint.ask`). Only what the endpoint or
-    the model did wrong is tolerated; a setting that cannot be used, such as an unreadable
-    ``.env``, is a user error that would drop every keyframe the same way, so it is raised.
+    view was on screen; ``kind`` is what the layout probe says the frame shows. Returns the
+    :class:`VisualContext` fields the model reads, or ``None`` with a warning when the call
+    fails or a field is malformed: a board description only enriches questions the pipeline
+    already found, so unlike the judge, vision never ends the run. Cached on the request,
+    image included (:func:`endpoint.ask`). Only what the endpoint or the model did wrong is
+    tolerated; a setting that cannot be used, such as an unreadable ``.env``, is a user error
+    that would drop every keyframe the same way, so it is raised.
 
     Raises:
         RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
         ValueError: If the settings cannot be used, such as an unreadable ``.env``.
 
     """
-    image = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+    image = _data_url(png)
     # As prompt v0 was measured in #52: the prompt, with its kind and speech filled in, as the
     # system message, and the image alone as the user message.
-    prompt = _PROMPT.replace("{kind}", _KIND).replace("{speech}", speech.strip() or "-")
+    prompt = _PROMPT.replace("{kind}", kind).replace("{speech}", speech.strip() or "-")
     request: dict[str, Any] = {
         "model": config.vision_model,
         "messages": [

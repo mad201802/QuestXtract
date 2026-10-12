@@ -14,6 +14,7 @@ from .media import MediaError, extract_audio
 from .models import (
     AsrSegment,
     Context,
+    Layout,
     QAPair,
     QuestionCandidate,
     SchemaError,
@@ -37,6 +38,7 @@ __all__ = [
     "AsrSegment",
     "Config",
     "Context",
+    "Layout",
     "MediaError",
     "QAPair",
     "Question",
