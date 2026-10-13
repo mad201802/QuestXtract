@@ -18,6 +18,7 @@ from .evaluate import evaluate, format_report
 from .export import result_to_json, write_questions
 from .models import Context, Stage, Transcript
 from .pipeline import STAGES, run
+from .vision import has_video
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
 
@@ -226,6 +227,28 @@ def _with_llm(config: Config) -> Config:
     return config
 
 
+def _with_vision(config: Config, source: Path) -> None:
+    """Check that vision can read the board before transcription and sampling run.
+
+    Only for a recording with a video track: with ``vision_enabled`` in the TOML file, an MP3
+    or a transcript still runs without the extra or a key, since there is no board to read.
+
+    Raises:
+        ValueError: If vision would run without the ``[llm]`` extra, or with neither an API key
+            nor a local endpoint.
+
+    """
+    if not config.vision_enabled or not has_video(source):
+        return
+    if importlib.util.find_spec("openai") is None:
+        raise ValueError("vision_enabled needs the LLM extra: pip install 'questxtract[llm]'")
+    if config.base_url is None and not config.api_key:
+        raise ValueError(
+            "vision_enabled needs OPENAI_API_KEY in the environment or .env, "
+            "or base_url for a local server"
+        )
+
+
 def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
     """Run ``stages`` under the progress bar, closing its line if anything interrupts it."""
     try:
@@ -249,6 +272,7 @@ def _process(args: argparse.Namespace) -> int:
         # The documented `stages=` seam (architecture.md 11.1): the transcript is in hand.
         ctx = _run(ctx, STAGES[_AFTER_TRANSCRIBE:])
     else:
+        _with_vision(config, source)
         ctx = _run(Context(source=source, config=config), STAGES)
 
     if output is None:  # stdout has no folder for keyframes, so they keep their cache paths
