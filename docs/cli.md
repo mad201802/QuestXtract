@@ -59,8 +59,12 @@ options with one correct, an explanation, and why each option is right or wrong.
 command that writes text that was not spoken: every text carries `origin` (`spoken` only when it
 is the question as it was asked), and every item starts as pending review.
 
-The model sees the question, the lecture's answer when there is one, and the text, LaTeX and
-description of the board states on screen when the lecture was processed with vision. Rejected
+The model sees the question, the lecture's answer when there is one, what was said in the few
+sentences around it, and the text, LaTeX and description of the board states on screen when the
+lecture was processed with vision. The speech comes from `--transcript`, else from the cached
+transcript of the recording (when `process` ran on this machine); without either, a `note:`
+says so and the quiz is written from the question, answer and board alone, which gives fewer and
+weaker items. `process --quiz` always has the speech. Rejected
 questions (`review.status` `deleted` or `false_positive`) and classroom check-ins are left out,
 and so is a question the model judges not to be quiz material: addressed to the room,
 rhetorical, or too vague to answer on its own.
@@ -73,6 +77,7 @@ and the same input gives the same file.
 | `-o`, `--output` | a path | next to the input | Where to write the quiz: `lecture.questions.json` gives `lecture.quiz.json`. `-o -` prints it instead. |
 | `--strictness` | `strict` or `lenient` | `strict` | `strict` uses only questions the lecture answered; `lenient` also the others, whose correct answer the model writes, with only the question to go on. |
 | `--options` | a number, 3 to 5 | `3` | Options per item, one of them correct. |
+| `--transcript` | a path | the cached transcript | The lecture's transcript, for what was said around each question. |
 | `--llm-model` | a model name | `gpt-5.6-terra` | The model that writes the quiz (`quiz_model`). |
 | `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint, as for `process`. |
 | `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | As for `process`. |

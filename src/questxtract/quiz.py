@@ -22,6 +22,7 @@ from typing import Any
 
 from . import endpoint
 from .config import Config
+from .models import Sentence
 
 QUIZ_SCHEMA_VERSION = "1.0"
 QUIZ_PROMPT_VERSION = "v0"
@@ -31,19 +32,23 @@ MIN_OPTIONS, MAX_OPTIONS = 3, 5
 
 _REJECTED = ("deleted", "false_positive")  # review.status values a teacher set to drop a question
 _BOARD_CHARS = 1500  # board text sent with one question: the states on screen, kept short
+_SPOKEN_BEFORE, _SPOKEN_AFTER = 4, 2  # sentences of lecture sent around the question
+_SPOKEN_CHARS = 1500  # and at most this much of them
 _IDS = "ABCDE"
 
 _PROMPT = """\
 You write one multiple-choice quiz item from a question asked in a university lecture. You get
-the question as it was asked, the lecturer's answer when the lecture gave one, and what was
-written on the board or slides at that moment.
+the question as it was asked, the lecturer's answer when the lecture gave one, what was said
+just before and after it, and what was written on the board or slides at that moment. The
+speech is an automatic transcript: it can mishear technical words, so tell from the context and
+the board what was meant.
 
 Write:
 - "quiz_material": false only when the question is addressed to the room ("what would you
   answer, people?"), rhetorical, about organisation, or when neither the question, the
-  lecturer's answer nor the board says what it is about. A question that points at something
-  ("this one", "here") is still quiz material when the lecturer's answer or the board makes
-  the topic clear: then name that topic in the stem. When false, leave every other field as an
+  lecturer's answer, the speech around it nor the board says what it is about. A question that
+  points at something ("this one", "here") is still quiz material when the context makes the
+  topic clear: then name that topic in the stem. When false, leave every other field as an
   empty string.
 - "stem": the question for the quiz. Keep the lecturer's wording when it is clear on its own;
   otherwise add only the context a student needs to answer it. Never turn it into another
@@ -89,12 +94,15 @@ def build_quiz(
     *,
     questions_name: str,
     questions_hash: str,
+    sentences: Sequence[Sentence] = (),
     progress: Callable[[str, float], None] | None = None,
 ) -> QuizResult:
     """Build ``quiz.json`` from a ``questions.json`` document (as :func:`read_questions` returns).
 
     ``questions_name`` and ``questions_hash`` identify the source file in the output; the hash
-    is the SHA-256 of its bytes. A question the model fails on (a stall, or an answer that is
+    is the SHA-256 of its bytes. ``sentences`` are the lecture's, from its transcript: the
+    ones around each question go with it as context, and without them the model sees only the
+    question, the answer and the board. A question the model fails on (a stall, or an answer that is
     not a usable item, twice) is left out and listed in ``failed``.
 
     Raises:
@@ -107,6 +115,7 @@ def build_quiz(
     if not MIN_OPTIONS <= config.quiz_options <= MAX_OPTIONS:
         raise ValueError(f"quiz_options must be between {MIN_OPTIONS} and {MAX_OPTIONS}")
     boards = {v["id"]: v for v in document.get("visuals", []) if isinstance(v, dict)}
+    spoken = _Spoken(sentences)
     selected, skipped = _select(document.get("questions", []), config.quiz_strictness)
     items: list[dict[str, Any]] = []
     failed: list[tuple[str, str]] = []
@@ -116,7 +125,7 @@ def build_quiz(
         try:
             answer = endpoint.ask(
                 config,
-                _request(config, question, boards),
+                _request(config, question, boards, spoken),
                 name="quiz",
                 valid=_usable(config.quiz_options - 1),
             )
@@ -167,7 +176,10 @@ def _select(
 
 
 def _request(
-    config: Config, question: Mapping[str, Any], boards: Mapping[str, Mapping[str, Any]]
+    config: Config,
+    question: Mapping[str, Any],
+    boards: Mapping[str, Mapping[str, Any]],
+    spoken: _Spoken,
 ) -> dict[str, Any]:
     """Build the chat request for one question: the prompt, then the question in context."""
     distractors = config.quiz_options - 1
@@ -177,6 +189,12 @@ def _request(
         lines.append(f"Lecturer's answer: {answer['text']}")
     else:
         lines.append("Lecturer's answer: none in the lecture; write the correct answer yourself.")
+    around = spoken.around(str(question.get("sentence_id") or ""))
+    lines.append(
+        f"Said around it (the question marked >>):\n{around}"
+        if around
+        else "Said around it: no transcript was given."
+    )
     board = _board_text(question.get("visual_ids") or (), boards)
     lines.append(f"Board: {board}" if board else "Board: nothing was linked to this question.")
     request: dict[str, Any] = {
@@ -190,6 +208,37 @@ def _request(
     if config.judge_reasoning_effort:
         request["reasoning_effort"] = config.judge_reasoning_effort
     return request
+
+
+class _Spoken:
+    """The lecture's sentences, to look up what was said around a question."""
+
+    def __init__(self, sentences: Sequence[Sentence]) -> None:
+        self.sentences = tuple(sentences)
+        self.index = {s.id: i for i, s in enumerate(self.sentences)}
+
+    def around(self, sentence_id: str) -> str:
+        """Return the sentences around one, the question marked, or ``""`` when not found.
+
+        Over the length cap, whole sentences go, farthest first: those before the question,
+        then those after it. The question itself always stays.
+        """
+        at = self.index.get(sentence_id)
+        if at is None:
+            return ""
+        first, last = max(0, at - _SPOKEN_BEFORE), min(len(self.sentences), at + _SPOKEN_AFTER + 1)
+
+        def text() -> str:
+            return "\n".join(
+                (">> " if i == at else "   ") + self.sentences[i].text.strip()
+                for i in range(first, last)
+            )
+
+        while len(text()) > _SPOKEN_CHARS and first < at:
+            first += 1
+        while len(text()) > _SPOKEN_CHARS and last > at + 1:
+            last -= 1
+        return text()
 
 
 def _board_text(visual_ids: Sequence[str], boards: Mapping[str, Mapping[str, Any]]) -> str:

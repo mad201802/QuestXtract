@@ -16,8 +16,8 @@ from . import __version__
 from .config import Config, load_config
 from .evaluate import evaluate, format_report
 from .export import read_questions, result_to_json, write_questions
-from .models import Context, Stage, Transcript
-from .pipeline import STAGES, run
+from .models import Context, Sentence, Stage, Transcript
+from .pipeline import STAGES, cached_transcript, run
 from .quiz import MAX_OPTIONS, MIN_OPTIONS, STRICTNESS, build_quiz, file_hash, quiz_to_json
 from .vision import has_video
 
@@ -264,16 +264,23 @@ def _with_quiz(config: Config) -> None:
         )
 
 
-def _write_quiz(questions: Path, output: Path | None, config: Config) -> None:
+def _write_quiz(
+    questions: Path,
+    output: Path | None,
+    config: Config,
+    sentences: Sequence[Sentence] = (),
+    document: dict[str, object] | None = None,
+) -> None:
     """Generate the quiz for a questions file and write it (``None`` prints it).
 
     A question the model fails on is left out with a warning line; the others are written.
     """
     result = build_quiz(
-        read_questions(questions),
+        document if document is not None else read_questions(questions),
         config,
         questions_name=questions.name,
         questions_hash=file_hash(questions),
+        sentences=sentences,
         progress=(bar := _progress_bar(1)),
     )
     bar("done", 1.0)
@@ -282,6 +289,31 @@ def _write_quiz(questions: Path, output: Path | None, config: Config) -> None:
     items = len(result.quiz["questions"])
     left_out = f" ({len(result.skipped)} not quiz material, {len(result.failed)} failed)"
     _write(quiz_to_json(result.quiz).rstrip("\n"), output, f"{items} quiz items{left_out}")
+
+
+def _quiz_sentences(
+    document: dict[str, object], transcript: Path | None, config: Config
+) -> tuple[Sentence, ...]:
+    """Find the lecture's sentences for the quiz's spoken context.
+
+    From ``--transcript``, else from the cache of the recording ``questions.json`` names, else
+    none, with a note.
+    """
+    if transcript is not None:
+        found: Transcript | None = Transcript.from_file(transcript)
+    else:
+        source = document.get("source")
+        digest = source.get("hash") if isinstance(source, dict) else None
+        found = cached_transcript(config, digest) if isinstance(digest, str) and digest else None
+    if found is None:
+        print(
+            "note: no transcript for this lecture in the cache, so the quiz sees only the "
+            "question, the answer and the board; pass --transcript for what was said around it",
+            file=sys.stderr,
+        )
+        return ()
+    ctx = Context(source=Path(""), config=config, transcript=found)
+    return run(ctx, STAGES[_AFTER_TRANSCRIBE : _AFTER_TRANSCRIBE + 1]).sentences
 
 
 def _with_vision(config: Config, source: Path) -> None:
@@ -346,7 +378,7 @@ def _process(args: argparse.Namespace) -> int:
         write_questions(ctx, output)
         print(f"{len(ctx.pairs)} questions -> {output}", file=sys.stderr)
         if args.quiz:  # questions.json is on disk first: a failing quiz never loses it
-            _write_quiz(output, _output_path(None, output, "quiz"), config)
+            _write_quiz(output, _output_path(None, output, "quiz"), config, ctx.sentences)
     return 0
 
 
@@ -387,7 +419,12 @@ def _quiz(args: argparse.Namespace) -> int:
     if questions.suffix.lower() != ".json":
         raise ValueError(f"{questions}: expected a questions.json written by `process`")
     _with_quiz(config)
-    _write_quiz(questions, _output_path(args.output, questions, "quiz"), config)
+    if args.transcript is not None and not Path(args.transcript).is_file():
+        raise FileNotFoundError(f"{args.transcript}: no such file")
+    document = read_questions(questions)
+    sentences = _quiz_sentences(document, args.transcript, config)
+    output = _output_path(args.output, questions, "quiz")
+    _write_quiz(questions, output, config, sentences, document)
     return 0
 
 
@@ -561,6 +598,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="where to write (default: next to the input, lecture.quiz.json; '-' prints to the "
         "terminal)",
+    )
+    quiz.add_argument(
+        "--transcript",
+        type=Path,
+        metavar="PATH",
+        help="the lecture's transcript, so the quiz sees what was said around each question "
+        "(default: the cached transcript of the recording, when there is one)",
     )
     quiz.add_argument(
         "--llm-model",

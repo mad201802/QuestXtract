@@ -1118,8 +1118,13 @@ check-in, and the answer is cached like any other. Without that way out, a model
 for every question it is given, and invents a topic for a vague one.
 
 **One request per question** through the shared endpoint (10.1), cached under
-`.questxtract/quiz/`: the question, the lecture's answer, and the `description`, `text` and
-`latex` of the board states linked to it (12.1), so formulas on the board reach the options. The
+`.questxtract/quiz/`: the question, the lecture's answer, the sentences around it (four before,
+two after, the question marked), and the `description`, `text` and `latex` of the board states
+linked to it (12.1), so formulas on the board reach the options. The speech is what makes a
+pointing question ("this area here, is it finite?") usable, and what lets the model tell a
+misheard word from what was meant. `questions.json` does not hold the transcript, so `quiz` takes
+`--transcript` or reads the cached one by the recording's hash (`pipeline.cached_transcript`);
+`process --quiz` has its sentences in hand. The
 response schema names every field, and the code checks that every field is filled and every
 option differs. A question that fails twice, or stalls twice, is left out with a warning; an
 unreachable endpoint or a bad key ends the run, as the same error would hit every question.

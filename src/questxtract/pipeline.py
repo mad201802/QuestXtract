@@ -27,14 +27,23 @@ from .config import Config
 from .detect import detect
 from .llm import judge
 from .media import ingest
-from .models import Context, Progress, Stage, StageInfo, stage, stage_info
+from .models import Context, Progress, Stage, StageInfo, Transcript, stage, stage_info
 from .score import score
 from .segments import segments
 from .sentences import sentences
 from .transcribe import transcribe
 from .vision import attach_visual, vision
 
-__all__ = ["STAGES", "Stage", "StageInfo", "process", "run", "stage", "stage_info"]
+__all__ = [
+    "STAGES",
+    "Stage",
+    "StageInfo",
+    "cached_transcript",
+    "process",
+    "run",
+    "stage",
+    "stage_info",
+]
 
 
 # --- cache (architecture.md 11.2) -------------------------------------------------
@@ -66,6 +75,21 @@ def _decode(value: Any, annotation: Any) -> Any:
         fields = {k: _decode(v, hints[k]) for k, v in value.items() if k in known}
         return annotation(**fields)
     return value
+
+
+def cached_transcript(config: Config, source_hash: str) -> Transcript | None:
+    """Return the transcript cached for a recording, or ``None`` when there is none.
+
+    Whatever settings made it: a caller that needs the transcript of a finished run (the quiz)
+    only has the recording's hash from ``questions.json``. A damaged entry counts as none.
+    """
+    path = Path(config.cache_dir) / source_hash / "transcribe.json"
+    try:
+        stored = json.loads(path.read_text(encoding="utf-8"))
+        transcript = _decode(stored["data"], Transcript)
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return transcript if isinstance(transcript, Transcript) else None
 
 
 def _cache_path(ctx: Context, info: StageInfo) -> Path:

@@ -1,3 +1,4 @@
+import dataclasses
 import json
 from collections.abc import Callable
 from pathlib import Path
@@ -9,6 +10,7 @@ import pytest
 from questxtract import endpoint
 from questxtract.cli import main
 from questxtract.config import Config
+from questxtract.models import Sentence, Transcript
 from questxtract.quiz import QUIZ_PROMPT_VERSION, build_quiz, quiz_to_json
 
 DATA = Path(__file__).parent / "data"
@@ -453,3 +455,130 @@ def test_strict_is_the_default(
 
     quiz = json.loads(questions_file.with_name("lecture.quiz.json").read_text(encoding="utf-8"))
     assert {i["provenance"]["source_question_id"] for i in quiz["questions"]} == answered
+
+
+def _sentence(n: int, text: str | None = None) -> Sentence:
+    return Sentence(
+        id=f"s_{n}",
+        text=text or f"Sentence {n}.",
+        word_start=n,
+        word_end=n + 1,
+        start=n,
+        end=n + 1.0,
+    )
+
+
+def test_what_was_said_around_the_question_goes_into_the_request(
+    fake_llm: Callable[..., Any], key: None
+) -> None:
+    client = fake_llm(_answer())
+    lecture = [_sentence(n) for n in range(10)]
+
+    build_quiz(
+        _document(_question("q_a", sentence_id="s_5")),
+        Config(),
+        questions_name="l.questions.json",
+        questions_hash="ab" * 32,
+        sentences=lecture,
+    )
+
+    content = client.requests[0]["messages"][1]["content"]
+    assert ">> Sentence 5." in content
+    assert all(f"Sentence {n}." in content for n in (1, 2, 3, 4, 6, 7))
+    assert "Sentence 0." not in content and "Sentence 8." not in content
+
+
+def test_long_speech_is_cut_far_from_the_question_never_the_question(
+    fake_llm: Callable[..., Any], key: None
+) -> None:
+    client = fake_llm(_answer())
+    lecture = [_sentence(n, f"Long sentence {n} " + "x" * 600) for n in range(10)]
+
+    build_quiz(
+        _document(_question("q_a", sentence_id="s_5")),
+        Config(),
+        questions_name="l.questions.json",
+        questions_hash="ab" * 32,
+        sentences=lecture,
+    )
+
+    content = client.requests[0]["messages"][1]["content"]
+    assert ">> Long sentence 5 " in content and "Long sentence 1 " not in content
+
+
+def _copy(source: Path, tmp_path: Path) -> Path:
+    path = tmp_path / "lecture.transcript.json"
+    path.write_bytes(source.read_bytes())
+    return path
+
+
+def test_quiz_takes_the_transcript_for_the_speech_around_each_question(
+    tmp_path: Path, fake_llm: Callable[..., Any], key: None
+) -> None:
+    transcript = _copy(DATA / "ttk4225_2026_09_14.transcript.json", tmp_path)
+    assert main(["process", str(transcript)]) == 0
+    client = fake_llm(_answer())
+
+    assert (
+        main(["quiz", str(tmp_path / "lecture.questions.json"), "--transcript", str(transcript)])
+        == 0
+    )
+
+    assert client.requests and all(">> " in r["messages"][1]["content"] for r in client.requests)
+
+
+def test_without_a_transcript_the_quiz_says_so_and_goes_on(
+    questions_file: Path,
+    fake_llm: Callable[..., Any],
+    key: None,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = fake_llm(_answer())
+
+    assert main(["quiz", str(questions_file)]) == 0
+
+    assert "pass --transcript" in capsys.readouterr().err
+    assert "no transcript was given" in client.requests[0]["messages"][1]["content"]
+
+
+def test_quiz_finds_the_cached_transcript_of_the_recording(
+    questions_file: Path, tmp_path: Path, fake_llm: Callable[..., Any], key: None
+) -> None:
+    transcript = Transcript.from_file(DATA / "ttk4225_2026_09_14.transcript.json")
+    entry = tmp_path / ".questxtract" / "f00d" / "transcribe.json"
+    entry.parent.mkdir(parents=True)
+    entry.write_text(
+        json.dumps({"config": {}, "data": dataclasses.asdict(transcript)}), encoding="utf-8"
+    )
+    data = json.loads(questions_file.read_text(encoding="utf-8"))
+    data["source"]["hash"] = "f00d"
+    questions_file.write_text(json.dumps(data), encoding="utf-8")
+    client = fake_llm(_answer())
+
+    assert main(["quiz", str(questions_file)]) == 0
+
+    assert all(">> " in r["messages"][1]["content"] for r in client.requests)
+
+
+def test_quiz_with_a_missing_transcript_file_fails_before_any_request(
+    questions_file: Path,
+    fake_llm: Callable[..., Any],
+    key: None,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = fake_llm(_answer())
+
+    assert main(["quiz", str(questions_file), "--transcript", "nope.json"]) == 1
+
+    assert "nope.json: no such file" in capsys.readouterr().err and client.requests == []
+
+
+def test_process_quiz_sends_the_speech_it_already_has(
+    tmp_path: Path, fake_llm: Callable[..., Any], key: None
+) -> None:
+    transcript = _copy(DATA / "ttk4225_2026_09_14.transcript.json", tmp_path)
+    client = fake_llm(_answer())
+
+    assert main(["process", str(transcript), "--quiz"]) == 0
+
+    assert client.requests and all(">> " in r["messages"][1]["content"] for r in client.requests)
