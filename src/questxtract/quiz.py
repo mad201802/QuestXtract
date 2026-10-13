@@ -39,6 +39,12 @@ the question as it was asked, the lecturer's answer when the lecture gave one, a
 written on the board or slides at that moment.
 
 Write:
+- "quiz_material": false only when the question is addressed to the room ("what would you
+  answer, people?"), rhetorical, about organisation, or when neither the question, the
+  lecturer's answer nor the board says what it is about. A question that points at something
+  ("this one", "here") is still quiz material when the lecturer's answer or the board makes
+  the topic clear: then name that topic in the stem. When false, leave every other field as an
+  empty string.
 - "stem": the question for the quiz. Keep the lecturer's wording when it is clear on its own;
   otherwise add only the context a student needs to answer it. Never turn it into another
   question.
@@ -64,8 +70,9 @@ class QuizResult:
 
     Args:
         quiz: The ``quiz.json`` document, ready to write.
-        skipped: Ids of questions the selection left out (rejected, check-in, or, when strict,
-            unanswered).
+        skipped: Ids of questions that are not quiz material: rejected, check-ins, unanswered
+            ones when strict, and those the model judged unusable (addressed to the room,
+            rhetorical, or too vague to answer on their own).
         failed: ``(question id, reason)`` for each question the model could not turn into a
             usable item; the rest of the quiz is unaffected.
 
@@ -115,6 +122,9 @@ def build_quiz(
             )
         except (endpoint.Stalled, endpoint.InvalidAnswer) as exc:
             failed.append((question["id"], str(exc)))
+            continue
+        if answer["quiz_material"] is False:
+            skipped.append(str(question["id"]))
             continue
         items.append(_item_dict(question, answer, config.quiz_options))
     if progress:
@@ -201,6 +211,8 @@ def _schema(distractors: int) -> dict[str, Any]:
     names = ["stem", "correct_answer", "correct_explanation", "explanation"]
     for number in range(1, distractors + 1):
         names += [f"distractor_{number}", f"why_wrong_{number}"]
+    properties: dict[str, Any] = {"quiz_material": {"type": "boolean"}}  # decided first
+    properties |= {name: {"type": "string"} for name in names}
     return {
         "type": "json_schema",
         "json_schema": {
@@ -208,8 +220,8 @@ def _schema(distractors: int) -> dict[str, Any]:
             "strict": True,
             "schema": {
                 "type": "object",
-                "properties": {name: {"type": "string"} for name in names},
-                "required": names,
+                "properties": properties,
+                "required": list(properties),
                 "additionalProperties": False,
             },
         },
@@ -217,12 +229,16 @@ def _schema(distractors: int) -> dict[str, Any]:
 
 
 def _usable(distractors: int) -> Callable[[dict[str, Any]], bool]:
-    """Whether an answer makes an item: every field filled, every option different.
+    """Whether an answer is usable: a decline, or every field filled and every option different.
 
     Anything else is rejected, asked once more and never cached (:func:`endpoint.ask`).
     """
 
     def usable(answer: dict[str, Any]) -> bool:
+        if answer.get("quiz_material") is False:
+            return True  # a valid answer: the question is left out, and the answer is cached
+        if answer.get("quiz_material") is not True:
+            return False
         keys = ["stem", "correct_answer", "correct_explanation", "explanation"]
         keys += [
             f"{kind}_{n}" for n in range(1, distractors + 1) for kind in ("distractor", "why_wrong")

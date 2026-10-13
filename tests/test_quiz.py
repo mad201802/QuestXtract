@@ -16,9 +16,10 @@ DATA = Path(__file__).parent / "data"
 
 def _answer(
     options: int = 3, *, stem: str = "Is sin(t) absolutely integrable?", **over: str
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """A usable model answer for an item with ``options`` options."""
-    answer = {
+    answer: dict[str, Any] = {
+        "quiz_material": True,
         "stem": stem,
         "correct_answer": "No, the integral diverges",
         "correct_explanation": "Every period adds the same area.",
@@ -92,7 +93,7 @@ def test_lenient_quiz_has_one_item_per_question_that_is_quiz_material(
     material = [q["id"] for q in data["questions"][2:] if "check_in" not in q["reasons"]]
     fake_llm(_answer())
 
-    result = _build(data)
+    result = _build(data, Config(quiz_strictness="lenient"))
 
     quiz = result.quiz
     assert [item["provenance"]["source_question_id"] for item in quiz["questions"]] == material
@@ -133,8 +134,8 @@ def test_strict_keeps_only_answered_questions_and_never_more_than_lenient(
     document = _document(_question("q_a"), _question("q_b", answer=None), _question("q_c"))
     fake_llm(_answer())
 
-    strict = _build(document, Config(quiz_strictness="strict")).quiz["questions"]
-    lenient = _build(document).quiz["questions"]
+    strict = _build(document).quiz["questions"]  # strict is the default
+    lenient = _build(document, Config(quiz_strictness="lenient")).quiz["questions"]
 
     assert [i["provenance"]["source_question_id"] for i in strict] == ["q_a", "q_c"]
     assert len(strict) <= len(lenient) == 3
@@ -410,3 +411,45 @@ def test_a_board_id_missing_from_visuals_adds_nothing(
     _build(_document(_question("q_a", visual_ids=["v_gone"])))
 
     assert "Board: nothing was linked" in client.requests[0]["messages"][1]["content"]
+
+
+def test_a_question_the_model_turns_down_is_left_out_and_not_asked_again(
+    fake_llm: Callable[..., Any], key: None
+) -> None:
+    declined = {k: ("" if isinstance(v, str) else False) for k, v in _answer().items()}
+    client = fake_llm(declined, _answer())
+    document = _document(
+        _question("q_room", text="What would you answer, people?"), _question("q_a")
+    )
+
+    first = _build(document)
+    second = _build(document)
+
+    assert [i["provenance"]["source_question_id"] for i in first.quiz["questions"]] == ["q_a"]
+    assert "q_room" in first.skipped and first.failed == ()
+    assert len(client.requests) == 2 and second.quiz == first.quiz  # the decline is cached
+
+
+def test_an_answer_without_the_quiz_material_flag_is_not_usable(
+    fake_llm: Callable[..., Any], key: None
+) -> None:
+    fake_llm({k: v for k, v in _answer().items() if k != "quiz_material"})
+
+    result = _build(_document(_question("q_a")))
+
+    assert result.quiz["questions"] == [] and [q for q, _ in result.failed] == ["q_a"]
+
+
+def test_strict_is_the_default(
+    questions_file: Path, fake_llm: Callable[..., Any], key: None
+) -> None:
+    fake_llm(_answer())
+    data = json.loads(questions_file.read_text(encoding="utf-8"))
+    answered = {
+        q["id"] for q in data["questions"] if q["answer"] and "check_in" not in q["reasons"]
+    }
+
+    assert main(["quiz", str(questions_file)]) == 0
+
+    quiz = json.loads(questions_file.with_name("lecture.quiz.json").read_text(encoding="utf-8"))
+    assert {i["provenance"]["source_question_id"] for i in quiz["questions"]} == answered

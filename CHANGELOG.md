@@ -9,9 +9,10 @@
   item has a stem, `--options` options (3 by default, one correct), an explanation and why each
   option is right or wrong; every text says whether it was spoken or generated, and every item
   starts as pending review. The model sees the question, the lecture's answer and, with vision, the
-  board text and LaTeX. `--strictness strict` uses only questions the lecture answered. Rejected
-  questions and check-ins are left out, a question the model fails on is skipped with a warning,
-  and answers are cached. Settings: `quiz_model`, `quiz_strictness`, `quiz_options`. (#79)
+  board text and LaTeX. By default only questions the lecture answered are used;
+  `--strictness lenient` adds the others. Rejected questions, check-ins and questions the model
+  judges not to be quiz material are left out, a question the model fails on is skipped with a
+  warning, and answers are cached. Settings: `quiz_model`, `quiz_strictness`, `quiz_options`. (#79)
 - Vision: with `vision_enabled = true` (in `questxtract.toml`) and a recording with a video
   track, the slides or board are read. Each stable view's keyframe goes to `vision_model`,
   together with what was said while it was on screen, and comes back as a board state in

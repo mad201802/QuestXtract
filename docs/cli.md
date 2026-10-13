@@ -61,7 +61,9 @@ is the question as it was asked), and every item starts as pending review.
 
 The model sees the question, the lecture's answer when there is one, and the text, LaTeX and
 description of the board states on screen when the lecture was processed with vision. Rejected
-questions (`review.status` `deleted` or `false_positive`) and classroom check-ins are left out.
+questions (`review.status` `deleted` or `false_positive`) and classroom check-ins are left out,
+and so is a question the model judges not to be quiz material: addressed to the room,
+rhetorical, or too vague to answer on its own.
 A question the model fails on is left out with a `warning:` line, and the rest are written; an
 unreachable endpoint or a bad key ends the run. Answers are cached, so a re-run sends nothing,
 and the same input gives the same file.
@@ -69,7 +71,7 @@ and the same input gives the same file.
 | Option | Takes | Default | What it does |
 |---|---|---|---|
 | `-o`, `--output` | a path | next to the input | Where to write the quiz: `lecture.questions.json` gives `lecture.quiz.json`. `-o -` prints it instead. |
-| `--strictness` | `strict` or `lenient` | `lenient` | `strict` uses only questions the lecture answered; `lenient` also the others, whose correct answer the model writes. |
+| `--strictness` | `strict` or `lenient` | `strict` | `strict` uses only questions the lecture answered; `lenient` also the others, whose correct answer the model writes, with only the question to go on. |
 | `--options` | a number, 3 to 5 | `3` | Options per item, one of them correct. |
 | `--llm-model` | a model name | `gpt-5.6-terra` | The model that writes the quiz (`quiz_model`). |
 | `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint, as for `process`. |
