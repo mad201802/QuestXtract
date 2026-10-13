@@ -1,0 +1,347 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "quiz.json",
+  "description": "First-version schema for quiz.json, separate from questions.json. The quiz-generation module produces this format from extracted questions, and export modules use it to generate QTI, LaTeX, or HTML. Version 1 supports only single-answer multiple-choice questions. The decision about open-ended questions described in issue #67 is intentionally left for discussion together with issue #79. JSON Schema cannot fully verify that every option_ids value exists in the options array, that every source_question_id exists in the source questions.json file, or that option_explanations contains only IDs present in options. These constraints must be verified by a Python application-level validator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "title",
+    "language",
+    "status",
+    "source",
+    "instructions",
+    "grading",
+    "generation",
+    "questions"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+$",
+      "minLength": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^quiz_[A-Za-z0-9_-]+$",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review"]
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "instructions": {
+      "$ref": "#/$defs/instructions"
+    },
+    "grading": {
+      "$ref": "#/$defs/grading"
+    },
+    "generation": {
+      "$ref": "#/$defs/generation"
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/choiceSingleQuestion"
+      }
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "questions_path",
+        "questions_schema_version",
+        "questions_hash",
+        "question_ids"
+      ],
+      "properties": {
+        "questions_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "questions_schema_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "questions_hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "question_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^q_[A-Za-z0-9_-]+$",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "instructions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "shuffle_questions",
+        "shuffle_options",
+        "show_feedback"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "shuffle_questions": {
+          "type": "boolean"
+        },
+        "shuffle_options": {
+          "type": "boolean"
+        },
+        "show_feedback": {
+          "type": "boolean"
+        }
+      }
+    },
+    "grading": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pass_percentage"],
+      "properties": {
+        "pass_percentage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "model",
+        "prompt_version",
+        "generated_at"
+      ],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["manual", "rule_based", "llm", "hybrid"]
+        },
+        "model": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "prompt_version": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time",
+          "minLength": 1
+        }
+      }
+    },
+    "generatedText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "origin"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "origin": {
+          "type": "string",
+          "enum": ["spoken", "generated"]
+        }
+      }
+    },
+    "option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+          "minLength": 1
+        },
+        "text": {
+          "$ref": "#/$defs/generatedText"
+        }
+      }
+    },
+    "options": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "$ref": "#/$defs/option"
+      }
+    },
+    "correctResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["option_ids"],
+      "properties": {
+        "option_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "solution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["explanation", "option_explanations"],
+      "properties": {
+        "explanation": {
+          "$ref": "#/$defs/generatedText"
+        },
+        "option_explanations": {
+          "type": "object",
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_.-]*$": {
+              "$ref": "#/$defs/generatedText"
+            }
+          }
+        }
+      }
+    },
+    "feedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["correct", "incorrect", "general"],
+      "properties": {
+        "correct": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "incorrect": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "general": {
+          "type": ["string", "null"],
+          "minLength": 1
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_question_id"],
+      "properties": {
+        "source_question_id": {
+          "type": "string",
+          "pattern": "^q_[A-Za-z0-9_-]+$",
+          "minLength": 1
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "note", "metadata"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "rejected"]
+        },
+        "note": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      }
+    },
+    "choiceSingleQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source_question_id",
+        "prompt",
+        "interaction_type",
+        "points",
+        "options",
+        "correct_response",
+        "solution",
+        "feedback",
+        "provenance",
+        "review"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^quiz_q_[A-Za-z0-9_-]+$",
+          "minLength": 1
+        },
+        "source_question_id": {
+          "type": "string",
+          "pattern": "^q_[A-Za-z0-9_-]+$",
+          "minLength": 1
+        },
+        "prompt": {
+          "$ref": "#/$defs/generatedText"
+        },
+        "interaction_type": {
+          "const": "choice_single"
+        },
+        "points": {
+          "type": "number",
+          "minimum": 0
+        },
+        "options": {
+          "$ref": "#/$defs/options"
+        },
+        "correct_response": {
+          "$ref": "#/$defs/correctResponse"
+        },
+        "solution": {
+          "$ref": "#/$defs/solution"
+        },
+        "feedback": {
+          "$ref": "#/$defs/feedback"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "review": {
+          "$ref": "#/$defs/review"
+        }
+      }
+    }
+  }
+}
