@@ -1098,11 +1098,35 @@ run.
 Keeping edits across a re-run (#15, not built yet) means copying `review` across by question id,
 which is why question and sentence ids are content hashes (section 5) rather than indices.
 
-### 12.3 quiz.json (planned, #79)
+### 12.3 quiz.json
 
-A different command producing a different file: `questxtract quiz questions.json -o quiz.json`.
-It is the only part of the system allowed to write text that was not spoken, and keeping it out
-of the extraction pipeline is what keeps requirement 4.5 checkable.
+A different command producing a different file: `questxtract quiz questions.json`, or
+`process --quiz` after `questions.json` is written. It is the only part of the system allowed to
+write text that was not spoken, and keeping it out of the extraction pipeline is what keeps
+requirement 4.5 checkable.
+
+**Items.** Single-answer multiple choice: a stem, `quiz_options` options with one correct, an
+explanation, and one explanation per option of why it is right or wrong. Every text carries
+`origin`: `spoken` only for a stem that is the question as it was said, word for word; the rest
+is `generated`. Every item starts with `review.status` `pending`.
+
+**Selection.** Questions a reviewer rejected and check-ins are never quiz material. `strict` keeps
+only questions the lecture answered; `lenient` also the others, whose answer the model writes.
+
+**One request per question** through the shared endpoint (10.1), cached under
+`.questxtract/quiz/`: the question, the lecture's answer, and the `description`, `text` and
+`latex` of the board states linked to it (12.1), so formulas on the board reach the options. The
+response schema names every field, and the code checks that every field is filled and every
+option differs. A question that fails twice, or stalls twice, is left out with a warning; an
+unreachable endpoint or a bad key ends the run, as the same error would hit every question.
+
+**Deterministic.** Items follow `questions.json`, item ids derive from the question ids, the
+correct option's place from a hash of the question id, and nothing records the time of the run.
+
+> **Decision.** `questxtract/quiz.py`, not a stage. Config: `quiz_model` (`gpt-5.6-terra`),
+> `quiz_strictness` (`lenient`), `quiz_options` (3, from 3 to 5); `base_url` and
+> `judge_reasoning_effort` are shared with the judge. The keys follow the `quiz.json` v1 fields
+> agreed with the export work (#67); its JSON Schema and validator are not in the package yet.
 
 ---
 
@@ -1124,13 +1148,14 @@ src/questxtract/
   detect.py        6 detect: extraction, vetoes, scoring, cue tables
   answer.py        7 answer: adjacent seed
   llm.py           8 judge: the LLM detector
-  endpoint.py      the OpenAI-compatible client and requests, shared by judge and vision
+  endpoint.py      the OpenAI-compatible client and requests, shared by judge, vision and quiz
   score.py         9 score: confidence, threshold
   export.py        questions.json writer and reader, with questions.schema.json
   filtering.py     time filter, experimental topic filter
   evaluate.py      labelled-set metrics
   schema.py        Question, a standalone shape the pipeline does not produce
   pipeline.py      STAGES, run(), process(), cache, progress
+  quiz.py          quiz.json from questions.json: selection, one request per question
   cli.py           process / transcribe / eval / quiz
 
 tests/            flat, one test module per source module, plus conftest.py
@@ -1176,12 +1201,13 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery are not built | #48, #78 |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |
-| `endpoint.py` | not a stage | done: client and requests for the judge and vision (10) | |
+| `endpoint.py` | not a stage | done: client and requests for the judge, vision and the quiz (10) | |
+| `quiz.py` | not a stage | done: quiz items from questions.json (12.3); the `quiz.json` JSON Schema and validator are not in the package yet | |
 | `score.py` | 9 score | done: confidence and threshold | |
 | `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
 | `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest | |
-| `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
+| `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `eval` and `quiz` work ([cli.md](cli.md)) | |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
 running list of what this document describes and the code does not yet do.

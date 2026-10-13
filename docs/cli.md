@@ -43,11 +43,39 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--llm-model` | a model name | `gpt-5.6-terra` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
 | `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint for `--detector llm`, e.g. `http://localhost:11434/v1` for Ollama. Without it, OpenAI is used with the key from `OPENAI_API_KEY`. |
 | `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | How long a thinking model may think before it judges. Slower, and what small models such as `qwen3.5:9b` need to judge well. `server` sends no setting and leaves it to the server, for a model without one such as `gpt-4o-mini`. Any level but `none` allows each request 10 minutes instead of 2. |
+| `--quiz` | nothing | off | Also writes a multiple-choice quiz next to the questions file (`lecture.quiz.json`), as [`questxtract quiz`](#questxtract-quiz-questionsjson) does. Needs a file output, so not `-o -`. If the quiz fails, the questions file is kept and the exit code is 1. |
+| `--quiz-model` | a model name | `gpt-5.6-terra` | The model that writes the quiz. Only with `--quiz`. |
+| `--strictness`, `--options` | | | As for `questxtract quiz`. Only with `--quiz`. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
 One thing to know about `-t` with the rules: a question with no answer scores at most `0.55`, so
 a threshold above `0.55` keeps only questions the next sentence answers. With `--detector llm`
 the confidence is the model's own, answered or not.
+
+### `questxtract quiz <questions.json>`
+
+Writes multiple-choice quiz items for the questions in a questions file: per question a stem,
+options with one correct, an explanation, and why each option is right or wrong. It is the only
+command that writes text that was not spoken: every text carries `origin` (`spoken` only when it
+is the question as it was asked), and every item starts as pending review.
+
+The model sees the question, the lecture's answer when there is one, and the text, LaTeX and
+description of the board states on screen when the lecture was processed with vision. Rejected
+questions (`review.status` `deleted` or `false_positive`) and classroom check-ins are left out.
+A question the model fails on is left out with a `warning:` line, and the rest are written; an
+unreachable endpoint or a bad key ends the run. Answers are cached, so a re-run sends nothing,
+and the same input gives the same file.
+
+| Option | Takes | Default | What it does |
+|---|---|---|---|
+| `-o`, `--output` | a path | next to the input | Where to write the quiz: `lecture.questions.json` gives `lecture.quiz.json`. `-o -` prints it instead. |
+| `--strictness` | `strict` or `lenient` | `lenient` | `strict` uses only questions the lecture answered; `lenient` also the others, whose correct answer the model writes. |
+| `--options` | a number, 3 to 5 | `3` | Options per item, one of them correct. |
+| `--llm-model` | a model name | `gpt-5.6-terra` | The model that writes the quiz (`quiz_model`). |
+| `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint, as for `process`. |
+| `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | As for `process`. |
+| `--config` | a path | `questxtract.toml` | The settings file. `quiz_model`, `quiz_strictness` and `quiz_options` can be set there. |
+| `-h`, `--help` | nothing | | Shows the options and examples. |
 
 ### `questxtract transcribe <recording>`
 
@@ -73,8 +101,7 @@ reads.
 precision, false positives by kind, a threshold sweep, and every miss
 ([tests/data/README.md](../tests/data/README.md)). It takes `--detector`, `--llm-model` and
 `--llm-url` too, so the rules and a model can be compared on the same recordings; the report's
-first line names the detector, the model and the prompt version. `questxtract quiz <questions.json>` is
-reserved for quiz generation; it is not implemented yet (#79) and exits with a one-line error.
+first line names the detector, the model and the prompt version.
 
 ## Configuration files
 

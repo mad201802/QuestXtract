@@ -26,6 +26,15 @@ class InvalidAnswer(ValueError):
     """
 
 
+class Stalled(ConnectionError):
+    """The endpoint gave no answer within the deadline, twice.
+
+    A ``ConnectionError`` so existing callers keep working. It is its own type so a caller that
+    skips one slow request (the quiz) does not also skip an unreachable endpoint or a bad key,
+    which every later request would hit the same way.
+    """
+
+
 def client(config: Config) -> Any:
     """Build the OpenAI-compatible client.
 
@@ -65,7 +74,8 @@ def ask(
 
     Raises:
         RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
-        ConnectionError: If the endpoint fails after the SDK's own retries, or times out twice.
+        ConnectionError: If the endpoint fails after the SDK's own retries.
+        Stalled: If it gives no answer within the deadline, twice (a ``ConnectionError``).
         InvalidAnswer: If the model answers with something other than a JSON object twice.
         ValueError: If the settings cannot be used, such as an unreadable ``.env``.
 
@@ -86,10 +96,10 @@ def ask(
     endpoint = config.base_url or "OpenAI"
     api_key = getattr(llm, "api_key", None) or config.api_key
 
-    def failure(detail: str) -> ConnectionError:
+    def failure(detail: str, kind: type[ConnectionError] = ConnectionError) -> ConnectionError:
         # Providers may echo credentials in errors; keep diagnostics but hide the key.
         message = f"{name}: {endpoint}: {detail}"
-        return ConnectionError(message.replace(api_key, "[REDACTED]") if api_key else message)
+        return kind(message.replace(api_key, "[REDACTED]") if api_key else message)
 
     stalled: TimeoutError | None = None
     # Once more after a stall or invalid JSON; the SDK retries HTTP errors itself. A stall is
@@ -113,7 +123,7 @@ def ask(
                 pass  # a read-only or full cache loses the saving, not the answer just paid for
             return answer
     if stalled is not None:
-        raise failure(f"{stalled}, twice") from None
+        raise failure(f"{stalled}, twice", Stalled) from None
     raise InvalidAnswer(f"{name}: {request['model']} did not return the expected JSON, twice")
 
 

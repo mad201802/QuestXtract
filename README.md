@@ -35,8 +35,9 @@ turns them into study material. It **extracts** questions, it never invents them
 | ⏱️ **Timestamps** | Every question carries its position in the recording |
 | ✏️ **Human in the loop** | A `review` block per question for teacher edits, never overwritten by the pipeline |
 | 📦 **JSON export** | `questions.json` with a fixed key set and a formal JSON Schema |
+| 🧩 **Quizzes** | Multiple-choice items from the questions asked, with explanations; every generated text is marked and starts as pending review |
 
-Planned: quiz generation (#79). What is built today:
+What is built today:
 [architecture.md 13.3](docs/architecture.md#133-status).
 
 ## Install
@@ -61,6 +62,7 @@ Requires Python 3.10+ on Linux, macOS or Windows.
 questxtract process lecture.mp4                # video -> lecture.questions.json
 questxtract transcribe lecture.mp4             # transcription only -> lecture.transcript.json
 questxtract process lecture.transcript.json    # questions from an existing transcript
+questxtract quiz lecture.questions.json        # multiple-choice quiz -> lecture.quiz.json
 ```
 
 The input decides how much runs: an `.mp4` or `.mp3` goes through every stage (an audio-only
