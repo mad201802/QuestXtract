@@ -69,6 +69,7 @@ examples:
   questxtract process lecture.mp4 --detector llm         an LLM picks the questions
   questxtract process lecture.mp4 --detector llm         a local model in Ollama:
       --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b --llm-reasoning low
+  questxtract process lecture.mp4 --vision               also read the slides or the board
 """
 
 _TRANSCRIBE_EXAMPLES = """\
@@ -188,6 +189,8 @@ def _config(args: argparse.Namespace) -> Config:
             ("llm_model", "judge_model"),
             ("llm_url", "base_url"),
             ("llm_reasoning", "judge_reasoning_effort"),
+            ("vision", "vision_enabled"),
+            ("vision_model", "vision_model"),
         )
         if (value := getattr(args, flag, None)) is not None
     }
@@ -226,6 +229,35 @@ def _with_llm(config: Config) -> Config:
     return config
 
 
+# Vision flags (#61). The vision design is still moving in M3 (ink curve #133, layout probe #57,
+# de-occlusion #127). When vision gains a setting, decide whether it gets a flag here or stays
+# TOML-only, and update together: `_config`, this check, the `process` parser, the
+# "Reading the board" section in README.md, the option and error tables in docs/cli.md, and
+# test_every_vision_setting_has_a_flag_decision in tests/test_cli.py, which fails until you do.
+def _with_vision(config: Config) -> Config:
+    """Check that vision can start before anything slow runs.
+
+    Applies whether vision was turned on by ``--vision`` or by ``vision_enabled`` in the
+    settings file. :func:`_with_llm` does the same for ``--detector llm``; without this check
+    a missing extra would only surface as a crash after transcription.
+
+    Raises:
+        ValueError: If vision is on and lacks the ``[llm]`` extra, or has neither an API key
+            nor a local endpoint.
+
+    """
+    if not config.vision_enabled:
+        return config
+    if importlib.util.find_spec("openai") is None:
+        raise ValueError("--vision needs the LLM extra: pip install 'questxtract[llm]'")
+    if config.base_url is None and not config.api_key:
+        raise ValueError(
+            "--vision (or vision_enabled in the settings file) needs OPENAI_API_KEY in the "
+            "environment or .env, or --llm-url for a local server"
+        )
+    return config
+
+
 def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
     """Run ``stages`` under the progress bar, closing its line if anything interrupts it."""
     try:
@@ -237,10 +269,13 @@ def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
 
 def _process(args: argparse.Namespace) -> int:
     """Extract questions from a recording (every stage) or a transcript (skips ASR)."""
-    config = _with_llm(_config(args))
+    config = _with_vision(_with_llm(_config(args)))
     source = Path(args.input)
     _check_input(source, (".mp4", ".mp3", ".json"))
     output = _output_path(args.output, source, "questions")
+    if config.vision_enabled and source.suffix.lower() in (".mp3", ".json"):
+        # The stage skips these itself (no video track); say so instead of staying silent.
+        print(f"note: {source.name} has no video, so the board is not read", file=sys.stderr)
 
     if source.suffix.lower() == ".json":
         transcript = Transcript.from_file(source)
@@ -357,8 +392,8 @@ def build_parser() -> argparse.ArgumentParser:
     llm.add_argument(
         "--llm-url",
         metavar="URL",
-        help="an OpenAI-compatible endpoint for --detector llm, e.g. http://localhost:11434/v1 "
-        "for Ollama (default: OpenAI, with the key from OPENAI_API_KEY)",
+        help="an OpenAI-compatible endpoint for --detector llm and --vision, e.g. "
+        "http://localhost:11434/v1 for Ollama (default: OpenAI, with the key from OPENAI_API_KEY)",
     )
     llm.add_argument(
         "--llm-reasoning",
@@ -392,6 +427,22 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="0-1",
         help=f"keep questions with at least this confidence (default: {defaults.min_confidence})",
+    )
+    # See the note above _with_vision before adding a vision flag.
+    process.add_argument(
+        "--vision",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="also read the slides or the board with a vision model (needs the questxtract[llm] "
+        "extra, and OPENAI_API_KEY or --llm-url); --no-vision turns off vision_enabled from the "
+        "settings file for one run",
+    )
+    process.add_argument(
+        "--vision-model",
+        default=None,
+        metavar="NAME",
+        help=f"the model that reads the board, as the endpoint names it (default: "
+        f"{defaults.vision_model})",
     )
     process.set_defaults(handler=_process)
 

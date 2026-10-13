@@ -4,6 +4,11 @@
 
 ### Added
 
+- `process --vision` / `--no-vision` and `--vision-model` switch reading the board on or off and
+  pick its model for one run, over `questxtract.toml`; `--llm-url` now also serves vision. With
+  vision on, from a flag or the settings file, a missing key or `questxtract[llm]` extra stops the
+  run before transcription, and an `.mp3` or transcript input gets a note that the board is not
+  read. (#61)
 - Vision: with `vision_enabled = true` (in `questxtract.toml`) and a recording with a video
   track, the slides or board are read. Each stable view's keyframe goes to `vision_model`,
   together with what was said while it was on screen, and comes back as a board state in
