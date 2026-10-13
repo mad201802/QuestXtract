@@ -18,6 +18,7 @@ from .evaluate import evaluate, format_report
 from .export import result_to_json, write_questions
 from .models import Context, Stage, Transcript
 from .pipeline import STAGES, run
+from .vision import has_video
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
 
@@ -234,26 +235,36 @@ def _with_llm(config: Config) -> Config:
 # TOML-only, and update together: `_config`, this check, the `process` parser, the
 # "Reading the board" section in README.md, the option and error tables in docs/cli.md, and
 # test_every_vision_setting_has_a_flag_decision in tests/test_cli.py, which fails until you do.
-def _with_vision(config: Config) -> Config:
-    """Check that vision can start before anything slow runs.
+def _with_vision(config: Config, source: Path) -> Config:
+    """Check that vision can read the board before transcription and sampling run.
 
     Applies whether vision was turned on by ``--vision`` or by ``vision_enabled`` in the
-    settings file. :func:`_with_llm` does the same for ``--detector llm``; without this check
-    a missing extra would only surface as a crash after transcription.
+    settings file; :func:`_with_llm` does the same for ``--detector llm``. A source without a
+    video track (an MP3, an audio-only MP4, or a transcript) has no board: a note says so and
+    the run goes on without vision, so it needs neither the extra nor a key, and
+    ``questions.json`` does not name a vision model that read nothing.
+
+    Returns:
+        The settings to run with.
 
     Raises:
-        ValueError: If vision is on and lacks the ``[llm]`` extra, or has neither an API key
+        ValueError: If vision would run without the ``[llm]`` extra, or with neither an API key
             nor a local endpoint.
 
     """
     if not config.vision_enabled:
         return config
+    if not has_video(source):
+        print(f"note: {source.name} has no video, so the board is not read", file=sys.stderr)
+        return config.replace(vision_enabled=False)
     if importlib.util.find_spec("openai") is None:
-        raise ValueError("--vision needs the LLM extra: pip install 'questxtract[llm]'")
+        raise ValueError(
+            "--vision / vision_enabled needs the LLM extra: pip install 'questxtract[llm]'"
+        )
     if config.base_url is None and not config.api_key:
         raise ValueError(
-            "--vision (or vision_enabled in the settings file) needs OPENAI_API_KEY in the "
-            "environment or .env, or --llm-url for a local server"
+            "--vision / vision_enabled needs OPENAI_API_KEY in the environment or .env, "
+            "or --llm-url (base_url) for a local server"
         )
     return config
 
@@ -273,12 +284,7 @@ def _process(args: argparse.Namespace) -> int:
     source = Path(args.input)
     _check_input(source, (".mp4", ".mp3", ".json"))
     output = _output_path(args.output, source, "questions")
-    if config.vision_enabled and source.suffix.lower() in (".mp3", ".json"):
-        # No video track, so there is no board: say so, and run without vision, so that no key
-        # is needed and questions.json does not name a vision model that read nothing.
-        print(f"note: {source.name} has no video, so the board is not read", file=sys.stderr)
-        config = config.replace(vision_enabled=False)
-    config = _with_vision(config)
+    config = _with_vision(config, source)
 
     if source.suffix.lower() == ".json":
         transcript = Transcript.from_file(source)

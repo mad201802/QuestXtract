@@ -43,7 +43,7 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--llm-model` | a model name | `gpt-5.6-terra` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
 | `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint for `--detector llm` and `--vision`, e.g. `http://localhost:11434/v1` for Ollama. Without it, OpenAI is used with the key from `OPENAI_API_KEY`. |
 | `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | How long a thinking model may think before it judges. Slower, and what small models such as `qwen3.5:9b` need to judge well. `server` sends no setting and leaves it to the server, for a model without one such as `gpt-4o-mini`. Any level but `none` allows each request 10 minutes instead of 2. |
-| `--vision`, `--no-vision` | nothing | off | Also reads the slides or the board with a vision model, through `--llm-url` or OpenAI. Needs the `questxtract[llm]` extra. `--no-vision` turns off `vision_enabled` from the settings file for one run. An `.mp3` or a transcript has no video, so the board is not read (a note says so). See [Reading the board](../README.md#reading-the-board). |
+| `--vision`, `--no-vision` | nothing | off | Also reads the slides or the board with a vision model, through `--llm-url` or OpenAI. Needs the `questxtract[llm]` extra. `--no-vision` turns off `vision_enabled` from the settings file for one run. A recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript has no board, so the board is not read (a note says so). See [Reading the board](../README.md#reading-the-board). |
 | `--vision-model` | a model name | `gpt-5.6-luna` | The model that reads the board, as the endpoint names it. It must take images. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
@@ -326,9 +326,9 @@ A `.json` transcript input never touches the cache. There is nothing expensive l
 | `detector must be rules or llm` | Correct the detector name. |
 | `.env: line N: expansion is not supported; ...` | Load the key into the environment using your shell or password store before running the command. |
 | `--detector llm needs the LLM extra: ...` | Install `questxtract[llm]`. |
-| `--vision (or vision_enabled in the settings file) needs OPENAI_API_KEY in the environment or .env, or --llm-url for a local server` | Make the key available, pass `--llm-url` for a local server, or turn vision off with `--no-vision`. |
-| `--vision needs the LLM extra: ...` | Install `questxtract[llm]`, or turn vision off with `--no-vision`. |
-| `note: <file> has no video, so the board is not read` | Not an error: an `.mp3` or a transcript has no board to read. The questions are written as usual. |
+| `--vision / vision_enabled needs OPENAI_API_KEY in the environment or .env, or --llm-url (base_url) for a local server` | Make the key available, pass `--llm-url` for a local server, or turn vision off with `--no-vision`. |
+| `--vision / vision_enabled needs the LLM extra: ...` | Install `questxtract[llm]`, or turn vision off with `--no-vision`. |
+| `note: <file> has no video, so the board is not read` | Not an error: a recording without video, or a transcript, has no board to read. The questions are written as usual. |
 | `judge: <endpoint>: ...` | The model endpoint failed: it is not running, the key is wrong, or the model name is unknown to it. The message after the endpoint says which. |
 | `judge: <endpoint>: ... Unrecognized request argument supplied: reasoning_effort` | The model has no reasoning setting, e.g. `gpt-4o-mini`. Pass `--llm-reasoning server`. |
 | `judge: <endpoint>: no answer within 120 s, twice` | The model did not answer one request in time, and not on a second try either. With a thinking model, pass `--llm-reasoning`, which allows 10 minutes; otherwise the provider is overloaded, try again later. |
