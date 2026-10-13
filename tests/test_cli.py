@@ -619,12 +619,17 @@ def test_vision_without_a_key_or_url_fails_before_transcription(
 
 
 def test_vision_without_the_extra_says_how_to_install_it(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(cli.importlib.util, "find_spec", lambda name: None)
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
 
-    assert main(["process", str(_transcript_file(tmp_path)), "--vision"]) == 1
-    assert "pip install 'questxtract[llm]'" in capsys.readouterr().err
+    assert main(["process", str(video), "--vision"]) == 1
+    assert "pip install 'questxtract[llm]'" in capsys.readouterr().err and fake_asr == []
 
 
 def test_vision_enabled_in_the_settings_file_is_checked_the_same_way(
@@ -694,7 +699,7 @@ def test_vision_on_an_input_without_video_says_so_and_goes_on(
     monkeypatch: pytest.MonkeyPatch,
     kind: str,
 ) -> None:
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)  # no board to read, so no key needed
     client = fake_llm(_BOARD)
     source = make_mp3(tmp_path / "t.mp3") if kind == "mp3" else _transcript_file(tmp_path)
 
@@ -702,7 +707,17 @@ def test_vision_on_an_input_without_video_says_so_and_goes_on(
 
     notes = [line for line in capsys.readouterr().err.splitlines() if line.startswith("note:")]
     assert notes == [f"note: {source.name} has no video, so the board is not read"]
-    assert (tmp_path / "t.questions.json").is_file() and client.requests == []
+    data = json.loads((tmp_path / "t.questions.json").read_text(encoding="utf-8"))
+    assert data["config"]["vision_model"] is None and client.requests == []
+
+
+def test_a_missing_input_file_is_reported_before_the_vision_check(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    assert main(["process", str(tmp_path / "typo.mp4"), "--vision"]) == 1
+    assert "no such file" in capsys.readouterr().err
 
 
 def test_without_a_vision_flag_or_setting_vision_stays_off() -> None:

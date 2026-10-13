@@ -269,13 +269,16 @@ def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
 
 def _process(args: argparse.Namespace) -> int:
     """Extract questions from a recording (every stage) or a transcript (skips ASR)."""
-    config = _with_vision(_with_llm(_config(args)))
+    config = _with_llm(_config(args))
     source = Path(args.input)
     _check_input(source, (".mp4", ".mp3", ".json"))
     output = _output_path(args.output, source, "questions")
     if config.vision_enabled and source.suffix.lower() in (".mp3", ".json"):
-        # The stage skips these itself (no video track); say so instead of staying silent.
+        # No video track, so there is no board: say so, and run without vision, so that no key
+        # is needed and questions.json does not name a vision model that read nothing.
         print(f"note: {source.name} has no video, so the board is not read", file=sys.stderr)
+        config = config.replace(vision_enabled=False)
+    config = _with_vision(config)
 
     if source.suffix.lower() == ".json":
         transcript = Transcript.from_file(source)
