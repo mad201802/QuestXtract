@@ -75,7 +75,7 @@ and the same input gives the same file.
 | Option | Takes | Default | What it does |
 |---|---|---|---|
 | `-o`, `--output` | a path | next to the input | Where to write the quiz: `lecture.questions.json` gives `lecture.quiz.json`. `-o -` prints it instead. |
-| `--strictness` | `strict` or `lenient` | `strict` | `strict` uses only questions the lecture answered; `lenient` also the others, whose correct answer the model writes, with only the question to go on. |
+| `--strictness` | `strict` or `lenient` | `lenient` | `lenient` also uses questions the lecture did not answer, whose correct answer the model writes from what was said around them; `strict` uses only questions the lecture answered. |
 | `--options` | a number, 3 to 5 | `3` | Options per item, one of them correct. |
 | `--transcript` | a path | the cached transcript | The lecture's transcript, for what was said around each question. |
 | `--llm-model` | a model name | `gpt-5.6-terra` | The model that writes the quiz (`quiz_model`). |

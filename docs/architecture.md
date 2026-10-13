@@ -1110,9 +1110,9 @@ explanation, and one explanation per option of why it is right or wrong. Every t
 `origin`: `spoken` only for a stem that is the question as it was said, word for word; the rest
 is `generated`. Every item starts with `review.status` `pending`.
 
-**Selection.** Questions a reviewer rejected and check-ins are never quiz material. `strict` (the
-default) keeps only questions the lecture answered; `lenient` also the others, whose answer the
-model writes from the question alone. The model's first field, `quiz_material`, can still turn a
+**Selection.** Questions a reviewer rejected and check-ins are never quiz material. `lenient` (the
+default) also takes questions the lecture did not answer, whose answer the model writes from what
+was said around them; `strict` keeps only questions the lecture answered. The model's first field, `quiz_material`, can still turn a
 question down (addressed to the room, rhetorical, too vague on its own): it is left out like a
 check-in, and the answer is cached like any other. Without that way out, a model writes an item
 for every question it is given, and invents a topic for a vague one.
@@ -1133,7 +1133,7 @@ unreachable endpoint or a bad key ends the run, as the same error would hit ever
 correct option's place from a hash of the question id, and nothing records the time of the run.
 
 > **Decision.** `questxtract/quiz.py`, not a stage. Config: `quiz_model` (`gpt-5.6-terra`),
-> `quiz_strictness` (`strict`), `quiz_options` (3, from 3 to 5); `base_url` and
+> `quiz_strictness` (`lenient`), `quiz_options` (3, from 3 to 5); `base_url` and
 > `judge_reasoning_effort` are shared with the judge. The keys follow the `quiz.json` v1 fields
 > agreed with the export work (#67); its JSON Schema and validator are not in the package yet.
 

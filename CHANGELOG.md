@@ -10,8 +10,8 @@
   option is right or wrong; every text says whether it was spoken or generated, and every item
   starts as pending review. The model sees the question, the lecture's answer, what was said
   around it (from `--transcript` or the cached transcript) and, with vision, the board text and
-  LaTeX. By default only questions the lecture answered are used;
-  `--strictness lenient` adds the others. Rejected questions, check-ins and questions the model
+  LaTeX. Questions the lecture did not answer are used too, with an answer the model writes;
+  `--strictness strict` uses only the answered ones. Rejected questions, check-ins and questions the model
   judges not to be quiz material are left out, a question the model fails on is skipped with a
   warning, and answers are cached. Settings: `quiz_model`, `quiz_strictness`, `quiz_options`. (#79)
 - Vision: with `vision_enabled = true` (in `questxtract.toml`) and a recording with a video

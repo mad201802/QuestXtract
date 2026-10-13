@@ -136,8 +136,8 @@ def test_strict_keeps_only_answered_questions_and_never_more_than_lenient(
     document = _document(_question("q_a"), _question("q_b", answer=None), _question("q_c"))
     fake_llm(_answer())
 
-    strict = _build(document).quiz["questions"]  # strict is the default
-    lenient = _build(document, Config(quiz_strictness="lenient")).quiz["questions"]
+    strict = _build(document, Config(quiz_strictness="strict")).quiz["questions"]
+    lenient = _build(document).quiz["questions"]  # lenient is the default
 
     assert [i["provenance"]["source_question_id"] for i in strict] == ["q_a", "q_c"]
     assert len(strict) <= len(lenient) == 3
@@ -442,19 +442,27 @@ def test_an_answer_without_the_quiz_material_flag_is_not_usable(
     assert result.quiz["questions"] == [] and [q for q, _ in result.failed] == ["q_a"]
 
 
-def test_strict_is_the_default(
+def test_lenient_is_the_default_and_strict_keeps_only_answered_questions(
     questions_file: Path, fake_llm: Callable[..., Any], key: None
 ) -> None:
     fake_llm(_answer())
     data = json.loads(questions_file.read_text(encoding="utf-8"))
-    answered = {
-        q["id"] for q in data["questions"] if q["answer"] and "check_in" not in q["reasons"]
-    }
+    material = {q["id"] for q in data["questions"] if "check_in" not in q["reasons"]}
+    answered = {q["id"] for q in data["questions"] if q["answer"] and q["id"] in material}
+    written = questions_file.with_name("lecture.quiz.json")
 
     assert main(["quiz", str(questions_file)]) == 0
+    default = {
+        i["provenance"]["source_question_id"]
+        for i in json.loads(written.read_text(encoding="utf-8"))["questions"]
+    }
+    assert main(["quiz", str(questions_file), "--strictness", "strict"]) == 0
+    strict = {
+        i["provenance"]["source_question_id"]
+        for i in json.loads(written.read_text(encoding="utf-8"))["questions"]
+    }
 
-    quiz = json.loads(questions_file.with_name("lecture.quiz.json").read_text(encoding="utf-8"))
-    assert {i["provenance"]["source_question_id"] for i in quiz["questions"]} == answered
+    assert default == material and strict == answered and answered < material
 
 
 def _sentence(n: int, text: str | None = None) -> Sentence:

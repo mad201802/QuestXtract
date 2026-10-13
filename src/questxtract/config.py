@@ -82,7 +82,7 @@ class Config:
 
     # --- 12.3 quiz (a separate command; shares base_url and judge_reasoning_effort) ---
     quiz_model: str = "gpt-5.6-terra"
-    quiz_strictness: str = "strict"  # only questions the lecture answered; or "lenient"
+    quiz_strictness: str = "lenient"  # or "strict": only questions the lecture answered
     quiz_options: int = 3  # options per item, one correct; 3 to 5
 
     # --- 11.2 cache ---
