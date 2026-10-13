@@ -208,7 +208,9 @@ were asked about; `stats` there still count the whole lecture. How it works:
 
 `questions.json` lists every question with its text, `start`/`end` in seconds, `confidence`, the
 `answer` where one was found, the `reasons` (rules) that fired, and a `review` block for teacher
-edits. Segments and board states are listed once and referenced by id. Every key is always
+edits. Its `config` block records how it was made (the detector, and with `--detector llm` the
+model, prompt version and reasoning level), so two saved runs can be told apart. Segments and
+board states are listed once and referenced by id. Every key is always
 present, `null` included. Example and field reference:
 [architecture.md 12.1](docs/architecture.md#121-questionsjson); formal schema:
 [questions.schema.json](src/questxtract/questions.schema.json).
