@@ -286,6 +286,53 @@ def test_detector_llm_without_a_key_or_url_fails_before_transcription(
     assert fake_asr == [] and "[1/" not in err
 
 
+def test_vision_without_the_extra_fails_before_transcription(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Jesper on PR #128: not a traceback after an hour of transcription and sampling."""
+    monkeypatch.setattr(cli.importlib.util, "find_spec", lambda name: None)
+    Path("questxtract.toml").write_text("vision_enabled = true", encoding="utf-8")
+    video = make_mp4(tmp_path / "lecture.mp4", audio=False)  # has a video track
+
+    assert main(["process", str(video)]) == 1
+
+    err = capsys.readouterr().err
+    assert "vision_enabled needs the LLM extra" in err and fake_asr == []
+
+
+def test_vision_without_a_key_or_url_fails_before_transcription(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    Path("questxtract.toml").write_text("vision_enabled = true", encoding="utf-8")
+    video = make_mp4(tmp_path / "lecture.mp4", audio=False)
+
+    assert main(["process", str(video)]) == 1
+
+    err = capsys.readouterr().err
+    assert "OPENAI_API_KEY" in err and "base_url" in err and fake_asr == []
+
+
+def test_vision_on_an_mp3_needs_neither_the_extra_nor_a_key(
+    tmp_path: Path,
+    make_mp3: Callable[..., Path],
+    fake_asr: list[Config],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No video track, no board to read: the setting in the file is not an error here."""
+    monkeypatch.setattr(cli.importlib.util, "find_spec", lambda name: None)
+    Path("questxtract.toml").write_text("vision_enabled = true", encoding="utf-8")
+
+    assert main(["process", str(make_mp3(tmp_path / "lecture.mp3"))]) == 0
+    assert len(fake_asr) == 1
+
+
 def test_detector_llm_without_the_extra_says_how_to_install_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

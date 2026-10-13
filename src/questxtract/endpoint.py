@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -46,13 +47,21 @@ def client(config: Config) -> Any:
     )
 
 
-def ask(config: Config, request: dict[str, Any], *, name: str) -> dict[str, Any]:
+def ask(
+    config: Config,
+    request: dict[str, Any],
+    *,
+    name: str,
+    valid: Callable[[dict[str, Any]], bool] | None = None,
+) -> dict[str, Any]:
     """Send ``request`` and return the JSON object it answers with; cached on the request.
 
     The cache key is the endpoint plus the whole request, so any change to what the model
     would see asks again, and nothing else does. Entries live under ``cache_dir/<name>/``;
-    ``name`` also prefixes every error. Only a valid answer is cached, and a cache that cannot
-    be read or written only costs a repeat request: the answer already paid for is returned.
+    ``name`` also prefixes every error. Only a valid answer is cached: a JSON object that
+    ``valid``, when given, accepts. Anything else counts as invalid JSON, asked once more and
+    never cached, so a rejected answer is not replayed on the next run. A cache that cannot be
+    read or written only costs a repeat request: the answer already paid for is returned.
 
     Raises:
         RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
@@ -68,8 +77,8 @@ def ask(config: Config, request: dict[str, Any], *, name: str) -> dict[str, Any]
             cached = _parse(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError):
             cached = None
-        if cached is not None:  # a damaged entry is asked again
-            return cached
+        if cached is not None and (valid is None or valid(cached)):
+            return cached  # a damaged or rejected entry is asked again
 
     llm = client(config)  # first: without the extra, it raises the install hint
     from openai import OpenAIError  # noqa: PLC0415 - the optional extra, as in client()
@@ -96,7 +105,7 @@ def ask(config: Config, request: dict[str, Any], *, name: str) -> dict[str, Any]
         stalled = None
         content = response.choices[0].message.content
         answer = _parse(content)
-        if answer is not None:
+        if answer is not None and (valid is None or valid(answer)):
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(content, encoding="utf-8")

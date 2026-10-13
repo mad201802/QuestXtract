@@ -75,10 +75,7 @@ def _cache_path(ctx: Context, info: StageInfo) -> Path:
 
 def _header(config: Config, info: StageInfo) -> dict[str, Any]:
     """Return the config values this stage's cache entry is keyed on."""
-    header = {name: getattr(config, name) for name in info.uses}
-    if info.version:
-        header["version"] = info.version
-    return header
+    return {name: getattr(config, name) for name in info.uses}
 
 
 def _cached(fn: Stage, ctx: Context) -> Context:
