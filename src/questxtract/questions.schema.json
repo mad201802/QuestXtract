@@ -17,12 +17,15 @@
     },
     "config": {
       "type": "object",
-      "required": ["model_size", "language", "min_confidence", "judge_model", "vision_model"],
+      "required": ["model_size", "language", "min_confidence", "detector", "judge_model", "judge_prompt_version", "judge_reasoning_effort", "vision_model"],
       "properties": {
         "model_size": {"type": "string"},
         "language": {"type": "string"},
         "min_confidence": {"$ref": "#/$defs/fraction", "description": "The threshold this file was cut at."},
+        "detector": {"type": "string", "description": "Which detector found the questions: rules or llm."},
         "judge_model": {"type": ["string", "null"], "description": "null when the LLM pass was off."},
+        "judge_prompt_version": {"type": ["string", "null"], "description": "The judge prompt's version, e.g. v5; null when the LLM pass was off."},
+        "judge_reasoning_effort": {"type": ["string", "null"], "description": "How long the model thought before judging (none, low, medium, high); empty when the server's own setting applied (--llm-reasoning server), null when the LLM pass was off."},
         "vision_model": {"type": ["string", "null"], "description": "null when vision was off."}
       }
     },
