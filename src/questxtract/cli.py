@@ -70,6 +70,7 @@ examples:
   questxtract process lecture.mp4 --detector llm         an LLM picks the questions
   questxtract process lecture.mp4 --detector llm         a local model in Ollama:
       --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b --llm-reasoning low
+  questxtract process lecture.mp4 --vision               also read the slides or the board
 """
 
 _TRANSCRIBE_EXAMPLES = """\
@@ -189,6 +190,8 @@ def _config(args: argparse.Namespace) -> Config:
             ("llm_model", "judge_model"),
             ("llm_url", "base_url"),
             ("llm_reasoning", "judge_reasoning_effort"),
+            ("vision", "vision_enabled"),
+            ("vision_model", "vision_model"),
         )
         if (value := getattr(args, flag, None)) is not None
     }
@@ -227,26 +230,43 @@ def _with_llm(config: Config) -> Config:
     return config
 
 
-def _with_vision(config: Config, source: Path) -> None:
+# Vision flags (#61). The vision design is still moving in M3 (ink curve #133, layout probe #57,
+# de-occlusion #127). When vision gains a setting, decide whether it gets a flag here or stays
+# TOML-only, and update together: `_config`, this check, the `process` parser, the
+# "Reading the board" section in README.md, the option and error tables in docs/cli.md, and
+# test_every_vision_setting_has_a_flag_decision in tests/test_cli.py, which fails until you do.
+def _with_vision(config: Config, source: Path) -> Config:
     """Check that vision can read the board before transcription and sampling run.
 
-    Only for a recording with a video track: with ``vision_enabled`` in the TOML file, an MP3
-    or a transcript still runs without the extra or a key, since there is no board to read.
+    Applies whether vision was turned on by ``--vision`` or by ``vision_enabled`` in the
+    settings file; :func:`_with_llm` does the same for ``--detector llm``. A source without a
+    video track (an MP3, an audio-only MP4, or a transcript) has no board: a note says so and
+    the run goes on without vision, so it needs neither the extra nor a key, and
+    ``questions.json`` does not name a vision model that read nothing.
+
+    Returns:
+        The settings to run with.
 
     Raises:
         ValueError: If vision would run without the ``[llm]`` extra, or with neither an API key
             nor a local endpoint.
 
     """
-    if not config.vision_enabled or not has_video(source):
-        return
+    if not config.vision_enabled:
+        return config
+    if not has_video(source):
+        print(f"note: {source.name} has no video, so the board is not read", file=sys.stderr)
+        return config.replace(vision_enabled=False)
     if importlib.util.find_spec("openai") is None:
-        raise ValueError("vision_enabled needs the LLM extra: pip install 'questxtract[llm]'")
+        raise ValueError(
+            "--vision / vision_enabled needs the LLM extra: pip install 'questxtract[llm]'"
+        )
     if config.base_url is None and not config.api_key:
         raise ValueError(
-            "vision_enabled needs OPENAI_API_KEY in the environment or .env, "
-            "or base_url for a local server"
+            "--vision / vision_enabled needs OPENAI_API_KEY in the environment or .env, "
+            "or --llm-url (base_url) for a local server"
         )
+    return config
 
 
 def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
@@ -264,6 +284,7 @@ def _process(args: argparse.Namespace) -> int:
     source = Path(args.input)
     _check_input(source, (".mp4", ".mp3", ".json"))
     output = _output_path(args.output, source, "questions")
+    config = _with_vision(config, source)
 
     if source.suffix.lower() == ".json":
         transcript = Transcript.from_file(source)
@@ -272,7 +293,6 @@ def _process(args: argparse.Namespace) -> int:
         # The documented `stages=` seam (architecture.md 11.1): the transcript is in hand.
         ctx = _run(ctx, STAGES[_AFTER_TRANSCRIBE:])
     else:
-        _with_vision(config, source)
         ctx = _run(Context(source=source, config=config), STAGES)
 
     if output is None:  # stdout has no folder for keyframes, so they keep their cache paths
@@ -381,8 +401,8 @@ def build_parser() -> argparse.ArgumentParser:
     llm.add_argument(
         "--llm-url",
         metavar="URL",
-        help="an OpenAI-compatible endpoint for --detector llm, e.g. http://localhost:11434/v1 "
-        "for Ollama (default: OpenAI, with the key from OPENAI_API_KEY)",
+        help="an OpenAI-compatible endpoint for --detector llm and --vision, e.g. "
+        "http://localhost:11434/v1 for Ollama (default: OpenAI, with the key from OPENAI_API_KEY)",
     )
     llm.add_argument(
         "--llm-reasoning",
@@ -416,6 +436,22 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="0-1",
         help=f"keep questions with at least this confidence (default: {defaults.min_confidence})",
+    )
+    # See the note above _with_vision before adding a vision flag.
+    process.add_argument(
+        "--vision",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="also read the slides or the board with a vision model (needs the questxtract[llm] "
+        "extra, and OPENAI_API_KEY or --llm-url); --no-vision turns off vision_enabled from the "
+        "settings file for one run",
+    )
+    process.add_argument(
+        "--vision-model",
+        default=None,
+        metavar="NAME",
+        help=f"the model that reads the board, as the endpoint names it (default: "
+        f"{defaults.vision_model})",
     )
     process.set_defaults(handler=_process)
 

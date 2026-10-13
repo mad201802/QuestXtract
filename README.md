@@ -181,7 +181,15 @@ If a key leaks, tell its owner at once so it can be revoked.
 A vision model can also read the slides or the board. Each stable view of the recording becomes a
 board state: its text, its formulas as LaTeX, a short description and a confidence, linked to the
 questions asked while it was on screen. It needs the `llm` extra and a model that takes images.
-There are no CLI flags for it yet (#61); switch it on in `questxtract.toml`:
+Switch it on for one run with `--vision`:
+
+```bash
+questxtract process lecture.mp4 --vision        # gpt-5.6-luna on OpenAI, key from OPENAI_API_KEY
+questxtract process lecture.mp4 --vision --llm-url http://localhost:11434/v1 \
+    --vision-model qwen3-vl:2b-instruct         # a local model in Ollama
+```
+
+or for every run in `questxtract.toml` (`--no-vision` turns it off again for one run):
 
 ```toml
 vision_enabled = true

@@ -6,6 +6,7 @@ for faster-whisper, while ingest still probes a real (tiny) MP4.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from collections.abc import Callable
 from pathlib import Path
@@ -635,3 +636,145 @@ def test_a_file_that_is_not_a_recording_gets_one_line_and_no_output(
     errors = [line for line in err.splitlines() if line.startswith("error:")]
     assert len(errors) == 1 and "invalid or unreadable recording" in errors[0]
     assert not (tmp_path / "lecture.questions.json").exists()
+
+
+# --- vision flags (#61) -------------------------------------------------------
+
+_BOARD = {
+    "description": "A slide on sorting.",
+    "text": "Stable sort",
+    "latex": None,
+    "confidence": 0.8,
+}
+
+
+def test_vision_flag_without_a_key_or_url_fails_before_transcription(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+
+    assert main(["process", str(video), "--vision"]) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("error: ") and "OPENAI_API_KEY" in err and "--llm-url" in err
+    assert err.count("\n") == 1 and fake_asr == [] and "[1/" not in err
+
+
+def test_vision_without_the_extra_says_how_to_install_it(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli.importlib.util, "find_spec", lambda name: None)
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+
+    assert main(["process", str(video), "--vision"]) == 1
+    assert "pip install 'questxtract[llm]'" in capsys.readouterr().err and fake_asr == []
+
+
+def test_vision_reads_the_board_with_the_model_given(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    fake_llm: Callable[..., Any],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    client = fake_llm(_BOARD)
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+
+    assert main(["process", str(video), "--vision", "--vision-model", "qwen3.8-27b"]) == 0
+
+    assert "Reading the board" in capsys.readouterr().err
+    data = json.loads((tmp_path / "lecture.questions.json").read_text(encoding="utf-8"))
+    assert [v["text"] for v in data["visuals"]] == ["Stable sort"]
+    assert data["questions"] and all(q["visual_ids"] for q in data["questions"])
+    assert data["config"]["vision_model"] == "qwen3.8-27b"
+    assert {request["model"] for request in client.requests} == {"qwen3.8-27b"}
+
+
+def test_no_vision_turns_off_vision_from_the_settings_file(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    fake_llm: Callable[..., Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)  # off, so no key is needed
+    Path("questxtract.toml").write_text("vision_enabled = true", encoding="utf-8")
+    client = fake_llm(_BOARD)
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+
+    assert main(["process", str(video), "--no-vision"]) == 0
+
+    data = json.loads((tmp_path / "lecture.questions.json").read_text(encoding="utf-8"))
+    assert data["visuals"] == [] and client.requests == []
+
+
+@pytest.mark.parametrize("kind", ["mp3", "transcript"])
+def test_vision_on_an_input_without_video_says_so_and_goes_on(
+    tmp_path: Path,
+    make_mp3: Callable[..., Path],
+    fake_asr: list[Config],
+    fake_llm: Callable[..., Any],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    kind: str,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)  # no board to read, so no key needed
+    client = fake_llm(_BOARD)
+    source = make_mp3(tmp_path / "t.mp3") if kind == "mp3" else _transcript_file(tmp_path)
+
+    assert main(["process", str(source), "--vision"]) == 0
+
+    notes = [line for line in capsys.readouterr().err.splitlines() if line.startswith("note:")]
+    assert notes == [f"note: {source.name} has no video, so the board is not read"]
+    data = json.loads((tmp_path / "t.questions.json").read_text(encoding="utf-8"))
+    assert data["config"]["vision_model"] is None and client.requests == []
+
+
+def test_a_missing_input_file_is_reported_before_the_vision_check(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    assert main(["process", str(tmp_path / "typo.mp4"), "--vision"]) == 1
+    assert "no such file" in capsys.readouterr().err
+
+
+def test_without_a_vision_flag_or_setting_vision_stays_off() -> None:
+    config = cli._config(cli.build_parser().parse_args(["process", "lecture.mp4"]))
+    assert not config.vision_enabled and config.vision_model == Config().vision_model
+
+
+# Every vision setting has a decision: a `process` flag, or the settings file only. A new
+# vision_* field in config.py fails this test until it is added to one of the two (and, for a
+# flag, to the parser, cli._config, cli._with_vision if it needs checking, docs/cli.md and
+# README.md). Each flag maps to the field it is listed with, and to a value it can set.
+_VISION_FLAGS: dict[str, tuple[list[str], Any]] = {
+    "vision_enabled": (["--vision"], True),
+    "vision_model": (["--vision-model", "some-model"], "some-model"),
+}
+_VISION_SETTINGS_FILE_ONLY = {
+    "vision_fps",
+    "vision_max_states",
+    "vision_change_fraction",
+    "vision_change_hold",
+}
+
+
+def test_every_vision_setting_has_a_flag_decision() -> None:
+    vision_fields = {f.name for f in dataclasses.fields(Config) if f.name.startswith("vision_")}
+    assert vision_fields == set(_VISION_FLAGS) | _VISION_SETTINGS_FILE_ONLY
+
+    for field, (flag, value) in _VISION_FLAGS.items():
+        config = cli._config(cli.build_parser().parse_args(["process", "lecture.mp4", *flag]))
+        assert getattr(config, field) == value, flag
