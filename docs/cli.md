@@ -290,6 +290,7 @@ from the same folder every time to benefit from it.
 |---|---|
 | `-t`, `-o`, `--detector`, `--llm-model`, `--llm-url`, `--llm-reasoning` | no |
 | `-m` | yes: a different model gives a different transcript |
+| a `vision_*` setting or `base_url` in the TOML file | no, but the board is read again; keyframes already read with the same model are not sent twice |
 | `--from-scratch` | yes, and it recomputes everything else too |
 | the video file itself | yes: the cache is keyed on the file's content |
 
@@ -340,3 +341,5 @@ transcription.
   Requirement 4.2 assumes English lectures, so no flag is planned. The Python API accepts
   `Config(language=...)` or `language` in the TOML file for experiments.
 - **YouTube URLs**: the CLI takes a local file. Download the video first.
+- **Vision flags** (#61): reading the board is switched on with `vision_enabled = true` in
+  `questxtract.toml`; see [Reading the board](../README.md#reading-the-board).
