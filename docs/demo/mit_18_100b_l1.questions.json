@@ -1,0 +1,254 @@
+{
+  "schema_version": "2.1",
+  "source": {
+    "path": "mit_18_100b_l1.mp4",
+    "duration_seconds": 3955.366667,
+    "hash": "8c708b8998a54d69"
+  },
+  "config": {
+    "model_size": "turbo",
+    "language": "en",
+    "min_confidence": 0.4,
+    "judge_model": null,
+    "vision_model": "Qwen/Qwen3.8-27B-FP8"
+  },
+  "stats": {
+    "sentences": 439,
+    "sentences_unpunctuated": 21,
+    "segments": 123,
+    "segments_closed_gap": 118,
+    "segments_closed_duration": 2,
+    "segments_closed_chars": 2,
+    "board_states": 80,
+    "candidates": 30,
+    "answered": 11,
+    "emitted": 28
+  },
+  "segments": [
+    {
+      "id": 17,
+      "start": 543.86,
+      "end": 560.52,
+      "topic": null,
+      "visual_ids": [
+        "v_5ae35c"
+      ]
+    },
+    {
+      "id": 48,
+      "start": 1366.28,
+      "end": 1419.74,
+      "topic": null,
+      "visual_ids": [
+        "v_e27f43"
+      ]
+    },
+    {
+      "id": 92,
+      "start": 3003.75,
+      "end": 3053.57,
+      "topic": null,
+      "visual_ids": [
+        "v_b48dcf"
+      ]
+    },
+    {
+      "id": 113,
+      "start": 3701.14,
+      "end": 3709.04,
+      "topic": null,
+      "visual_ids": [
+        "v_8f6c27"
+      ]
+    }
+  ],
+  "visuals": [
+    {
+      "id": "v_5ae35c",
+      "start": 543.0,
+      "end": 596.0,
+      "keyframe_path": "mit_18_100b_l1.keyframes/v_5ae35c.png",
+      "description": "A blackboard split into two panels on the left, illustrating the Intermediate Value Theorem. The top panel has hypotheses (a,b in R, f: [a,b] -> R continuous, f(a)<0, f(b)>0) alongside a coordinate-plane sketch of a curve crossing the x-axis between points a and b, with the curve labeled f(a) at the bottom and f(b) at the top. The bottom panel states the Intermediate Value Theorem with two sketches: a line crossing the axis, and a crossed-out 'Not cont.' diagram of intersecting lines. A lecturer stands at the right board, partly blocking it.",
+      "text": "a, b ∈ R.\nf: [a,b] → R.\nContinuous.\nf(a) < 0\nf(b) > 0\nIntermediate Value Theorem\nthere exists a < c ≤ b.\nf(c) = 0\nNot cont.",
+      "latex": "a, b \\in \\mathbb{R}.\nf: [a,b] \\to \\mathbb{R}.\nf(a) < 0\nf(b) > 0\na < c \\leq b\nf(c) = 0",
+      "confidence": 0.7
+    },
+    {
+      "id": "v_e27f43",
+      "start": 1374.0,
+      "end": 1433.0,
+      "keyframe_path": "mit_18_100b_l1.keyframes/v_e27f43.png",
+      "description": "A four-panel blackboard with handwritten notes defining the number systems N (natural), Z (integers), Q (rationals), and the operations addition, multiplication, and ordering on rationals, written as fractions m/n.",
+      "text": "N = {1,2,3,4,5,...}. Natural #.\nZ integers. Z = {0,±1,±2,±3,...}.\nQ rational numbers    m/n    m ∈ Z, n ∈ N.\nm1/n1 + m2/n2 = (m1 n2 + m2 n1)/(n1 n2)\n+ m2/n2 ∈ Q\nMultiplication\nm1/n1  m2/n2 = m1 m2 / n1 n2\nOrdering",
+      "latex": "N = \\{1,2,3,4,5,\\ldots\\}\n\\mathbb{Z} = \\{0, \\pm 1, \\pm 2, \\pm 3, \\ldots\\}\n\\frac{m}{n}, \\quad m \\in \\mathbb{Z}, n \\in N\n\\frac{m_1}{n_1} + \\frac{m_2}{n_2} = \\frac{m_1 n_2 + m_2 n_1}{n_1 n_2}\n\\frac{m_1}{n_1} \\cdot \\frac{m_2}{n_2} = \\frac{m_1 m_2}{n_1 n_2}",
+      "confidence": 0.7
+    },
+    {
+      "id": "v_b48dcf",
+      "start": 3004.0,
+      "end": 3065.0,
+      "keyframe_path": "mit_18_100b_l1.keyframes/v_b48dcf.png",
+      "description": "A blackboard titled 'Example' with a handwritten list comparing number sets to the notion of a field: the rationals marked as a field, the naturals and integers marked as not fields, followed by a circled note showing 2 is an integer and the equation 2·x = 1.",
+      "text": "Example\nis a Field\nNot a Field\nNot a Field",
+      "latex": "\\mathbb{Q} \\quad \\mathbb{N} \\quad \\mathbb{Z}\n2 \\in \\mathbb{Z}\n2 \\cdot x = 1",
+      "confidence": 0.65
+    },
+    {
+      "id": "v_8f6c27",
+      "start": 3697.0,
+      "end": 3742.0,
+      "keyframe_path": "mit_18_100b_l1.keyframes/v_8f6c27.png",
+      "description": "A blackboard with a hand-written 'Proof' heading and several lines of algebraic working involving products and inverses; the lecturer's back and head obscure the middle and right portions, and the board is partly smudged from erasing.",
+      "text": "Proof\nWant to Show    x yz\nthat is equivale[nt] ... ing to\nxz + (-xz) < ... + (-x ...\n0 = 0 + 0",
+      "latex": "xz + (-xz) = \\cdots + (-x \\cdots)\n0 = 0 + 0",
+      "confidence": 0.45
+    }
+  ],
+  "questions": [
+    {
+      "id": "q_086642",
+      "text": "So how do we make this intuition into a proof?",
+      "original_text": null,
+      "start": 543.86,
+      "end": 560.52,
+      "start_hms": "9:04",
+      "end_hms": "9:21",
+      "confidence": 0.55,
+      "confidence_label": "medium",
+      "question_type": "how",
+      "source": "audio",
+      "answer": null,
+      "segment_id": 17,
+      "sentence_id": "s_6c9ae4",
+      "visual_ids": [
+        "v_5ae35c"
+      ],
+      "verdict": "unjudged",
+      "reasons": [
+        "mark",
+        "wh",
+        "no_answer_found"
+      ],
+      "review": {
+        "status": "pending",
+        "text": null,
+        "note": null,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "q_744ee3",
+      "text": "What is a field?",
+      "original_text": null,
+      "start": 1389.91,
+      "end": 1390.67,
+      "start_hms": "23:10",
+      "end_hms": "23:11",
+      "confidence": 1.0,
+      "confidence_label": "high",
+      "question_type": "what",
+      "source": "audio",
+      "answer": {
+        "text": "That's what we are trying to understand.",
+        "start": 1390.83,
+        "end": 1392.23,
+        "sentence_ids": [
+          "s_251921"
+        ]
+      },
+      "segment_id": 48,
+      "sentence_id": "s_6a9137",
+      "visual_ids": [
+        "v_e27f43"
+      ],
+      "verdict": "unjudged",
+      "reasons": [
+        "mark",
+        "wh",
+        "intra_sentence_qa"
+      ],
+      "review": {
+        "status": "pending",
+        "text": null,
+        "note": null,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "q_c23962",
+      "text": "And why is this not a field?",
+      "original_text": null,
+      "start": 3010.95,
+      "end": 3012.45,
+      "start_hms": "50:11",
+      "end_hms": "50:12",
+      "confidence": 1.0,
+      "confidence_label": "high",
+      "question_type": "why",
+      "source": "audio",
+      "answer": {
+        "text": "It's for multiplication.",
+        "start": 3012.75,
+        "end": 3014.47,
+        "sentence_ids": [
+          "s_416a84"
+        ]
+      },
+      "segment_id": 92,
+      "sentence_id": "s_36423c",
+      "visual_ids": [
+        "v_b48dcf"
+      ],
+      "verdict": "unjudged",
+      "reasons": [
+        "mark",
+        "wh",
+        "intra_sentence_qa"
+      ],
+      "review": {
+        "status": "pending",
+        "text": null,
+        "note": null,
+        "metadata": {}
+      }
+    },
+    {
+      "id": "q_78d3a4",
+      "text": "Why is that equivalent?",
+      "original_text": null,
+      "start": 3701.14,
+      "end": 3702.56,
+      "start_hms": "1:01:41",
+      "end_hms": "1:01:43",
+      "confidence": 1.0,
+      "confidence_label": "high",
+      "question_type": "why",
+      "source": "audio",
+      "answer": {
+        "text": "But this is this law here that is chaining the ordering together with addition.",
+        "start": 3702.98,
+        "end": 3709.04,
+        "sentence_ids": [
+          "s_299465"
+        ]
+      },
+      "segment_id": 113,
+      "sentence_id": "s_6ba955",
+      "visual_ids": [
+        "v_8f6c27"
+      ],
+      "verdict": "unjudged",
+      "reasons": [
+        "mark",
+        "wh",
+        "intra_sentence_qa"
+      ],
+      "review": {
+        "status": "pending",
+        "text": null,
+        "note": null,
+        "metadata": {}
+      }
+    }
+  ]
+}
