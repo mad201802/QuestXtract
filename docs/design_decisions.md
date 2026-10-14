@@ -353,6 +353,36 @@ is no reason to stop a run of up to 80 calls.
 
 *Cost:* one more module. A vision cache key hashes the whole keyframe, up to a few MB per request.
 
+### D15: quiz.json v1 is single choice, origin-tagged, deterministic, and checked without jsonschema
+
+*Chose:* a separate `quiz.json` with its own schema (#146, architecture.md 12.3), agreed with the
+quiz command's owner (#79) and the exporters (#67, #37):
+
+- Single choice only, at least three options: one correct and at least two distractors.
+- Every text (stem, options, explanations) carries `origin`, `spoken` or `generated`. A stem is
+  `spoken` only when it is the question as it was said, which for a question the LLM judge
+  reworded is `original_text`, not `text`.
+- No run timestamps, no absolute paths and no `feedback` block, so the same input gives a
+  byte-identical file; exporters build feedback from `solution`.
+- The source question id lives only in each item's `provenance`; the item id is derived from it,
+  and two items may not share a source.
+- `review.status` is `pending`, `accepted` or `rejected`.
+- A runtime validator in plain Python for the rules JSON Schema cannot express; the schema
+  itself is enforced with `jsonschema` in the tests only.
+
+*Alternative:* `generated_at` and a `feedback` block per item, as in the first draft; a list of
+source ids in `source`; `jsonschema` as a runtime dependency that checks everything at once.
+
+*Why:* requirement 4.5 says the extraction never invents a question, so the one place that does
+write new text must say which text that is, per field. A file that changes on every run cannot
+be diffed or cached, and feedback derived from `solution` cannot drift from it. A second list of
+source ids would be one more thing to keep in sync with the items. `rejected` replaces
+`questions.json`'s `deleted` and `false_positive`, because a generated item is not a false
+detection. `jsonschema` would add a runtime dependency for checks the writer's tests already make.
+
+*Cost:* a reader that skips `read_quiz` gets no structural check at runtime. Spoken options and
+explanations cannot be checked, because `quiz.json` holds no transcript.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |

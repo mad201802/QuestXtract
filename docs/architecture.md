@@ -1102,11 +1102,29 @@ run.
 Keeping edits across a re-run (#15, not built yet) means copying `review` across by question id,
 which is why question and sentence ids are content hashes (section 5) rather than indices.
 
-### 12.3 quiz.json (planned, #79)
+### 12.3 quiz.json
 
-A different command producing a different file: `questxtract quiz questions.json -o quiz.json`.
-It is the only part of the system allowed to write text that was not spoken, and keeping it out
-of the extraction pipeline is what keeps requirement 4.5 checkable.
+A different command producing a different file: `questxtract quiz questions.json -o quiz.json`
+(planned, #79). It is the only part of the system allowed to write text that was not spoken, and
+keeping it out of the extraction pipeline is what keeps requirement 4.5 checkable.
+
+Schema 1.0, formally [`quiz.schema.json`](../src/questxtract/quiz.schema.json), which ships in
+the package. Items are single choice: at least three options, exactly one of them correct, a
+`solution` with an explanation and one `option_explanations` entry per option. Every text
+(stem, options, explanations) is `{text, origin}`: `spoken` only when it is verbatim from the
+lecture, `generated` for anything reworded or newly written. `provenance` ties an item to its
+source question (`source_question_id`, `start`, `end`), and the item id is `"quiz_"` plus that
+id. Every item has a `review` block (`pending`, `accepted`, `rejected`) that the teacher owns.
+The file holds no run timestamps and no absolute paths, so the same input gives the same bytes;
+exporters build feedback from `solution`.
+
+`validate_quiz` (in `quiz_schema.py`) checks what the schema cannot: the correct option exists,
+explanations match the options one to one, option ids are unique, item ids are derived and
+unique, `end >= start`, and, given the source `questions.json`, the source question exists and a
+`spoken` stem is that question as it was said (`original_text` when the judge reworded it, else
+`text`). `read_quiz` refuses another major version, then validates. Spoken options and
+explanations cannot be checked without the transcript, so they stay a rule for the writer. The
+validator is plain Python: `jsonschema` checks the schema in the tests only.
 
 ---
 
@@ -1131,6 +1149,7 @@ src/questxtract/
   endpoint.py      the OpenAI-compatible client and requests, shared by judge and vision
   score.py         9 score: confidence, threshold
   export.py        questions.json writer and reader, with questions.schema.json
+  quiz_schema.py   quiz.json reader and validator, with quiz.schema.json
   filtering.py     time filter, experimental topic filter
   evaluate.py      labelled-set metrics
   schema.py        Question, a standalone shape the pipeline does not produce
@@ -1183,6 +1202,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `endpoint.py` | not a stage | done: client and requests for the judge and vision (10) | |
 | `score.py` | 9 score | done: confidence and threshold | |
 | `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
+| `quiz_schema.py` | not a stage | done: the `quiz.json` reader and validator (12.3); the `quiz` command that writes the file is not built | #79 |
 | `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest | |
 | `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
