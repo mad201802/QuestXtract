@@ -22,9 +22,7 @@ QUIZ_SCHEMA_PATH = Path(__file__).with_name("quiz.schema.json")
 _ITEM_PREFIX = "quiz_"
 
 
-def validate_quiz(
-    document: Mapping[str, Any], questions: Mapping[str, Any] | None = None
-) -> None:
+def validate_quiz(document: Mapping[str, Any], questions: Mapping[str, Any] | None = None) -> None:
     """Check the rules of a ``quiz.json`` document that its JSON Schema cannot express.
 
     Per item: the correct option exists (1), ``option_explanations`` has one entry per option
@@ -83,9 +81,7 @@ def validate_quiz(
         raise SchemaError("\n".join(errors))
 
 
-def read_quiz(
-    path: str | Path, questions: Mapping[str, Any] | None = None
-) -> dict[str, Any]:
+def read_quiz(path: str | Path, questions: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Read a ``quiz.json`` and check it with :func:`validate_quiz`.
 
     A newer minor version is read; another major version is refused.
@@ -117,9 +113,7 @@ def read_quiz(
     try:
         validate_quiz(data, questions)
     except SchemaError as exc:
-        raise SchemaError(
-            "\n".join(f"{path}: {line}" for line in str(exc).splitlines())
-        ) from exc
+        raise SchemaError("\n".join(f"{path}: {line}" for line in str(exc).splitlines())) from exc
     return data
 
 
@@ -154,27 +148,19 @@ def _check_options(path: str, item: Mapping[str, Any], errors: list[str]) -> Non
                 )
 
     solution = item.get("solution")
-    explained = (
-        solution.get("option_explanations") if isinstance(solution, Mapping) else None
-    )
+    explained = solution.get("option_explanations") if isinstance(solution, Mapping) else None
     if not isinstance(explained, Mapping):
         errors.append(f"{path}.solution.option_explanations: expected an object")
         return
     for option_id in first_option_of:
         if option_id not in explained:
-            errors.append(
-                f"{path}.solution.option_explanations: no entry for option {option_id!r}"
-            )
+            errors.append(f"{path}.solution.option_explanations: no entry for option {option_id!r}")
     for key in explained:
         if key not in first_option_of:
-            errors.append(
-                f"{path}.solution.option_explanations.{key}: no option {key!r}"
-            )
+            errors.append(f"{path}.solution.option_explanations.{key}: no option {key!r}")
 
 
-def _check_provenance(
-    path: str, item: Mapping[str, Any], errors: list[str]
-) -> str | None:
+def _check_provenance(path: str, item: Mapping[str, Any], errors: list[str]) -> str | None:
     """Rule 6, and the source question id for rules 4, 5 and 7, or ``None`` if unusable."""
     provenance = item.get("provenance")
     if not isinstance(provenance, Mapping):
@@ -218,9 +204,7 @@ def _check_source(
         )
 
 
-def _spoken_texts(
-    questions: Mapping[str, Any], errors: list[str]
-) -> dict[str, str] | None:
+def _spoken_texts(questions: Mapping[str, Any], errors: list[str]) -> dict[str, str] | None:
     """Each question id in a ``questions.json``, mapped to the question as it was said.
 
     That is ``original_text`` when the LLM judge reworded the question (verdict ``revise``),

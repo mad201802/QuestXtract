@@ -158,6 +158,7 @@ TWO_OPTIONS = [_option("a", "right"), _option("b", "wrong")]
         ("schema_version", DROP),
         ("questions", DROP),
         ("extra", 1),
+        ("grading", {"pass_percentage": 60}),
         ("schema_version", "2.0"),
         ("id", "lecture"),
         ("title", ""),
