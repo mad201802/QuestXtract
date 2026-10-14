@@ -4,6 +4,11 @@
 
 ### Added
 
+- `questxtract filter lecture.questions.json --text WORDS --from TIME --to TIME` keeps the
+  questions where every word appears, said or written on the board on screen while they were
+  asked, and that fall in the time range, without running the pipeline again. Times are seconds,
+  `M:SS` or `H:MM:SS`. It prints the result, or writes it with `-o`. `filter_questions` and
+  `filter_document` take the same `text=`. (#136)
 - `process --vision` / `--no-vision` and `--vision-model` switch reading the board on or off and
   pick its model for one run, over `questxtract.toml`; `--llm-url` now also serves vision. With
   vision on, a recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript gets a

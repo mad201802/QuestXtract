@@ -527,6 +527,9 @@ judge.
 
 - **Detection** (section 7): a small positive delta when a question shares content words with the
   board state on screen while it was asked (#60).
+- **Search** (`filtering.py`, `questxtract filter`): a text query matches every word against
+  what was said and the board states in a question's `visual_ids` together, as whole words and
+  ignoring case, so "what if this is zero?" is found by a word only the board shows.
 - **A second, VLM pass** over the question/answer pairs (not built): the frames on screen go into
   the prompt, where they matter most: "what does this term mean?" is unanswerable from audio
   alone.
@@ -1131,11 +1134,11 @@ src/questxtract/
   endpoint.py      the OpenAI-compatible client and requests, shared by judge and vision
   score.py         9 score: confidence, threshold
   export.py        questions.json writer and reader, with questions.schema.json
-  filtering.py     time filter, experimental topic filter
+  filtering.py     time and text filters, experimental topic filter
   evaluate.py      labelled-set metrics
   schema.py        Question, a standalone shape the pipeline does not produce
   pipeline.py      STAGES, run(), process(), cache, progress
-  cli.py           process / transcribe / eval / quiz
+  cli.py           process / transcribe / filter / eval / quiz
 
 tests/            flat, one test module per source module, plus conftest.py
 ```
@@ -1183,9 +1186,9 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `endpoint.py` | not a stage | done: client and requests for the judge and vision (10) | |
 | `score.py` | 9 score | done: confidence and threshold | |
 | `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
-| `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |
+| `filtering.py` | not a stage | time and text filters done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest | |
-| `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
+| `cli.py` | not a stage | `process`, `transcribe`, `filter` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
 running list of what this document describes and the code does not yet do.
