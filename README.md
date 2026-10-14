@@ -181,7 +181,15 @@ If a key leaks, tell its owner at once so it can be revoked.
 A vision model can also read the slides or the board. Each stable view of the recording becomes a
 board state: its text, its formulas as LaTeX, a short description and a confidence, linked to the
 questions asked while it was on screen. It needs the `llm` extra and a model that takes images.
-There are no CLI flags for it yet (#61); switch it on in `questxtract.toml`:
+Switch it on for one run with `--vision`:
+
+```bash
+questxtract process lecture.mp4 --vision        # gpt-5.6-luna on OpenAI, key from OPENAI_API_KEY
+questxtract process lecture.mp4 --vision --llm-url http://localhost:11434/v1 \
+    --vision-model qwen3-vl:2b-instruct         # a local model in Ollama
+```
+
+or for every run in `questxtract.toml` (`--no-vision` turns it off again for one run):
 
 ```toml
 vision_enabled = true
@@ -200,7 +208,9 @@ were asked about; `stats` there still count the whole lecture. How it works:
 
 `questions.json` lists every question with its text, `start`/`end` in seconds, `confidence`, the
 `answer` where one was found, the `reasons` (rules) that fired, and a `review` block for teacher
-edits. Segments and board states are listed once and referenced by id. Every key is always
+edits. Its `config` block records how it was made (the detector, and with `--detector llm` the
+model, prompt version and reasoning level), so two saved runs can be told apart. Segments and
+board states are listed once and referenced by id. Every key is always
 present, `null` included. Example and field reference:
 [architecture.md 12.1](docs/architecture.md#121-questionsjson); formal schema:
 [questions.schema.json](src/questxtract/questions.schema.json).

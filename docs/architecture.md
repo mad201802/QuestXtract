@@ -991,18 +991,19 @@ Vision reports sampling as its first half and each keyframe read as its second.
 
 ### 12.1 questions.json
 
-Schema 2.1: a fixed key set, `null` included, in one file, plus a keyframe folder beside it.
+Schema 2.2: a fixed key set, `null` included, in one file, plus a keyframe folder beside it.
 The formal description is [`questions.schema.json`](../src/questxtract/questions.schema.json),
 which ships inside the package; the tests validate every export shape against it. The example shows one entry of each
 list, with vision and the LLM detector on; with the rules and no vision, `visuals` is
-empty, `verdict` is `unjudged` and both model names are `null`:
+empty, `verdict` is `unjudged` and the judge and vision settings are `null`:
 
 ```json
 {
-  "schema_version": "2.1",
+  "schema_version": "2.2",
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
   "config": {"model_size": "turbo", "language": "en", "min_confidence": 0.4,
-             "judge_model": "gpt-5.6-terra", "vision_model": "gpt-5.6-luna"},
+             "detector": "llm", "judge_model": "gpt-5.6-terra", "judge_prompt_version": "v5",
+             "judge_reasoning_effort": "none", "vision_model": "gpt-5.6-luna"},
   "stats": {"sentences": 1840, "sentences_unpunctuated": 12, "segments": 96,
             "segments_closed_gap": 92, "segments_closed_duration": 1, "segments_closed_chars": 3,
             "board_states": 34, "candidates": 61, "answered": 30, "emitted": 38},
@@ -1074,6 +1075,10 @@ one more top-level list pointing at visual ids.
   directory, where the vision stage keeps keyframes.
 - `config.min_confidence` is the threshold the file was cut at; `config.judge_model` and
   `config.vision_model` are `null` when that stage was off.
+- `config.detector`, `judge_prompt_version` and `judge_reasoning_effort` tell two runs apart:
+  `rules` or `llm`, the judge prompt's version, and the `--llm-reasoning` level (`""` for
+  `server`). The last two are `null` with the rules. The file is not a run log; other settings
+  are not recorded.
 
 **Versioning.** `schema_version` is `MAJOR.MINOR`. A minor version adds keys, or changes what a
 value means without changing its type (as `keyframe_path` being relative to the file), so a

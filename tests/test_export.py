@@ -8,6 +8,7 @@ from jsonschema import Draft202012Validator, ValidationError
 from questxtract import SchemaError, Transcript, VisualContext, read_questions, write_questions
 from questxtract.cli import main
 from questxtract.export import SCHEMA_PATH, _format_hms, result_to_dict, result_to_json
+from questxtract.llm import JUDGE_PROMPT_VERSION
 from questxtract.pipeline import STAGES, run
 from questxtract.vision import attach_visual
 
@@ -67,6 +68,21 @@ def test_export_emits_a_fixed_key_set_with_nulls_kept(finished):
     assert question["verdict"] == "unjudged"
     assert question["source"] == "audio"
     assert question["review"] == {"status": "pending", "text": None, "note": None, "metadata": {}}
+
+
+def test_the_config_block_names_the_detector_and_nothing_that_did_not_run(finished):
+    config = result_to_dict(finished)["config"]
+    assert config["detector"] == "rules"
+    assert config["judge_prompt_version"] is None and config["judge_reasoning_effort"] is None
+
+
+@pytest.mark.parametrize(("effort", "expected"), [("low", "low"), ("", "")])
+def test_the_config_block_names_the_llm_prompt_and_reasoning(finished, effort, expected):
+    config = finished.config.replace(detector="llm", judge_reasoning_effort=effort)
+    exported = result_to_dict(dataclasses.replace(finished, config=config))["config"]
+    assert exported["detector"] == "llm"
+    assert exported["judge_prompt_version"] == JUDGE_PROMPT_VERSION
+    assert exported["judge_reasoning_effort"] == expected
 
 
 def test_export_carries_the_timestamp_and_the_label(finished):
@@ -168,6 +184,16 @@ def test_every_export_shape_matches_the_published_schema(finished, validator):
     validator.validate(result_to_dict(finished))
     finished.pairs = ()
     validator.validate(result_to_dict(finished))
+    judged = finished.config.replace(detector="llm", judge_reasoning_effort="")
+    validator.validate(result_to_dict(dataclasses.replace(finished, config=judged)))
+
+
+def test_the_schema_requires_the_detector_settings(finished, validator):
+    for key in ("detector", "judge_prompt_version", "judge_reasoning_effort"):
+        data = result_to_dict(finished)
+        del data["config"][key]
+        with pytest.raises(ValidationError, match=key):
+            validator.validate(data)
 
 
 def test_the_schema_rejects_what_the_format_does_not_allow(finished, validator):
@@ -314,6 +340,16 @@ def test_read_questions_accepts_a_newer_minor_and_refuses_another_major(tmp_path
         read_questions(out)
 
 
+def test_read_questions_accepts_an_older_minor_without_the_detector_settings(tmp_path, finished):
+    out = tmp_path / "q.json"
+    data = result_to_dict(finished)
+    data["schema_version"] = "2.1"
+    for key in ("detector", "judge_prompt_version", "judge_reasoning_effort"):
+        del data["config"][key]
+    out.write_text(json.dumps(data), encoding="utf-8")
+    assert read_questions(out)["config"]["judge_model"] is None
+
+
 @pytest.mark.parametrize(
     "content",
     ["not json", '{"questions": null}', "[]", '{"schema_version": "2.0", "questions": []}'],
@@ -350,7 +386,7 @@ def test_cli_roundtrip(tmp_path):
     out = tmp_path / "q.json"
     assert main(["process", str(_transcript_file(tmp_path)), "-o", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
-    assert data["schema_version"] == "2.1"
+    assert data["schema_version"] == "2.2"
     # An aux head without a '?' scores 0.4, under the 0.45 detection gate, so it is never a
     # candidate (architecture.md 7.3).
     assert [q["text"] for q in data["questions"]] == ["What is a stable sort?"]
