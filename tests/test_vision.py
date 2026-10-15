@@ -495,6 +495,10 @@ def test_the_views_are_cached_so_a_second_run_samples_nothing(
     changed = _lecture(context, video, tmp_path / "cache", vision_change_hold=2)
     with pytest.raises(AssertionError, match="sampled again"):
         run(changed, VISION_STAGES)  # other sampling settings cut again
+    cropped = _lecture(context, video, tmp_path / "cache")
+    cropped.layout = Layout(content_region=(0.0, 0.0, 0.5, 1.0), kind="slides")
+    with pytest.raises(AssertionError, match="sampled again"):
+        run(cropped, VISION_STAGES)  # another crop cuts again
 
 
 def _offset_lecture(path, offset=10.0, rate=10):
@@ -750,7 +754,8 @@ def _png_size(path):
     with av.open(str(path)) as image:
         frame = next(image.decode(video=0))
         return frame.width, frame.height
-      
+
+
 # --- PR #131 ---
 
 

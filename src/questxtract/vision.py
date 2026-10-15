@@ -156,7 +156,7 @@ def layout(ctx: Context) -> Context:
         ValueError: If the settings cannot be used, such as an unreadable ``.env``.
 
     """
-    if not ctx.config.vision_enabled or not _has_video(ctx.source):
+    if not ctx.config.vision_enabled or not has_video(ctx.source):
         return ctx
     try:
         frames = _probe_frames(ctx.source)
@@ -265,20 +265,7 @@ def vision(ctx: Context) -> Context:
     if not ctx.config.vision_enabled or not has_video(ctx.source):
         return ctx
     config, report = ctx.config, ctx.progress
-
-    def sampling(_: str, fraction: float) -> None:
-        if report:
-            report("vision", fraction / 2)  # sampling is the first half of the stage
-
-    region = ctx.layout.content_region
-    crop = None if region == _FULL_FRAME else region
-    views = _views(
-        _sample_frames(ctx.source, config.vision_fps, crop=crop, progress=sampling),
-        change=config.vision_change_fraction,
-        hold=config.vision_change_hold,
-        max_views=config.vision_max_states,
-        end=ctx.duration or None,
-    )
+    views = _cut(ctx)
     visual: list[VisualContext] = []
     failed = 0
     for index, view in enumerate(views):
@@ -307,13 +294,17 @@ def vision(ctx: Context) -> Context:
 def _cut(ctx: Context) -> list[_View]:
     """Sample the recording and cut it into views, cached on the sampling settings.
 
-    Sampling decodes the whole video, minutes for a lecture, while the views depend only on
-    the recording and these settings, not on the transcript or the model. Entries live in
+    Frames are cropped to the ``layout`` stage's ``content_region``. Sampling decodes the
+    whole video, minutes for a lecture, while the views depend only on the recording, the
+    crop and these settings, not on the transcript or the model. Entries live in
     ``cache_dir/<source_hash>/views.json``, keyframes beside them (:func:`_store`); without a
     source hash nothing is cached, as for the runner's own cache (architecture.md 11.2).
     """
     config, report = ctx.config, ctx.progress
+    region = ctx.layout.content_region
+    crop = None if region == _FULL_FRAME else region
     header = {
+        "content_region": list(region),
         "vision_fps": config.vision_fps,
         "vision_change_fraction": config.vision_change_fraction,
         "vision_change_hold": config.vision_change_hold,
@@ -330,7 +321,7 @@ def _cut(ctx: Context) -> list[_View]:
         if report:
             report("vision", fraction / 2)  # sampling is the first half of the stage
 
-    samples = _sample_frames(ctx.source, config.vision_fps, progress=sampling)
+    samples = _sample_frames(ctx.source, config.vision_fps, crop=crop, progress=sampling)
     views = _views(
         _from_audio_start(samples, _audio_start(ctx.source)),
         change=config.vision_change_fraction,
