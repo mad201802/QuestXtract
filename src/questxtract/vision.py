@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import math
 import warnings
 from collections.abc import Iterable, Iterator, Sequence
@@ -35,7 +36,7 @@ _GRAY = np.array([0.299, 0.587, 0.114], dtype=np.float32)  # ITU-R BT.601 luma w
 _NOISE = 32  # grey levels a pixel must move by to count as changed, above codec noise
 
 # The prompt and the schema are module-level, version-tagged, so a prompt change is a reviewable
-# diff. A change to either changes the cache key, so no stale caption is replayed.
+# diff. Both are part of every request, so a change to either asks again (endpoint.ask's cache).
 VISION_PROMPT_VERSION = "v0"  # tests/data/vision/prompt_v0.txt, chosen in #52
 _SPEECH_CHARS = 1500  # the speech sent with one keyframe: its own view's words, kept short
 _GIVE_UP_AFTER = 3  # failed readings in a row, before any success, that stop the captioning
@@ -248,20 +249,7 @@ def _data_url(png: bytes) -> str:
     return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
 
 
-@stage(
-    "vision",
-    cache="visual",
-    uses=(
-        "vision_enabled",
-        "vision_fps",
-        "vision_model",
-        "vision_max_states",
-        "vision_change_fraction",
-        "vision_change_hold",
-        "base_url",
-    ),
-    version=VISION_PROMPT_VERSION,
-)
+@stage("vision")
 def vision(ctx: Context) -> Context:
     """Capture board states from the recording into ``ctx.visual`` (architecture.md 6.3 to 6.5).
 
@@ -274,7 +262,7 @@ def vision(ctx: Context) -> Context:
     ``content_region`` and its ``kind`` goes into the prompt; one answer holds for the whole
     recording. De-occlusion is not built.
     """
-    if not ctx.config.vision_enabled or not _has_video(ctx.source):
+    if not ctx.config.vision_enabled or not has_video(ctx.source):
         return ctx
     config, report = ctx.config, ctx.progress
 
@@ -312,7 +300,133 @@ def vision(ctx: Context) -> Context:
         path = _store(view.keyframe, config, ctx.source_hash)
         visual.append(VisualContext(start=view.start, end=view.end, keyframe_path=path, **fields))
     ctx.visual = tuple(visual)
+    ctx.stats["vision_failed"] = len(views) - len(visual)
     return ctx
+
+
+def _cut(ctx: Context) -> list[_View]:
+    """Sample the recording and cut it into views, cached on the sampling settings.
+
+    Sampling decodes the whole video, minutes for a lecture, while the views depend only on
+    the recording and these settings, not on the transcript or the model. Entries live in
+    ``cache_dir/<source_hash>/views.json``, keyframes beside them (:func:`_store`); without a
+    source hash nothing is cached, as for the runner's own cache (architecture.md 11.2).
+    """
+    config, report = ctx.config, ctx.progress
+    header = {
+        "vision_fps": config.vision_fps,
+        "vision_change_fraction": config.vision_change_fraction,
+        "vision_change_hold": config.vision_change_hold,
+        "vision_max_states": config.vision_max_states,
+        "duration": ctx.duration,
+    }
+    path = Path(config.cache_dir) / ctx.source_hash / "views.json"
+    if ctx.source_hash and not config.from_scratch:
+        cached = _load_views(path, header, Path(config.cache_dir))
+        if cached is not None:
+            return cached
+
+    def sampling(_: str, fraction: float) -> None:
+        if report:
+            report("vision", fraction / 2)  # sampling is the first half of the stage
+
+    samples = _sample_frames(ctx.source, config.vision_fps, progress=sampling)
+    views = _views(
+        _from_audio_start(samples, _audio_start(ctx.source)),
+        change=config.vision_change_fraction,
+        hold=config.vision_change_hold,
+        max_views=config.vision_max_states,
+        end=ctx.duration or None,
+    )
+    if ctx.source_hash:
+        entries = []
+        for view in views:
+            stored = _store(view.keyframe, config, ctx.source_hash)
+            if not stored:
+                return views  # the cache cannot be written: keep the views, cache nothing
+            entries.append(
+                {
+                    "start": view.start,
+                    "end": view.end,
+                    "keyframe": stored,
+                    "keyframe_time": view.keyframe_time,
+                }
+            )
+        try:
+            path.write_text(json.dumps({"config": header, "views": entries}), encoding="utf-8")
+        except OSError:
+            pass
+    return views
+
+
+def _from_audio_start(
+    samples: Iterable[tuple[float, Frame]], origin: float
+) -> Iterator[tuple[float, Frame]]:
+    """Shift sample times so that zero is the audio start, the transcript's clock.
+
+    What was on screen before the audio starts is never spoken about, so those samples are
+    dropped, except the last one: the board visible when the audio starts, at time zero. Every
+    other sample keeps its own, later time, so no view can end where it starts.
+    """
+    before: Frame | None = None
+    for time, frame in samples:
+        shifted = time - origin
+        if shifted < 0:
+            before = frame
+            continue
+        if before is not None:
+            if shifted > 0:
+                yield 0.0, before
+            before = None
+        yield shifted, frame
+    if before is not None:  # the picture ends before the audio starts
+        yield 0.0, before
+
+
+def _load_views(path: Path, header: dict[str, Any], cache: Path) -> list[_View] | None:
+    """Read cached views, or ``None`` when they are missing, stale or damaged.
+
+    A keyframe is named by the start of its content hash (:func:`_store`), so one whose bytes
+    no longer match its name, such as a write cut short, makes the whole entry stale.
+    """
+    try:
+        stored = json.loads(path.read_text(encoding="utf-8"))
+        if stored.get("config") != header:
+            return None
+        views = []
+        for entry in stored["views"]:
+            keyframe = (cache / entry["keyframe"]).read_bytes()
+            if _content_name(keyframe) != PurePosixPath(entry["keyframe"]).name:
+                return None
+            views.append(
+                _View(
+                    start=entry["start"],
+                    end=entry["end"],
+                    keyframe=keyframe,
+                    keyframe_time=entry["keyframe_time"],
+                )
+            )
+        return views
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
+def _audio_start(path: Path) -> float:
+    """When the audio starts on the container's clock, in seconds: the transcript's zero.
+
+    Word times count from the first audio sample, while frame times are the video stream's
+    own, so a file whose streams do not start at zero (a trimmed recording) would put board
+    states beside the wrong speech. Subtracting the audio start keeps a real offset between
+    sound and picture, which zeroing the video stream alone would remove.
+    """
+    try:
+        with av.open(str(path)) as container:
+            audio = container.streams.audio
+            if not audio or audio[0].start_time is None or audio[0].time_base is None:
+                return 0.0
+            return float(audio[0].start_time * audio[0].time_base)
+    except (av.error.FFmpegError, OSError):
+        return 0.0
 
 
 def _speech(sentences: Sequence[Sentence], start: float, end: float) -> str:
@@ -326,24 +440,33 @@ def _speech(sentences: Sequence[Sentence], start: float, end: float) -> str:
 def _store(png: bytes, config: Config, source_hash: str) -> str:
     """Write a keyframe into the cache; return its path relative to ``cache_dir`` (#59).
 
-    Named by its content, so a re-run writes nothing new. Relative to the cache, so a cached
-    result still finds its images from another working directory and board-state ids do not
-    depend on where the cache lives. ``""`` when the cache cannot be written: the reading is
-    kept, only the image is missing.
+    Named by its content, so a re-run writes nothing new, and a file whose bytes do not match
+    its name is written again. Written through a temporary file, so an interrupted write
+    leaves no half image under the real name. Relative to the cache, so a cached result still
+    finds its images from another working directory and board-state ids do not depend on where
+    the cache lives. ``""`` when the cache cannot be written: the reading is kept, only the
+    image is missing.
     """
-    relative = PurePosixPath(source_hash or "unhashed", "keyframes")
-    relative /= f"{hashlib.sha256(png).hexdigest()[:16]}.png"
+    name = _content_name(png)
+    relative = PurePosixPath(source_hash or "unhashed", "keyframes", name)
     path = Path(config.cache_dir) / relative
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        if not path.is_file():
-            path.write_bytes(png)
+        if not path.is_file() or _content_name(path.read_bytes()) != name:
+            partial = path.with_suffix(".tmp")
+            partial.write_bytes(png)
+            partial.replace(path)
     except OSError:
         return ""
     return relative.as_posix()
 
 
-def _has_video(path: Path) -> bool:
+def _content_name(png: bytes) -> str:
+    """Return a keyframe's file name: the start of its SHA-256, so the name checks the content."""
+    return f"{hashlib.sha256(png).hexdigest()[:16]}.png"
+
+
+def has_video(path: Path) -> bool:
     """Whether ``path`` is a recording with a video track; ``False`` for anything else."""
     try:
         with av.open(str(path)) as container:
@@ -582,31 +705,32 @@ def _caption(
         "response_format": _SCHEMA,
     }
     try:
-        answer = endpoint.ask(config, request, name="vision")
+        answer = endpoint.ask(config, request, name="vision", valid=_readable)
     except (ConnectionError, endpoint.InvalidAnswer) as exc:
         warnings.warn(f"vision: keyframe left out: {exc}", UserWarning, stacklevel=2)
         return None
-    description, text, latex, confidence = (answer.get(k) for k in _FIELDS)
-    if (
-        not isinstance(description, str)
-        or not isinstance(text, str)
-        or not (latex is None or isinstance(latex, str))
-        or isinstance(confidence, bool)
-        or not isinstance(confidence, (int, float))
-        or not math.isfinite(confidence)
-    ):
-        warnings.warn(
-            f"vision: keyframe left out: {config.vision_model} answered with malformed fields",
-            UserWarning,
-            stacklevel=2,
-        )
-        return None
+    description, text, latex, confidence = (answer[k] for k in _FIELDS)
     return {
         "description": description.strip(),
         "text": text.strip(),
         "latex": (latex or "").strip() or None,
         "confidence": min(1.0, max(0.0, float(confidence))),
     }
+
+
+def _readable(answer: dict[str, Any]) -> bool:
+    """Whether an answer has every board field with a usable type; nothing else is cached."""
+    if not all(key in answer for key in _FIELDS):
+        return False  # a missing "latex" is not null: the schema asks for every key
+    description, text, latex, confidence = (answer[k] for k in _FIELDS)
+    return (
+        isinstance(description, str)
+        and isinstance(text, str)
+        and (latex is None or isinstance(latex, str))
+        and not isinstance(confidence, bool)
+        and isinstance(confidence, (int, float))
+        and math.isfinite(confidence)
+    )
 
 
 @stage("attach_visual")

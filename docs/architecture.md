@@ -69,7 +69,7 @@ Three consequences that show up repeatedly below:
                               v
   4 segments                  |  gap/duration/length breaks -> Segment[]
                               v
-  5 vision (optional)         |  layout probe -> 1 fps frames -> board states -> VLM
+  5 vision (optional)         |  1 fps frames -> stable views -> VLM per keyframe
                               v
   6 detect                    |  lexical scoring + vetoes -> QuestionCandidate[]
                               v
@@ -514,7 +514,7 @@ panning chalkboard camera adds a view per pan, which the cap absorbs until motio
 lands. A lecturer standing still in front of the board for the whole hold is a view of its own
 until de-occlusion.
 
-**Ink curve (planned, M3).** Count ink pixels per sampled frame after an adaptive threshold. A
+**Ink curve (planned, #133).** Count ink pixels per sampled frame after an adaptive threshold. A
 rising curve means writing, a sharp drop is an erase, and the local maximum before a drop is the
 completed board: the keyframe. The recording is cut into **board states** between erase events,
 roughly 20 to 60 per lecture. On slides the same curve works unchanged: a slide change is a large
@@ -535,10 +535,15 @@ need formulas.
 Each keyframe that was read is written to the cache as `<source_hash>/keyframes/<content
 hash>.png`, and `keyframe_path` holds that path relative to `cache_dir`: a cached result stays
 valid from another working directory, and the board-state id does not depend on where the cache
-lives. Writing `questions.json` copies the images beside it (12.1).
+lives. Frame times count from the start of the audio stream, the transcript's zero, so a file
+whose streams do not start at zero keeps its board states beside the right speech; of what was on
+screen before the audio starts, only the board visible at its start is kept. A keyframe whose
+bytes no longer match its content-hash name, such as an interrupted write, is sampled again.
+Writing `questions.json` copies the images beside it (12.1).
 
 Captioning is **never required**: an endpoint error, a stall or invalid JSON twice, or a
-malformed field leaves that one keyframe out with a warning, and the run goes on. When the
+malformed field leaves that one keyframe out with a warning, counted in `stats.vision_failed`, and
+the run goes on. None of these is cached, so the next run asks again. When the
 first three readings fail and none has succeeded, the rest are not sent: a wrong model name, key
 or endpoint would fail every call the same way, and each one costs. The judge does
 the opposite (10.3, rule 5) because the user asked for it; a board description only enriches
@@ -965,16 +970,15 @@ explicitly; constructing `Config()` alone does not read TOML.
 ```
 .questxtract/
   <source_hash>/transcribe.json   the transcript
-  <source_hash>/vision.json       the board states (6.5)
+  <source_hash>/views.json        the stable views of the recording (6.4)
   <source_hash>/keyframes/        their keyframe images, named by content hash
   layout/<request hash>.json      one per layout probe request (6.2, 10.4)
   vision/<request hash>.json      one per keyframe request (10.4)
   judge/<request hash>.json       one per LLM detector request (10.4)
 ```
 
-Each entry is written with a header holding the values of the stage's `uses` config fields,
-plus its `version` when the stage declares one: what else the result depends on that is not a
-config field, such as the vision prompt. The runner reuses an entry when the header matches and recomputes when it does not; `--from-scratch`
+Each entry is written with a header holding the values of the stage's `uses` config fields. The
+runner reuses an entry when the header matches and recomputes when it does not; `--from-scratch`
 bypasses reuse for every stage. Sentences, segments, detection, answers and scoring declare no
 `cache` and always recompute: caching a 20 ms stage buys nothing and costs an invalidation bug.
 
@@ -986,6 +990,11 @@ sharing one bucket, which would replay one recording's results into another's.
 config-only header cannot key, so it declares no `cache=` and caches each request itself, keyed on
 the request (10.4). `--from-scratch` bypasses it too. The layout probe does the same (6.2), so a
 failed probe is not stored and is asked again.
+
+**Vision is the second exception.** Each reading depends on the transcript (the speech is in the
+prompt) and may fail, and a stage-level entry would replay both a stale reading and a failed
+one. So `vision` declares no `cache=`: it caches the sampled views itself in `views.json`, keyed
+on the sampling settings, and each reading per request, only once the answer is valid (6.5).
 
 A stage that reads a config field and forgets to list it in `uses` serves stale results: the one
 bug class this design still has. Keep `uses` next to the signature so the two are reviewed
@@ -1012,18 +1021,19 @@ Vision reports sampling as its first half and each keyframe read as its second.
 
 ### 12.1 questions.json
 
-Schema 2.1: a fixed key set, `null` included, in one file, plus a keyframe folder beside it.
+Schema 2.2: a fixed key set, `null` included, in one file, plus a keyframe folder beside it.
 The formal description is [`questions.schema.json`](../src/questxtract/questions.schema.json),
 which ships inside the package; the tests validate every export shape against it. The example shows one entry of each
 list, with vision and the LLM detector on; with the rules and no vision, `visuals` is
-empty, `verdict` is `unjudged` and both model names are `null`:
+empty, `verdict` is `unjudged` and the judge and vision settings are `null`:
 
 ```json
 {
-  "schema_version": "2.1",
+  "schema_version": "2.2",
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
   "config": {"model_size": "turbo", "language": "en", "min_confidence": 0.4,
-             "judge_model": "gpt-5.6-terra", "vision_model": "gpt-5.6-luna"},
+             "detector": "llm", "judge_model": "gpt-5.6-terra", "judge_prompt_version": "v5",
+             "judge_reasoning_effort": "none", "vision_model": "gpt-5.6-luna"},
   "stats": {"sentences": 1840, "sentences_unpunctuated": 12, "segments": 96,
             "segments_closed_gap": 92, "segments_closed_duration": 1, "segments_closed_chars": 3,
             "board_states": 34, "candidates": 61, "answered": 30, "emitted": 38},
@@ -1075,7 +1085,7 @@ empty, `verdict` is `unjudged` and both model names are `null`:
 **Shared things are listed once and referenced by id.** `segments` and `visuals` (board states,
 6.4) are top-level lists; a question points into them with `segment_id` and `visual_ids`, so a
 board state that ten questions discuss is written once. The vision milestones grow into this
-shape without a breaking change: M3's board timeline is `visuals` in time order, M4's animations
+shape without a breaking change: M3's board timeline is `visuals` in time order, its animations
 one more top-level list pointing at visual ids.
 
 - `visual_ids` holds the board states on screen while the question was asked, falling back to
@@ -1095,6 +1105,10 @@ one more top-level list pointing at visual ids.
   directory, where the vision stage keeps keyframes.
 - `config.min_confidence` is the threshold the file was cut at; `config.judge_model` and
   `config.vision_model` are `null` when that stage was off.
+- `config.detector`, `judge_prompt_version` and `judge_reasoning_effort` tell two runs apart:
+  `rules` or `llm`, the judge prompt's version, and the `--llm-reasoning` level (`""` for
+  `server`). The last two are `null` with the rules. The file is not a run log; other settings
+  are not recorded.
 
 **Versioning.** `schema_version` is `MAJOR.MINOR`. A minor version adds keys, or changes what a
 value means without changing its type (as `keyframe_path` being relative to the file), so a

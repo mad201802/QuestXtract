@@ -176,11 +176,41 @@ commit the key, paste it into a chat, issue or pull request, or write it into an
 saved, delete the message you received it in. Ask the customer before using another model with it.
 If a key leaks, tell its owner at once so it can be revoked.
 
+### Reading the board
+
+A vision model can also read the slides or the board. Each stable view of the recording becomes a
+board state: its text, its formulas as LaTeX, a short description and a confidence, linked to the
+questions asked while it was on screen. It needs the `llm` extra and a model that takes images.
+Switch it on for one run with `--vision`:
+
+```bash
+questxtract process lecture.mp4 --vision        # gpt-5.6-luna on OpenAI, key from OPENAI_API_KEY
+questxtract process lecture.mp4 --vision --llm-url http://localhost:11434/v1 \
+    --vision-model qwen3-vl:2b-instruct         # a local model in Ollama
+```
+
+or for every run in `questxtract.toml` (`--no-vision` turns it off again for one run):
+
+```toml
+vision_enabled = true
+vision_model = "gpt-5.6-luna"              # the default, on OpenAI with OPENAI_API_KEY
+# base_url = "http://localhost:11434/v1"   # or any OpenAI-compatible server, such as Ollama
+```
+
+A lecture costs at most `vision_max_states` (80) model calls. Readings and keyframe images are
+cached, so running it again sends nothing. A reading that fails leaves its view out with a
+warning, and the run goes on. Example output: [docs/demo/](docs/demo/mit_18_100b_l1.questions.json),
+four questions from MIT 18.100B Lecture 1 (MIT OpenCourseWare, CC BY-NC-SA) with the boards they
+were asked about; `stats` there still count the whole lecture. How it works:
+[architecture.md 6](docs/architecture.md#6-vision).
+
 ### Output
 
 `questions.json` lists every question with its text, `start`/`end` in seconds, `confidence`, the
 `answer` where one was found, the `reasons` (rules) that fired, and a `review` block for teacher
-edits. Segments and board states are listed once and referenced by id. Every key is always
+edits. Its `config` block records how it was made (the detector, and with `--detector llm` the
+model, prompt version and reasoning level), so two saved runs can be told apart. Segments and
+board states are listed once and referenced by id. Every key is always
 present, `null` included. Example and field reference:
 [architecture.md 12.1](docs/architecture.md#121-questionsjson); formal schema:
 [questions.schema.json](src/questxtract/questions.schema.json).
