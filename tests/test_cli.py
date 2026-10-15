@@ -560,7 +560,7 @@ def test_eval_receives_file_settings_and_reasoning_timeout(tmp_path, monkeypatch
     )
     seen = []
 
-    def evaluate(paths, config):
+    def evaluate(paths, config, board=False):
         seen.append(config)
         return {}
 

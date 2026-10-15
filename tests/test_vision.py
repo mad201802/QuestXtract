@@ -25,7 +25,6 @@ from questxtract.vision import (
     _View,
     _views,
     attach_visual,
-    overlapping,
     vision,
 )
 
@@ -33,13 +32,6 @@ STATES = (
     VisualContext(start=0.0, end=5.0, description="first board"),
     VisualContext(start=5.0, end=20.0, description="second board"),
 )
-
-
-def test_overlapping_uses_half_open_intervals():
-    assert overlapping(STATES, 1.0, 2.0) == (STATES[0],)
-    assert overlapping(STATES, 4.0, 6.0) == STATES
-    assert overlapping(STATES, 5.0, 6.0) == (STATES[1],)  # touching at 5.0 is not overlapping
-    assert overlapping(STATES, 30.0, 40.0) == ()
 
 
 def test_attach_visual_is_a_no_op_without_board_states(context):

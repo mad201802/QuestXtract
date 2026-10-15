@@ -4,6 +4,12 @@
 
 ### Added
 
+- Detection can read the board: with vision on and `board_overlap_delta` set, a question that
+  shares a word with the text of the board on screen while it was asked gets that boost, the
+  reason `board_overlap`, and `source: "combined"` in `questions.json`. Off by default (0.0): at
+  0.10 it changed nothing on the labelled recordings. `eval --board` scores them with the board
+  states committed beside their transcripts. (#60)
+
 - `process --vision` / `--no-vision` and `--vision-model` switch reading the board on or off and
   pick its model for one run, over `questxtract.toml`; `--llm-url` now also serves vision. With
   vision on, a recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript gets a

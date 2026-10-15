@@ -323,7 +323,7 @@ def _transcribe(args: argparse.Namespace) -> int:
 def _eval(args: argparse.Namespace) -> int:
     """Score the pipeline against the labelled set."""
     try:
-        report = evaluate(args.paths, _with_llm(_config(args)))
+        report = evaluate(args.paths, _with_llm(_config(args)), board=args.board)
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -471,6 +471,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluation.add_argument(
         "paths", nargs="+", help="*.labels.jsonl files, or directories holding them"
+    )
+    evaluation.add_argument(
+        "--board",
+        action="store_true",
+        help="use the board states in <name>.visual.json beside each transcript, as if "
+        "--vision had read them",
     )
     evaluation.add_argument("--json", action="store_true", help="machine-readable, for CI")
     evaluation.set_defaults(handler=_eval)

@@ -10,6 +10,7 @@ anything — this file only covers structure and naming, not what a label means.
 tests/data/
   <recording-name>.labels.jsonl       one file per labelled recording
   <recording-name>.transcript.json    the ASR transcript the labels are timed against
+  <recording-name>.visual.json        board states read from its video, for `eval --board`
   held_out/                           the same pair per held-out recording (below)
   README.md                           this file
 ```
@@ -62,7 +63,15 @@ chunk `text`/`start`/`end` and per word `word`/`start`/`end`. Committed so `eval
 in CI without an ASR run. Re-transcribing changes the word clock, so a new transcript means
 re-snapping the labels (`scratch_to_labels.py --transcript`).
 
-**License.** Transcripts and labels are derived from the recording, so they carry its license,
+**Board states.** `<slug>.visual.json` holds what the vision stage read off the recording's
+video: per board state its `start`, `end`, `description`, `text`, `latex` and `confidence`, plus
+the `vision_model` and `vision_prompt_version` that read it. No keyframes are committed. Written
+by `scripts/board_states.py` from the recording (720p video track) against the committed
+transcript, so the board states share the labels' clock; `questxtract eval tests/data/ --board`
+uses them. They are one model's reading at one point in time: regenerate them with the script,
+never edit them by hand.
+
+**License.** Transcripts, board states and labels are derived from the recording, so they carry its license,
 not the repository's MIT license: the MIT recordings are MIT OpenCourseWare, so
 `mit_18_100b_l1.*` are CC BY-NC-SA 4.0 (attribution: MIT OpenCourseWare, 18.100B Real
 Analysis) and `held_out/mit_6_003_l8.*` are CC BY-NC-SA (attribution: MIT OpenCourseWare,

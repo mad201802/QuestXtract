@@ -70,6 +70,21 @@ def test_export_emits_a_fixed_key_set_with_nulls_kept(finished):
     assert question["review"] == {"status": "pending", "text": None, "note": None, "metadata": {}}
 
 
+def test_a_question_raised_by_the_board_is_combined(context):
+    context.config = context.config.replace(board_overlap_delta=0.1)
+    context.visual = (VisualContext(start=0.0, end=5.0, text="Stable sort: keeps equal keys"),)
+    ctx = run(context, STAGES[2:])
+    (question,) = result_to_dict(ctx)["questions"]
+    assert "board_overlap" in question["reasons"]
+    assert question["source"] == "combined"
+
+
+def test_a_question_the_board_did_not_raise_stays_audio(context):
+    context.visual = (VisualContext(start=0.0, end=5.0, text="Heaps"),)
+    (question,) = result_to_dict(run(context, STAGES[2:]))["questions"]
+    assert question["source"] == "audio"
+
+
 def test_the_config_block_names_the_detector_and_nothing_that_did_not_run(finished):
     config = result_to_dict(finished)["config"]
     assert config["detector"] == "rules"

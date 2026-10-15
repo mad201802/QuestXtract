@@ -1,0 +1,646 @@
+{
+  "vision_model": "gpt-5.6-luna",
+  "vision_prompt_version": "v0",
+  "board_states": [
+    {
+      "start": 0.03333333333333333,
+      "end": 41.0,
+      "description": "A title slide for a real analysis lecture, identifying Lecture 1 as an introduction to real numbers. MIT OpenCourseWare branding and licensing icons appear at the bottom.",
+      "text": "Real Analysis\n18.100B, Spring 2025\nLecture 1:\nIntroduction to Real Numbers\nTobias Colding\nMIT OCW\nocw.mit.edu",
+      "latex": null,
+      "confidence": 0.99
+    },
+    {
+      "start": 41.0,
+      "end": 103.0,
+      "description": "The visible blackboard appears blank, with no discernible writing, formulas, diagrams, or figures.",
+      "text": "",
+      "latex": null,
+      "confidence": 0.98
+    },
+    {
+      "start": 103.0,
+      "end": 163.0,
+      "description": "A blackboard shows a single handwritten line near the top reading “10 weekly homework.”",
+      "text": "10 weekly homework",
+      "latex": null,
+      "confidence": 0.98
+    },
+    {
+      "start": 163.0,
+      "end": 215.0,
+      "description": "A chalkboard lists course assessment items: weekly homework, a midterm with a date, and a final.",
+      "text": "10 Weekly homework.\n1 Midterm 20 March\n1 Final",
+      "latex": null,
+      "confidence": 0.98
+    },
+    {
+      "start": 215.0,
+      "end": 252.0,
+      "description": "A chalkboard lists course assessment components and their percentage weights, including weekly homework, a midterm dated 20 March, and a final. A partially obstructed note near the lower left mentions a Canvas site.",
+      "text": "10 weekly homework.\n50%\nmidterm 20 March\n20%\nFinal\n30%\n[unreadable]nvas site.",
+      "latex": null,
+      "confidence": 0.88
+    },
+    {
+      "start": 252.0,
+      "end": 283.0,
+      "description": "A chalkboard shows a handwritten list of basic course information, including course duration, exams, Canvas, lecture notes, and PSET partners.",
+      "text": "10 weeks\n1 midterm\n1 Final\nCanvas site\nlecture notes\npset partners",
+      "latex": null,
+      "confidence": 0.82
+    },
+    {
+      "start": 283.0,
+      "end": 314.0,
+      "description": "A chalkboard lists course assessment components and percentages, Canvas information, and a note about past papers. The right side shows course numbers and the lecturer’s name, while “Key” is written on the lower-left board.",
+      "text": "10 weekly homework. 50%\n1 midterm 20 March 20%\n1 Final 30%\nCanvas site.\nlecture notes will be posted under files.\nPast papers.\nKey\n18.100B/18.1002\nToby Golding.",
+      "latex": "50\\%\n20\\%\n30\\%\n18.100B/18.1002",
+      "confidence": 0.87
+    },
+    {
+      "start": 314.0,
+      "end": 384.0,
+      "description": "A classroom chalkboard shows course information and grading percentages on the left, the course number and a brief lecture heading at the top center, and a short list of key topics below. The visible key-topic list includes writing mathematics and proving theorems.",
+      "text": "10 weekly homework 50%\n1 midterm 20 March 20%\n1 final 30%\nCanvas site\nlecture notes will be posted under files\npdf handouts\n18.100B/18.1002\nToday: Editing.\nKey topics\n1) Write a mathematical\n2) How to prove theorems.",
+      "latex": "18.100B/18.1002",
+      "confidence": 0.78
+    },
+    {
+      "start": 384.0,
+      "end": 440.0,
+      "description": "The board introduces a function on the interval from a to b, with continuity and endpoint sign conditions. It includes an interval sketch and a graph of a continuous curve rising from a negative value at a to a positive value at b.",
+      "text": "a, b ∈ ℝ.\nf: [a, b] → ℝ.\nContinuous:\nf(a) < 0\nf(b) > 0\nf(b)\nf(a)",
+      "latex": "a,b\\in\\mathbb{R}\nf:[a,b]\\to\\mathbb{R}\nf(a)<0\nf(b)>0",
+      "confidence": 0.95
+    },
+    {
+      "start": 440.0,
+      "end": 486.0,
+      "description": "A chalkboard presentation of the Intermediate Value Theorem. It includes assumptions for a continuous function on [a,b], endpoint sign conditions, and a sketch of a curve rising from below the horizontal axis to above it and crossing the axis between a and b.",
+      "text": "50%\n20%\n30%\n[unreadable] finals.\na, b ∈ R.\nf: [a,b] → R.\nContinuous.\nf(a) < 0\nf(b) > 0\nf(b)\nf(a)\na\nb\nThe intermediate value theorem:\nThere exists a c, a < c < b.\nf(c) = 0",
+      "latex": "a,b\\in\\mathbb{R}\nf:[a,b]\\to\\mathbb{R}\nf(a)<0\nf(b)>0\na<c<b\nf(c)=0",
+      "confidence": 0.87
+    },
+    {
+      "start": 486.0,
+      "end": 543.0,
+      "description": "A chalkboard introduces the Intermediate Value theorem. The board shows a statement about a point c between a and b and a coordinate-style sketch partly obscured by the lecturer.",
+      "text": "The Intermediate Value theorem:\nThere exists a < c < b.\nf(c) = 0",
+      "latex": "a<c<b\nf(c)=0",
+      "confidence": 0.91
+    },
+    {
+      "start": 543.0,
+      "end": 596.0,
+      "description": "The board presents the intermediate value theorem for a function on [a,b], with conditions that the endpoint values have opposite signs and a sketch of a continuous curve crossing the horizontal axis. A second sketch shows a curve with a discontinuity, labeled as not continuous.",
+      "text": "a, b ∈ R.\nf: [a,b] → R.\ncontinuous:\nf(a) < 0\nf(b) > 0\nThe intermediate Value theorem:\nthere exists a c, a ≤ c ≤ b.\nf(c) = 0\nNot cont",
+      "latex": "a,b\\in\\mathbb{R}\nf:[a,b]\\to\\mathbb{R}\nf(a)<0\nf(b)>0\na\\le c\\le b\nf(c)=0",
+      "confidence": 0.76
+    },
+    {
+      "start": 596.0,
+      "end": 629.0,
+      "description": "A mostly blank blackboard with a handwritten question across the top asking how to turn the situation into a proof.",
+      "text": "How do we make this situation into a proof?",
+      "latex": null,
+      "confidence": 0.98
+    },
+    {
+      "start": 629.0,
+      "end": 667.0,
+      "description": "A chalkboard presents the Intermediate Value Theorem for a continuous function on [a,b], with endpoint sign conditions and sketches showing a zero crossing. A separate sketch at right is labeled as not continuous.",
+      "text": "50%\n20%\n30%\nmodel files.\na,b ∈ R.\nf: [a,b] → R.\nContinuous\nf(a) < 0\nf(b) > 0\nThe Intermediate Value Theorem:\nThere exists a < c < b.\nf(c) = 0\nNot cont\nHow do",
+      "latex": "a,b\\in\\mathbb{R}\nf:[a,b]\\to\\mathbb{R}\nf(a)<0\nf(b)>0\na<c<b\nf(c)=0",
+      "confidence": 0.86
+    },
+    {
+      "start": 667.0,
+      "end": 699.0,
+      "description": "A blackboard shows a question about turning a solution into a proof, followed by a partially obscured question about which properties are involved.",
+      "text": "How do we make this solution into a proof?\nWhat properties are we [unreadable] the",
+      "latex": null,
+      "confidence": 0.78
+    },
+    {
+      "start": 699.0,
+      "end": 745.0,
+      "description": "A chalkboard shows a question about turning intuition into a proof, followed by questions concerning properties of the real numbers and the square root of 2. The lecturer obscures part of the middle text.",
+      "text": "How do we make this intuition into a proof?\n[unreadable] properties are we using of the\nreal numbers?\n[unreadable] the real numbers?\n√2 ?",
+      "latex": "\\sqrt{2}",
+      "confidence": 0.66
+    },
+    {
+      "start": 745.0,
+      "end": 802.0,
+      "description": "A blackboard presentation of the Intermediate Value theorem, with a statement involving a point between two endpoints and sketches of coordinate axes with curves. The right-hand sketch is labeled as a non-continuous example.",
+      "text": "The Intermediate Value theorem:\nThere exists a < c < b.\nf(c) = 0\nNot cont.",
+      "latex": "a < c < b\nf(c)=0",
+      "confidence": 0.92
+    },
+    {
+      "start": 802.0,
+      "end": 833.0,
+      "description": "A chalkboard shows a handwritten answer about the real numbers as a complete ordered field containing the rational numbers. Several older, partially erased lines of writing are faintly visible below and around the main statement.",
+      "text": "Answer weekly homework 5/6\nR ⊃ a complete ordered Field that\nContains the rational numbers",
+      "latex": "\\mathbb{R} \\supset",
+      "confidence": 0.76
+    },
+    {
+      "start": 833.0,
+      "end": 867.0,
+      "description": "A blackboard presents the Intermediate Value Theorem, with the statement that a point c lies between a and b and satisfies f(c)=0. To the right are coordinate-axis sketches of intersecting curves, labeled as not continuous.",
+      "text": "The Intermediate Value theorem:\nThere exists a ≤ c ≤ b.\nf(c) = 0\nNot cont.",
+      "latex": "\\text{There exists } a \\le c \\le b.\nf(c)=0",
+      "confidence": 0.91
+    },
+    {
+      "start": 867.0,
+      "end": 915.0,
+      "description": "A chalkboard shows an underlined heading and a written definition describing the real numbers as a complete ordered field containing the rational numbers.",
+      "text": "Answer\nR → a complete ordered Field that\ncontains the rational numbers Q.",
+      "latex": "\\mathbb{R} \\to \\text{a complete ordered field that contains the rational numbers } \\mathbb{Q}",
+      "confidence": 0.84
+    },
+    {
+      "start": 915.0,
+      "end": 955.0,
+      "description": "The board shows a definition of the natural numbers, represented as a set containing the positive counting numbers. Faint erased chalk marks are visible elsewhere on the board.",
+      "text": "① N = {1, 2, 3, 4, 5, ...} natural",
+      "latex": "N = \\{1,2,3,4,5,\\ldots\\}",
+      "confidence": 0.92
+    },
+    {
+      "start": 955.0,
+      "end": 1002.0,
+      "description": "A chalkboard lists the natural numbers, integers, and rational numbers as three numbered items. The integer set is partly obscured by the lecturer.",
+      "text": "1) N = {1, 2, 3, 4, 5, ...} natural #.\n2) Z integers. [unreadable] 0, +1, +2, +3, ...\n3) Q rational numbers",
+      "latex": "N=\\{1,2,3,4,5,\\ldots\\}\n\\mathbb{Z}=\\{[\\text{unreadable}],0,+1,+2,+3,\\ldots\\}",
+      "confidence": 0.84
+    },
+    {
+      "start": 1002.0,
+      "end": 1038.0,
+      "description": "Two chalkboards introduce key topics and notation for common number sets. The right board lists the natural numbers, integers, and rational numbers.",
+      "text": "Key topics\n1) Write a mathematical\n2) How to prove theorems.\n1) N = {1, 2, 3, 4, 5, ...}\n2) Z integers Z\n3) Q rational numbers",
+      "latex": "N = \\{1,2,3,4,5,\\ldots\\}\n\\mathbb{Z}\n\\mathbb{Q}",
+      "confidence": 0.82
+    },
+    {
+      "start": 1038.0,
+      "end": 1082.0,
+      "description": "A blackboard headed “Properties of rational numbers.” shows an equality between two fractions, with the left fraction partly obscured by the lecturer.",
+      "text": "Properties of rational numbers.",
+      "latex": "\\frac{m_1}{n_1}=\\frac{m_2}{n_2}",
+      "confidence": 0.78
+    },
+    {
+      "start": 1082.0,
+      "end": 1115.0,
+      "description": "A blackboard headed “Properties of rational numbers,” showing an equivalence involving two fractions and a cross-multiplication condition. Part of the right-hand formula is obscured by the lecturer’s hand.",
+      "text": "Properties of rational numbers,",
+      "latex": "\\frac{m_2}{n_2} \\Longleftrightarrow m_1 n_2 = m_2 n_1",
+      "confidence": 0.78
+    },
+    {
+      "start": 1115.0,
+      "end": 1163.0,
+      "description": "The boards introduce the real numbers as a complete ordered field containing the rationals, review the natural, integer, and rational number sets, and state the equivalence condition for rational representatives. A lower board also sketches a function on an interval with endpoint sign conditions, while the right board poses questions about the real numbers and √2.",
+      "text": "Answer\nR is a complete ordered field that contains the rational numbers Q.\nProperties of rational numbers.\nintegers\nnatural numbers\nintegers\nrational numbers\ncontinuous\nWhat are the real numbers?\nWhat is √2?\nIs √2 a real number?",
+      "latex": "\\mathbb{R}\\text{ is a complete ordered field that contains the rational numbers }\\mathbb{Q}.\n\\mathbb{N}=\\{1,2,3,4,5,\\ldots\\}\n\\mathbb{Z}=\\{0,\\pm1,\\pm2,\\pm3,\\ldots\\}\n\\mathbb{Q}=\\left\\{\\frac{m}{n}:m\\in\\mathbb{Z},\\ n\\in\\mathbb{N}\\right\\}\n\\frac{m_1}{n_1}=\\frac{m_2}{n_2}\\Longleftrightarrow m_1n_2=m_2n_1\nf:[a,b]\\to\\mathbb{R}\nf(a)<0,\\quad f(b)>0\n\\sqrt{2}\n\\sqrt{2}\\in\\mathbb{R}?",
+      "confidence": 0.74
+    },
+    {
+      "start": 1163.0,
+      "end": 1206.0,
+      "description": "The central chalkboard lists the natural numbers, integers, and rational numbers, including a fractional representation of a rational number. A partially obscured rational-number addition expression is being written on the lower board; adjacent boards contain fragmentary notes and questions.",
+      "text": "① N = {1, 2, 3, 4, 5, ...} . natural #\n② Z integers. ℤ = {0, ±1, ±2, ±3, ...}\n③ Q rational numbers\nm/n    m ∈ ℤ, n ∈ N\nm₁/n₁ + m\nHow do ?\nWhat prope[unreadable]\n① What are t[unreadable]\n② What is [unreadable]\n③ Is √2 [unreadable]",
+      "latex": "\\mathbb{N}=\\{1,2,3,4,5,\\ldots\\}\n\\mathbb{Z}=\\{0,\\pm1,\\pm2,\\pm3,\\ldots\\}\n\\mathbb{Q}=\\left\\{\\frac{m}{n}\\mid m\\in\\mathbb{Z},\\ n\\in\\mathbb{N}\\right\\}\n\\frac{m_1}{n_1}+m",
+      "confidence": 0.78
+    },
+    {
+      "start": 1206.0,
+      "end": 1254.0,
+      "description": "A chalkboard lists the natural numbers, integers, and rational numbers, followed by the fraction-addition formula for two rational numbers. A partially visible adjacent board contains an underlined question and a numbered list.",
+      "text": "① ℕ = {1, 2, 3, 4, 5, ...} — natural #\n② ℤ integers ℤ = {0, ±1, ±2, ±3, ...}\n③ ℚ rational numbers\nm/n    m ∈ ℤ, n ∈ ℕ\nHow do?\nWhat prope[unreadable]\n① What are [unreadable]\n② which [unreadable]\n③ Is √2 [unreadable]",
+      "latex": "\\mathbb{N}=\\{1,2,3,4,5,\\ldots\\}\n\\mathbb{Z}=\\{0,\\pm1,\\pm2,\\pm3,\\ldots\\}\n\\mathbb{Q}=\\left\\{\\frac{m}{n}:m\\in\\mathbb{Z},\\ n\\in\\mathbb{N}\\right\\}\n\\frac{m_1}{n_1}+\\frac{m_2}{n_2}=\\frac{m_1n_2+m_2n_1}{n_1n_2}",
+      "confidence": 0.78
+    },
+    {
+      "start": 1254.0,
+      "end": 1310.0,
+      "description": "A chalkboard shows the addition of two rational numbers written as fractions, their common-denominator form, and the statement that the sum belongs to the rational numbers.",
+      "text": "",
+      "latex": "\\frac{m_1}{n_1}+\\frac{m_2}{n_2}=\\frac{m_1n_2+m_2n_1}{n_1n_2}\n\\frac{m_1}{n_1}+\\frac{m_2}{n_2}\\in\\mathbb{Q}",
+      "confidence": 0.96
+    },
+    {
+      "start": 1310.0,
+      "end": 1374.0,
+      "description": "A chalkboard section titled “Multiplication” shows the multiplication rule for two fractions, with the numerators multiplied together and the denominators multiplied together.",
+      "text": "Multiplication",
+      "latex": "\\frac{m_1}{n_1}\\cdot\\frac{m_2}{n_2}=\\frac{m_1m_2}{n_1n_2}",
+      "confidence": 0.82
+    },
+    {
+      "start": 1374.0,
+      "end": 1433.0,
+      "description": "Several chalkboard panels introduce the natural numbers, integers, and rational numbers, then show rational-number multiplication and addition. A separate panel is headed “Ordering” but contains no visible content beneath the heading.",
+      "text": "N = {1, 2, 3, 4, 5, ...}, natural #\nZ integers, Z = {0, ±1, ±2, ±3, ...}\nQ rational numbers\nm/n, m ∈ Z, n ∈ N\nMultiplication\nOrdering",
+      "latex": "\\mathbb{N}=\\{1,2,3,4,5,\\ldots\\}\n\\mathbb{Z}=\\{0,\\pm1,\\pm2,\\pm3,\\ldots\\}\n\\mathbb{Q}=\\left\\{\\frac{m}{n}:m\\in\\mathbb{Z},\\ n\\in\\mathbb{N}\\right\\}\n\\frac{m_1}{n_1}\\cdot\\frac{m_2}{n_2}=\\frac{m_1m_2}{n_1n_2}\n\\frac{m_1}{n_1}+\\frac{m_2}{n_2}=\\frac{m_1n_2+m_2n_1}{n_1n_2}",
+      "confidence": 0.84
+    },
+    {
+      "start": 1433.0,
+      "end": 1506.0,
+      "description": "A blackboard section titled “Ordering” shows an inequality involving a fraction on the right; the left side is largely obscured by the lecturer, and part of another comparison symbol is visible below.",
+      "text": "Ordering",
+      "latex": "< \\quad \\frac{m_2}{n_2}\n>",
+      "confidence": 0.82
+    },
+    {
+      "start": 1506.0,
+      "end": 1566.0,
+      "description": "Several chalkboards present definitions and arithmetic rules for the natural numbers, integers, rational numbers, and real numbers. The lower boards show rational-number multiplication, addition, and ordering rules using fractions.",
+      "text": "Answer\nR is a complete ordered field that contains the rational numbers Q.\n1) N = {1, 2, 3, 4, 5, ...}\n2) Z integers Z = {..., -2, -1, 0, 1, 2, 3, ...}\n3) Q rational numbers\nMultiplication\nProposition\nOrdering",
+      "latex": "\\mathbb{N}=\\{1,2,3,4,5,\\ldots\\}\n\\mathbb{Z}=\\{\\ldots,-2,-1,0,1,2,3,\\ldots\\}\n\\mathbb{Q}=\\left\\{\\frac{m}{n}\\mid m\\in\\mathbb{Z},\\ n\\in\\mathbb{N}\\right\\}\n\\frac{m_1}{n_1}\\cdot\\frac{m_2}{n_2}=\\frac{m_1m_2}{n_1n_2}\n\\frac{m_1}{n_1}+\\frac{m_2}{n_2}=\\frac{m_1n_2+m_2n_1}{n_1n_2}\n\\frac{m_1}{n_1}<\\frac{m_2}{n_2}\\Longleftrightarrow m_1n_2<m_2n_1",
+      "confidence": 0.72
+    },
+    {
+      "start": 1566.0,
+      "end": 1607.0,
+      "description": "A chalkboard heading introduces checking that multiplication is well-defined and independent of the representative. Below it are partially erased or obscured fraction notations involving subscripts 1 and 2.",
+      "text": "Checking that multiplication is a\nwell-defined operation i.e. it is independent\nof the representative.",
+      "latex": "\\frac{m_1}{n_1}\\frac{m_2}{n_2}",
+      "confidence": 0.78
+    },
+    {
+      "start": 1607.0,
+      "end": 1666.0,
+      "description": "A chalkboard contains a handwritten statement about checking that multiplication is well-defined and independent of the chosen representative. The lecturer partially obscures the middle of the writing; “P₁” is visible and underlined below.",
+      "text": "Checking that multiplication [unreadable]\nwell-defined operation is [unreadable] independent\nof the representative, [unreadable]\nP₁",
+      "latex": "P_1",
+      "confidence": 0.46
+    },
+    {
+      "start": 1666.0,
+      "end": 1703.0,
+      "description": "A chalkboard shows two equivalent-rational-number examples: a pair of fractions involving m and n at the top, with a cross-multiplication relation to the right, and a second pair involving P and Q below. The lecturer partially obscures the middle of the board.",
+      "text": "m₁/n₁ = m₂/n₂\nm₁n₂ = m₂n₁\nP₁/Q₁ = P₂/Q₂",
+      "latex": "\\frac{m_1}{n_1}=\\frac{m_2}{n_2}\nm_1n_2=m_2n_1\n\\frac{P_1}{Q_1}=\\frac{P_2}{Q_2}",
+      "confidence": 0.78
+    },
+    {
+      "start": 1703.0,
+      "end": 1735.0,
+      "description": "Chalkboards discuss the natural numbers, integers, and rational numbers, followed by checking that multiplication of rational-number representations is well-defined. Fraction representations are paired with cross-multiplication equivalences.",
+      "text": "Answer: ... homomorphism ...\nR → a complete ordered field that contains the rational numbers, Q.\n1) N = {1, 2, 3, 4, 5, ...} natural #\n2) Z integers {0, ±1, ±2, ±3, ...}\n3) Q rational numbers\nChecking the multiplication [unreadable] a well defined operation & is independent of the representation\nm₁/n₁ · p₁/q₁\nm₂/n₂ · p₂/q₂\nm₁/n₁ ⇔ m₂/n₂   m₁n₂ = m₂n₁\np₁/q₁ = p₂/q₂ ⇔ p₁q₂ = p₂q₁",
+      "latex": "R\\to\\text{ a complete ordered field that contains the rational numbers }\\mathbb{Q}\n\\mathbb{N}=\\{1,2,3,4,5,\\ldots\\}\n\\mathbb{Z}=\\{0,\\pm1,\\pm2,\\pm3,\\ldots\\}\n\\mathbb{Q}=\\left\\{\\frac{m}{n}:m\\in\\mathbb{Z},\\,n\\in\\mathbb{Z},\\,n\\ne0\\right\\}\n\\frac{m_1}{n_1}\\cdot\\frac{p_1}{q_1}\n\\frac{m_2}{n_2}\\cdot\\frac{p_2}{q_2}\n\\frac{m_1}{n_1}\\Longleftrightarrow\\frac{m_2}{n_2},\\quad m_1n_2=m_2n_1\n\\frac{p_1}{q_1}=\\frac{p_2}{q_2}\\Longleftrightarrow p_1q_2=p_2q_1",
+      "confidence": 0.66
+    },
+    {
+      "start": 1735.0,
+      "end": 1778.0,
+      "description": "A chalkboard shows an equality between two fractions involving subscripted M, P, N, and Q variables. Additional partially obscured handwritten notes appear below, including “Need” and a phrase ending in “to show.”",
+      "text": "M₁ P₁ / N₁ [unreadable] = M₂ P₂ / N₂ Q₂\nNeed\n[unreadable]nt to show.",
+      "latex": "\\frac{M_1P_1}{N_1[\\text{unreadable}]}=\\frac{M_2P_2}{N_2Q_2}",
+      "confidence": 0.62
+    },
+    {
+      "start": 1778.0,
+      "end": 1814.0,
+      "description": "A chalkboard shows two fraction expressions at the top and a product expression below, connected by arrows and notes indicating what needs to be shown. The right side of the equations is partly obscured by the lecturer and chalk smudging.",
+      "text": "Want to Show\nNeed to Show\nNeed to sho",
+      "latex": "\\frac{M_1P_1}{N_1Q_1}=\\frac{M_2P_2}{N_2Q_2}\nM_1P_1N_2Q_2=\\cdots",
+      "confidence": 0.68
+    },
+    {
+      "start": 1814.0,
+      "end": 1875.0,
+      "description": "A chalkboard shows two fractions involving m₁, n₁, p₁, q₁ and m₂, n₂, p₂, q₂, with arrows and partial notes about what needs to be shown. The lecturer obscures much of the lower writing.",
+      "text": "m₁ p₁ / n₁ q₁\nm₂ p₂ / n₂ q₂\nWant to show.\nNeed to show.\nm₂ p₂  n₁ q₁\nto show.",
+      "latex": "\\frac{m_1p_1}{n_1q_1}\n\\frac{m_2p_2}{n_2q_2}\nm_2p_2\\ n_1q_1",
+      "confidence": 0.58
+    },
+    {
+      "start": 1875.0,
+      "end": 1929.0,
+      "description": "A chalkboard discusses checking that multiplication is well-defined and independent of representation. Two pairs of fractions are shown, each pair enclosed in an oval: m₁/n₁ with p₁/q₁, and m₂/n₂ with p₂/q₂.",
+      "text": "Checking that multiplication is a\nwell-defined operation i.e. it is independent\nof the representation",
+      "latex": "\\frac{m_1}{n_1},\\quad \\frac{p_1}{q_1}\n\\frac{m_2}{n_2},\\quad \\frac{p_2}{q_2}",
+      "confidence": 0.88
+    },
+    {
+      "start": 1929.0,
+      "end": 1962.0,
+      "description": "Four chalkboard panels discuss number systems and the construction of the real numbers. The upper-right panel lists natural numbers, integers, and rational numbers; the lower panels show fraction-equivalence calculations and a statement about multiplication being well-defined.",
+      "text": "Assertion: [unreadable]\nR → an ordered field that contains the rational numbers Q.\n1) N = {1, 2, 3, 4, 5, ...} natural #\n2) Z integers. Z = {..., 0, ±1, ±2, ±3, ...}\n3) Q rational numbers\nm/n, m ∈ Z, n [unreadable]\nChecking that multiplication is a well-defined operation is an essential [unreadable]\n[m₁/n₁] [m₂/n₂] ⇔ m₁ = m₂, n₁ = n₂\n[p₁/q₁] = [p₂/q₂] ⇔ p₁q₂ = p₂q₁",
+      "latex": "\\mathbb{R} \\to \\text{an ordered field that contains the rational numbers } \\mathbb{Q}\n\\mathbb{N}=\\{1,2,3,4,5,\\ldots\\}\n\\mathbb{Z}=\\{\\ldots,0,\\pm1,\\pm2,\\pm3,\\ldots\\}\n\\frac{m}{n},\\ m\\in\\mathbb{Z}\n\\frac{m_1}{n_1}\\ \\frac{m_2}{n_2}\\ \\Longleftrightarrow\\ m_1=m_2,\\ n_1=n_2\n\\frac{p_1}{q_1}=\\frac{p_2}{q_2}\\Longleftrightarrow p_1q_2=p_2q_1",
+      "confidence": 0.63
+    },
+    {
+      "start": 1962.0,
+      "end": 2025.0,
+      "description": "A chalkboard discusses number systems and field-related assertions. It shows the natural numbers, integers, and rational numbers on the right, while the lower-left section checks whether multiplication of fractional representations is well-defined.",
+      "text": "Assertion: [unreadable]\nR is a complete ordered Field that contains the rational numbers, Q.\nChecking that multiplication is a well-defined operation: is it independent of the representation?\n1) N = {1, 2, 3, 4, 5, ...} natural #\n2) Z integers. {0, +1, -1, ...}\n3) Q rational numbers",
+      "latex": "\\mathbb{R}\\text{ is a complete ordered field that contains the rational numbers }\\mathbb{Q}.\\\\\n\\frac{m_1}{n_1}\\cdot\\frac{p_1}{q_1}\\\\\n\\frac{m_2}{n_2}\\cdot\\frac{p_2}{q_2}\\\\\n\\mathbb{N}=\\{1,2,3,4,5,\\ldots\\}\\\\\n\\mathbb{Z}=\\{0,+1,-1,\\ldots\\}",
+      "confidence": 0.57
+    },
+    {
+      "start": 2025.0,
+      "end": 2076.0,
+      "description": "A chalkboard lecture frame introduces a field as a set with two operations. On the left are two circled pairs of fractions, while the right board contains the heading and opening definition.",
+      "text": "checking that multiplication [unreadable]\nwell defined operations are [unreadable] independent\nof the representation\nA Field, F\nA set with two operations\nis the follow[unreadable]",
+      "latex": "\\frac{m_1}{n_1}=\\frac{p_1}{q_1}\n\\frac{m_2}{n_2}=\\frac{p_2}{q_2}",
+      "confidence": 0.54
+    },
+    {
+      "start": 2076.0,
+      "end": 2121.0,
+      "description": "A chalkboard introduces a field and lists the first property of addition, closure: two elements of the field have a sum that is also in the field.",
+      "text": "A Field F is the following:\nA set with two operations \"+\" and \"·\"\nProperties of addition:\n① x ∈ F, y ∈ F\nx + y ∈ F",
+      "latex": "x\\in F,\\quad y\\in F\nx+y\\in F",
+      "confidence": 0.91
+    },
+    {
+      "start": 2121.0,
+      "end": 2162.0,
+      "description": "A chalkboard section titled “Properties of addition” shows the first listed property for elements of F, including closure under addition and commutativity.",
+      "text": "Properties of addition:\n①",
+      "latex": "x \\in F,\\quad y \\in F\nx+y \\in F\nx+y=y+x",
+      "confidence": 0.93
+    },
+    {
+      "start": 2162.0,
+      "end": 2215.0,
+      "description": "A chalkboard section defines a field and lists three properties of addition: closure, commutativity, and associativity. Additional partially erased mathematical notes are visible on the surrounding side panels.",
+      "text": "A field, F, is the following:\nA set with two operations “+” and “·”\nproperties of addition:\nField Aut\nhomomorphisms\n[unreadable]",
+      "latex": "x\\in F,\\ y\\in F\nx+y\\in F\nx+y=y+x\n(x+y)+z=x+(y+z)",
+      "confidence": 0.78
+    },
+    {
+      "start": 2215.0,
+      "end": 2256.0,
+      "description": "A chalkboard lists properties of addition, including closure, commutativity, associativity, and the beginning of the statement about an element denoted by 0.",
+      "text": "Properties of addition:\n① x ∈ F    y ∈ F\nx + y ∈ F\n② x + y = y + x\n③ (x + y) + z = x + (y + z)\n④ there exists an element denoted by “0”",
+      "latex": "x\\in F,\\quad y\\in F\nx+y\\in F\nx+y=y+x\n(x+y)+z=x+(y+z)",
+      "confidence": 0.96
+    },
+    {
+      "start": 2256.0,
+      "end": 2318.0,
+      "description": "A chalkboard lists properties of addition. The visible section states the identity-element property with the formula 0 + x = x, followed by the beginning of the inverse-element property for any element x.",
+      "text": "4)\nThere exists an element denoted by \"0\"\nthat has the property\nFor any element x there exists another element\nwith the property.",
+      "latex": "0+x=x",
+      "confidence": 0.87
+    },
+    {
+      "start": 2318.0,
+      "end": 2350.0,
+      "description": "Several chalkboards present notes on addition and field properties. The central boards list closure, commutativity, associativity, additive identity, and additive inverses, with a few rational-number notes on the left.",
+      "text": "Addition\nR is a [unreadable] ordered field containing the rational numbers Q.\nChecking that multiplication is well-defined —\n[unreadable]\n[unreadable]\n[unreadable]\nA FIELD: If [unreadable]\nA field is a set with two operations, + and ·, and [unreadable]\nproperties of addition\nThere exists an element called 0, such that [unreadable]\nFor every element x, there exists another element (-x) [unreadable]",
+      "latex": "x\\in F,\\ y\\in F\nx+y\\in F\nx+y=y+x\n(x+y)+z=x+(y+z)\n0+x=x\nx+(-x)=0\n\\frac{m_1}{n_1}\\cdot\\frac{m_2}{n_2}\n\\frac{m_1}{n_2}=\\frac{p_2}{q_2}",
+      "confidence": 0.68
+    },
+    {
+      "start": 2350.0,
+      "end": 2396.0,
+      "description": "A set of chalkboards presents notes on fields, including closure, commutativity, associativity, the additive identity, and additive inverses. The left boards contain notes about the real numbers and fractions, while the right board begins a list of multiplication properties.",
+      "text": "Answer\nR is a complete ordered field that contains the natural numbers ℕ.\nChecking that multiplication is a well defined operation is [unreadable]\n[unreadable] Field: The following\nA field satisfies two operations + and ·\nProperties of addition\n① x, y ∈ F\nx + y ∈ F\n② x + y = y + x\n③ (x + y) + z = x + (y + z)\n④ There exists an element called “0” such that for any x,\n⑤ For any element x there exists another element (−x) such that\nMultiplication Properties\n① x, y ∈ F   x × y ∈ F\nm₁/n₁ = p₁/q₁\nm₂/n₂ = p₂/q₂",
+      "latex": "R\\text{ is a complete ordered field that contains the natural numbers }\\mathbb{N}.\nx,y\\in F\nx+y\\in F\nx+y=y+x\n(x+y)+z=x+(y+z)\n0+x=x\nx+(-x)=0\nx,y\\in F\nx\\times y\\in F\n\\frac{m_1}{n_1}=\\frac{p_1}{q_1}\n\\frac{m_2}{n_2}=\\frac{p_2}{q_2}",
+      "confidence": 0.7
+    },
+    {
+      "start": 2396.0,
+      "end": 2434.0,
+      "description": "A chalkboard lists multiplication properties, with four numbered items; the lecturer obscures much of the fourth item. A partial note on the adjacent board mentions an inverse element and shows \\((-x)\\).",
+      "text": "Multiplication properties\n1) ∀ x,y ∈ F    x·y ∈ F\n2) ∀ x,y ∈ F    x·y = y·x\n3) ∀ x,y,z ∈ F    (x·y)·z = x·(y·z)\n4) th[unreadable]\ninverse element    (−x)",
+      "latex": "\\forall x,y\\in F,\\quad x\\cdot y\\in F\n\\forall x,y\\in F,\\quad x\\cdot y=y\\cdot x\n\\forall x,y,z\\in F,\\quad (x\\cdot y)\\cdot z=x\\cdot(y\\cdot z)\n(-x)",
+      "confidence": 0.78
+    },
+    {
+      "start": 2434.0,
+      "end": 2473.0,
+      "description": "A chalkboard lists four multiplication properties under the heading “Multiplication properties”: closure, commutativity, associativity, and an identity element property.",
+      "text": "Multiplication properties\n1\n∀ x, y ∈ F        x · y ∈ F\n2\nx · y = y · x\n3\n(x · y) · z = x · (y · z)\n4\nThere exists an element denoted by “1”\n1 · x = x",
+      "latex": "\\forall x,y\\in\\mathbb{F},\\quad x\\cdot y\\in\\mathbb{F}\nx\\cdot y=y\\cdot x\n(x\\cdot y)\\cdot z=x\\cdot(y\\cdot z)\n1\\cdot x=x",
+      "confidence": 0.92
+    },
+    {
+      "start": 2473.0,
+      "end": 2539.0,
+      "description": "A chalkboard shows the fifth item of a list of algebraic properties, beginning with a statement about any nonzero element of F. Several following lines are largely obscured by the lecturer and chalk smudging; a separate fragment “(−x)” is visible on the left board.",
+      "text": "⑤ For any x ∈ F \\ {0}.\nThere [unreadable]\n[unreadable]\n(−x)",
+      "latex": "\u0005\\quad \\text{For any }x\\in F\\setminus\\{0\\}.",
+      "confidence": 0.52
+    },
+    {
+      "start": 2539.0,
+      "end": 2583.0,
+      "description": "A chalkboard lists the properties of addition in a field, including closure, commutativity, associativity, the additive identity, and additive inverses. A partially visible adjacent section on the right appears to list multiplication properties.",
+      "text": "A Field, F\nA set with two operations “+” and “·” and [unreadable]\nProperties of addition:\n① x ∈ F, y ∈ F\n② x + y = y + x\n③ (x + y) + z = x + (y + z)\n④ There exists an element denoted by “0” that has the property:\n⑤ For any element x there exists another element (−x) with the property:",
+      "latex": "x,y\\in F\nx+y\\in F\nx+y=y+x\n(x+y)+z=x+(y+z)\n0+x=x\nx+(-x)=0",
+      "confidence": 0.82
+    },
+    {
+      "start": 2583.0,
+      "end": 2622.0,
+      "description": "Three chalkboards present the properties of a field. The center board lists additive properties, while the right board lists multiplicative properties; the left board notes that the real numbers contain the rational numbers.",
+      "text": "Inclusion\nR is a complete ordered field that contains the rational numbers, Q.\n[unreadable]\n[unreadable] Field: F is the following\nA field with two operations + and ·\n1. x, y ∈ F\n2. x + y = y + x\n3. (x + y) + z = x + (y + z)\n4. There exists an element called 0, such that 0 + x = x\n5. For each x there exists a unique element (-x) such that x + (-x) = 0\nMultiplicative properties\n1. x, y ∈ F → x · y ∈ F\n2. x · y = y · x\n3. (x · y) · z = x · (y · z)\n4. There exists an element called 1, such that 1 · x = x\n5. For every x ≠ 0 ∈ F, there exists 1/x such that x · 1/x = 1",
+      "latex": "x,y\\in F\nx+y\\in F\nx\\cdot y\\in F\nx+y=y+x\n(x+y)+z=x+(y+z)\n0+x=x\nx+(-x)=0\nx\\cdot y=y\\cdot x\n(x\\cdot y)\\cdot z=x\\cdot(y\\cdot z)\n1\\cdot x=x\nx\\cdot\\frac{1}{x}=1",
+      "confidence": 0.72
+    },
+    {
+      "start": 2622.0,
+      "end": 2667.0,
+      "description": "A chalkboard shows the heading “Axiom chaining \"+\" together,” with heavily erased or faint mathematical writing beneath it. Near the bottom are two fraction-like expressions, one involving M and M₂ and another involving P₂ and P₃, enclosed by a large curved outline.",
+      "text": "Axiom chaining \"+\" together",
+      "latex": "\\frac{M}{M_2}\n\\frac{P_2}{P_3}",
+      "confidence": 0.48
+    },
+    {
+      "start": 2667.0,
+      "end": 2707.0,
+      "description": "A chalkboard lecture page defining a field and listing its additive and multiplicative properties. The center panel gives additive axioms, while the right panel gives corresponding multiplicative axioms; the left panel mentions the real numbers and an associativity example.",
+      "text": "Definition\nR is a complete ordered field that\ncontains the rational numbers Q.\nAssociative chaining\nA Field F\nF is a set with two operations + and · satisfying the following\n1\n2\n3\n4 There exists an element called 0 such that for every x ∈ F\n5 For any element x there exists another element called (−x)\nMultiplicative properties\n1\n2\n3\n4 There is an element called 1 such that for every x\n5 For every x ≠ 0 ∈ F there exists an element called x⁻¹",
+      "latex": "\\mathbb{R}\\text{ is a complete ordered field that contains the rational numbers }\\mathbb{Q}\n x\\cdot(y+z)=x\\cdot y+x\\cdot z\nx,y\\in F,\\quad x+y\\in F\nx+y=y+x\n(x+y)+z=x+(y+z)\n0+x=x\nx+(-x)=0\nx,y\\in F,\\quad xy\\in F\nxy=yx\n(xy)z=x(yz)\n1\\cdot x=x\nx\\cdot x^{-1}=1",
+      "confidence": 0.68
+    },
+    {
+      "start": 2707.0,
+      "end": 2762.0,
+      "description": "A chalkboard shows a theorem about the uniqueness of the zero element in a field, followed by the heading “proof.” Much of the surrounding chalk writing has been erased or is too faint to read.",
+      "text": "Theorem\nFor any Field F there exists only one zero\nelement\nproof",
+      "latex": "F",
+      "confidence": 0.78
+    },
+    {
+      "start": 2762.0,
+      "end": 2827.0,
+      "description": "A chalkboard shows a statement about an axiom involving addition and multiplication, followed by the distributive-law equation. Partial circled numbers are visible on the adjacent board at right.",
+      "text": "Axiom clearly '+' together with '·'.\n③\n④\n⑤",
+      "latex": "x\\cdot(y+z)=x\\cdot y+x\\cdot z",
+      "confidence": 0.78
+    },
+    {
+      "start": 2827.0,
+      "end": 2897.0,
+      "description": "A chalkboard proof of the uniqueness of the zero element in a field. The board states the theorem, assumes two zero elements, and lists their defining addition properties.",
+      "text": "Theorem\nFor any Field F there exists only one zero element\nproof: Assume that O₁, O₂ are both zero element\nthis means\nO₁ + x = x\nO₂ + x = x",
+      "latex": "O_1 + x = x\nO_2 + x = x",
+      "confidence": 0.86
+    },
+    {
+      "start": 2897.0,
+      "end": 2962.0,
+      "description": "A chalkboard lists the fourth field property: the existence of a zero element for addition and an additive inverse for each element. A partially visible distributive-law equation appears on the adjacent board at upper left.",
+      "text": "[unreadable] + z) = x·y + x·z\n4) There exists an element denoted by \"0\"\nthat has the property\nFor any element x there exists another element\nwith the property.",
+      "latex": "[unreadable] + z) = x y + x z\n0 + x = x\nx + (-x) = 0",
+      "confidence": 0.79
+    },
+    {
+      "start": 2962.0,
+      "end": 3004.0,
+      "description": "A chalkboard shows an underlined example heading and a statement identifying the real numbers with two operations as a field. Much of the surrounding writing has been erased or is too faint to read, with a large circled fraction-like expression near the bottom.",
+      "text": "Example\na Field",
+      "latex": "(\\mathbb{R},+,\\cdot)",
+      "confidence": 0.72
+    },
+    {
+      "start": 3004.0,
+      "end": 3065.0,
+      "description": "A chalkboard example lists number systems and whether they are fields. It shows the natural numbers and integers marked as not fields, with an integer example demonstrating multiplication by one-half to obtain one.",
+      "text": "Example\nℚ is a Field\nℕ is Not a Field.\nℤ is Not a Field.\n2 ∈ ℤ\n2 × 1/2 = 1",
+      "latex": "2 \\in \\mathbb{Z}\n2 \\times \\frac{1}{2}=1",
+      "confidence": 0.82
+    },
+    {
+      "start": 3065.0,
+      "end": 3136.0,
+      "description": "A chalkboard lecture on the axioms of a field, focusing on closure and properties of addition. The right board is mostly erased and indistinct, with the lecturer writing near its upper-left area.",
+      "text": "[unreadable] field, F, is the following:\nF is a set with two operations “+” and “·”\nclosed under addition\nx, y ∈ F\nx + y ∈ F\nThere exists an element denoted by “0”\nthat has the property\nFor any element x there exists another element (-x)\nwith the property of",
+      "latex": "x,y\\in F\nx+y\\in F\nx+y=y+x\n(x+y)+z=x+(y+z)\n0+x=x\nx+(-x)=0",
+      "confidence": 0.76
+    },
+    {
+      "start": 3136.0,
+      "end": 3193.0,
+      "description": "A chalkboard gives a partial definition of an ordered set, with an ordering symbol shown and the variables x and y taken from a set S. Much of the lower writing has been erased or is too faint to read.",
+      "text": "An ordered set w/ an ordering \"<\"\nIs a Set S\nx, y ∈ S",
+      "latex": "x,y\\in S",
+      "confidence": 0.82
+    },
+    {
+      "start": 3193.0,
+      "end": 3232.0,
+      "description": "A chalkboard presents a definition of an ordered set and begins listing the possible comparisons between two elements of a set. The right side of the list is partly obscured by the lecturer.",
+      "text": "An ordered set [unreadable] an ordering\nIs a Set S with an ordering\nx, y ∈ S then one of the following",
+      "latex": "<\nx,y\\in S",
+      "confidence": 0.62
+    },
+    {
+      "start": 3232.0,
+      "end": 3295.0,
+      "description": "The frame shows chalkboard notes defining the real numbers as a complete ordered field containing the rationals, alongside the first five additive-field properties for a field F.",
+      "text": "Answer:\nR is a complete ordered Field that\ncontains the rational numbers, Q.\nA Field F is the following:\nA set with two operations, “+” and “·”\nproperties of addition:\n①\n②\n③\n④ There exists an element denoted by “0”, that has the property\n⑤ For any element x there exists another element whose property",
+      "latex": "\\mathbb{R}\\text{ is a complete ordered field that contains the rational numbers }\\mathbb{Q}. \\\\\n x\\in F,\\ y\\in F \\\\\n x+y\\in F \\\\\n x+y=y+x \\\\\n (x+y)+z=x+(y+z) \\\\\n 0+x=x \\\\\n x+(-x)=0",
+      "confidence": 0.78
+    },
+    {
+      "start": 3295.0,
+      "end": 3337.0,
+      "description": "A chalkboard introduces the topic of ordered fields and states that a field is also equipped with an ordering, followed by a reference to the following properties. Much of the lower board contains faint erased mathematical writing.",
+      "text": "An ordered Field.\n1) a field that is also an ordered alg[unreadable]\nwith the following properties",
+      "latex": null,
+      "confidence": 0.72
+    },
+    {
+      "start": 3337.0,
+      "end": 3395.0,
+      "description": "A chalkboard introduces ordered fields and lists properties relating the order to field operations. The first numbered property concerns preserving an inequality when the same element is added to both sides; part of the formula is obscured by the lecturer.",
+      "text": "An ordered field.\n2) a field that is also an ordered set\nwith the following properties,\n1)",
+      "latex": "x<y\\Longrightarrow x+z<y+z\\quad\\text{for any }z\\in\\mathbb{F}",
+      "confidence": 0.72
+    },
+    {
+      "start": 3395.0,
+      "end": 3439.0,
+      "description": "A chalkboard presents the definition and properties of an ordered field. Two numbered properties are shown: order is preserved when the same element is added, and the product of two positive elements is positive.",
+      "text": "An ordered field\na) a field that is also an orde[unreadable]\n2) with the following properties\n1) for any z ∈ F\n2) 0 < x and 0 < y",
+      "latex": "x<y\\implies x+z<y+z\\quad\\text{for any }z\\in F\n0<x\\text{ and }0<y\\implies 0<xy",
+      "confidence": 0.76
+    },
+    {
+      "start": 3439.0,
+      "end": 3495.0,
+      "description": "A chalkboard defines an ordered field and lists ordering properties involving addition and multiplication. The visible items include an implication involving x, y, and z, a separate inequality on the right, and a positivity condition for a product.",
+      "text": "An ordered field\n1) a field that is also an ordered set\nwith the following properties\n① x < y ⇒ x + z < y + z for any z ∈ F\nx + z ≤ y + z\n③ 0 < x and 0 < y\n⇒ 0 < xy",
+      "latex": "x<y\\Rightarrow x+z<y+z\\quad\\text{for any }z\\in F\nx+z\\le y+z\n0<x\\text{ and }0<y\\Rightarrow 0<xy",
+      "confidence": 0.78
+    },
+    {
+      "start": 3495.0,
+      "end": 3542.0,
+      "description": "A multi-panel chalkboard lecture on ordered fields and field axioms. The center board lists additive properties, while the left boards discuss ordered-field properties and the real numbers; much of the right board is obscured or erased.",
+      "text": "Example\nR is a [unreadable] ordered field that contains the rational numbers, Q.\nClearly,\nAn ordered field ... also an ordered field\n1) x < y ⇒ x + z < y + z\n2) if x < y and 0 < z\nAn Ordered Field: The following\n[unreadable] with the two operations + and · and [unreadable]\n1) x ∈ F, y ∈ F\nx + y ∈ F\n2) x + y = y + x\n3) (x + y) + z = x + (y + z)\n4) There exists an additive identity “0”\n0 + x = x\n5) For any element x there exists a unique element (−x)\nx + (−x) = 0\n[unreadable] Field",
+      "latex": "R\\text{ is a [unreadable] ordered field that contains the rational numbers }\\mathbb{Q}.\nx<y\\Rightarrow x+z<y+z\nx<y,\\ 0<z\nx\\in F,\\ y\\in F\nx+y\\in F\nx+y=y+x\n(x+y)+z=x+(y+z)\n0+x=x\nx+(-x)=0",
+      "confidence": 0.67
+    },
+    {
+      "start": 3542.0,
+      "end": 3581.0,
+      "description": "A chalkboard shows the heading “Theorem,” followed by a statement involving an ordered field and the inequality x < y. Much of the remaining writing is faint or obscured by the lecturer.",
+      "text": "Theorem\nF ordered field\nx < y",
+      "latex": "x<y",
+      "confidence": 0.78
+    },
+    {
+      "start": 3581.0,
+      "end": 3633.0,
+      "description": "Several chalkboards show the axioms and properties of a field, including addition properties and additive inverses. The upper-right board shows a theorem about multiplying an inequality by a positive element.",
+      "text": "field, F is the following\nset with two operations, “+” and “·”, and [unreadable]\n[unreadable] under addition;\nFor x, y ∈ F\nThere exists an element denoted by “0”\nthat has the property\nFor any element x there exists another element (−x)\nwith the property\nTheorem\nF ordered field\nthen",
+      "latex": "x,y\\in F\nx+y\\in F\nx+y=y+x\n(x+y)+z=x+(y+z)\n0+x=x\nx+(-x)=0\nx<y\\text{ and }0<z\nxz<yz",
+      "confidence": 0.67
+    },
+    {
+      "start": 3633.0,
+      "end": 3697.0,
+      "description": "A chalkboard shows the beginning of a proof concerning the inequality between xz and yz. The lecturer obscures part of the writing, and much of the lower board is erased or indistinct.",
+      "text": "Proof\n[unreadable] to show xz < yz.\n[unreadable] is equivalent, to showing that.",
+      "latex": "xz < yz",
+      "confidence": 0.72
+    },
+    {
+      "start": 3697.0,
+      "end": 3742.0,
+      "description": "A chalkboard proof is shown. It begins by stating a goal involving an inequality with x and yz, followed by an equivalence statement and a partially occluded inequality obtained by adding an inverse term.",
+      "text": "Proof\nWant to show x ≤ yz.\nThis is equivalent to proving that\nxz + (−xz) ≤ [unreadable] + (−xz)",
+      "latex": "xz + (-xz) \\leq [\\text{unreadable}] + (-xz)",
+      "confidence": 0.62
+    },
+    {
+      "start": 3742.0,
+      "end": 3808.0,
+      "description": "A chalkboard proof is shown. It aims to establish an inequality involving xz and yz, with a line rewriting the comparison by adding the opposite of xz; the lecturer partially obscures the lower and right-hand parts of the equations.",
+      "text": "Proof\nWant to show xz < yz\nthis is equivalent to showing\n0 = xz + (-xz) < yz + (-xz)\n= yz",
+      "latex": "0=xz+(-xz)<yz+(-xz)\n=yz",
+      "confidence": 0.8
+    },
+    {
+      "start": 3808.0,
+      "end": 3890.0,
+      "description": "The chalkboards present definitions and properties of the real numbers, ordered fields, and fields. The right side lists the additive field axioms, while the lower-left panel lists two ordering properties involving addition and multiplication.",
+      "text": "Answer:\nR is a complete ordered Field that contains the rational numbers, Q.\nAn ordered field is a field that is also an ordered set with the following properties.\n① x < y ⇒ for any z ∈ F\nx + z < y + z\n② 0 < x and 0 < y\n0 < xy\nA Field F is the following:\nA set F which has two operations\nProperties of addition:\n① x ∈ F, y ∈ F\nx + y ∈ F\n② x + y = y + x\n③ (x + y) + z = x + (y + z)\n④ There exists an element denoted by “0” such that, has the property:\n0 + x = x\n⑤ For any element x there exists another element with the property:\nx + (−x) = 0",
+      "latex": "R \\text{ is a complete ordered field that contains the rational numbers } \\mathbb{Q}.\n x<y \\Rightarrow \\text{ for any } z\\in F,\\ x+z<y+z\n0<x\\ \\text{and}\\ 0<y \\Rightarrow 0<xy\nx\\in F,\\ y\\in F \\Rightarrow x+y\\in F\nx+y=y+x\n(x+y)+z=x+(y+z)\n0+x=x\nx+(-x)=0",
+      "confidence": 0.84
+    },
+    {
+      "start": 3890.0,
+      "end": 3955.0,
+      "description": "Several chalkboards present definitions and axioms concerning ordered fields, including addition properties, order-preserving inequalities, and a theorem/proof on the right.",
+      "text": "Definition\nR is a complete ordered field that contains the rational numbers Q.\nAn ordered field\n1) x < y implies ...\n2) x < y and z > 0 ...\nAn ordered field F has the following axioms with two operations + and ·\nProperties of addition\n1)\n2)\n3)\n4) There exists an identity element 0 ...\n5) For any element x there exists an element (−x)\nTheorem\nFor every ...\nWe want to show ...",
+      "latex": "\\mathbb{R}\\text{ is a complete ordered field containing }\\mathbb{Q}\n x<y \\implies x+z<y+z\n x<y,\\ z>0 \\implies xz<yz\n x+y=y+x\n (x+y)+z=x+(y+z)\n x+0=x\n x+(-x)=0",
+      "confidence": 0.48
+    }
+  ]
+}
