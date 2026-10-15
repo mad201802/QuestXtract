@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Read the board of a labelled recording into <slug>.visual.json, for `eval --board`.
 
-Runs the vision stage (architecture.md 6) over a recording against its committed transcript,
-so the board states keep the clock the labels are timed against, and no ASR runs. The views
-and readings are cached as in a normal run (`.questxtract/`), so a second run makes no calls.
+Runs the layout probe and the vision stage (architecture.md 6) over a recording against its
+committed transcript, so the board states keep the clock the labels are timed against, and no
+ASR runs. The layout answer, views and readings are cached as in a normal run
+(`.questxtract/`), so a second run makes no calls.
 Calls the vision model: needs the `[llm]` extra and OPENAI_API_KEY, or `base_url` in the
 settings file.
 
@@ -26,7 +27,7 @@ from questxtract.models import Context, Transcript
 from questxtract.pipeline import run
 from questxtract.segments import segments
 from questxtract.sentences import sentences
-from questxtract.vision import VISION_PROMPT_VERSION, has_video, vision
+from questxtract.vision import VISION_PROMPT_VERSION, has_video, layout, vision
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -47,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
     ctx.duration = transcript.duration
     ctx = run(
         ctx,
-        (sentences, segments, vision),
+        (sentences, segments, layout, vision),
         progress=lambda stage, f: print(f"\r{stage} {f:4.0%}", end="", file=sys.stderr),
     )
     print(file=sys.stderr)

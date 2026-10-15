@@ -69,7 +69,8 @@ the `vision_model` and `vision_prompt_version` that read it. No keyframes are co
 by `scripts/board_states.py` from the recording (720p video track) against the committed
 transcript, so the board states share the labels' clock; `questxtract eval tests/data/ --board`
 uses them. They are one model's reading at one point in time: regenerate them with the script,
-never edit them by hand.
+never edit them by hand. The committed files were read on the full frame, before the layout
+probe (#57) cropped frames to the content; regenerating them now crops.
 
 **License.** Transcripts, board states and labels are derived from the recording, so they carry its license,
 not the repository's MIT license: the MIT recordings are MIT OpenCourseWare, so
