@@ -387,22 +387,25 @@ the reference recordings, in well under a second.
 
 The vision model (section 6) is scored the same way, on labelled keyframes instead of labelled
 questions: `tests/data/vision/<name>.frames.jsonl`, one line per frame with its lecture type
-(`slides`, `blackboard`, `whiteboard` or `tablet`), the text on the board, each formula as LaTeX
-and a line on any diagram. The set spans several lecturers per type, because QuestXtract has to
+(`slides`, `blackboard`, `whiteboard` or `handwriting`, as the layout probe of 6.2 names them),
+the text on the board, each formula as LaTeX and a line on any diagram. The set spans several lecturers per type, because QuestXtract has to
 read any teacher's board, not only the reference recordings'. Sources, licences and labelling
 conventions: [`tests/data/vision/README.md`](../tests/data/vision/README.md).
 
 ```bash
-questxtract eval --vision tests/data/vision/    # vision_model, per lecture type
+questxtract eval --score-vision tests/data/vision/    # vision_model, per lecture type
 ```
 
-Each frame goes to `vision_model` as the vision stage sends a keyframe (6.5: prompt v0, kind
-`unknown`, no speech), cached per request. Per frame: the **character error rate** of `text`
-(edits per label character, casefolded and with whitespace collapsed, capped at 1) and
-**formula recall**, a labelled formula counting as found when some stretch of the answer's
-`latex` is within one edit per four characters of it after removing spacing and sizing commands.
-A frame the model cannot read scores as an empty answer. The report gives both per lecture type
-and in total, then every frame, worst first.
+Each frame is read by `vision.read_keyframe`, the function the vision stage uses (6.5), so eval
+scores what a run sends: `vision_model` (`--vision-model`), prompt v0 with the label's kind, as
+when the layout probe gets the kind right, and no speech; cached per request. Per frame: the
+**character error rate** of `text` (edits per label character, casefolded and with whitespace
+collapsed, capped at 1) and **formula recall**, a labelled formula counting as found when some
+run of whole LaTeX tokens in the answer is within one edit per four of its tokens, after removing
+spacing and sizing commands; a short formula must match exactly. A blank board has no error
+rate, since any text would score 1; it counts as read when the answer has no text but
+`[unreadable]`. A frame the model cannot read scores as an empty answer. The report gives all
+three per lecture type and in total, then every frame, worst first.
 
 CI checks the labels (every type has at least 5 frames, every frame exists), not the scores: they
 need a real model.
@@ -1244,7 +1247,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `score.py` | 9 score | done: confidence and threshold | |
 | `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
 | `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |
-| `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --vision` (4.4) | |
+| `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --score-vision` (4.4) | |
 | `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the

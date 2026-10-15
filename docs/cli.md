@@ -77,10 +77,10 @@ reads.
 precision, false positives by kind, a threshold sweep, and every miss
 ([tests/data/README.md](../tests/data/README.md)). It takes `--detector`, `--llm-model` and
 `--llm-url` too, so the rules and a model can be compared on the same recordings; the report's
-first line names the detector, the model and the prompt version. With `--vision`, it scores the
-vision model (`vision_model`, at `--llm-url` if given) on the labelled keyframes in
-`tests/data/vision/` instead: character error rate and formula recall per lecture type, then
-every frame, worst first ([tests/data/vision/README.md](../tests/data/vision/README.md)). It calls
+first line names the detector, the model and the prompt version. With `--score-vision`, it
+scores the vision model instead (`--vision-model`, at `--llm-url` if given) on the labelled
+keyframes in `tests/data/vision/`: character error rate, blank boards read as blank and formula
+recall per lecture type, then every frame, worst first ([tests/data/vision/README.md](../tests/data/vision/README.md)). It calls
 the model once per frame and caches the answers. `questxtract quiz <questions.json>` is
 reserved for quiz generation; it is not implemented yet (#79) and exits with a one-line error.
 

@@ -1,17 +1,19 @@
 # Labelled keyframes for the vision model
 
-Ground truth for `questxtract eval --vision` (#58): 30 keyframes from six lectures, each labelled
+Ground truth for `questxtract eval --score-vision` (#58): 30 keyframes from six lectures, each labelled
 with the text on the board, its formulas as LaTeX and a line on any diagram, so the vision model
 can be scored the way `tests/data/*.labels.jsonl` score question detection. The prompt and the
 raw answers of the model comparison (#52) live here too.
 
 ```bash
-uv run questxtract eval --vision tests/data/vision/              # gpt-5.6-luna, needs OPENAI_API_KEY
-uv run questxtract eval --vision tests/data/vision/ --llm-url URL # any OpenAI-compatible endpoint
+uv run questxtract eval --score-vision tests/data/vision/        # gpt-5.6-luna, needs OPENAI_API_KEY
+uv run questxtract eval --score-vision tests/data/vision/ --llm-url URL --vision-model NAME
 ```
 
-The model is `vision_model` (set it in `questxtract.toml`); each frame is sent as the vision
-stage sends a keyframe (prompt v0, frame kind `unknown`, no speech) and the answer is cached, so a
+The model is `vision_model` (`--vision-model`, or `questxtract.toml`). Each frame goes through
+`vision.read_keyframe`, the function the vision stage reads a keyframe with, as a run sends it
+when the layout probe got the frame's kind right: prompt v0 with the label's `kind`, no speech.
+Frames are the full picture, not cropped to the probe's content region. Answers are cached, so a
 second run makes no calls. CI never runs it: it needs a real model. CI does check the labels
 (`tests/test_evaluate.py`): every line is well formed, its PNG exists, and every lecture type has
 at least 5 frames.
@@ -38,7 +40,7 @@ Slugs follow `tests/data/README.md`: a short, stable name per recording.
 | Field | Type | Notes |
 |---|---|---|
 | `frame` | string | PNG file name beside the labels |
-| `kind` | string | lecture type: `slides`, `blackboard`, `whiteboard` or `tablet` (handwriting on a tablet, or paper under a document camera); the frame kinds prompt v0 names |
+| `kind` | string | lecture type: `slides`, `blackboard`, `whiteboard` or `handwriting` (on a tablet, or paper under a document camera, also over slides); the layout probe's kinds (architecture.md 6.2), so a label's kind is what the probe should answer |
 | `text` | string | every piece of text a careful reader can make out at full resolution, in reading order, one line per line on the board; `""` for a blank board |
 | `latex` | list of strings | each formula on the board, once, as LaTeX; `[]` when there is none |
 | `diagram` | string or null | one line on any diagram, graph or figure; `null` when there is none |
@@ -66,13 +68,18 @@ Per frame, `evaluate.py` computes:
 - **CER**, the character error rate of the model's `text` against the label: edits (insert,
   delete, substitute) per label character after casefolding and collapsing whitespace, capped
   at 1. 0 is a perfect reading, 1 is nothing right.
-- **Formula recall**: a labelled formula counts as found when some stretch of the model's `latex`
-  is within one edit per four characters of it, after removing whitespace, `$`, `\left`,
-  `\right`, `\displaystyle` and spacing commands, and reading `\dfrac`/`\tfrac` as `\frac`.
+- **Blank boards** (label `text` is `""`) have no CER, since any text would score 1, the same
+  as misreading a full board. They count as read when the answer's text is empty or only
+  `[unreadable]`, in a column of their own.
+- **Formula recall**: both formulas are normalised (`$`, `\left`, `\right`, `\displaystyle` and
+  spacing commands removed, `\dfrac`/`\tfrac` read as `\frac`) and split into tokens: a command,
+  a number, or one other character. A labelled formula counts as found when some run of whole
+  tokens in the model's `latex` is within one edit per four of its tokens. So a formula of three
+  tokens or fewer must match exactly, and a labelled `x` is not found inside `\max`.
 
 A frame the model could not read counts as an empty answer and is listed as failed. The report
-gives the mean CER and pooled formula recall per lecture type and in total, then every frame,
-worst first, with the formulas it missed. `diagram` is not scored yet: it is there for a human
+gives the mean CER, blank boards read as blank and pooled formula recall per lecture type and in
+total, then every frame, worst first, with the formulas it missed. `diagram` is not scored yet: it is there for a human
 or an LLM judge to compare against.
 
 ## Frames
@@ -80,7 +87,7 @@ or an LLM judge to compare against.
 | Lecture type | Frames | From |
 |---|---|---|
 | `blackboard` | 9 | `mit_18_100b_l1` (5), `mit_6_042j_2010_l1` (4) |
-| `tablet` | 9 | `ttk4225_2026_09_14` (5), `math231_2020_r2` (4) |
+| `handwriting` | 9 | `ttk4225_2026_09_14` (5), `math231_2020_r2` (4) |
 | `slides` | 6 | `mit_18_404j_l1` |
 | `whiteboard` | 6 | `uw_machine_intelligence_l13` |
 
@@ -137,8 +144,8 @@ redistributing derivatives is used; a public YouTube upload alone is not enough.
 |---|---|---|---|---|
 | `mit_18_100b_l1` | MIT 18.100B Real Analysis, Lecture 1 | https://www.youtube.com/watch?v=BWvjy0a1Ffg | blackboard | CC BY-NC-SA 4.0, attribution: MIT OpenCourseWare, 18.100B Real Analysis |
 | `mit_6_042j_2010_l1` | MIT 6.042J Mathematics for Computer Science, Fall 2010, Lecture 1, Tom Leighton | https://www.youtube.com/watch?v=L3LMbpZIKhQ | blackboard | CC BY-NC-SA, attribution: MIT OpenCourseWare, 6.042J Fall 2010. A clip in the video that OCW marks as not covered is not used. |
-| `ttk4225_2026_09_14` | TTK4225, 2026-09-14, P03·12 | https://www.youtube.com/watch?v=ufmTACqiE78 | tablet | the lecturer's own recording, committed with the lecturer's (Damiano's) permission |
-| `math231_2020_r2` | Recitation 2 Recording for Math 231, Fall 2020, Linda Green | https://www.youtube.com/watch?v=8XYYUsFnl4A | tablet | CC BY (YouTube's Creative Commons Attribution licence), attribution: Linda Green |
+| `ttk4225_2026_09_14` | TTK4225, 2026-09-14, P03·12 | https://www.youtube.com/watch?v=ufmTACqiE78 | handwriting | the lecturer's own recording, committed with the lecturer's (Damiano's) permission |
+| `math231_2020_r2` | Recitation 2 Recording for Math 231, Fall 2020, Linda Green | https://www.youtube.com/watch?v=8XYYUsFnl4A | handwriting | CC BY (YouTube's Creative Commons Attribution licence), attribution: Linda Green |
 | `mit_18_404j_l1` | MIT 18.404J Theory of Computation, Fall 2020, Lecture 1, Michael Sipser | https://www.youtube.com/watch?v=9syvZr-9xwk | slides | CC BY-NC-SA, attribution: MIT OpenCourseWare, 18.404J Fall 2020. OCW notes that some content in the video is not covered; only the lecturer's own slides are used. |
 | `uw_machine_intelligence_l13` | Machine Intelligence, Lecture 13 (Convolutional Neural Networks), Kimia Lab, University of Waterloo | https://www.youtube.com/watch?v=AVwS3VpMGlo | whiteboard | CC BY (YouTube's Creative Commons Attribution licence), attribution: Kimia Lab |
 

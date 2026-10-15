@@ -272,7 +272,7 @@ def vision(ctx: Context) -> Context:
         if report:
             report("vision", 0.5 + 0.5 * index / len(views))
         speech = _speech(ctx.sentences, view.start, view.end)
-        fields = _caption(config, view.keyframe, speech, kind=ctx.layout.kind)
+        fields = read_keyframe(config, view.keyframe, speech, kind=ctx.layout.kind)
         if fields is None:
             failed += 1
             if not visual and failed >= _GIVE_UP_AFTER:
@@ -664,13 +664,15 @@ def _length(view: _View) -> float:
     return view.end - view.start
 
 
-def _caption(
-    config: Config, png: bytes, speech: str, *, kind: str = "unknown"
+def read_keyframe(
+    config: Config, png: bytes, speech: str = "", *, kind: str = "unknown"
 ) -> dict[str, Any] | None:
     """Read one keyframe with the vision model (architecture.md 6.5).
 
-    ``png`` is the keyframe as :class:`_View` holds it; ``speech`` is what was said while its
-    view was on screen; ``kind`` is what the layout probe says the frame shows. Returns the
+    The one place a keyframe is read: the ``vision`` stage and ``eval --score-vision``
+    (architecture.md 4.4) both call it, so what eval scores is what a run sends. ``png`` is the
+    keyframe as :class:`_View` holds it; ``speech`` is what was said while its view was on
+    screen; ``kind`` is what the layout probe says the frame shows. Returns the
     :class:`VisualContext` fields the model reads, or ``None`` with a warning when the call
     fails or a field is malformed: a board description only enriches questions the pipeline
     already found, so unlike the judge, vision never ends the run. Cached on the request,

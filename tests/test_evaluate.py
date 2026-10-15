@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from questxtract import Config, Transcript
+from questxtract import Config, Transcript, cli
 from questxtract.cli import main
 from questxtract.evaluate import (
     KINDS,
@@ -195,6 +195,13 @@ def test_character_error_rate(predicted: str, reference: str, rate: float) -> No
         (r"x(t) = \sin(t)", None, False),
         (r"\leftarrow", r"\rightarrow", False),  # \left inside a command name is not spacing
         (r"\quad", None, True),  # nothing left to find once spacing is removed
+        # #58 review: a short formula is matched exactly and never inside a longer token.
+        ("x", r"\max_{i} a_i", False),
+        ("n", r"x \in Q", False),  # the space after \in keeps it one token, apart from Q
+        ("0", "100", False),
+        ("x", r"a = x + 1", True),
+        ("x^2", "x^3", False),
+        (r"r_n \in F", r"r_n \in F", True),
     ],
 )
 def test_formula_found(formula: str, latex: str | None, found: bool) -> None:
@@ -230,12 +237,17 @@ def test_vision_accuracy_is_reported_per_lecture_type(
             _frame("lec_1.png", "slides", "Stable sort", ["x^2"]),
             _frame("lec_2.png", "blackboard", "f(c) = 0", ["f(c) = 0", "a < c < b"]),
             _frame("lec_3.png", "blackboard", "Not cont.", []),
+            _frame("lec_4.png", "blackboard", "", []),  # blank boards
+            _frame("lec_5.png", "blackboard", "", []),
         ],
     )
     client = fake_llm(
         _board("Stable sort", "x^2"),
         _board("f(c) = O", "f(c) = 0"),
         TimeoutError("no answer"),  # the third frame cannot be read: an empty answer
+        TimeoutError("no answer"),
+        _board(" [unreadable] ", None),  # read as blank: unsure, but no invented text
+        _board("Q.E.D.", None),  # not read as blank
     )
 
     with pytest.warns(UserWarning, match="vision: keyframe left out"):
@@ -247,31 +259,40 @@ def test_vision_accuracy_is_reported_per_lecture_type(
         "frames": 1,
         "failed": 0,
         "cer": 0.0,
+        "blank": 0,
+        "blank_read": 0,
         "formulas": 1,
         "formulas_found": 1,
         "formula_recall": 1.0,
     }
     board = report["kinds"]["blackboard"]
-    assert board["frames"] == 2 and board["failed"] == 1
+    assert board["frames"] == 4 and board["failed"] == 1
+    # Blank boards are out of the CER mean, and counted on their own.
     assert board["cer"] == pytest.approx((0.125 + 1.0) / 2, abs=1e-3)
+    assert (board["blank"], board["blank_read"]) == (2, 1)
     assert (board["formulas"], board["formulas_found"], board["formula_recall"]) == (2, 1, 0.5)
-    assert report["total"]["frames"] == 3 and report["total"]["formula_recall"] == 0.667
+    assert report["total"]["frames"] == 5 and report["total"]["formula_recall"] == 0.667
     assert report["frames"][1]["missed"] == ["a < c < b"]
-    # The frame went to the model as the vision stage sends a keyframe, with no speech.
+    assert report["frames"][3]["cer"] is None and report["frames"][3]["read_blank"] is True
+    # The frame went to the model as the vision stage sends a keyframe when the layout probe
+    # got its kind right: the label's kind in the prompt, no speech.
     system, user = client.requests[0]["messages"]
-    assert "Frame kind: unknown" in system["content"] and "-" in system["content"]
+    assert "Frame kind: slides" in system["content"] and "-" in system["content"]
+    assert "Frame kind: blackboard" in client.requests[1]["messages"][0]["content"]
     assert user["content"][0]["image_url"]["url"].startswith("data:image/png;base64,")
 
     table = format_vision_report(report)
     assert "slides" in table and "blackboard" in table and "TOTAL" in table
     assert "FAILED" in table and "missed: a < c < b" in table
+    assert "1/2" in table  # blank boards read as blank
+    assert table.index("NOT blank") < table.index("lec_3.png")  # an invented reading first
 
 
 def test_vision_eval_reads_each_frame_once(
     tmp_path: Path, fake_llm: Callable[..., Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    _frames(tmp_path, "lec", [_frame("lec_1.png", "tablet", "h(t)", [])])
+    _frames(tmp_path, "lec", [_frame("lec_1.png", "handwriting", "h(t)", [])])
     client = fake_llm(_board("h(t)", None))
     first = evaluate_vision([tmp_path])
     assert evaluate_vision([tmp_path / "lec.frames.jsonl"]) == first
@@ -282,7 +303,9 @@ def test_vision_eval_reads_each_frame_once(
     ("label", "problem"),
     [
         ([], "not a JSON object"),
-        (_frame("../x.png", "slides", "", []), "frame must be a file name"),
+        (_frame("../x.png", "slides", "", []), "frame must be the name of a .png file"),
+        (_frame("", "slides", "", []), "frame must be the name of a .png file"),
+        (_frame("..", "slides", "", []), "frame must be the name of a .png file"),
         (_frame("a.png", "lecture", "", []), "kind must be one of"),
         ({**_frame("a.png", "slides", "", []), "text": None}, "text must be"),
         (_frame("a.png", "slides", "", "x^2"), "latex must be a list"),  # type: ignore[arg-type]
@@ -305,7 +328,7 @@ def test_vision_eval_rejects_a_missing_frame_or_an_empty_set(tmp_path: Path) -> 
         evaluate_vision([tmp_path / "empty"])
 
 
-def test_cli_eval_vision_prints_the_table_and_json(
+def test_cli_eval_score_vision_prints_the_table_and_json(
     tmp_path: Path,
     fake_llm: Callable[..., Any],
     capsys: pytest.CaptureFixture[str],
@@ -313,19 +336,31 @@ def test_cli_eval_vision_prints_the_table_and_json(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     _frames(tmp_path, "lec", [_frame("lec_1.png", "whiteboard", "MLPs", [])])
-    fake_llm(_board("MLPs", None))
-    url = ["--llm-url", "http://localhost:11434/v1"]
-    assert main(["eval", "--vision", str(tmp_path), *url]) == 0
-    assert "whiteboard" in capsys.readouterr().out
-    assert main(["eval", "--vision", str(tmp_path), *url, "--json"]) == 0
+    client = fake_llm(_board("MLPs", None))
+    flags = ["--llm-url", "http://localhost:11434/v1", "--vision-model", "qwen3-vl"]
+    assert main(["eval", "--score-vision", str(tmp_path), *flags]) == 0
+    out = capsys.readouterr().out
+    assert "whiteboard" in out and "vision model qwen3-vl" in out
+    assert main(["eval", "--score-vision", str(tmp_path), *flags, "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["kinds"]["whiteboard"]["cer"] == 0.0
+    # #58 review: --vision-model picks the model scored, not --llm-model (the judge's).
+    assert client.requests[0]["model"] == "qwen3-vl"
 
 
-def test_cli_eval_vision_needs_a_model_to_ask(
+def test_cli_eval_score_vision_needs_a_model_to_ask(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert main(["eval", "--vision", str(tmp_path)]) == 1
-    assert "eval --vision needs OPENAI_API_KEY" in capsys.readouterr().err
+    assert main(["eval", "--score-vision", str(tmp_path)]) == 1
+    assert "eval --score-vision needs OPENAI_API_KEY" in capsys.readouterr().err
+
+
+def test_eval_keeps_vision_enabled_from_the_settings_file(tmp_path: Path) -> None:
+    """#58 review: the eval flag must not reach _config's mapping of --vision."""
+    settings = tmp_path / "questxtract.toml"
+    settings.write_text("vision_enabled = true\n", encoding="utf-8")
+    for extra in ([], ["--score-vision"]):
+        args = cli.build_parser().parse_args(["eval", "x", "--config", str(settings), *extra])
+        assert cli._config(args).vision_enabled is True
 
 
 def test_the_labelled_keyframes_cover_every_lecture_type() -> None:

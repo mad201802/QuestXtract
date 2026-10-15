@@ -4,10 +4,12 @@
 
 ### Added
 
-- `eval --vision`: scores `vision_model` on 30 labelled keyframes in `tests/data/vision/`, from six
-  lectures that may be shared over four lecture types (slides, blackboard, whiteboard, tablet), and
-  reports the character error rate of the text and the share of formulas read, per lecture
-  type and per frame. Answers are cached, so a second run makes no calls. (#58)
+- `eval --score-vision`: scores `vision_model` (or `--vision-model`) on 30 labelled keyframes in
+  `tests/data/vision/`, from six lectures over four lecture types (slides, blackboard,
+  whiteboard, handwriting), each recording one whose licence or lecturer allows sharing. It
+  reports the character error rate of the text, blank boards read as blank, and the share of
+  formulas read, per lecture type and per frame. Answers are cached, so a second run makes no
+  calls. (#58)
 - Vision finds the slides or board first: three frames from across the recording go to
   `vision_model` in one request, which answers where the content is and what kind it is
   (`slides`, `blackboard`, `whiteboard`, `handwriting`, `screencast` or `unknown`). Frames are

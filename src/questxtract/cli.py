@@ -318,11 +318,11 @@ def _transcribe(args: argparse.Namespace) -> int:
 
 
 def _eval(args: argparse.Namespace) -> int:
-    """Score the pipeline, or with ``--vision`` the vision model, against the labelled set."""
+    """Score the pipeline, or with ``--score-vision`` the vision model, on the labelled set."""
     try:
         config = _with_llm(_config(args))
-        if args.vision:
-            _check_endpoint(config, "eval --vision")
+        if args.score_vision:
+            _check_endpoint(config, "eval --score-vision")
             report = evaluate_vision(args.paths, config)
         else:
             report = evaluate(args.paths, config)
@@ -332,7 +332,7 @@ def _eval(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(report, indent=2))
     else:
-        print(format_vision_report(report) if args.vision else format_report(report))
+        print(format_vision_report(report) if args.score_vision else format_report(report))
     return 0
 
 
@@ -421,9 +421,19 @@ def build_parser() -> argparse.ArgumentParser:
         "anything but none also allows each request 10 minutes instead of 2",
     )
 
+    # The vision model: `process` reads the board with it, `eval --score-vision` scores it.
+    vision_model = argparse.ArgumentParser(add_help=False)
+    vision_model.add_argument(
+        "--vision-model",
+        default=None,
+        metavar="NAME",
+        help=f"the model that reads the board, as the endpoint names it (default: "
+        f"{defaults.vision_model})",
+    )
+
     process = subs.add_parser(
         "process",
-        parents=[configured, shared, llm],
+        parents=[configured, shared, llm, vision_model],
         help="extract questions from a recording or a transcript",
         description="Extract the questions asked in a recording, or in an existing transcript.",
         epilog=_PROCESS_EXAMPLES,
@@ -451,13 +461,6 @@ def build_parser() -> argparse.ArgumentParser:
         "extra, and OPENAI_API_KEY or --llm-url); --no-vision turns off vision_enabled from the "
         "settings file for one run",
     )
-    process.add_argument(
-        "--vision-model",
-        default=None,
-        metavar="NAME",
-        help=f"the model that reads the board, as the endpoint names it (default: "
-        f"{defaults.vision_model})",
-    )
     process.set_defaults(handler=_process)
 
     transcribe = subs.add_parser(
@@ -472,17 +475,19 @@ def build_parser() -> argparse.ArgumentParser:
     transcribe.set_defaults(handler=_transcribe)
 
     evaluation = subs.add_parser(
-        "eval", parents=[configured, llm], help="score against the labelled set"
+        "eval", parents=[configured, llm, vision_model], help="score against the labelled set"
     )
     evaluation.add_argument(
         "paths",
         nargs="+",
-        help="*.labels.jsonl files, or directories holding them (with --vision: *.frames.jsonl)",
+        help="*.labels.jsonl files, or directories holding them (with --score-vision: "
+        "*.frames.jsonl)",
     )
     evaluation.add_argument(
-        "--vision",
+        "--score-vision",
         action="store_true",
-        help="score the vision model (vision_model, at --llm-url) on the labelled keyframes "
+        dest="score_vision",  # not `vision`: that is vision_enabled, read by _config
+        help="score the vision model (--vision-model, at --llm-url) on the labelled keyframes "
         "instead of question detection; calls the model once per frame, then caches",
     )
     evaluation.add_argument("--json", action="store_true", help="machine-readable, for CI")
