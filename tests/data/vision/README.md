@@ -43,7 +43,9 @@ uv run python scripts/extract_keyframes.py lecture.mp4 -o keyframes/ --max-views
 
 Raw answers of the model comparison, one line per call: `results/<run>/results.jsonl`, written by
 `scripts/compare_vision.py` (frame, model, seconds, token counts, the answer or the error).
-`results/tesseract/` holds the OCR text. The comparison and its caveats are on #52.
+The OCR baseline is GLM-OCR: `results/glm-ocr/` and `results/glm-ocr-q8-local/` hold its plain text,
+and `results/tesseract/` a classic OCR engine's, for comparison. The comparisons and their caveats
+are on #52 and #143.
 
 | Run | Models | Frames |
 |---|---|---|
@@ -57,6 +59,8 @@ Raw answers of the model comparison, one line per call: `results/<run>/results.j
 | `claude-hand-graded` | Claude Sonnet 5.5 reading each frame itself and answering in the prompt v0 format. **Not independent**: the same reader wrote the reference text the other models are scored against. | MIT and TTK |
 | `claude-independent-agent` | A fresh Claude agent with no context, given only the prompt and the frames, told to open nothing else | MIT and TTK |
 | `qwen3-vl-2b-instruct-local` | Qwen3-VL 2B through Ollama | MIT |
+| `glm-ocr` | GLM-OCR (`zai-org/GLM-OCR`, 0.9B) on Idun's hosted service, prompt "Text Recognition:" | MIT and TTK at 360p |
+| `glm-ocr-q8-local` | GLM-OCR `glm-ocr:q8_0` through Ollama on an 8 GB MacBook Air M2, same prompt; `ollama-ps.txt` holds the memory in use | MIT and TTK at 360p |
 
 ## Licences
 
