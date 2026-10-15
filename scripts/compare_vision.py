@@ -15,6 +15,11 @@ no setting is sent, which models without a reasoning mode such as gpt-4o need. W
 DIR/results.jsonl, one line per call. ``--transcript T.json`` adds the words spoken within
 ``--window`` seconds of each frame (its second is the number in the file name).
 ``--price name=IN,OUT`` (USD per million tokens) adds a cost per call.
+
+``--ocr PROMPT`` is for an OCR model, which takes a task prompt instead of prompt v0 and
+answers in plain text: the frame goes out with PROMPT and no schema, and the row keeps the
+text. For GLM-OCR through a local Ollama:
+``-m glm-ocr:q8_0 --ocr "Text Recognition:" --base-url http://localhost:11434/v1``.
 """
 
 from __future__ import annotations
@@ -72,12 +77,21 @@ def _speech(transcript: dict[str, Any], seconds: float, window: float) -> str:
 
 
 def _request(
-    model: str, reasoning: str | None, prompt: str, png: bytes, detail: str | None, schema: Any
+    model: str,
+    reasoning: str | None,
+    prompt: str,
+    png: bytes,
+    detail: str | None,
+    schema: Any,
+    ocr: str | None = None,
 ) -> dict[str, Any]:
-    """Build the chat request for one frame."""
+    """Build the chat request for one frame: prompt v0 with the schema, or an OCR task prompt."""
     image: dict[str, Any] = {"url": "data:image/png;base64," + base64.b64encode(png).decode()}
     if detail:
         image["detail"] = detail
+    if ocr is not None:  # an OCR model reads the task from the user turn and returns plain text
+        content = [{"type": "image_url", "image_url": image}, {"type": "text", "text": ocr}]
+        return {"model": model, "messages": [{"role": "user", "content": content}]}
     request: dict[str, Any] = {
         "model": model,
         "messages": [
@@ -117,6 +131,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--detail", choices=("low", "high", "auto"), default=None)
     parser.add_argument("--timeout", type=float, default=120.0, help="seconds per call")
     parser.add_argument("--price", action="append", default=[], help="name=IN,OUT per 1M tokens")
+    parser.add_argument(
+        "--ocr", metavar="PROMPT", default=None, help="OCR model: send PROMPT, keep plain text"
+    )
     args = parser.parse_args(argv)
 
     key = os.environ.get(args.key_env) or ("local" if args.base_url else "")
@@ -157,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
             for spec in args.model:
                 model, sep, reasoning = spec.partition("@")
                 request = _request(
-                    model, reasoning if sep else None, prompt, png, args.detail, schema
+                    model, reasoning if sep else None, prompt, png, args.detail, schema, args.ocr
                 )
                 row: dict[str, Any] = {
                     "frame": frame.name,
@@ -176,14 +193,12 @@ def main(argv: list[str] | None = None) -> int:
                     row["tokens_in"] = usage.prompt_tokens if usage else None
                     row["tokens_out"] = usage.completion_tokens if usage else None
                     content = response.choices[0].message.content or ""
-                    try:
-                        answer = json.loads(content)
-                    except json.JSONDecodeError:
-                        answer = None
-                    problem = _check(answer)
-                    row.update(ok=problem is None, answer=answer if problem is None else content)
-                    if problem:
-                        row["error"] = problem
+                    if args.ocr is not None:
+                        row.update(ok=bool(content.strip()), text=content)
+                        if not content.strip():
+                            row["error"] = "empty answer"
+                    else:
+                        _record(row, content)
                     if usage and model in prices:
                         low, high = prices[model]
                         row["usd"] = round(
@@ -195,6 +210,18 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{frame.name} {spec}: {status} {row.get('seconds', '')}s", file=sys.stderr)
     print(f"-> {out}", file=sys.stderr)
     return 0
+
+
+def _record(row: dict[str, Any], content: str) -> None:
+    """Store a prompt-v0 answer in ``row``: the parsed JSON when it fits the schema."""
+    try:
+        answer = json.loads(content)
+    except json.JSONDecodeError:
+        answer = None
+    problem = _check(answer)
+    row.update(ok=problem is None, answer=answer if problem is None else content)
+    if problem:
+        row["error"] = problem
 
 
 if __name__ == "__main__":
