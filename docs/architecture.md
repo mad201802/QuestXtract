@@ -503,7 +503,7 @@ user message. The previous state's description and the ink difference are to joi
 #137). Out, under a strict JSON schema and checked again in code: `description`, `text`, `latex`
 (or null) and `confidence`. The prompt asks for what is visible only, with `[unreadable]` for a
 word it cannot read. Cached per request, the image included (10.4), so no keyframe is sent twice.
-`latex` is there because prose does not compile, and the M4 animations need formulas.
+`latex` is there because prose does not compile, and the M3 animations need formulas.
 
 Each keyframe is written to the cache as `<source_hash>/keyframes/<content hash>.png`, and `keyframe_path` holds that path relative to `cache_dir`: a cached result stays
 valid from another working directory, and the board-state id does not depend on where the cache
@@ -1055,7 +1055,7 @@ empty, `verdict` is `unjudged` and the judge and vision settings are `null`:
 **Shared things are listed once and referenced by id.** `segments` and `visuals` (board states,
 6.4) are top-level lists; a question points into them with `segment_id` and `visual_ids`, so a
 board state that ten questions discuss is written once. The vision milestones grow into this
-shape without a breaking change: M3's board timeline is `visuals` in time order, M4's animations
+shape without a breaking change: M3's board timeline is `visuals` in time order, its animations
 one more top-level list pointing at visual ids.
 
 - `visual_ids` holds the board states on screen while the question was asked, falling back to
