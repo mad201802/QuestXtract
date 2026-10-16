@@ -14,56 +14,48 @@ from pathlib import Path
 from typing import cast
 from xml.etree import ElementTree
 
-from .export import read_questions
 from .models import SchemaError
-from .qti import AssessmentItem, AssessmentTest, QtiExportError, questions_to_qti
+from .qti import AssessmentItem, AssessmentTest, QtiExportError, quiz_to_qti
+from .quiz_schema import read_quiz
 
 QTI_NS = "http://www.imsglobal.org/xsd/imsqtiasi_v3p0"
 CP_NS = "http://www.imsglobal.org/xsd/qti/qtiv3p0/imscp_v1p1"
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
-_QTI_XSD = "https://purl.imsglobal.org/spec/qti/v3p0/schema/xsd/imsqti_asiv3p0_v1p0.xsd"
+_QTI_XSD = "https://purl.imsglobal.org/spec/qti/v3p0/schema/xsd/imsqti_asiv3p0p1_v1p0.xsd"
 _CP_XSD = "https://purl.imsglobal.org/spec/qti/v3p0/schema/xsd/imsqtiv3p0_imscpv1p2_v1p0.xsd"
 # The namespaces are literal attributes on unqualified tags: ElementTree's
 # tostring(default_namespace=...) rejects unqualified attributes, and register_namespace is
 # process-global. Every official 1EdTech example uses the default namespace.
 _QTI_ROOT = {"xmlns": QTI_NS, "xmlns:xsi": XSI_NS, "xsi:schemaLocation": f"{QTI_NS} {_QTI_XSD}"}
 _CP_ROOT = {"xmlns": CP_NS, "xmlns:xsi": XSI_NS, "xsi:schemaLocation": f"{CP_NS} {_CP_XSD}"}
-_INTERACTIONS = {
-    "extendedTextInteraction": "qti-extended-text-interaction",
-    "choiceInteraction": "qti-choice-interaction",
-}
+_INTERACTIONS = {"choiceInteraction": "qti-choice-interaction"}
 _METADATA_PATH = "metadata/questxtract.json"
 _ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)  # the earliest date a ZIP entry can carry
 
 
-def export_qti(
-    questions_path: str | Path,
-    output_path: str | Path,
-    *,
-    only_keep: bool = False,
-) -> None:
-    """Read a ``questions.json`` and write it as a QTI 3.0 package.
+def export_qti(quiz_path: str | Path, output_path: str | Path) -> None:
+    """Read a ``quiz.json`` and write it as a QTI 3.0 package.
 
-    Every question becomes a text-entry item scored by a person. Questions a reviewer marked
-    ``deleted`` or ``false_positive`` are left out. The same input gives a byte-identical ZIP.
+    Every item becomes a single-choice item scored against its correct option, with each
+    option's explanation and the general one as feedback. Items a reviewer marked ``rejected``
+    are left out. The same input gives a byte-identical ZIP.
 
     Args:
-        questions_path: A ``questions.json`` written by ``process``, edited or not.
+        quiz_path: A ``quiz.json``, schema version 1.x.
         output_path: Where to write the ZIP. Its folder must exist.
-        only_keep: Export only questions whose ``verdict`` is ``keep``.
 
     Raises:
-        QtiExportError: If the questions file cannot be read or is not a ``questions.json``,
-            if a question cannot be represented in QTI, or if the package cannot be written.
+        QtiExportError: If the quiz file cannot be read or breaks a rule of ``quiz.json``, if
+            an item cannot be represented in QTI, or if the package cannot be written.
 
     """
     try:
-        document = read_questions(questions_path)
+        document = read_quiz(quiz_path)
     except OSError as exc:
-        raise QtiExportError(f"{questions_path}: {exc.strerror or exc}") from exc
+        raise QtiExportError(f"{quiz_path}: {exc.strerror or exc}") from exc
     except SchemaError as exc:
         raise QtiExportError(str(exc)) from exc
-    write_qti_package(questions_to_qti(document, only_keep=only_keep), output_path)
+    write_qti_package(quiz_to_qti(document), output_path)
 
 
 def write_qti_package(assessment: AssessmentTest, path: str | Path) -> None:
@@ -133,14 +125,15 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
             attributes["normal-maximum"] = _float(outcome.normal_maximum)
         if outcome.normal_minimum is not None:
             attributes["normal-minimum"] = _float(outcome.normal_minimum)
-        if outcome.external_scored is not None:
-            attributes["external-scored"] = outcome.external_scored
         node = ElementTree.SubElement(root, "qti-outcome-declaration", attributes)
         if outcome.default_value is not None:
             default_value = ElementTree.SubElement(node, "qti-default-value")
             ElementTree.SubElement(default_value, "qti-value").text = outcome.default_value
     body = ElementTree.SubElement(root, "qti-item-body")
-    attributes = {"response-identifier": item.interaction.response_identifier}
+    attributes = {
+        "response-identifier": item.interaction.response_identifier,
+        "shuffle": _bool(item.interaction.shuffle),
+    }
     if item.interaction.min_choices is not None:
         attributes["min-choices"] = str(item.interaction.min_choices)
     if item.interaction.max_choices is not None:
@@ -153,67 +146,45 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
         ElementTree.SubElement(
             interaction, "qti-simple-choice", {"identifier": option.identifier}
         ).text = option.text
-    feedback_enabled = any(
-        outcome.identifier == "FEEDBACK" for outcome in item.outcome_declarations
-    )
-    if item.has_answer_key:
-        # Explicit Core response processing (Implementation Guide 3.4.4), not the
-        # match_correct template: the template always scores 1, whatever the item is worth.
-        processing = ElementTree.SubElement(root, "qti-response-processing")
-        condition = ElementTree.SubElement(processing, "qti-response-condition")
-        response_if = ElementTree.SubElement(condition, "qti-response-if")
-        match = ElementTree.SubElement(response_if, "qti-match")
-        ElementTree.SubElement(match, "qti-variable", {"identifier": "RESPONSE"})
-        ElementTree.SubElement(match, "qti-correct", {"identifier": "RESPONSE"})
-        score = ElementTree.SubElement(
-            response_if, "qti-set-outcome-value", {"identifier": "SCORE"}
+
+    # Explicit Core response processing (Implementation Guide 3.4.4), not the match_correct
+    # template: the template always scores 1, whatever the item is worth.
+    processing = ElementTree.SubElement(root, "qti-response-processing")
+    condition = ElementTree.SubElement(processing, "qti-response-condition")
+    response_if = ElementTree.SubElement(condition, "qti-response-if")
+    match = ElementTree.SubElement(response_if, "qti-match")
+    ElementTree.SubElement(match, "qti-variable", {"identifier": "RESPONSE"})
+    ElementTree.SubElement(match, "qti-correct", {"identifier": "RESPONSE"})
+    score = ElementTree.SubElement(response_if, "qti-set-outcome-value", {"identifier": "SCORE"})
+    ElementTree.SubElement(score, "qti-variable", {"identifier": "MAXSCORE"})
+    response_else = ElementTree.SubElement(condition, "qti-response-else")
+    wrong = ElementTree.SubElement(response_else, "qti-set-outcome-value", {"identifier": "SCORE"})
+    ElementTree.SubElement(wrong, "qti-base-value", {"base-type": "float"}).text = _float(0.0)
+
+    if item.has_feedback:
+        # FEEDBACK names the chosen option, which shows that option's modal feedback. No
+        # response leaves it NULL, and no feedback is shown.
+        chosen = ElementTree.SubElement(
+            processing, "qti-set-outcome-value", {"identifier": "FEEDBACK"}
         )
-        ElementTree.SubElement(score, "qti-variable", {"identifier": "MAXSCORE"})
-        if feedback_enabled:
-            _set_outcome(
-                response_if, "FEEDBACK", "identifier", _feedback_identifier(item, "correct")
+        ElementTree.SubElement(chosen, "qti-variable", {"identifier": "RESPONSE"})
+        for option in item.options:
+            if option.feedback is None:
+                continue
+            modal = ElementTree.SubElement(
+                root,
+                "qti-modal-feedback",
+                {
+                    "identifier": option.identifier,
+                    "outcome-identifier": "FEEDBACK",
+                    "show-hide": "show",
+                },
             )
-        response_else = ElementTree.SubElement(condition, "qti-response-else")
-        _set_outcome(response_else, "SCORE", "float", _float(0.0))
-        if feedback_enabled:
-            _set_outcome(
-                response_else, "FEEDBACK", "identifier", _feedback_identifier(item, "incorrect")
-            )
-    if item.feedback is not None:
-        for identifier, text in (
-            ("correct", item.feedback.correct),
-            ("incorrect", item.feedback.incorrect),
-            ("general", item.feedback.general),
-        ):
-            if text is not None:
-                feedback_node = ElementTree.SubElement(
-                    root,
-                    "qti-modal-feedback",
-                    {
-                        "identifier": identifier,
-                        "outcome-identifier": "FEEDBACK",
-                        "show-hide": "show",
-                    },
-                )
-                ElementTree.SubElement(feedback_node, "qti-content-body").text = text
+            content = ElementTree.SubElement(modal, "qti-content-body")
+            for text in (option.feedback, item.explanation):
+                if text is not None:
+                    ElementTree.SubElement(content, "p").text = text
     return root
-
-
-def _set_outcome(parent: ElementTree.Element, identifier: str, base_type: str, value: str) -> None:
-    node = ElementTree.SubElement(parent, "qti-set-outcome-value", {"identifier": identifier})
-    ElementTree.SubElement(node, "qti-base-value", {"base-type": base_type}).text = value
-
-
-def _feedback_identifier(item: AssessmentItem, preferred: str) -> str:
-    """Return a feedback identifier that has a corresponding modal element."""
-    feedback = item.feedback
-    if feedback is None:
-        return "none"
-    if getattr(feedback, preferred) is not None:
-        return preferred
-    if feedback.general is not None:
-        return "general"
-    return "none"
 
 
 def _test_xml(assessment: AssessmentTest) -> ElementTree.Element:
@@ -226,11 +197,22 @@ def _test_xml(assessment: AssessmentTest) -> ElementTree.Element:
         "qti-test-part",
         {"identifier": "part-1", "navigation-mode": "linear", "submission-mode": "individual"},
     )
+    ElementTree.SubElement(
+        part, "qti-item-session-control", {"show-feedback": _bool(assessment.show_feedback)}
+    )
     section = ElementTree.SubElement(
         part,
         "qti-assessment-section",
-        {"identifier": "section-1", "title": "Questions", "visible": "true"},
+        {"identifier": "section-1", "title": assessment.title, "visible": "true"},
     )
+    if assessment.shuffle_items:
+        ElementTree.SubElement(section, "qti-ordering", {"shuffle": "true"})
+    if assessment.instructions is not None:
+        rubric = ElementTree.SubElement(
+            section, "qti-rubric-block", {"view": "candidate", "use": "instructions"}
+        )
+        content = ElementTree.SubElement(rubric, "qti-content-body")
+        ElementTree.SubElement(content, "p").text = assessment.instructions
     for item in assessment.items:
         ElementTree.SubElement(
             section,
@@ -283,14 +265,16 @@ def _metadata_json(assessment: AssessmentTest) -> bytes:
         provenance = item.provenance
         items[item.identifier] = {
             "source_question_id": provenance.source_question_id if provenance else None,
-            "source_sentence_id": provenance.source_sentence_id if provenance else None,
-            "linguistic_question_type": item.linguistic_question_type,
-            "interaction_type": item.interaction.interaction_type,
-            "source_answer": provenance.source_answer if provenance else None,
-            "metadata": dict(item.metadata),
+            "start": provenance.start if provenance else None,
+            "end": provenance.end if provenance else None,
+            **item.metadata,
         }
-    payload = {"format": "questxtract-qti-3.0", "items": items}
+    payload = {"format": "questxtract-qti-3.0", "quiz": assessment.metadata, "items": items}
     return (json.dumps(payload, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def _bool(value: bool) -> str:
+    return "true" if value else "false"
 
 
 def _float(value: float) -> str:

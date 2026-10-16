@@ -20,6 +20,12 @@
   per option, the source question's id and times, and a teacher `review` block. `read_quiz` and
   `validate_quiz` check a file against the rules the schema cannot express and list every
   problem with its path. (#146)
+- `questxtract qti quiz.json -o quiz.qti.zip` (and `export_qti()`) writes a `quiz.json` as a
+  QTI 3.0 package an LMS can import: one single-choice item per quiz item, worth its points and
+  scored against its correct option, with each option's explanation as feedback. The quiz's
+  instructions set shuffling, whether feedback is shown and the instructions text. Items a
+  reviewer marked `rejected` are left out. The same quiz gives the same ZIP, byte for byte, and
+  every package the tests write is validated against the official 1EdTech XSDs. (#67)
 - Vision: with `vision_enabled = true` (in `questxtract.toml`) and a recording with a video
   track, the slides or board are read. Each stable view's keyframe goes to `vision_model`,
   together with what was said while it was on screen, and comes back as a board state in

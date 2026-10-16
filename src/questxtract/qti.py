@@ -1,37 +1,45 @@
-"""QTI assessment model and the ``questions.json`` mapping.
+"""QTI assessment model and the ``quiz.json`` mapping.
 
 This module holds no XML and no package code: :mod:`questxtract.qti_v3` serializes the model
 and imports this module, never the other way round.
+
+:func:`quiz_to_qti` takes a ``quiz.json`` that :func:`questxtract.quiz_schema.read_quiz` has
+read. That checks the rules across fields, not the structure (the JSON Schema is enforced in
+the tests only), so every field the mapping uses is checked here and reported with its path.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from typing import Any
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from typing import Any, TypeGuard
 
 from .models import SchemaError
 
 _XML_ID = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]*$")
+# xs:language, the type of xml:lang.
+_LANGUAGE = re.compile(r"^[A-Za-z]{1,8}(-[A-Za-z0-9]{1,8})*$")
 # Characters XML 1.0 does not allow, even escaped; ElementTree writes them unchecked.
 _XML_ILLEGAL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f￾￿\ud800-\udfff]")
 
 
 class QtiExportError(SchemaError):
-    """Raised when a questions file cannot be read or exported as QTI, or the package written."""
+    """Raised when a quiz file cannot be read or exported as QTI, or the package written."""
 
 
 @dataclass(frozen=True, kw_only=True)
 class AssessmentOption:
-    """An option belonging to a choice interaction."""
+    """An option of a choice interaction, with the feedback shown when it is chosen."""
 
     identifier: str
     text: str
+    feedback: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
 class ResponseDeclaration:
-    """A response variable and its optional answer key."""
+    """A response variable and its answer key."""
 
     identifier: str
     base_type: str
@@ -47,11 +55,12 @@ class Interaction:
     response_identifier: str
     min_choices: int | None = None
     max_choices: int | None = None
+    shuffle: bool = False
 
 
 @dataclass(frozen=True, kw_only=True)
 class OutcomeDeclaration:
-    """An outcome variable produced by response processing or by a human scorer."""
+    """An outcome variable set by response processing."""
 
     identifier: str
     base_type: str = "float"
@@ -59,162 +68,253 @@ class OutcomeDeclaration:
     default_value: str | None = None
     normal_maximum: float | None = None
     normal_minimum: float | None = None
-    external_scored: str | None = None
-
-
-@dataclass(frozen=True, kw_only=True)
-class Feedback:
-    """Feedback shown for a response outcome."""
-
-    correct: str | None = None
-    incorrect: str | None = None
-    general: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
 class Provenance:
-    """Links an exported item back to QuestXtract source data."""
+    """Links an exported item back to the lecture: the source question and its seconds."""
 
     source_question_id: str
-    source_sentence_id: str | None = None
-    source_answer: str | None = None
+    start: float
+    end: float
 
 
 @dataclass(frozen=True, kw_only=True)
 class AssessmentItem:
-    """One QTI assessment item."""
+    """One QTI assessment item.
+
+    ``explanation`` is shown after every option's own feedback. ``metadata`` goes to the
+    package's JSON sidecar as it is.
+    """
 
     identifier: str
     title: str
     prompt: str
     language: str
-    linguistic_question_type: str
     response_declarations: tuple[ResponseDeclaration, ...]
     interaction: Interaction
     options: tuple[AssessmentOption, ...] = ()
-    feedback: Feedback | None = None
+    explanation: str | None = None
+    points: float = 1.0
     provenance: Provenance | None = None
-    metadata: tuple[tuple[str, str], ...] = ()
-    points: float | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
-    def has_answer_key(self) -> bool:
-        """Whether a response can be scored by matching it against an answer key."""
-        return any(declaration.correct_values for declaration in self.response_declarations)
+    def has_feedback(self) -> bool:
+        """Whether any option has feedback to show."""
+        return any(option.feedback is not None for option in self.options)
 
     @property
     def outcome_declarations(self) -> tuple[OutcomeDeclaration, ...]:
-        """``SCORE`` and ``MAXSCORE``, plus ``FEEDBACK`` when there is feedback to show.
-
-        ``SCORE`` is scored externally, by a person, when there is no answer key.
-        """
-        maximum = 1.0 if self.points is None else float(self.points)
-        normalised = self.points is not None and self.points > 0  # normal-maximum must be > 0
+        """``SCORE`` and ``MAXSCORE``, plus ``FEEDBACK`` when there is feedback to show."""
+        maximum = float(self.points)
+        normalised = maximum > 0  # normal-maximum must be > 0
         outcomes = [
             OutcomeDeclaration(
                 identifier="SCORE",
                 default_value=repr(0.0),
                 normal_maximum=maximum if normalised else None,
                 normal_minimum=0.0 if normalised else None,
-                external_scored=None if self.has_answer_key else "human",
             ),
             OutcomeDeclaration(identifier="MAXSCORE", default_value=repr(maximum)),
         ]
-        feedback = self.feedback
-        if feedback is not None and any(
-            text is not None for text in (feedback.correct, feedback.incorrect, feedback.general)
-        ):
-            outcomes.append(
-                OutcomeDeclaration(
-                    identifier="FEEDBACK", base_type="identifier", default_value="general"
-                )
-            )
+        if self.has_feedback:
+            outcomes.append(OutcomeDeclaration(identifier="FEEDBACK", base_type="identifier"))
         return tuple(outcomes)
 
 
 @dataclass(frozen=True, kw_only=True)
 class AssessmentTest:
-    """An ordered QTI assessment test."""
+    """An ordered QTI assessment test.
+
+    ``metadata`` goes to the package's JSON sidecar as it is.
+    """
 
     identifier: str
     title: str
     items: tuple[AssessmentItem, ...]
+    instructions: str | None = None
+    shuffle_items: bool = False
+    show_feedback: bool = True
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
-def questions_to_qti(document: dict[str, Any], *, only_keep: bool = False) -> AssessmentTest:
-    """Convert a ``questions.json`` document to an assessment test of text-entry items.
+def quiz_to_qti(document: Mapping[str, Any]) -> AssessmentTest:
+    """Convert a ``quiz.json`` document to an assessment test of single-choice items.
 
-    Questions a reviewer marked ``deleted`` or ``false_positive`` are left out; with
-    ``only_keep``, so is every question whose verdict is not ``keep``.
+    Items a reviewer marked ``rejected`` are left out; ``pending`` and ``accepted`` are kept.
+
+    Raises:
+        QtiExportError: Naming the field, if one the mapping uses is missing, has the wrong
+            type, is not a valid XML identifier or language, or holds a character XML does not
+            allow.
+
     """
-    if not isinstance(document, dict) or not isinstance(document.get("questions"), list):
+    if not isinstance(document, Mapping) or not isinstance(document.get("questions"), list):
         raise QtiExportError("expected an object with a 'questions' list")
-    config = document.get("config")
-    if config is not None and not isinstance(config, dict):
-        raise QtiExportError("'config' must be an object")
-    language = str((config or {}).get("language") or "en")
-    selected: list[AssessmentItem] = []
-    seen: set[str] = set()
+    identifier = _identifier(document.get("id"), "id")
+    language = document.get("language")
+    if not isinstance(language, str) or not _LANGUAGE.fullmatch(language):
+        raise QtiExportError(f"language: expected a language tag such as 'en', got {language!r}")
+    instructions = _object(document.get("instructions"), "instructions")
+    shuffle_options = _flag(instructions, "shuffle_options", "instructions")
+    instructions_text = instructions.get("text")
+    if instructions_text is not None:
+        instructions_text = _string(instructions_text, "instructions.text")
+
+    items: list[AssessmentItem] = []
+    seen = {identifier}
     for index, raw in enumerate(document["questions"]):
-        if not isinstance(raw, dict):
-            raise QtiExportError(f"questions[{index}]: expected an object")
-        review = raw.get("review")
-        status = review.get("status") if isinstance(review, dict) else None
-        if status in {"deleted", "false_positive"} or (only_keep and raw.get("verdict") != "keep"):
+        path = f"questions[{index}]"
+        item = _object(raw, path)
+        review = _object(item.get("review"), f"{path}.review")
+        if review.get("status") == "rejected":
             continue
-        item = _item_from_question(raw, language, index)
-        if item.identifier in seen:
-            raise QtiExportError(f"duplicate question identifier: {item.identifier}")
-        seen.add(item.identifier)
-        selected.append(item)
+        exported = _item(item, path, language, shuffle_options)
+        if exported.identifier in seen:
+            raise QtiExportError(f"{path}.id: {exported.identifier!r} is already in use")
+        seen.add(exported.identifier)
+        items.append(exported)
+
     return AssessmentTest(
-        identifier="questxtract-test",
-        title="QuestXtract questions",
-        items=tuple(selected),
+        identifier=identifier,
+        title=_string(document.get("title"), "title"),
+        items=tuple(items),
+        instructions=instructions_text,
+        shuffle_items=_flag(instructions, "shuffle_questions", "instructions"),
+        show_feedback=_flag(instructions, "show_feedback", "instructions"),
+        metadata={
+            key: document.get(key)
+            for key in ("id", "schema_version", "status", "description", "source", "generation")
+        },
     )
 
 
-# ponytail: #79, read choice items, points and feedback from quiz.json instead of questions.json
-def _item_from_question(raw: dict[str, Any], language: str, index: int) -> AssessmentItem:
-    """Build an extended-text item with no answer key from one question."""
-    question_id = raw.get("id")
-    if not isinstance(question_id, str) or not question_id:
-        raise QtiExportError(f"questions[{index}].id: expected a non-empty string")
-    identifier = f"qti-{question_id}"
-    if not _XML_ID.fullmatch(identifier):
-        raise QtiExportError(f"questions[{index}].id: invalid XML identifier {question_id!r}")
-    prompt = raw.get("text")
-    if not isinstance(prompt, str) or not prompt.strip():
-        raise QtiExportError(f"questions[{index}].text: expected a non-empty string")
-    _check_xml_text(prompt, f"questions[{index}].text")
-    review = raw.get("review")
-    if isinstance(review, dict) and isinstance(review.get("text"), str) and review["text"].strip():
-        prompt = review["text"]
-        _check_xml_text(prompt, f"questions[{index}].review.text")
-    answer = raw.get("answer")
-    if answer is not None and not isinstance(answer, dict):
-        raise QtiExportError(f"questions[{index}].answer: expected an object or null")
-    answer_text = answer.get("text") if answer else None
-    sentence_id = raw.get("sentence_id")
+def _item(
+    item: Mapping[str, Any], path: str, language: str, shuffle_options: bool
+) -> AssessmentItem:
+    """Build one single-choice item from a ``quiz.json`` item."""
+    identifier = _identifier(item.get("id"), f"{path}.id")
+    prompt, prompt_origin = _text(item.get("prompt"), f"{path}.prompt")
+    solution = _object(item.get("solution"), f"{path}.solution")
+    explanation, explanation_origin = _text(
+        solution.get("explanation"), f"{path}.solution.explanation"
+    )
+    explained = _object(solution.get("option_explanations"), f"{path}.solution.option_explanations")
+
+    raw_options = item.get("options")
+    if not isinstance(raw_options, list) or not raw_options:
+        raise QtiExportError(f"{path}.options: expected a non-empty list")
+    options: list[AssessmentOption] = []
+    origins: dict[str, dict[str, str]] = {"options": {}, "option_explanations": {}}
+    for index, raw_option in enumerate(raw_options):
+        option_path = f"{path}.options[{index}]"
+        option = _object(raw_option, option_path)
+        option_id = _identifier(option.get("id"), f"{option_path}.id")
+        text, text_origin = _text(option.get("text"), f"{option_path}.text")
+        feedback, feedback_origin = _text(
+            explained.get(option_id), f"{path}.solution.option_explanations.{option_id}"
+        )
+        if any(existing.identifier == option_id for existing in options):
+            raise QtiExportError(f"{option_path}.id: {option_id!r} repeats another option")
+        options.append(AssessmentOption(identifier=option_id, text=text, feedback=feedback))
+        origins["options"][option_id] = text_origin
+        origins["option_explanations"][option_id] = feedback_origin
+
+    correct = _object(item.get("correct_response"), f"{path}.correct_response")
+    option_ids = correct.get("option_ids")
+    if (
+        not isinstance(option_ids, list)
+        or len(option_ids) != 1
+        or option_ids[0] not in {option.identifier for option in options}
+    ):
+        raise QtiExportError(
+            f"{path}.correct_response.option_ids: expected the id of one option, got {option_ids!r}"
+        )
+
+    points = item.get("points")
+    if not _is_number(points) or points < 0:
+        raise QtiExportError(f"{path}.points: expected a number >= 0, got {points!r}")
+    provenance = _object(item.get("provenance"), f"{path}.provenance")
+    source_id = _string(
+        provenance.get("source_question_id"), f"{path}.provenance.source_question_id"
+    )
+    start, end = provenance.get("start"), provenance.get("end")
+    if not _is_number(start) or not _is_number(end):
+        raise QtiExportError(f"{path}.provenance: expected numbers for start and end")
+    review = _object(item.get("review"), f"{path}.review")
+
     return AssessmentItem(
         identifier=identifier,
-        title=f"Question {question_id}",
+        title=f"Question {source_id}",
         prompt=prompt,
         language=language,
-        linguistic_question_type=str(raw.get("question_type", "other")),
         response_declarations=(
-            ResponseDeclaration(identifier="RESPONSE", base_type="string", cardinality="single"),
+            ResponseDeclaration(
+                identifier="RESPONSE",
+                base_type="identifier",
+                cardinality="single",
+                correct_values=(option_ids[0],),
+            ),
         ),
         interaction=Interaction(
-            interaction_type="extendedTextInteraction", response_identifier="RESPONSE"
+            interaction_type="choiceInteraction",
+            response_identifier="RESPONSE",
+            max_choices=1,
+            shuffle=shuffle_options,
         ),
-        provenance=Provenance(
-            source_question_id=question_id,
-            source_sentence_id=sentence_id if isinstance(sentence_id, str) else None,
-            source_answer=answer_text if isinstance(answer_text, str) else None,
-        ),
-        metadata=(("confidence", str(raw.get("confidence", ""))),),
+        options=tuple(options),
+        explanation=explanation,
+        points=float(points),
+        provenance=Provenance(source_question_id=source_id, start=float(start), end=float(end)),
+        metadata={
+            "review_status": review.get("status"),
+            "origin": {
+                "prompt": prompt_origin,
+                "explanation": explanation_origin,
+                **origins,
+            },
+        },
     )
+
+
+def _object(value: object, path: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise QtiExportError(f"{path}: expected an object")
+    return value
+
+
+def _string(value: object, path: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise QtiExportError(f"{path}: expected a non-empty string")
+    _check_xml_text(value, path)
+    return value
+
+
+def _text(value: object, path: str) -> tuple[str, str]:
+    """Return the text and the origin of a ``{text, origin}`` object."""
+    text = _object(value, path)
+    origin = text.get("origin")
+    if origin not in {"spoken", "generated"}:
+        raise QtiExportError(f"{path}.origin: expected 'spoken' or 'generated', got {origin!r}")
+    return _string(text.get("text"), f"{path}.text"), origin
+
+
+def _identifier(value: object, path: str) -> str:
+    if not isinstance(value, str) or not _XML_ID.fullmatch(value):
+        raise QtiExportError(f"{path}: invalid XML identifier {value!r}")
+    return value
+
+
+def _flag(container: Mapping[str, Any], key: str, path: str) -> bool:
+    value = container.get(key)
+    if not isinstance(value, bool):
+        raise QtiExportError(f"{path}.{key}: expected true or false")
+    return value
+
+
+def _is_number(value: object) -> TypeGuard[float]:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _check_xml_text(text: str, field: str) -> None:
