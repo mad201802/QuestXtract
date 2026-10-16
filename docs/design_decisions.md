@@ -383,6 +383,28 @@ detection. `jsonschema` would add a runtime dependency for checks the writer's t
 *Cost:* a reader that skips `read_quiz` gets no structural check at runtime. Spoken options and
 explanations cannot be checked, because `quiz.json` holds no transcript.
 
+### D16: QTI 3.0 from quiz.json, validated against the official XSDs in the tests only
+
+*Chose:* `questxtract qti` reads `quiz.json` (D15), not `questions.json`, and writes QTI 3.0
+only (#67, architecture.md 12.4). The tests validate every package they write against the
+1EdTech XSDs, from a local copy that `scripts/fetch_qti_xsd.py` downloads once: the raw bytes of
+all 17 files the two schemas import, each pinned by SHA-256, mapped from their URLs with
+`xmlschema`'s `uri_mapper`. CI caches the copy and fails when it is missing.
+
+*Alternative:* text-entry items from `questions.json`; QTI 2.x beside 3.0; the XSDs committed to
+the repository; validation at runtime, always or behind a `--validate` flag; lxml, or
+`xmlschema`'s own export of the schemas.
+
+*Why:* `quiz.json` has what a scorable item needs (options, a correct answer, points,
+explanations), and only a separate generative command may write that text (requirement 4.5).
+The item XSD alone is 18 MB, about 1.5 MB compressed in every clone. lxml cannot follow the
+schemas' `https` imports, and `xmlschema`'s export corrupts `XInclude.xsd`, which is served in
+UTF-16. Validating in the tests proves the writer, whose output depends only on the quiz's
+fields, without a runtime dependency or a network call on every export.
+
+*Cost:* a first `ci-check.sh` needs the network once. A user's package is not validated when it
+is written, so the tests must cover every shape the writer can produce.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |

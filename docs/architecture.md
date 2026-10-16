@@ -18,7 +18,8 @@ In: a lecture video. Out: a JSON file of the questions that were actually asked,
 timestamp, a confidence, an answer span where the lecture contains one, and enough provenance to
 jump back to the exact seconds in the recording.
 
-The package's job stops at files: that JSON, and an LMS package made from it (section 12.4).
+The package's job stops at files: that JSON, a quiz made from it (section 12.3) and an LMS
+package of that quiz (section 12.4).
 Everything downstream - the editor, the quiz UI, the upload and the rest of the LMS glue - lives
 in a wrapper around it. That boundary is why the package may reach the network at all
 (section 10): the caller decides whether to configure an endpoint, not us.
@@ -1159,34 +1160,46 @@ validator is plain Python: `jsonschema` checks the schema in the tests only.
 
 ### 12.4 QTI 3.0 package
 
-`questxtract qti questions.json -o lecture.zip` turns a questions file into a 1EdTech QTI 3.0
-content package an LMS can import: `qti.py` builds the model, `qti_v3.py` writes the XML and the
-ZIP. Items come from quiz.json (planned, #79); until then `qti` reads questions.json and writes
-text-entry items.
+`questxtract qti quiz.json -o quiz.qti.zip` turns a quiz (section 12.3) into a 1EdTech QTI 3.0
+content package an LMS can import: `qti.py` maps the quiz to a model, `qti_v3.py` writes the XML
+and the ZIP. The file is read through `read_quiz`, which refuses another major version and the
+errors across fields; the structure is not checked at runtime, so `qti.py` checks every field it
+uses and names its path.
 
 ```text
-items/qti-<question id>.xml    one qti-assessment-item per question, in document order
+items/<item id>.xml            one qti-assessment-item per quiz item, in document order
 assessmentTest.xml             one linear test part and section referencing every item
 imsmanifest.xml                the content package manifest
-metadata/questxtract.json      provenance: question and sentence ids, answer, confidence
+metadata/questxtract.json      provenance, review status and the origin of every text
 ```
 
-- **Selection.** Every question except those whose `review.status` is `deleted` or
-  `false_positive`; `--only-keep` further keeps only `verdict == "keep"`. A non-empty
-  `review.text` replaces the spoken text.
+- **Selection.** Every item except those whose `review.status` is `rejected`.
+- **Items.** A `qti-choice-interaction` with `max-choices="1"` and one `qti-simple-choice` per
+  option. Identifiers are the quiz's item and option ids, which are already XML identifiers.
+  `RESPONSE` is a single identifier whose correct response is the correct option.
+- **Scoring.** `SCORE` (float, default `0.0`) and `MAXSCORE` (the item's points). With points
+  above zero, `SCORE` carries `normal-maximum` and `normal-minimum`. Explicit response
+  processing from the Core subset: a match against the correct response sets `SCORE` to
+  `MAXSCORE`, otherwise to `0.0`. The `match_correct` template is not used, because it always
+  scores 1.
+- **Feedback.** Response processing sets the `FEEDBACK` outcome to the chosen option. Each option
+  has a `qti-modal-feedback` with its own explanation, then the general one, both from
+  `solution`. No response, no feedback.
+- **Instructions.** `show_feedback` becomes `show-feedback` on the test part's
+  `qti-item-session-control`, `shuffle_options` the interaction's `shuffle`,
+  `shuffle_questions` a `qti-ordering shuffle="true"` in the section, and `text` a candidate
+  `qti-rubric-block`.
 - **XML.** Items and the test use the default namespace `imsqtiasi_v3p0` with an
-  `xsi:schemaLocation` to the 3.0 XSD, as every official example does, never prefixes. The
+  `xsi:schemaLocation` to the 3.0.1 XSD, as every official example does, never prefixes. The
   manifest uses the QTI 3.0 content-package namespace and `schemaversion` `3.0.0`, the only value
   the implementation guide and the 3.0.0 CP XSD allow. Every file but the manifest is a resource;
   the JSON sidecar is `type="extension"`.
-- **Scoring.** Every item declares `SCORE` (float, default `0.0`) and `MAXSCORE` (its points, or
-  `1.0`). With points above zero, `SCORE` carries `normal-maximum` and `normal-minimum`. An item
-  with an answer key gets explicit response processing from the Core subset: a match against the
-  correct response sets `SCORE` to `MAXSCORE`, otherwise to `0.0`. The `match_correct` template
-  is not used, because it always scores 1. An item without an answer key (every item today) has
-  `external-scored="human"` and no response processing.
-- **Feedback.** With feedback, a `FEEDBACK` identifier outcome is set to `correct` or `incorrect`
-  by the same condition, and `qti-modal-feedback` elements follow the response processing.
+- **Validation.** The tests validate every package they write against the official XSDs (items
+  and test against ASI 3.0.1, the manifest against the content-package XSD), then check what an
+  XSD cannot: the correct response and every feedback name an option, every `href` and
+  dependency resolves, identifiers are unique. `scripts/fetch_qti_xsd.py` downloads the 17
+  schema files once, pinned by SHA-256, into `.cache/qti-xsd/`, and the tests compile them from
+  there with network access off. The package itself does not depend on the XSDs.
 - **Determinism.** The same input gives the same bytes: entries are written in a fixed order with
   the date 1980-01-01, deflate, Unix permissions `0644` and no clock or platform data.
 
@@ -1215,6 +1228,8 @@ src/questxtract/
   score.py         9 score: confidence, threshold
   export.py        questions.json writer and reader, with questions.schema.json
   quiz_schema.py   quiz.json reader and validator, with quiz.schema.json
+  qti.py           QTI model and the quiz.json mapping
+  qti_v3.py        QTI 3.0 XML and the ZIP package
   filtering.py     time filter, experimental topic filter
   evaluate.py      labelled-set metrics
   schema.py        Question, a standalone shape the pipeline does not produce
@@ -1270,7 +1285,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `quiz_schema.py` | not a stage | done: the `quiz.json` reader and validator (12.3); the `quiz` command that writes the file is not built | #79 |
 | `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest | |
-| `qti.py`, `qti_v3.py` | not a stage | QTI 3.0 package; choice items from quiz.json not built | #79 |
+| `qti.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 package of a `quiz.json` (12.4) | |
 | `cli.py` | not a stage | `process`, `transcribe`, `eval` and `qti` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
