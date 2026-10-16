@@ -1,5 +1,7 @@
 # questxtract's own pipeline cache (config.cache_dir, pipeline.py's _cached())
 .questxtract/
+# QTI 3.0 XSDs downloaded by scripts/fetch_qti_xsd.py
+.cache/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -55,6 +55,8 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.13",
     "jsonschema>=4",
+    # Validates QTI packages against the 1EdTech XSDs (scripts/fetch_qti_xsd.py).
+    "xmlschema>=4",
     # The [llm] extra, so the LLM tests run locally as they do in CI (`--all-extras`).
     "openai>=1.0",
 ]
