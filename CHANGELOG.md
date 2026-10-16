@@ -23,6 +23,11 @@
   out with a warning and is counted in `stats.vision_failed`; when the first three fail, the rest
   are not sent. Needs the `llm` extra and an API key, or `base_url` for a local server, checked
   before transcription starts. (#59)
+- `questions.json`'s `stats` records what the model calls cost, per caller: `judge_*` with
+  `--detector llm`, `layout_*` and `vision_*` with vision on. Each has `_requests`,
+  `_input_tokens`, `_output_tokens` and `_ms`, all 0 when the answers came from the cache.
+  Multiply by your provider's prices for the cost of a lecture. Not a schema change: `stats`
+  takes any integer key. (#123)
 - `process` and `transcribe` accept `.mp3` recordings as well as `.mp4`. A recording without a
   video track, an MP3 or an audio-only MP4, is transcribed as usual and has no board to read.
   (#117)

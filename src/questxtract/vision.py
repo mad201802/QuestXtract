@@ -19,6 +19,7 @@ import hashlib
 import json
 import math
 import warnings
+from collections import Counter
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -173,10 +174,14 @@ def layout(ctx: Context) -> Context:
         ],
         "response_format": _LAYOUT_SCHEMA,
     }
+    usage: Counter[str] = Counter()
+    ctx.stats.update(dict.fromkeys(_cost_keys("layout"), 0))
     try:
-        answer = endpoint.ask(ctx.config, request, name="layout")
+        answer = endpoint.ask(ctx.config, request, name="layout", usage=usage)
     except (ConnectionError, endpoint.InvalidAnswer) as exc:
         return _fallback(ctx, str(exc))
+    finally:
+        ctx.stats.update(usage)
     found = _layout_from(answer)
     if found is None:
         return _fallback(ctx, f"{ctx.config.vision_model} answered with a malformed layout")
@@ -268,11 +273,12 @@ def vision(ctx: Context) -> Context:
     views = _cut(ctx)
     visual: list[VisualContext] = []
     failed = 0
+    usage: Counter[str] = Counter()  # what the readings cost (#123)
     for index, view in enumerate(views):
         if report:
             report("vision", 0.5 + 0.5 * index / len(views))
         speech = _speech(ctx.sentences, view.start, view.end)
-        fields = _caption(config, view.keyframe, speech, kind=ctx.layout.kind)
+        fields = _caption(config, view.keyframe, speech, kind=ctx.layout.kind, usage=usage)
         if fields is None:
             failed += 1
             if not visual and failed >= _GIVE_UP_AFTER:
@@ -288,7 +294,13 @@ def vision(ctx: Context) -> Context:
         visual.append(VisualContext(start=view.start, end=view.end, keyframe_path=path, **fields))
     ctx.visual = tuple(visual)
     ctx.stats["vision_failed"] = len(views) - len(visual)
+    ctx.stats.update({**dict.fromkeys(_cost_keys("vision"), 0), **usage})
     return ctx
+
+
+def _cost_keys(name: str) -> tuple[str, ...]:
+    """Return the ``stats`` keys :func:`endpoint.ask` counts for ``name``, even when 0."""
+    return tuple(f"{name}_{key}" for key in ("requests", "input_tokens", "output_tokens", "ms"))
 
 
 def _cut(ctx: Context) -> list[_View]:
@@ -665,12 +677,18 @@ def _length(view: _View) -> float:
 
 
 def _caption(
-    config: Config, png: bytes, speech: str, *, kind: str = "unknown"
+    config: Config,
+    png: bytes,
+    speech: str,
+    *,
+    kind: str = "unknown",
+    usage: Counter[str] | None = None,
 ) -> dict[str, Any] | None:
     """Read one keyframe with the vision model (architecture.md 6.5).
 
     ``png`` is the keyframe as :class:`_View` holds it; ``speech`` is what was said while its
-    view was on screen; ``kind`` is what the layout probe says the frame shows. Returns the
+    view was on screen; ``kind`` is what the layout probe says the frame shows; ``usage``
+    collects what the call cost (:func:`endpoint.ask`). Returns the
     :class:`VisualContext` fields the model reads, or ``None`` with a warning when the call
     fails or a field is malformed: a board description only enriches questions the pipeline
     already found, so unlike the judge, vision never ends the run. Cached on the request,
@@ -696,7 +714,7 @@ def _caption(
         "response_format": _SCHEMA,
     }
     try:
-        answer = endpoint.ask(config, request, name="vision", valid=_readable)
+        answer = endpoint.ask(config, request, name="vision", valid=_readable, usage=usage)
     except (ConnectionError, endpoint.InvalidAnswer) as exc:
         warnings.warn(f"vision: keyframe left out: {exc}", UserWarning, stacklevel=2)
         return None

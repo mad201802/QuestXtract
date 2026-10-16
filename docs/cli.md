@@ -265,6 +265,12 @@ questxtract eval tests/data/ --detector llm --llm-url http://localhost:11434/v1 
 Another `-t` or a second `eval` makes no calls; a different model, endpoint, transcript or
 prompt asks again (a new questxtract version may change the prompt). `--from-scratch` ignores the cache.
 
+**What it cost.** The `stats` block of `questions.json` counts the model calls of the run:
+`judge_requests`, `judge_input_tokens`, `judge_output_tokens` and `judge_ms`, and the same with
+`layout_` and `vision_` when vision is on. Tokens are what the endpoint reports (0 from a server
+that reports none); a run answered from the cache shows 0. Multiply by your provider's prices
+for the cost of a lecture.
+
 **When the endpoint fails.** You asked for the model, so there is no quiet fallback to the rules:
 the run stops with one `error:` line (see [When something goes wrong](#when-something-goes-wrong)).
 Parts already answered stay cached, so running the same command again picks up where it stopped.
