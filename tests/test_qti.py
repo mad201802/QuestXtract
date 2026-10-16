@@ -88,6 +88,7 @@ def test_rejected_items_are_left_out(make_quiz: MakeQuiz) -> None:
     quiz["questions"][1]["review"]["status"] = "accepted"
     quiz["questions"][2]["review"]["status"] = "rejected"
     quiz["questions"][2]["prompt"] = None  # a rejected item is not read further
+    quiz["questions"][2]["interaction_type"] = "choice_multiple"
     assert _ids(quiz) == ["quiz_q_pending", "quiz_q_accepted"]
 
 
@@ -145,12 +146,24 @@ def test_zero_points_are_allowed(make_quiz: MakeQuiz) -> None:
             r"^questions\[0\]\.correct_response\.option_ids: expected the id of one option",
         ),
         (
+            lambda q: q["questions"][0].update(interaction_type="choice_multiple"),
+            r"^questions\[0\]\.interaction_type: 'choice_multiple' is not supported",
+        ),
+        (
             lambda q: q["questions"][0].update(points=True),
-            r"^questions\[0\]\.points: expected a number >= 0",
+            r"^questions\[0\]\.points: expected a finite number >= 0",
+        ),
+        (
+            lambda q: q["questions"][0].update(points=float("nan")),
+            r"^questions\[0\]\.points: expected a finite number >= 0, got nan",
         ),
         (
             lambda q: q["questions"][0]["provenance"].update(end=None),
-            r"^questions\[0\]\.provenance: expected numbers",
+            r"^questions\[0\]\.provenance: expected finite numbers",
+        ),
+        (
+            lambda q: q["questions"][0]["provenance"].update(start=float("-inf")),
+            r"^questions\[0\]\.provenance: expected finite numbers",
         ),
     ],
 )

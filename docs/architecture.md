@@ -1176,7 +1176,9 @@ metadata/questxtract.json      provenance, review status and the origin of every
 - **Selection.** Every item except those whose `review.status` is `rejected`.
 - **Items.** A `qti-choice-interaction` with `max-choices="1"` and one `qti-simple-choice` per
   option. Identifiers are the quiz's item and option ids, which are already XML identifiers.
-  `RESPONSE` is a single identifier whose correct response is the correct option.
+  `RESPONSE` is a single identifier whose correct response is the correct option. Any other
+  `interaction_type`, which a newer 1.x quiz may add, fails with its path instead of being
+  exported as single choice; so do `NaN` and infinite numbers, which `json.loads` accepts.
 - **Scoring.** `SCORE` (float, default `0.0`) and `MAXSCORE` (the item's points). With points
   above zero, `SCORE` carries `normal-maximum` and `normal-minimum`. Explicit response
   processing from the Core subset: a match against the correct response sets `SCORE` to

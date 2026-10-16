@@ -19,13 +19,18 @@ from xml.etree import ElementTree
 
 import pytest
 import xmlschema
+from jsonschema import Draft202012Validator
 from scripts.fetch_qti_xsd import ASI_XSD, CP_XSD, missing, uri_mapper, xsd_dir
 
+from questxtract.cli import main
+from questxtract.export import read_questions
 from questxtract.qti import QtiExportError
 from questxtract.qti_v3 import CP_NS, QTI_NS, export_qti
+from questxtract.quiz_schema import QUIZ_SCHEMA_PATH, read_quiz
 
 _Q = f"{{{QTI_NS}}}"
 _CP = f"{{{CP_NS}}}"
+_DATA = Path(__file__).parent / "data"
 
 MakeQuiz = Callable[..., dict[str, Any]]
 Schemas = tuple[xmlschema.XMLSchema, xmlschema.XMLSchema]
@@ -133,6 +138,47 @@ def test_every_instruction_still_gives_a_conformant_package(
     }
     quiz["questions"][0]["points"] = 0
     _assert_conformant(_export(tmp_path, quiz), schemas)
+
+
+def test_a_quiz_on_a_real_export_gives_a_conformant_package(
+    tmp_path: Path, make_quiz: MakeQuiz, schemas: Schemas
+) -> None:
+    """process on a committed transcript, a quiz on its questions, then qti, all through the CLI.
+
+    The quiz is what the quiz command (#79) is meant to write: one item per question, the stem
+    spoken as it was said, the question's own times. It passes the schema and read_quiz with
+    the questions file, so the rules on source questions and spoken stems run too.
+    """
+    transcript = _DATA / "ttk4225_2026_09_14.transcript.json"
+    assert main(["process", str(transcript), "-o", "lecture.questions.json"]) == 0
+    questions = read_questions(tmp_path / "lecture.questions.json")
+    asked = questions["questions"]
+    assert len(asked) > 10
+
+    quiz = make_quiz(*[question["id"] for question in asked])
+    for item, question in zip(quiz["questions"], asked, strict=True):
+        item["prompt"]["text"] = question["original_text"] or question["text"]
+        item["provenance"].update(start=question["start"], end=question["end"])
+    quiz["questions"][1]["review"]["status"] = "rejected"
+    Draft202012Validator(json.loads(QUIZ_SCHEMA_PATH.read_text(encoding="utf-8"))).validate(quiz)
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(quiz), encoding="utf-8")
+    read_quiz(tmp_path / "lecture.quiz.json", questions)
+
+    assert main(["qti", "lecture.quiz.json", "-o", "lecture.zip"]) == 0
+
+    with zipfile.ZipFile(tmp_path / "lecture.zip") as package:
+        contents = {name: package.read(name) for name in package.namelist()}
+    _assert_conformant(contents, schemas)
+    kept = [question for index, question in enumerate(asked) if index != 1]
+    assert [name for name in contents if name.startswith("items/")] == [
+        f"items/quiz_{question['id']}.xml" for question in kept
+    ]
+    metadata = json.loads(contents["metadata/questxtract.json"])
+    for question in kept:
+        item = metadata["items"][f"quiz_{question['id']}"]
+        assert (item["start"], item["end"]) == (question["start"], question["end"])
+        prompt = _item(contents, f"quiz_{question['id']}").findtext(f".//{_Q}qti-prompt")
+        assert prompt == (question["original_text"] or question["text"])
 
 
 def test_the_validator_rejects_a_broken_item(
@@ -350,4 +396,26 @@ def test_an_unreadable_or_invalid_quiz_fails_readably(tmp_path: Path, make_quiz:
     quiz["questions"][0]["correct_response"]["option_ids"] = ["d"]
     with pytest.raises(QtiExportError, match=r"quiz\.json: questions\[0\]\.correct_response"):
         _export(tmp_path, quiz)
+    assert not (tmp_path / "out.zip").exists()
+
+
+def test_a_newer_quiz_with_an_unsupported_item_fails_naming_it(
+    tmp_path: Path, make_quiz: MakeQuiz
+) -> None:
+    quiz = make_quiz("q_aaa", "q_bbb", schema_version="1.1")
+    quiz["questions"][1]["interaction_type"] = "choice_multiple"
+    with pytest.raises(QtiExportError, match=r"questions\[1\]\.interaction_type"):
+        _export(tmp_path, quiz)
+    assert not (tmp_path / "out.zip").exists()
+
+
+def test_nan_and_infinity_in_the_file_fail_instead_of_reaching_the_xml(
+    tmp_path: Path, make_quiz: MakeQuiz
+) -> None:
+    source = tmp_path / "quiz.json"
+    for literal in ("NaN", "Infinity"):
+        text = json.dumps(make_quiz("q_aaa")).replace('"points": 2', f'"points": {literal}')
+        source.write_text(text, encoding="utf-8")
+        with pytest.raises(QtiExportError, match=r"questions\[0\]\.points: expected a finite"):
+            export_qti(source, tmp_path / "out.zip")
     assert not (tmp_path / "out.zip").exists()

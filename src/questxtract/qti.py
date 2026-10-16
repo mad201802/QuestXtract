@@ -10,6 +10,7 @@ the tests only), so every field the mapping uses is checked here and reported wi
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -147,7 +148,9 @@ def quiz_to_qti(document: Mapping[str, Any]) -> AssessmentTest:
     Raises:
         QtiExportError: Naming the field, if one the mapping uses is missing, has the wrong
             type, is not a valid XML identifier or language, or holds a character XML does not
-            allow.
+            allow, or if an item's ``interaction_type`` is not ``choice_single``. A newer 1.x
+            ``quiz.json`` may add interaction types; they fail here instead of being exported
+            as single choice.
 
     """
     if not isinstance(document, Mapping) or not isinstance(document.get("questions"), list):
@@ -194,6 +197,12 @@ def _item(
     item: Mapping[str, Any], path: str, language: str, shuffle_options: bool
 ) -> AssessmentItem:
     """Build one single-choice item from a ``quiz.json`` item."""
+    interaction_type = item.get("interaction_type")
+    if interaction_type != "choice_single":
+        raise QtiExportError(
+            f"{path}.interaction_type: {interaction_type!r} is not supported; "
+            "the QTI export handles 'choice_single' only"
+        )
     identifier = _identifier(item.get("id"), f"{path}.id")
     prompt, prompt_origin = _text(item.get("prompt"), f"{path}.prompt")
     solution = _object(item.get("solution"), f"{path}.solution")
@@ -234,14 +243,14 @@ def _item(
 
     points = item.get("points")
     if not _is_number(points) or points < 0:
-        raise QtiExportError(f"{path}.points: expected a number >= 0, got {points!r}")
+        raise QtiExportError(f"{path}.points: expected a finite number >= 0, got {points!r}")
     provenance = _object(item.get("provenance"), f"{path}.provenance")
     source_id = _string(
         provenance.get("source_question_id"), f"{path}.provenance.source_question_id"
     )
     start, end = provenance.get("start"), provenance.get("end")
     if not _is_number(start) or not _is_number(end):
-        raise QtiExportError(f"{path}.provenance: expected numbers for start and end")
+        raise QtiExportError(f"{path}.provenance: expected finite numbers for start and end")
     review = _object(item.get("review"), f"{path}.review")
 
     return AssessmentItem(
@@ -314,7 +323,11 @@ def _flag(container: Mapping[str, Any], key: str, path: str) -> bool:
 
 
 def _is_number(value: object) -> TypeGuard[float]:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
+    """Whether ``value`` is an int or float that XML can carry: not a bool, NaN or infinity.
+
+    ``json.loads`` reads ``NaN`` and ``Infinity``; written as ``nan`` they are no ``xs:double``.
+    """
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def _check_xml_text(text: str, field: str) -> None:
