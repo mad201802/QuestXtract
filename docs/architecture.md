@@ -46,7 +46,7 @@ all are what we develop and measure against.
 Three consequences that show up repeatedly below:
 
 - **There is no single video layout.** Merged single-camera, separate speaker plus screenshare,
-  blackboard-only, digital tablet notes, picture-in-picture. Section 6 plans a VLM layout probe
+  blackboard-only, digital tablet notes, picture-in-picture. Section 6 uses a VLM layout probe
   rather than a classifier.
 - **The TTK4225 instructor uses a habitual confirmation tag** ("...right?", "...true?") several
   times a minute; `docs/annotation_guidelines.md` section 2 says how it is labelled.
@@ -87,8 +87,8 @@ Every other stage is pure Python plus one local model. Stages 5 and 8 are the on
 an LLM endpoint, and both are off unless asked for. Expensive stages are cached and report
 progress (section 11).
 
-The `STAGES` list in `pipeline.py` is this sequence, rows 1 to 9, with vision split into `vision`
-and `attach_visual` (11.1). Row 10 is not a stage: export runs on the finished `Context`.
+The `STAGES` list in `pipeline.py` is this sequence, rows 1 to 9, with vision split into `layout`,
+`vision` and `attach_visual` (11.1). Row 10 is not a stage: export runs on the finished `Context`.
 
 ### 1.4 The rule path and the judge
 
@@ -399,6 +399,7 @@ the code.
 | `Transcript` | the words, the ASR chunks, `language`, `duration`; `from_dict`, `from_file`, `to_dict` |
 | `Sentence` | a half-open word range with its text and timings; `id` is a content hash, so it survives a re-transcription |
 | `Segment` | a run of sentences (3.2), its `close_reason`, and the board states that overlap it |
+| `Layout` | where the content is in the frame (`content_region`) and its `kind`, one per recording (6.2) |
 | `VisualContext` | one board state on its own clock: keyframe, description, text, `latex` (section 6) |
 | `QuestionCandidate` | a detected question: sentence id, text, score, `question_type`, `reasons` |
 | `QAPair` | a candidate with its answer span, confidence, timestamps and `verdict` |
@@ -424,9 +425,10 @@ segment at capture time would bake in a wrong join, and would make vision uncach
 ## 6. Vision
 
 Optional enrichment of the audio with what is on the board or the slides, off unless
-`vision_enabled`. One `vision` stage samples the recording (6.3), cuts it into stable views with
-one keyframe each (6.4) and has a VLM read each keyframe (6.5). The layout probe (6.2),
-de-occlusion (6.3) and the ink curve (6.4) are not built.
+`vision_enabled`. The `layout` stage asks a VLM once where the content is and what kind it is
+(6.2). The `vision` stage samples the recording inside that region (6.3), cuts it into stable views
+with one keyframe each (6.4) and has a VLM read each keyframe (6.5). De-occlusion (6.3) and the
+ink curve (6.4) are not built.
 
 ### 6.1 The regime problem, and why not OCR
 
@@ -451,22 +453,46 @@ Prompt v0 and its output schema, matching `VisualContext`, are in
 [`tests/data/vision/`](../tests/data/vision/README.md); the comparison, its caveats (a few frames,
 one run per model) and the raw answers are on #52 and in `tests/data/vision/results/`.
 
-### 6.2 Layout probe (planned, #57)
+### 6.2 Layout probe
 
 Recordings mix layouts (single camera, speaker plus screenshare, blackboard only,
-picture-in-picture), and a layout classifier would be a permanent bug farm. Instead: three frames
-from across the recording, one VLM call, answer cached by source hash:
+picture-in-picture), and a layout classifier would be a permanent bug farm. Instead, the `layout`
+stage sends three frames, taken at 20, 50 and 80 % of the recording and scaled to at most 640
+pixels wide, to `vision_model` in one request, under a strict JSON schema:
 
 ```json
 {"content_region": [0.32, 0.05, 0.66, 0.80], "kind": "blackboard"}
 ```
 
-On any failure: the full frame, `kind: "unknown"`.
+`content_region` is `[x0, y0, x1, y1]` in fractions of the frame from its top-left corner. `kind`
+is `slides`, `blackboard`, `whiteboard`, `handwriting` (tablet or paper), `screencast` or `unknown`.
+The answer becomes `Context.layout`: `vision` crops every sampled frame to the region, so the
+change detection never sees the speaker's camera and the keyframe holds only the content, and puts
+the kind into the captioning prompt (6.5).
+
+VLMs are loose at box regression: GPT-4o and Claude fall well behind detection models on COCO
+boxes ([arXiv 2507.01955](https://arxiv.org/abs/2507.01955)). A lecture only needs a coarse box,
+so the code guards it rather than trusting it: the box is padded by 0.02 on each side within the
+frame, and a box under a tenth of the frame keeps its kind but not its crop.
+
+**Never required.** An endpoint error, a stall or invalid JSON twice, or a malformed answer (a
+region that is not four fractions with `x0 < x1` and `y0 < y1`, a kind outside the list) leaves the
+full frame and `unknown` with a warning, and the run goes on. A setting that cannot be used, such
+as an unreadable `.env`, stops the run, as it does for captioning.
+
+**Cached per request, not per stage.** The request, frames included, is cached like a caption
+(10.4), and only a valid answer is, so a probe that failed is asked again next run while a probe
+that worked costs nothing. The three frames are decoded again each run, a few seeks.
+
+**Known limitations.** One answer holds for the whole recording: a layout that changes
+mid-lecture (the camera switches to a screenshare) keeps the first answer. `vision.json` is keyed on
+the config (11.2), not on the layout, so board states captured with the full-frame fallback are
+reused until `--from-scratch` or a vision setting changes.
 
 ### 6.3 Frame sampling and de-occlusion
 
-Sample at `vision_fps` (1) through PyAV, grayscale, downscale to about 480p; the crop to
-`content_region` waits for the layout probe. Not built yet (#127): where the camera is **static**, a per-pixel temporal median over a window of frames removes
+Sample at `vision_fps` (1) through PyAV, crop to the layout probe's `content_region` (6.2),
+grayscale, downscale to about 480p. Not built yet (#127): where the camera is **static**, a per-pixel temporal median over a window of frames removes
 the lecturer standing in front of the board
 (`np.median(np.stack(window_frames), axis=0)`). Where it **pans** (MIT 18.100B), the median is
 meaningless, so a motion check (median absolute frame difference) switches to picking the
@@ -496,16 +522,18 @@ ink delta.
 
 ### 6.5 Captioning
 
-One VLM call per view, sent as prompt v0 was measured on #52: the prompt (`VISION_PROMPT_VERSION`),
-filled in with the frame kind (`unknown` until 6.2) and what was said while the view was on screen
-(up to 1500 characters), as the system message, and the keyframe alone, as a PNG data URL, as the
-user message. The previous state's description and the ink difference are to join it (planned,
-#137). Out, under a strict JSON schema and checked again in code: `description`, `text`, `latex`
-(or null) and `confidence`. The prompt asks for what is visible only, with `[unreadable]` for a
-word it cannot read. Cached per request, the image included (10.4), so no keyframe is sent twice.
-`latex` is there because prose does not compile, and the M4 animations need formulas.
+One VLM call per view, sent as prompt v0 was measured on #52: the prompt
+(`VISION_PROMPT_VERSION`), filled in with the layout probe's `kind` (6.2) and what was said
+while the view was on screen (up to 1500 characters), as the system message, and the keyframe
+alone, as a PNG data URL, as the user message. In M3 the previous state's description and the ink
+difference join it. Out, under a strict JSON schema and checked again in code: `description`,
+`text`, `latex` (or null) and `confidence`. The prompt asks for what is visible only, with
+`[unreadable]` for a word it cannot read. Cached per request, the image included (10.4), so no
+keyframe is sent twice. `latex` is there because prose does not compile, and the M4 animations
+need formulas.
 
-Each keyframe is written to the cache as `<source_hash>/keyframes/<content hash>.png`, and `keyframe_path` holds that path relative to `cache_dir`: a cached result stays
+Each keyframe that was read is written to the cache as `<source_hash>/keyframes/<content
+hash>.png`, and `keyframe_path` holds that path relative to `cache_dir`: a cached result stays
 valid from another working directory, and the board-state id does not depend on where the cache
 lives. Frame times count from the start of the audio stream, the transcript's zero, so a file
 whose streams do not start at zero keeps its board states beside the right speech; of what was on
@@ -732,8 +760,8 @@ near duplicates stay in the output. The LLM detector labels a fragment echo `pro
 ## 10. The LLM layer
 
 One client, two jobs, each off unless asked for: the LLM detector (stage 8, `--detector llm`),
-which decides which candidate sentences are real questions, and the vision captioning of section
-6. Each stage keeps its own prompt, schema and output checks. What both send goes through
+which decides which candidate sentences are real questions, and the vision of section 6 (the
+layout probe and captioning). Each stage keeps its own prompt, schema and output checks. What both send goes through
 `endpoint.py`, which is not a stage, so neither stage imports the other (11.1, rule 1): it builds
 the client and sends a request with a deadline on the whole call, one resend after a stall or
 invalid JSON, the per-request cache of 10.4, and the key hidden in every error. The pipeline
@@ -865,7 +893,7 @@ endpoint, the model, the prompt, the schema and the transcript lines. Any change
 would see asks again, and nothing else does: another `-t` or an `eval` re-run costs zero calls,
 and a `.json` transcript input, which has no source hash, is cached too. A vision request (6.5) is
 cached the same way under `.questxtract/vision/`, keyed on the keyframe image instead of transcript
-lines. Only a valid JSON answer is cached; a failed request is asked again on the next run. A cache entry that cannot be read
+lines, and a layout probe (6.2) under `.questxtract/layout/`, keyed on its three frames. Only a valid JSON answer is cached; a failed request is asked again on the next run. A cache entry that cannot be read
 is asked again, and a cache that cannot be written costs only the saving: the answer is returned.
 
 > **Decision.** `questxtract/llm.py` (the judge), `questxtract/endpoint.py` (client and requests,
@@ -914,8 +942,8 @@ with a `None`. `tests/test_pipeline.py` checks that `STAGES` matches 1.3.
 2. **Stages read config only through `ctx.config`.** No module constants that are really
    settings, no environment reads outside `config.py`. A stage whose behaviour is not a function
    of `(ctx.config, ctx)` is not cacheable and not testable.
-3. **Optional stages no-op themselves.** `vision` and `judge` return `ctx` unchanged when disabled;
-   the runner stays dumb.
+3. **Optional stages no-op themselves.** `layout`, `vision` and `judge` return `ctx` unchanged
+   when disabled; the runner stays dumb.
 4. **A cached stage produces exactly one `Context` field** of JSON-serialisable dataclasses. This
    is why `vision` (expensive, cached) and `attach_visual` (an interval join, always recomputed)
    are two stages.
@@ -944,6 +972,7 @@ explicitly; constructing `Config()` alone does not read TOML.
   <source_hash>/transcribe.json   the transcript
   <source_hash>/views.json        the stable views of the recording (6.4)
   <source_hash>/keyframes/        their keyframe images, named by content hash
+  layout/<request hash>.json      one per layout probe request (6.2, 10.4)
   vision/<request hash>.json      one per keyframe request (10.4)
   judge/<request hash>.json       one per LLM detector request (10.4)
 ```
@@ -959,7 +988,8 @@ sharing one bucket, which would replay one recording's results into another's.
 
 **The LLM detector is the exception to the `uses` rule.** Its input is the transcript, which a
 config-only header cannot key, so it declares no `cache=` and caches each request itself, keyed on
-the request (10.4). `--from-scratch` bypasses it too.
+the request (10.4). `--from-scratch` bypasses it too. The layout probe does the same (6.2), so a
+failed probe is not stored and is asked again.
 
 **Vision is the second exception.** Each reading depends on the transcript (the speech is in the
 prompt) and may fail, and a stage-level entry would replay both a stale reading and a failed
@@ -1055,7 +1085,7 @@ empty, `verdict` is `unjudged` and the judge and vision settings are `null`:
 **Shared things are listed once and referenced by id.** `segments` and `visuals` (board states,
 6.4) are top-level lists; a question points into them with `segment_id` and `visual_ids`, so a
 board state that ten questions discuss is written once. The vision milestones grow into this
-shape without a breaking change: M3's board timeline is `visuals` in time order, M4's animations
+shape without a breaking change: M3's board timeline is `visuals` in time order, its animations
 one more top-level list pointing at visual ids.
 
 - `visual_ids` holds the board states on screen while the question was asked, falling back to
@@ -1142,7 +1172,8 @@ src/questxtract/
   transcribe.py    2 transcribe, through the AsrBackend registry in asr.py
   sentences.py     3 sentences: word walk, abbreviation guard, force-split
   segments.py      4 segments: structural segmentation
-  vision.py        5 vision: sampling, views, captioning; attach_visual, the interval join
+  vision.py        5 layout, the probe; vision: sampling, views, captioning; attach_visual,
+                   the interval join
   detect.py        6 detect: extraction, vetoes, scoring, cue tables
   answer.py        7 answer: adjacent seed
   llm.py           8 judge: the LLM detector
@@ -1195,7 +1226,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not built | #62 |
 | `sentences.py` | 3 sentences | done | |
 | `segments.py` | 4 segments | done | |
-| `vision.py` | 5 vision, attach_visual | done: frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5) and the interval join; the layout probe, de-occlusion and the ink curve are not built | #57, #127, #133 |
+| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5) and the interval join; de-occlusion and the ink curve are not built | #127 |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery are not built | #48, #78 |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |

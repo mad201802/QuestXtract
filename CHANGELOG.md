@@ -4,6 +4,12 @@
 
 ### Added
 
+- Vision finds the slides or board first: three frames from across the recording go to
+  `vision_model` in one request, which answers where the content is and what kind it is
+  (`slides`, `blackboard`, `whiteboard`, `handwriting`, `screencast` or `unknown`). Frames are
+  cropped to that region, so the lecturer's camera or a screenshare frame no longer starts new
+  board states, and the kind goes into the captioning prompt. One answer holds for the whole
+  recording. When the probe fails, vision reads the full frame as before, with a warning. (#57)
 - `process --vision` / `--no-vision` and `--vision-model` switch reading the board on or off and
   pick its model for one run, over `questxtract.toml`; `--llm-url` now also serves vision. With
   vision on, a recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript gets a
