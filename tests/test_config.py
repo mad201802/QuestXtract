@@ -164,3 +164,15 @@ def test_bad_dotenv_values_are_reported_without_exposure(tmp_path, monkeypatch, 
         _ = Config().api_key
     assert ".env: line 1:" in str(error.value)
     assert "do-not-echo" not in str(error.value)
+
+
+def test_tests_see_neither_the_developers_key_nor_their_checkout():
+    # conftest's autouse fixture: a README-style .env or a questxtract.toml in the checkout,
+    # or OPENAI_API_KEY in the shell, must not change any test's result (issue #112).
+    import os
+
+    assert "OPENAI_API_KEY" not in os.environ
+    assert Path.cwd().resolve() != Path(__file__).resolve().parents[1]
+    assert list(Path.cwd().iterdir()) == []
+    assert Config().api_key is None
+    assert load_config() == Config()

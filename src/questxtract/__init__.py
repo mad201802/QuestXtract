@@ -14,6 +14,7 @@ from .media import MediaError, extract_audio
 from .models import (
     AsrSegment,
     Context,
+    Layout,
     QAPair,
     QuestionCandidate,
     SchemaError,
@@ -24,6 +25,7 @@ from .models import (
     Word,
 )
 from .pipeline import STAGES, process, run, stage
+from .quiz_schema import read_quiz, validate_quiz
 from .qti import QtiExportError
 from .qti_v3 import export_qti
 from .schema import Question
@@ -39,6 +41,7 @@ __all__ = [
     "AsrSegment",
     "Config",
     "Context",
+    "Layout",
     "MediaError",
     "QAPair",
     "QtiExportError",
@@ -57,10 +60,12 @@ __all__ = [
     "filter_questions",
     "process",
     "read_questions",
+    "read_quiz",
     "register_backend",
     "resolve_backend",
     "result_to_json",
     "run",
     "stage",
+    "validate_quiz",
     "write_questions",
 ]

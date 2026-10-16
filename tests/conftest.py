@@ -10,28 +10,42 @@ import pytest
 from questxtract import Config, Context, Sentence, Transcript, Word, endpoint
 
 
-def _make_mp4(path: Path, *, audio: bool = True) -> Path:
-    """Write a tiny real MP4: a tenth of a second of silence, or a single video frame."""
+@pytest.fixture(autouse=True)
+def _isolated_from_the_developer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Keep the developer's OPENAI_API_KEY, .env and questxtract.toml out of every test.
+
+    Each test runs in its own empty ``tmp_path`` with no key in the environment, so the
+    cwd-relative reads (``.env``, ``questxtract.toml``, the ``.questxtract`` cache) see
+    nothing of the checkout. Build paths to test files from ``__file__``, never the cwd.
+    """
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+
+def _make_mp4(path: Path, *, audio: bool = True, video: bool = False) -> Path:
+    """Write a tiny real MP4: a tenth of a second of silence, a single video frame, or both.
+
+    ``audio=False`` gives the frame only; ``video=True`` adds the frame to the silence.
+    """
     with av.open(str(path), mode="w", format="mp4") as container:
-        if audio:
-            stream = container.add_stream("aac", rate=8000)
-            stream.layout = "mono"
-            frame = av.AudioFrame(format="s16", layout="mono", samples=800)
-            frame.sample_rate = 8000
-            frame.planes[0].update(b"\0" * frame.planes[0].buffer_size)
-            for packet in stream.encode(frame):
+        # Every stream is declared and configured before the first packet writes the header.
+        sound = container.add_stream("aac", rate=8000) if audio else None
+        picture = container.add_stream("mpeg4", rate=1) if video or not audio else None
+        if sound is not None:
+            sound.layout = "mono"
+        if picture is not None:
+            picture.width = 16
+            picture.height = 16
+            picture.pix_fmt = "yuv420p"
+        if sound is not None:
+            samples = av.AudioFrame(format="s16", layout="mono", samples=800)
+            samples.sample_rate = 8000
+            samples.planes[0].update(b"\0" * samples.planes[0].buffer_size)
+            for packet in [*sound.encode(samples), *sound.encode()]:
                 container.mux(packet)
-            for packet in stream.encode():
-                container.mux(packet)
-        else:
-            stream = container.add_stream("mpeg4", rate=1)
-            stream.width = 16
-            stream.height = 16
-            stream.pix_fmt = "yuv420p"
+        if picture is not None:
             frame = av.VideoFrame(16, 16, "yuv420p")
-            for packet in stream.encode(frame):
-                container.mux(packet)
-            for packet in stream.encode():
+            for packet in [*picture.encode(frame), *picture.encode()]:
                 container.mux(packet)
     return path
 

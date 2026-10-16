@@ -4,11 +4,31 @@
 
 ### Added
 
-- `questxtract qti questions.json -o lecture.zip` (and `export_qti()`) writes a QTI 3.0 package an
-  LMS can import: one text-entry item per question, scored by a person, in the reviewer's wording
-  where there is one. Every question is exported except those a reviewer marked `deleted` or
-  `false_positive`; `--only-keep` exports only verdict `keep`. The same input gives the same ZIP,
-  byte for byte. (#67)
+- Vision finds the slides or board first: three frames from across the recording go to
+  `vision_model` in one request, which answers where the content is and what kind it is
+  (`slides`, `blackboard`, `whiteboard`, `handwriting`, `screencast` or `unknown`). Frames are
+  cropped to that region, so the lecturer's camera or a screenshare frame no longer starts new
+  board states, and the kind goes into the captioning prompt. One answer holds for the whole
+  recording. When the probe fails, vision reads the full frame as before, with a warning. (#57)
+- `process --vision` / `--no-vision` and `--vision-model` switch reading the board on or off and
+  pick its model for one run, over `questxtract.toml`; `--llm-url` now also serves vision. With
+  vision on, a recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript gets a
+  note that the board is not read, and runs without vision. (#61)
+- `quiz.json` schema 1.0 (`quiz.schema.json`, shipped in the package), the format the coming
+  `quiz` command writes and the QTI and Exerplaza exporters read: single-choice items with at
+  least three options, every text marked `spoken` or `generated`, a solution with one explanation
+  per option, the source question's id and times, and a teacher `review` block. `read_quiz` and
+  `validate_quiz` check a file against the rules the schema cannot express and list every
+  problem with its path. (#146)
+- Vision: with `vision_enabled = true` (in `questxtract.toml`) and a recording with a video
+  track, the slides or board are read. Each stable view's keyframe goes to `vision_model`,
+  together with what was said while it was on screen, and comes back as a board state in
+  `visuals` (text, LaTeX, a description and a confidence), linked to its segments through
+  `visual_ids`, with the keyframe copied beside the file. Readings and keyframes are cached, so a
+  re-run sends nothing; a reading that failed is asked again. A failed reading leaves its view
+  out with a warning and is counted in `stats.vision_failed`; when the first three fail, the rest
+  are not sent. Needs the `llm` extra and an API key, or `base_url` for a local server, checked
+  before transcription starts. (#59)
 - `process` and `transcribe` accept `.mp3` recordings as well as `.mp4`. A recording without a
   video track, an MP3 or an audio-only MP4, is transcribed as usual and has no board to read.
   (#117)
@@ -29,6 +49,11 @@
 - `--llm-reasoning` lets a thinking model think before it judges (`low`, `medium`, `high`); small
   models such as Qwen3.5 9B need it. `server` sends no setting, for a model without one such as
   gpt-4o-mini. Any level but `none` allows each request 10 minutes. (#89, #97)
+
+- `questions.json` schema 2.2: `config` records how the file was made, so two saved runs can be
+  told apart: `detector` (`rules` or `llm`), `judge_prompt_version` (e.g. `v5`) and
+  `judge_reasoning_effort` (the `--llm-reasoning` level, `""` for `server`). The last two are
+  `null` with the rules detector. Files from schema 2.0 and 2.1 still read. (#114)
 
 ### Changed
 

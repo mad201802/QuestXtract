@@ -1,22 +1,27 @@
 """Stage 5: optional enrichment of the audio with what is on the board.
 
-Two stages, not one, because of architecture.md 11.1 rule 4: capture is expensive and caches
-as ``vision.json``, while the interval join is eight lines and always recomputes. Nailing
-one board state to one segment at capture time would bake in a wrong join that every
-consumer inherits.
+Three stages. ``layout`` asks the model once where the content is and what it is (6.2), so
+``vision`` can crop to it and tell the captioning prompt which kind of frame it reads.
 
-Both no-op themselves when vision is off, rather than being filtered out by the runner
+Capture and the join are two stages, not one, because of architecture.md 11.1 rule 4:
+capture is expensive and caches as ``vision.json``, while the interval join is eight lines
+and always recomputes. Nailing one board state to one segment at capture time would bake in
+a wrong join that every consumer inherits.
+
+All three no-op themselves when vision is off, rather than being filtered out by the runner
 (rule 3).
 """
 
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 import math
 import warnings
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import av
@@ -24,31 +29,47 @@ import numpy as np
 
 from . import endpoint
 from .config import Config
-from .models import Context, Progress, Segment, VisualContext, stage
+from .models import Context, Layout, Progress, Segment, Sentence, VisualContext, stage
 
 _COMPARE_HEIGHT = 480  # architecture.md 6.3: change detection compares frames at about 480p
 _GRAY = np.array([0.299, 0.587, 0.114], dtype=np.float32)  # ITU-R BT.601 luma weights
 _NOISE = 32  # grey levels a pixel must move by to count as changed, above codec noise
 
 # The prompt and the schema are module-level, version-tagged, so a prompt change is a reviewable
-# diff. A change to either changes the cache key, so no stale caption is replayed.
-VISION_PROMPT_VERSION = "v0"  # ponytail: #59, swap in prompt v0 (tests/data/vision/prompt_v0.txt)
+# diff. Both are part of every request, so a change to either asks again (endpoint.ask's cache).
+VISION_PROMPT_VERSION = "v0"  # tests/data/vision/prompt_v0.txt, chosen in #52
+_SPEECH_CHARS = 1500  # the speech sent with one keyframe: its own view's words, kept short
+_GIVE_UP_AFTER = 3  # failed readings in a row, before any success, that stop the captioning
 
 _FIELDS = ("description", "text", "latex", "confidence")
 
 _PROMPT = """\
-You read one keyframe of a university lecture recording: a slide, a blackboard, a whiteboard or
-a tablet page. What the lecturer said while it was on screen comes with it, as context only:
-describe what is shown, not what was said.
+You read one frame from a lecture recording: a slide, a blackboard, a whiteboard or tablet notes.
+Describe what is visible on the board or slide, for someone who cannot see it.
 
-Give:
-- description: one or two sentences on what it shows: a slide's topic, a derivation, a diagram.
-- text: the words and symbols written or printed on it, verbatim, in reading order. Leave out
-  what you cannot read; never guess.
-- latex: its formulas as LaTeX, one per line, or null when it shows none.
-- confidence: from 0 to 1, how much of what is shown you could read.
+Frame kind: {kind}
 
-Answer with JSON only.\
+What the lecturer said while this frame was on screen (context only):
+{speech}
+
+Rules:
+- Report only what is visible in the image. The speech helps you read unclear writing, but never
+  copy words, formulas or claims from it that are not on the board.
+- "text": every piece of text on the board or slide, handwritten or printed, in reading order,
+  one line per line on the board. Keep the wording and spelling you see. Mark a word you cannot
+  read as [unreadable]. Empty string when there is no text.
+- "latex": the formulas on the board as LaTeX, one formula per line. null when there is no
+  formula. Do not write LaTeX for plain words.
+- "description": one or two sentences on what the frame shows: the slide or board topic, and any
+  diagram, graph or figure (its parts and how they connect). No text transcription here.
+- "confidence": a number from 0 to 1 for how sure you are of "text" and "latex" together. Use a
+  low value for blur, glare, a lecturer blocking the board, or handwriting you had to guess.
+- Ignore the lecturer, the room, the camera and any on-screen interface.
+- An empty or blank board is a valid answer: empty "text", null "latex", a short "description"
+  saying so, confidence 1 if you are sure it is blank.
+
+Answer with one JSON object and nothing else: \
+{"description": ..., "text": ..., "latex": ..., "confidence": ...}\
 """
 
 _SCHEMA: dict[str, Any] = {
@@ -73,33 +94,370 @@ _SCHEMA: dict[str, Any] = {
 Frame = np.ndarray[Any, np.dtype[np.uint8]]
 Crop = tuple[float, float, float, float]  # normalised (x0, y0, x1, y1), from the layout probe
 
+_FULL_FRAME: Crop = (0.0, 0.0, 1.0, 1.0)
+_KINDS = ("slides", "blackboard", "whiteboard", "handwriting", "screencast", "unknown")
+_PROBE_AT = (0.2, 0.5, 0.8)  # where in the recording the probe's three frames are taken
+_PROBE_WIDTH = 640  # the region is in fractions, so a small frame shows it as well
+_REGION_PAD = 0.02  # VLM boxes are loose; a margin keeps the board's edges in the crop
+_REGION_MIN_AREA = 0.1  # a smaller box is more likely a misreading than the content
 
-@stage(
-    "vision",
-    cache="visual",
-    uses=(
-        "vision_fps",
-        "vision_model",
-        "vision_max_states",
-        "vision_change_fraction",
-        "vision_change_hold",
-    ),
-)
-def vision(ctx: Context) -> Context:
-    """Capture board states from the recording into ``ctx.visual``.
+_LAYOUT_PROMPT = """\
+You see three frames taken from across one lecture recording. Find where the lecture content is:
+the slides, the board or the written notes.
 
-    A no-op unless ``config.vision_enabled``, which is false unless an endpoint is
-    configured, and for a source with no video track (an MP3, or a transcript): there is no
-    board to read. Frame sampling, stable views and the captioning call (architecture.md 6.3
-    to 6.5) exist but are not called yet (#59); the layout probe and de-occlusion are not built.
+Rules:
+- "content_region": the box around the content as [x0, y0, x1, y1], fractions of the frame's
+  width and height measured from its top-left corner, each from 0 to 1. Leave out the lecturer's
+  camera, the room around the board, and on-screen interface such as toolbars, a video-call
+  window or a taskbar. Give one box that holds the content in all three frames. If the content
+  fills the frame, answer [0, 0, 1, 1].
+- "kind": what the content is.
+  "slides": prepared slides with printed text and figures.
+  "blackboard": chalk on a blackboard.
+  "whiteboard": marker on a whiteboard.
+  "handwriting": writing on a tablet or on paper under a camera, also over slides.
+  "screencast": a computer screen with code, a terminal or an application.
+  "unknown": none of these, or you cannot tell.
+
+Answer with one JSON object and nothing else: {"content_region": [x0, y0, x1, y1], "kind": ...}\
+"""
+
+_LAYOUT_SCHEMA: dict[str, Any] = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "layout",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "properties": {
+                "content_region": {"type": "array", "items": {"type": "number"}},
+                "kind": {"type": "string", "enum": list(_KINDS)},
+            },
+            "required": ["content_region", "kind"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+
+@stage("layout")
+def layout(ctx: Context) -> Context:
+    """Find where the content is and what kind it is, once per recording (architecture.md 6.2).
+
+    A no-op unless ``config.vision_enabled``, and for a source with no video track. Three
+    frames from across the recording go to ``vision_model`` in one request; the answer sets
+    ``ctx.layout``. Any failure of the endpoint, the model or the recording leaves the full
+    frame and ``unknown`` with a warning: the probe only sharpens vision, so it never ends the
+    run. Not stage-cached: the request is cached by :func:`endpoint.ask`, which keeps only a
+    valid answer, so a probe that failed is asked again on the next run.
+
+    Raises:
+        RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
+        ValueError: If the settings cannot be used, such as an unreadable ``.env``.
+
     """
-    if not ctx.config.vision_enabled or not _has_video(ctx.source):
+    if not ctx.config.vision_enabled or not has_video(ctx.source):
         return ctx
-    # ponytail: #59, call sampling, views and captioning from the stage (architecture.md 6.3-6.5).
-    raise NotImplementedError("vision is not implemented yet (#59); set vision_enabled=False")
+    try:
+        frames = _probe_frames(ctx.source)
+    except (av.error.FFmpegError, OSError) as exc:
+        return _fallback(ctx, f"the recording could not be read: {exc}")
+    if not frames:
+        return _fallback(ctx, "the recording has no frame to show")
+    images = [{"type": "image_url", "image_url": {"url": _data_url(png)}} for png in frames]
+    request: dict[str, Any] = {
+        "model": ctx.config.vision_model,
+        "messages": [
+            {"role": "system", "content": _LAYOUT_PROMPT},
+            {"role": "user", "content": images},
+        ],
+        "response_format": _LAYOUT_SCHEMA,
+    }
+    try:
+        answer = endpoint.ask(ctx.config, request, name="layout")
+    except (ConnectionError, endpoint.InvalidAnswer) as exc:
+        return _fallback(ctx, str(exc))
+    found = _layout_from(answer)
+    if found is None:
+        return _fallback(ctx, f"{ctx.config.vision_model} answered with a malformed layout")
+    ctx.layout = found
+    return ctx
 
 
-def _has_video(path: Path) -> bool:
+def _fallback(ctx: Context, why: str) -> Context:
+    warnings.warn(
+        f"vision: layout probe failed, using the full frame: {why}", UserWarning, stacklevel=3
+    )
+    ctx.layout = Layout()
+    return ctx
+
+
+def _probe_frames(path: Path) -> list[bytes]:
+    """Take the frames at ``_PROBE_AT`` of the recording, as PNG, ``_PROBE_WIDTH`` wide at most.
+
+    Seeks to each one rather than decoding the whole recording. Without a known duration,
+    only the first frame.
+    """
+    pngs: list[bytes] = []
+    with av.open(str(path)) as container:
+        stream = container.streams.video[0]
+        duration = container.duration / av.time_base if container.duration else 0.0
+        for fraction in _PROBE_AT if duration else (0.0,):
+            target = duration * fraction
+            container.seek(int(target * av.time_base))  # to the keyframe at or before it
+            for frame in container.decode(stream):
+                if frame.time is not None and frame.time + 1e-6 < target:
+                    continue
+                width = min(frame.width, _PROBE_WIDTH)
+                height = round(frame.height * width / frame.width / 2) * 2 or 2
+                picture: Frame = frame.reformat(width=width, height=height).to_ndarray(
+                    format="rgb24"
+                )
+                pngs.append(_png(picture))
+                break
+    return pngs
+
+
+def _layout_from(answer: dict[str, Any]) -> Layout | None:
+    """Return the :class:`Layout` an answer gives, or ``None`` when it is malformed.
+
+    The box is padded by ``_REGION_PAD`` on each side, within the frame. A box smaller than
+    ``_REGION_MIN_AREA`` of the frame is not trusted: the kind is kept, the crop is not.
+    """
+    region, kind = answer.get("content_region"), answer.get("kind")
+    if kind not in _KINDS or not isinstance(region, list) or len(region) != 4:
+        return None
+    if not all(
+        isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in region
+    ):
+        return None
+    x0, y0, x1, y1 = (float(v) for v in region)
+    if not (0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1):
+        return None
+    if (x1 - x0) * (y1 - y0) < _REGION_MIN_AREA:
+        return Layout(kind=str(kind))
+    padded = (
+        max(0.0, x0 - _REGION_PAD),
+        max(0.0, y0 - _REGION_PAD),
+        min(1.0, x1 + _REGION_PAD),
+        min(1.0, y1 + _REGION_PAD),
+    )
+    return Layout(content_region=padded, kind=str(kind))
+
+
+def _data_url(png: bytes) -> str:
+    return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+
+
+@stage("vision")
+def vision(ctx: Context) -> Context:
+    """Capture board states from the recording into ``ctx.visual`` (architecture.md 6.3 to 6.5).
+
+    A no-op unless ``config.vision_enabled``, and for a source with no video track (an MP3, or
+    a transcript): there is no board to read. Otherwise the recording is sampled at
+    ``vision_fps`` and cut into stable views, one keyframe each; each keyframe is read by
+    ``vision_model`` together with what was said while its view was on screen, and stored in
+    the cache. A reading that fails leaves that one view out with a warning; when the first
+    readings all fail, the rest are not sent. Frames are cropped to the ``layout`` stage's
+    ``content_region`` and its ``kind`` goes into the prompt; one answer holds for the whole
+    recording. De-occlusion is not built.
+    """
+    if not ctx.config.vision_enabled or not has_video(ctx.source):
+        return ctx
+    config, report = ctx.config, ctx.progress
+    views = _cut(ctx)
+    visual: list[VisualContext] = []
+    failed = 0
+    for index, view in enumerate(views):
+        if report:
+            report("vision", 0.5 + 0.5 * index / len(views))
+        speech = _speech(ctx.sentences, view.start, view.end)
+        fields = _caption(config, view.keyframe, speech, kind=ctx.layout.kind)
+        if fields is None:
+            failed += 1
+            if not visual and failed >= _GIVE_UP_AFTER:
+                warnings.warn(
+                    f"vision: the first {failed} keyframes could not be read, so the rest are "
+                    "not sent; check vision_model, the API key and the endpoint",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                break
+            continue
+        path = _store(view.keyframe, config, ctx.source_hash)
+        visual.append(VisualContext(start=view.start, end=view.end, keyframe_path=path, **fields))
+    ctx.visual = tuple(visual)
+    ctx.stats["vision_failed"] = len(views) - len(visual)
+    return ctx
+
+
+def _cut(ctx: Context) -> list[_View]:
+    """Sample the recording and cut it into views, cached on the sampling settings.
+
+    Frames are cropped to the ``layout`` stage's ``content_region``. Sampling decodes the
+    whole video, minutes for a lecture, while the views depend only on the recording, the
+    crop and these settings, not on the transcript or the model. Entries live in
+    ``cache_dir/<source_hash>/views.json``, keyframes beside them (:func:`_store`); without a
+    source hash nothing is cached, as for the runner's own cache (architecture.md 11.2).
+    """
+    config, report = ctx.config, ctx.progress
+    region = ctx.layout.content_region
+    crop = None if region == _FULL_FRAME else region
+    header = {
+        "content_region": list(region),
+        "vision_fps": config.vision_fps,
+        "vision_change_fraction": config.vision_change_fraction,
+        "vision_change_hold": config.vision_change_hold,
+        "vision_max_states": config.vision_max_states,
+        "duration": ctx.duration,
+    }
+    path = Path(config.cache_dir) / ctx.source_hash / "views.json"
+    if ctx.source_hash and not config.from_scratch:
+        cached = _load_views(path, header, Path(config.cache_dir))
+        if cached is not None:
+            return cached
+
+    def sampling(_: str, fraction: float) -> None:
+        if report:
+            report("vision", fraction / 2)  # sampling is the first half of the stage
+
+    samples = _sample_frames(ctx.source, config.vision_fps, crop=crop, progress=sampling)
+    views = _views(
+        _from_audio_start(samples, _audio_start(ctx.source)),
+        change=config.vision_change_fraction,
+        hold=config.vision_change_hold,
+        max_views=config.vision_max_states,
+        end=ctx.duration or None,
+    )
+    if ctx.source_hash:
+        entries = []
+        for view in views:
+            stored = _store(view.keyframe, config, ctx.source_hash)
+            if not stored:
+                return views  # the cache cannot be written: keep the views, cache nothing
+            entries.append(
+                {
+                    "start": view.start,
+                    "end": view.end,
+                    "keyframe": stored,
+                    "keyframe_time": view.keyframe_time,
+                }
+            )
+        try:
+            path.write_text(json.dumps({"config": header, "views": entries}), encoding="utf-8")
+        except OSError:
+            pass
+    return views
+
+
+def _from_audio_start(
+    samples: Iterable[tuple[float, Frame]], origin: float
+) -> Iterator[tuple[float, Frame]]:
+    """Shift sample times so that zero is the audio start, the transcript's clock.
+
+    What was on screen before the audio starts is never spoken about, so those samples are
+    dropped, except the last one: the board visible when the audio starts, at time zero. Every
+    other sample keeps its own, later time, so no view can end where it starts.
+    """
+    before: Frame | None = None
+    for time, frame in samples:
+        shifted = time - origin
+        if shifted < 0:
+            before = frame
+            continue
+        if before is not None:
+            if shifted > 0:
+                yield 0.0, before
+            before = None
+        yield shifted, frame
+    if before is not None:  # the picture ends before the audio starts
+        yield 0.0, before
+
+
+def _load_views(path: Path, header: dict[str, Any], cache: Path) -> list[_View] | None:
+    """Read cached views, or ``None`` when they are missing, stale or damaged.
+
+    A keyframe is named by the start of its content hash (:func:`_store`), so one whose bytes
+    no longer match its name, such as a write cut short, makes the whole entry stale.
+    """
+    try:
+        stored = json.loads(path.read_text(encoding="utf-8"))
+        if stored.get("config") != header:
+            return None
+        views = []
+        for entry in stored["views"]:
+            keyframe = (cache / entry["keyframe"]).read_bytes()
+            if _content_name(keyframe) != PurePosixPath(entry["keyframe"]).name:
+                return None
+            views.append(
+                _View(
+                    start=entry["start"],
+                    end=entry["end"],
+                    keyframe=keyframe,
+                    keyframe_time=entry["keyframe_time"],
+                )
+            )
+        return views
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return None
+
+
+def _audio_start(path: Path) -> float:
+    """When the audio starts on the container's clock, in seconds: the transcript's zero.
+
+    Word times count from the first audio sample, while frame times are the video stream's
+    own, so a file whose streams do not start at zero (a trimmed recording) would put board
+    states beside the wrong speech. Subtracting the audio start keeps a real offset between
+    sound and picture, which zeroing the video stream alone would remove.
+    """
+    try:
+        with av.open(str(path)) as container:
+            audio = container.streams.audio
+            if not audio or audio[0].start_time is None or audio[0].time_base is None:
+                return 0.0
+            return float(audio[0].start_time * audio[0].time_base)
+    except (av.error.FFmpegError, OSError):
+        return 0.0
+
+
+def _speech(sentences: Sequence[Sentence], start: float, end: float) -> str:
+    """Return what was said while a view was on screen, cut to ``_SPEECH_CHARS`` at a word."""
+    text = " ".join(s.text.strip() for s in sentences if s.start < end and s.end > start)
+    if len(text) <= _SPEECH_CHARS:
+        return text
+    return text[:_SPEECH_CHARS].rsplit(" ", 1)[0] + " ..."
+
+
+def _store(png: bytes, config: Config, source_hash: str) -> str:
+    """Write a keyframe into the cache; return its path relative to ``cache_dir`` (#59).
+
+    Named by its content, so a re-run writes nothing new, and a file whose bytes do not match
+    its name is written again. Written through a temporary file, so an interrupted write
+    leaves no half image under the real name. Relative to the cache, so a cached result still
+    finds its images from another working directory and board-state ids do not depend on where
+    the cache lives. ``""`` when the cache cannot be written: the reading is kept, only the
+    image is missing.
+    """
+    name = _content_name(png)
+    relative = PurePosixPath(source_hash or "unhashed", "keyframes", name)
+    path = Path(config.cache_dir) / relative
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.is_file() or _content_name(path.read_bytes()) != name:
+            partial = path.with_suffix(".tmp")
+            partial.write_bytes(png)
+            partial.replace(path)
+    except OSError:
+        return ""
+    return relative.as_posix()
+
+
+def _content_name(png: bytes) -> str:
+    """Return a keyframe's file name: the start of its SHA-256, so the name checks the content."""
+    return f"{hashlib.sha256(png).hexdigest()[:16]}.png"
+
+
+def has_video(path: Path) -> bool:
     """Whether ``path`` is a recording with a video track; ``False`` for anything else."""
     try:
         with av.open(str(path)) as container:
@@ -306,63 +664,64 @@ def _length(view: _View) -> float:
     return view.end - view.start
 
 
-def _caption(config: Config, png: bytes, speech: str) -> dict[str, Any] | None:
+def _caption(
+    config: Config, png: bytes, speech: str, *, kind: str = "unknown"
+) -> dict[str, Any] | None:
     """Read one keyframe with the vision model (architecture.md 6.5).
 
     ``png`` is the keyframe as :class:`_View` holds it; ``speech`` is what was said while its
-    view was on screen. Returns the :class:`VisualContext` fields the model reads, or ``None``
-    with a warning when the call fails or a field is malformed: a board description only
-    enriches questions the pipeline already found, so unlike the judge, vision never ends the
-    run. Cached on the request, image included (:func:`endpoint.ask`). Only what the endpoint or
-    the model did wrong is tolerated; a setting that cannot be used, such as an unreadable
-    ``.env``, is a user error that would drop every keyframe the same way, so it is raised.
+    view was on screen; ``kind`` is what the layout probe says the frame shows. Returns the
+    :class:`VisualContext` fields the model reads, or ``None`` with a warning when the call
+    fails or a field is malformed: a board description only enriches questions the pipeline
+    already found, so unlike the judge, vision never ends the run. Cached on the request,
+    image included (:func:`endpoint.ask`). Only what the endpoint or the model did wrong is
+    tolerated; a setting that cannot be used, such as an unreadable ``.env``, is a user error
+    that would drop every keyframe the same way, so it is raised.
 
     Raises:
         RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
         ValueError: If the settings cannot be used, such as an unreadable ``.env``.
 
     """
-    image = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+    image = _data_url(png)
+    # As prompt v0 was measured in #52: the prompt, with its kind and speech filled in, as the
+    # system message, and the image alone as the user message.
+    prompt = _PROMPT.replace("{kind}", kind).replace("{speech}", speech.strip() or "-")
     request: dict[str, Any] = {
         "model": config.vision_model,
         "messages": [
-            {"role": "system", "content": _PROMPT},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": f"Said while on screen: {speech.strip() or '-'}"},
-                    {"type": "image_url", "image_url": {"url": image}},
-                ],
-            },
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": [{"type": "image_url", "image_url": {"url": image}}]},
         ],
         "response_format": _SCHEMA,
     }
     try:
-        answer = endpoint.ask(config, request, name="vision")
+        answer = endpoint.ask(config, request, name="vision", valid=_readable)
     except (ConnectionError, endpoint.InvalidAnswer) as exc:
         warnings.warn(f"vision: keyframe left out: {exc}", UserWarning, stacklevel=2)
         return None
-    description, text, latex, confidence = (answer.get(k) for k in _FIELDS)
-    if (
-        not isinstance(description, str)
-        or not isinstance(text, str)
-        or not (latex is None or isinstance(latex, str))
-        or isinstance(confidence, bool)
-        or not isinstance(confidence, (int, float))
-        or not math.isfinite(confidence)
-    ):
-        warnings.warn(
-            f"vision: keyframe left out: {config.vision_model} answered with malformed fields",
-            UserWarning,
-            stacklevel=2,
-        )
-        return None
+    description, text, latex, confidence = (answer[k] for k in _FIELDS)
     return {
         "description": description.strip(),
         "text": text.strip(),
         "latex": (latex or "").strip() or None,
         "confidence": min(1.0, max(0.0, float(confidence))),
     }
+
+
+def _readable(answer: dict[str, Any]) -> bool:
+    """Whether an answer has every board field with a usable type; nothing else is cached."""
+    if not all(key in answer for key in _FIELDS):
+        return False  # a missing "latex" is not null: the schema asks for every key
+    description, text, latex, confidence = (answer[k] for k in _FIELDS)
+    return (
+        isinstance(description, str)
+        and isinstance(text, str)
+        and (latex is None or isinstance(latex, str))
+        and not isinstance(confidence, bool)
+        and isinstance(confidence, (int, float))
+        and math.isfinite(confidence)
+    )
 
 
 @stage("attach_visual")

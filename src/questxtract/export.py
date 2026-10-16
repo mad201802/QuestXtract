@@ -19,11 +19,12 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from .llm import JUDGE_PROMPT_VERSION
 from .models import Context, QAPair, SchemaError, Segment, Sentence, VisualContext
 from .score import confidence_label
 from .vision import overlapping
 
-SCHEMA_VERSION = "2.1"
+SCHEMA_VERSION = "2.2"
 SCHEMA_PATH = Path(__file__).with_name("questions.schema.json")
 
 _CONFIG_KEYS = ("model_size", "language", "min_confidence")
@@ -40,6 +41,7 @@ def result_to_dict(ctx: Context, keyframes: Mapping[str, str] | None = None) -> 
 
     """
     by_id = {s.id: s for s in ctx.sentences}
+    llm = ctx.config.detector == "llm"
     return {
         "schema_version": SCHEMA_VERSION,
         "source": {
@@ -49,8 +51,11 @@ def result_to_dict(ctx: Context, keyframes: Mapping[str, str] | None = None) -> 
         },
         "config": {
             **{key: getattr(ctx.config, key) for key in _CONFIG_KEYS},
+            "detector": ctx.config.detector,
             # null when the stage is off, so the file never names a model that did not run
-            "judge_model": ctx.config.judge_model if ctx.config.detector == "llm" else None,
+            "judge_model": ctx.config.judge_model if llm else None,
+            "judge_prompt_version": JUDGE_PROMPT_VERSION if llm else None,
+            "judge_reasoning_effort": ctx.config.judge_reasoning_effort if llm else None,
             "vision_model": ctx.config.vision_model if ctx.config.vision_enabled else None,
         },
         "stats": dict(ctx.stats),
