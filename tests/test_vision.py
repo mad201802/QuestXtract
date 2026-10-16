@@ -7,13 +7,14 @@ import numpy as np
 import openai
 import pytest
 
-from questxtract import Config, Context, Transcript, VisualContext, Word, endpoint
+from questxtract import Config, Context, Layout, Transcript, VisualContext, Word, endpoint
 from questxtract import vision as vision_module
 from questxtract.export import result_to_dict, write_questions
 from questxtract.pipeline import run
 from questxtract.segments import segments as segments_stage
 from questxtract.sentences import sentences as sentences_stage
 from questxtract.vision import (
+    _LAYOUT_PROMPT,
     _PROMPT,
     VISION_PROMPT_VERSION,
     _caption,
@@ -25,6 +26,7 @@ from questxtract.vision import (
     _View,
     _views,
     attach_visual,
+    layout,
     overlapping,
     vision,
 )
@@ -493,6 +495,10 @@ def test_the_views_are_cached_so_a_second_run_samples_nothing(
     changed = _lecture(context, video, tmp_path / "cache", vision_change_hold=2)
     with pytest.raises(AssertionError, match="sampled again"):
         run(changed, VISION_STAGES)  # other sampling settings cut again
+    cropped = _lecture(context, video, tmp_path / "cache")
+    cropped.layout = Layout(content_region=(0.0, 0.0, 0.5, 1.0), kind="slides")
+    with pytest.raises(AssertionError, match="sampled again"):
+        run(cropped, VISION_STAGES)  # another crop cuts again
 
 
 def _offset_lecture(path, offset=10.0, rate=10):
@@ -591,7 +597,166 @@ def test_a_keyframe_is_stored_once_by_its_content(tmp_path):
     assert _store(PNG, Config(cache_dir=str(tmp_path / "blocked")), "abc123") == ""
 
 
-# --- Jesper's review of PR #131 ---
+# --- the layout probe (#57) ---
+
+LAYOUT_STAGES = (sentences_stage, segments_stage, layout, vision, attach_visual)
+
+
+def _probe(**fields):
+    return {"content_region": [0.5, 0.0, 1.0, 0.5], "kind": "slides", **fields}
+
+
+def test_the_probe_sends_three_frames_from_across_the_recording(context, fake_llm, tmp_path):
+    """One request: the prompt, and frames at 20, 50 and 80 % of the recording, small."""
+    client = fake_llm(_probe())
+    video = _video(tmp_path / "v.mp4", size=(800, 600))  # brightness 20 per second
+    ctx = layout(_lecture(context, video, tmp_path / "cache", vision_model="qwen3-vl"))
+    assert ctx.layout == Layout(content_region=(0.48, 0.0, 1.0, 0.52), kind="slides")
+    (request,) = client.requests
+    assert request["model"] == "qwen3-vl"
+    assert request["response_format"]["json_schema"]["strict"] is True
+    system, user = request["messages"]
+    assert system["content"] == _LAYOUT_PROMPT
+    brightness = []
+    for part in user["content"]:
+        png = base64.b64decode(part["image_url"]["url"].removeprefix("data:image/png;base64,"))
+        (tmp_path / "f.png").write_bytes(png)
+        with av.open(str(tmp_path / "f.png")) as image:
+            picture = next(image.decode(video=0)).to_ndarray(format="rgb24")
+        assert picture.shape == (480, 640, 3)
+        brightness.append(round(float(picture.mean()) / 20))
+    assert brightness == [2, 5, 8]
+
+
+@pytest.mark.parametrize(
+    "replies",
+    [
+        (openai.OpenAIError("Connection error."),),
+        (TimeoutError("no answer within 120 s"),),  # a stall, twice
+        ("not json", "[]"),  # bad JSON, twice
+        (_probe(kind="chalk"),),
+        (_probe(kind=None),),
+        (_probe(content_region=[0.1, 0.1, 0.9]),),
+        (_probe(content_region="the left half"),),
+        (_probe(content_region=[0.6, 0.0, 0.4, 1.0]),),  # x0 > x1
+        (_probe(content_region=[0, 0, 500, 1000]),),  # pixels, not fractions
+        (_probe(content_region=[0, 0, True, 1]),),
+        (_probe(content_region=[0, 0, float("nan"), 1]),),
+    ],
+)
+def test_a_failed_probe_falls_back_to_the_full_frame(context, fake_llm, tmp_path, replies):
+    """#57 AC: when the probe fails or returns bad JSON, the full frame and unknown are used."""
+    fake_llm(*replies)
+    ctx = _lecture(context, _video(tmp_path / "v.mp4", seconds=2), tmp_path / "cache")
+    with pytest.warns(UserWarning, match="layout probe failed, using the full frame") as caught:
+        ctx = layout(ctx)
+    assert ctx.layout == Layout(content_region=(0.0, 0.0, 1.0, 1.0), kind="unknown")
+    assert len(caught) == 1
+
+
+def test_after_a_failed_probe_the_run_continues_on_the_full_frame(context, fake_llm, tmp_path):
+    """#57 AC: the run goes on: board states are still read, uncropped and of kind unknown."""
+    client = fake_llm("not json", "not json", _board())
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    with pytest.warns(UserWarning, match="layout probe failed"):
+        ctx = run(_lecture(context, video, tmp_path / "cache"), LAYOUT_STAGES)
+    assert len(ctx.visual) == 3
+    assert all("Frame kind: unknown" in r["messages"][0]["content"] for r in client.requests[2:])
+    assert _png_size(tmp_path / "cache" / ctx.visual[0].keyframe_path) == (320, 240)
+
+
+def test_the_probe_crops_the_frames_and_names_the_kind(context, fake_llm, tmp_path):
+    """#57: the crop box goes to the sampler, the kind to the captioning prompt."""
+    client = fake_llm(_probe(content_region=[0.0, 0.0, 0.48, 0.48], kind="blackboard"), _board())
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    ctx = run(_lecture(context, video, tmp_path / "cache"), LAYOUT_STAGES)
+    assert ctx.layout == Layout(content_region=(0.0, 0.0, 0.5, 0.5), kind="blackboard")
+    assert ctx.visual and all(
+        "Frame kind: blackboard" in r["messages"][0]["content"] for r in client.requests[1:]
+    )
+    assert _png_size(tmp_path / "cache" / ctx.visual[0].keyframe_path) == (160, 120)
+
+
+def test_a_cached_probe_is_not_asked_again(context, fake_llm, tmp_path):
+    """#57 AC: given a cached probe result, a second run makes no probe call."""
+    client = fake_llm(_probe())
+    video = _video(tmp_path / "v.mp4", seconds=2)
+    first = layout(_lecture(context, video, tmp_path / "cache"))
+    again = layout(_lecture(context, video, tmp_path / "cache"))
+    assert again.layout == first.layout != Layout()
+    assert len(client.requests) == 1
+    assert len(list((tmp_path / "cache" / "layout").glob("*.json"))) == 1
+
+
+def test_a_failed_probe_is_asked_again_on_the_next_run(context, fake_llm, tmp_path):
+    client = fake_llm(openai.OpenAIError("Connection error."), _probe())
+    video = _video(tmp_path / "v.mp4", seconds=2)
+    with pytest.warns(UserWarning, match="layout probe failed"):
+        assert layout(_lecture(context, video, tmp_path / "cache")).layout == Layout()
+    assert layout(_lecture(context, video, tmp_path / "cache")).layout.kind == "slides"
+    assert len(client.requests) == 2
+
+
+def test_a_box_too_small_to_trust_keeps_the_kind_but_not_the_crop(context, fake_llm, tmp_path):
+    fake_llm(_probe(content_region=[0.4, 0.4, 0.6, 0.6], kind="whiteboard"))
+    ctx = layout(_lecture(context, _video(tmp_path / "v.mp4", seconds=2), tmp_path / "cache"))
+    assert ctx.layout == Layout(kind="whiteboard")
+
+
+def test_the_padding_stays_inside_the_frame(context, fake_llm, tmp_path):
+    fake_llm(_probe(content_region=[0, 0, 1, 1], kind="screencast"))
+    ctx = layout(_lecture(context, _video(tmp_path / "v.mp4", seconds=2), tmp_path / "cache"))
+    assert ctx.layout == Layout(kind="screencast")
+
+
+def test_the_probe_no_ops_when_vision_is_off_or_there_is_no_video(
+    context, fake_llm, tmp_path, make_mp3
+):
+    """#57: the full frame and unknown when vision is off, and no call."""
+    client = fake_llm(_probe())
+    video = _video(tmp_path / "v.mp4", seconds=2)
+    off = _lecture(context, video, tmp_path / "cache", vision_enabled=False)
+    assert layout(off).layout == Layout()
+    audio = _lecture(context, make_mp3(tmp_path / "a.mp3"), tmp_path / "cache")
+    assert layout(audio).layout == Layout()
+    assert not client.requests
+
+
+def test_a_recording_that_cannot_be_decoded_falls_back(context, fake_llm, tmp_path, monkeypatch):
+    client = fake_llm(_probe())
+
+    def broken(path):
+        raise OSError("read error")
+
+    monkeypatch.setattr("questxtract.vision._probe_frames", broken)
+    ctx = _lecture(context, _video(tmp_path / "v.mp4", seconds=2), tmp_path / "cache")
+    with pytest.warns(UserWarning, match="could not be read"):
+        assert layout(ctx).layout == Layout()
+    monkeypatch.setattr("questxtract.vision._probe_frames", lambda path: [])
+    with pytest.warns(UserWarning, match="no frame"):
+        assert layout(ctx).layout == Layout()
+    assert not client.requests
+
+
+def test_a_setting_that_cannot_be_used_stops_the_probe(context, monkeypatch, tmp_path):
+    """As for captioning: an unreadable .env is a user error, raised, not a fallback."""
+
+    def unusable(config):
+        raise ValueError(".env: line 1: expansion is not supported")
+
+    monkeypatch.setattr(endpoint, "client", unusable)
+    ctx = _lecture(context, _video(tmp_path / "v.mp4", seconds=2), tmp_path / "cache")
+    with pytest.raises(ValueError, match="expansion is not supported"):
+        layout(ctx)
+
+
+def _png_size(path):
+    with av.open(str(path)) as image:
+        frame = next(image.decode(video=0))
+        return frame.width, frame.height
+
+
+# --- PR #131 ---
 
 
 def test_an_answer_without_latex_is_rejected_not_cached(fake_llm, tmp_path):

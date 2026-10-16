@@ -8,7 +8,7 @@ final, and this file changes with them. Findings go on the issue and a summary i
 
 | File | What it is |
 |---|---|
-| `prompt_v0.txt` | Captioning prompt v0. `{kind}` is the frame kind (slides, blackboard, whiteboard, tablet, unknown); `{speech}` is the transcript overlapping the frame, as context only. |
+| `prompt_v0.txt` | Captioning prompt v0. `{kind}` is the frame kind from the layout probe (slides, blackboard, whiteboard, handwriting, screencast, unknown); `{speech}` is the transcript overlapping the frame, as context only. |
 | `prompt_v1.txt` | Prompt v0 with a stricter `latex` instruction (every equation, even a short one). It did not change how often the models fill `latex`, so v0 stays. |
 | `prompt_v0.schema.json` | The JSON the model must return: `description`, `text`, `latex` (or `null`), `confidence`, matching `VisualContext` in `models.py`. |
 | `mit_18_100b_l1_<seconds>.png` | Test frames from the MIT lecture, named by the second of the recording they were taken at (table below). `ttk4225_2026_09_14_<seconds>.png` are the same for the TTK4225 lecture (640x360, tablet notes over slides). Diagram frames from a third recording are not committed. |
