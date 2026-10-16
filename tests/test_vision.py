@@ -847,33 +847,35 @@ def _glyph(page, x, y, segments):
 
 
 def _page(*, digit="3", point=0, sign="<", note=0, colour=(200, 40, 40)):
-    """A 720p page of text-like lines with the small details a reuse must not miss.
+    """A 640 x 360 page of text-like lines with the small details a reuse must not miss.
 
-    ``point`` is the side of a decimal point in px, off the 4 px grid; ``note`` draws a
-    handwritten stroke this many grey levels darker than the page; ``colour`` keeps the grey
-    level of the default red when it is (0, 130, 100).
+    The details have the sizes they have on a 720p page, since the detail check works in
+    pixels; the page is smaller only to keep the tests fast. ``point`` is the side of a decimal
+    point in px, off the 4 px grid; ``note`` draws a handwritten stroke this many grey levels
+    darker than the page; ``colour`` keeps the grey level of the default red when it is
+    (0, 130, 100).
     """
-    page = np.full((720, 1280, 3), 240, np.uint8)
-    page[40:100, 80:1200] = 30  # the title
-    for row, width in enumerate((900, 1040, 720, 980)):
-        page[160 + 60 * row : 174 + 60 * row, 80 : 80 + width] = 40  # a line of text
-    page[420:434, 80:700] = colour
-    _glyph(page, 80, 500, "abcdg" if digit == "3" else "abcdefg")
+    page = np.full((360, 640, 3), 240, np.uint8)
+    page[20:50, 40:600] = 30  # the title
+    for row, width in enumerate((450, 520, 360, 490)):
+        page[70 + 30 * row : 77 + 30 * row, 40 : 40 + width] = 40  # a line of text
+    page[195:209, 40:350] = colour
+    _glyph(page, 40, 250, "abcdg" if digit == "3" else "abcdefg")
     for row in range(25):  # a 25 px "<" or ">", 4 px thick
         slant = abs(row - 12) * 20 // 12
-        column = 220 + (slant if sign == "<" else 20 - slant)
-        page[510 + row, column : column + 4] = 40
+        column = 110 + (slant if sign == "<" else 20 - slant)
+        page[255 + row, column : column + 4] = 40
     if point:
-        page[541 : 541 + point, 141 : 141 + point] = 40
+        page[271 : 271 + point, 71 : 71 + point] = 40
     for row in range(30 if note else 0):  # a handwritten stroke
-        page[600 + row, 400 + 3 * row : 408 + 3 * row] = 240 - note
+        page[310 + row, 200 + 3 * row : 208 + 3 * row] = 240 - note
     return page
 
 
 def _other_page():
-    page = np.full((720, 1280, 3), 240, np.uint8)
-    page[300:360, 200:1100] = 30
-    page[420:600, 300:900] = 120
+    page = np.full((360, 640, 3), 240, np.uint8)
+    page[150:180, 100:550] = 30
+    page[210:300, 150:450] = 120
     return page
 
 
@@ -882,7 +884,8 @@ def _pages(path, pages, seconds=4, rate=2, quantizer=8):
     about the codec noise of a compressed screen recording, and keeps a 2 px dot."""
     with av.open(str(path), "w", format="mp4") as container:
         stream = container.add_stream("mpeg4", rate=rate)
-        stream.width, stream.height, stream.pix_fmt = 1280, 720, "yuv420p"
+        stream.height, stream.width = pages[0].shape[:2]
+        stream.pix_fmt = "yuv420p"
         stream.options = {"qmin": str(quantizer), "qmax": str(quantizer)}
         for page in pages:
             for _ in range(seconds * rate):
@@ -902,7 +905,8 @@ def _paged_lecture(context, video, cache, kind="slides", **config):
 
 @pytest.mark.parametrize("kind", ["slides", "handwriting", "screencast"])
 def test_a_page_that_comes_back_is_read_once(context, fake_llm, tmp_path, kind):
-    """#138 AC: A, B, A gives three board states but two readings; the third copies the first."""
+    """#138 AC: A, B, A gives three board states but two readings; the third copies the first,
+    through the codec noise of a compressed screen recording (``_pages``)."""
     client = fake_llm(_board(text="page A"), _board(text="page B"))
     video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page()])
     ctx = run(_paged_lecture(context, video, tmp_path / "cache", kind), VISION_STAGES)
@@ -917,15 +921,6 @@ def test_a_page_that_comes_back_is_read_once(context, fake_llm, tmp_path, kind):
         ctx.sentences, again.start, again.end
     )
     assert ctx.stats["vision_reused"] == 1
-
-
-def test_a_page_compressed_like_a_screen_recording_is_still_reused(context, fake_llm, tmp_path):
-    """#138 AC: the codec noise of a compressed screen recording alone is not a change."""
-    client = fake_llm(_board(text="page A"), _board(text="page B"))
-    pages = [_page(), _other_page(), _page()]
-    video = _pages(tmp_path / "lecture.mp4", pages, quantizer=10)
-    ctx = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
-    assert len(client.requests) == 2 and ctx.stats["vision_reused"] == 1
 
 
 def test_under_harder_compression_a_page_is_read_again(context, fake_llm, tmp_path):
@@ -1020,7 +1015,9 @@ def test_the_lookup_keeps_only_small_copies_and_readings(context, fake_llm, tmp_
 
     monkeypatch.setattr(vision_module, "_Reading", recorded)
     fake_llm(_board(text="page A"), _board(text="page B"))
-    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page()])
+    double = np.ones((2, 2, 1), np.uint8)  # 720p, so the small copy is smaller than the keyframe
+    pages = [np.kron(page, double) for page in (_page(), _other_page(), _page())]
+    video = _pages(tmp_path / "lecture.mp4", pages)
     run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
 
     assert [r.view for r in kept] == [0, 1]  # the reused third page added nothing
