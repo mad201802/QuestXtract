@@ -21,7 +21,7 @@ Four things shaped the design, roughly in order of weight:
    extract question *and* solution → store → review → upload to exerplaza. An architecture
    that only fits M1 would have to be reworked twice.
 2. **The roadmap's modality shift.** M1 is audio-only; M2/M3 add slide/board understanding
-   that *enriches* the audio questions; M4 renders animations. The seams between stages had
+   that *enriches* the audio questions; M3 also renders animations. The seams between stages had
    to be placed where those modalities join, not where today's code happens to split.
 3. **How the team works.** Five people, ten weeks, two-week sprints, and issues #6–#18
    assigned to different members in parallel. Module boundaries double as ownership
@@ -30,7 +30,7 @@ Four things shaped the design, roughly in order of weight:
 4. **Course quality bar.** Modular, testable, installable on three OSes × four Python
    versions, with CI gates (tests ≥ 70 % coverage, ruff, mypy strict) on every PR.
 
-Quality attributes we prioritised, in order: **modifiability** (M2–M4), **testability**
+Quality attributes we prioritised, in order: **modifiability** (M2, M3), **testability**
 (each stage in isolation), **portability** (stdlib-only core, no native deps yet),
 **interoperability** of the output (JSON as the contract with the review UI and exerplaza).
 We deliberately did *not* optimise for throughput; hour-long lectures are batch jobs.

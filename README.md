@@ -30,7 +30,7 @@ turns them into study material. It **extracts** questions, it never invents them
 |---|---|
 | 🎥 **Video or audio in** | `.mp4` or `.mp3` recordings, audio track extracted automatically (no system ffmpeg) |
 | 🗣️ **Transcription** | Speech-to-text with faster-whisper, or any ASR engine behind a small interface |
-| 🖼️ **Board and slides** | Optional: a vision model reads each slide or board view into text, LaTeX and a description, linked to the questions asked while it was on screen |
+| 🖼️ **Board and slides** | Optional: a vision model finds the slides or board in the frame, whatever the recording style, then reads each view into text, LaTeX and a description, linked to the questions asked while it was on screen |
 | ❓ **Question detection** | Fast offline rules, or an LLM you pick (local in Ollama, or hosted) that reads the transcript; a confidence score and the reasons for every question |
 | ⏱️ **Timestamps** | Every question carries its position in the recording |
 | 🔎 **Search** | Find the questions by words said or written on the board while they were asked, and by time |
