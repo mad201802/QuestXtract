@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import glob
 import json
 import os
 import re
@@ -63,6 +64,17 @@ def _check(answer: Any) -> str | None:
         if key not in answer or not ok(answer[key]):
             return f"bad or missing {key}"
     return None
+
+
+def _frames(patterns: list[str]) -> list[Path]:
+    """Expand each argument here, so a quoted pattern works in any shell, PowerShell included."""
+    frames: list[Path] = []
+    for pattern in patterns:
+        hits = sorted(glob.glob(pattern)) if any(c in pattern for c in "*?[") else [pattern]
+        if not hits:
+            raise SystemExit(f"error: no frames match {pattern}")
+        frames += [Path(hit) for hit in hits]
+    return frames
 
 
 def _speech(transcript: dict[str, Any], seconds: float, window: float) -> str:
@@ -111,7 +123,9 @@ def _request(
 def main(argv: list[str] | None = None) -> int:
     """Send every frame to every model and write the results."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("frames", nargs="+", type=Path, help="PNG frames")
+    parser.add_argument(
+        "frames", nargs="+", help='PNG frames, or quoted patterns: "tests/data/vision/mit_*.png"'
+    )
     parser.add_argument("-m", "--model", action="append", required=True, help="name[@reasoning]")
     parser.add_argument("-o", "--output", type=Path, default=Path("spike-results"))
     parser.add_argument("--base-url", default=None, help="OpenAI-compatible endpoint")
@@ -161,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
     args.output.mkdir(parents=True, exist_ok=True)
     out = args.output / "results.jsonl"
     with out.open("a", encoding="utf-8") as sink:
-        for frame in args.frames:
+        for frame in _frames(args.frames):
             png = frame.read_bytes()
             speech = "-"
             if transcript:

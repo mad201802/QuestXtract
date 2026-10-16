@@ -227,3 +227,6 @@ __marimo__/
 
 # macOS Finder metadata, written into every folder Finder opens
 .DS_Store
+
+# scripts/compare_vision.py output, local runs of the vision comparison
+spike-results/
