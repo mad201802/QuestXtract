@@ -4,9 +4,9 @@ Three stages. ``layout`` asks the model once where the content is and what it is
 ``vision`` can crop to it and tell the captioning prompt which kind of frame it reads.
 
 Capture and the join are two stages, not one, because of architecture.md 11.1 rule 4:
-capture is expensive and caches as ``vision.json``, while the interval join is eight lines
-and always recomputes. Nailing one board state to one segment at capture time would bake in
-a wrong join that every consumer inherits.
+capture is expensive and caches its views in ``views.json`` and each reading per request,
+while the interval join is eight lines and always recomputes. Nailing one board state to one
+segment at capture time would bake in a wrong join that every consumer inherits.
 
 All three no-op themselves when vision is off, rather than being filtered out by the runner
 (rule 3).
