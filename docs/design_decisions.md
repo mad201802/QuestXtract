@@ -353,6 +353,26 @@ is no reason to stop a run of up to 80 calls.
 
 *Cost:* one more module. A vision cache key hashes the whole keyframe, up to a few MB per request.
 
+### D16: Reuse the reading of a page that comes back, and read again when unsure
+
+*Chose:* within a run, a keyframe that shows the same page as one already read copies that
+reading (#138, architecture.md 6.5). A share of changed pixels finds the candidate; a check of
+mean brightness and colour in small squares at full resolution decides, with limits set from the
+codec noise of TTK4225 2026-09-14: between frames of one page, and between its pages coming back
+after H.264 encoding.
+
+*Alternative:* the views' measure alone, a share of changed pixels; or a perceptual hash.
+
+*Why:* both average a small change away. A new digit or decimal point is a few hundredths of a
+percent of the page, and a colour change at the same brightness is none, so the earlier reading
+would be copied over content that changed. A wrong copy puts stale text into a board state; a
+missed copy only costs one model call. So whatever the check cannot tell from noise is read again.
+
+*Cost:* the saving depends on the lecture. A tablet lecture whose pen cursor stays on the page
+rarely shows a page unchanged twice, so it saves little; a slide deck the lecturer pages back
+through saves the most. A mark fainter than the codec noise allows, about 48 grey levels of
+contrast, can go unnoticed.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |
@@ -467,6 +487,9 @@ information-flow arrows — the compendium asks for an architecture sketch with 
 - **Compute once.** Persisting transcripts (D8) and keeping ASR offline means the expensive
   step runs once per lecture rather than per edit or per threshold change. Worth quantifying
   in the report (minutes of GPU/CPU per hour of lecture × number of re-runs avoided).
+- **Read a page once.** Within a run, a slide that comes back unchanged copies its earlier
+  reading instead of another vision call (D16). `stats.vision_reused` counts the readings copied;
+  each is a call saved unless the request cache would have answered it anyway.
 - **Small dependency footprint.** The core is stdlib-only; heavy models are isolated in
   `transcribe.py` and `vision.py`, and the LLM client is an optional `[llm]` extra imported
   inside the function that needs it, so a transcript-only user never installs any of them.

@@ -300,6 +300,10 @@ from the same folder every time to benefit from it.
 
 A `.json` transcript input never touches the cache. There is nothing expensive left to save.
 
+Within one run, a slide or page that comes back with nothing changed is not read again either: its
+earlier reading is copied, also with `--from-scratch`, and counted in `stats.vision_reused`. This
+is not the cache, so it works on a first run too ([architecture.md 6.5](architecture.md#65-captioning)).
+
 ## When something goes wrong
 
 | Exit code | Meaning |

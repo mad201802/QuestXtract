@@ -4,6 +4,13 @@
 
 ### Added
 
+- Vision reads a slide or page that comes back only once per run. On slides, handwriting and
+  screencasts, a keyframe that shows the same content as one read earlier in the run copies that
+  reading instead of asking the model again; it stays a board state of its own, with its own
+  times, and is counted in `stats.vision_reused`. A page whose changes exceed the limits of that
+  comparison, such as new ink, a new decimal point or a moved pen cursor, is read again; a very
+  faint mark can go unnoticed. Blackboards, whiteboards and frames the layout probe could not name
+  are always read. (#138)
 - Vision finds the slides or board first: three frames from across the recording go to
   `vision_model` in one request, which answers where the content is and what kind it is
   (`slides`, `blackboard`, `whiteboard`, `handwriting`, `screencast` or `unknown`). Frames are
