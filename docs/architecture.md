@@ -404,7 +404,7 @@ collapsed, capped at 1) and **formula recall**, a labelled formula counting as f
 run of whole LaTeX tokens in the answer is within one edit per four of its tokens, after removing
 spacing and sizing commands; a short formula must match exactly. A blank board has no error
 rate, since any text would score 1; it counts as read when the answer has no text but
-`[unreadable]`. A frame the model cannot read scores as an empty answer. The report gives all
+`[unreadable]`. A frame the model cannot read scores as an empty answer, a blank one as not read. The report gives all
 three per lecture type and in total, then every frame, worst first.
 
 CI checks the labels (every type has at least 5 frames, every frame exists), not the scores: they

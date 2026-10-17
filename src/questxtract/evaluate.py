@@ -325,7 +325,7 @@ def evaluate_vision(paths: Sequence[str | Path], config: Config | None = None) -
     :func:`~questxtract.vision.read_keyframe`, as the vision stage reads a keyframe when the
     layout probe got the frame's kind right: the label's kind in the prompt, no speech. Answers
     are cached per request, so a second run makes no calls. A frame the model could not read
-    counts as an empty answer.
+    counts as an empty answer, and a blank board it could not read as not read.
 
     A frame labelled blank (no text) has no character error rate: any text at all would score 1,
     the same as misreading a full board. It is counted as read when the answer's text is empty
@@ -360,7 +360,9 @@ def evaluate_vision(paths: Sequence[str | Path], config: Config | None = None) -
                     "kind": label["kind"],
                     "failed": answer is None,
                     "blank": blank,
-                    "read_blank": blank and not text.replace(_UNREADABLE, "").strip(),
+                    "read_blank": blank
+                    and answer is not None
+                    and not text.replace(_UNREADABLE, "").strip(),
                     "cer": None if blank else round(character_error_rate(text, label["text"]), 3),
                     "formulas": len(label["latex"]),
                     "missed": [f for f in label["latex"] if not formula_found(f, latex)],

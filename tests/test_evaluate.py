@@ -239,6 +239,7 @@ def test_vision_accuracy_is_reported_per_lecture_type(
             _frame("lec_3.png", "blackboard", "Not cont.", []),
             _frame("lec_4.png", "blackboard", "", []),  # blank boards
             _frame("lec_5.png", "blackboard", "", []),
+            _frame("lec_6.png", "blackboard", "", []),
         ],
     )
     client = fake_llm(
@@ -248,6 +249,8 @@ def test_vision_accuracy_is_reported_per_lecture_type(
         TimeoutError("no answer"),
         _board(" [unreadable] ", None),  # read as blank: unsure, but no invented text
         _board("Q.E.D.", None),  # not read as blank
+        TimeoutError("no answer"),  # a failed reading is not a blank one
+        TimeoutError("no answer"),
     )
 
     with pytest.warns(UserWarning, match="vision: keyframe left out"):
@@ -266,12 +269,12 @@ def test_vision_accuracy_is_reported_per_lecture_type(
         "formula_recall": 1.0,
     }
     board = report["kinds"]["blackboard"]
-    assert board["frames"] == 4 and board["failed"] == 1
+    assert board["frames"] == 5 and board["failed"] == 2
     # Blank boards are out of the CER mean, and counted on their own.
     assert board["cer"] == pytest.approx((0.125 + 1.0) / 2, abs=1e-3)
-    assert (board["blank"], board["blank_read"]) == (2, 1)
+    assert (board["blank"], board["blank_read"]) == (3, 1)
     assert (board["formulas"], board["formulas_found"], board["formula_recall"]) == (2, 1, 0.5)
-    assert report["total"]["frames"] == 5 and report["total"]["formula_recall"] == 0.667
+    assert report["total"]["frames"] == 6 and report["total"]["formula_recall"] == 0.667
     assert report["frames"][1]["missed"] == ["a < c < b"]
     assert report["frames"][3]["cer"] is None and report["frames"][3]["read_blank"] is True
     # The frame went to the model as the vision stage sends a keyframe when the layout probe
@@ -284,7 +287,7 @@ def test_vision_accuracy_is_reported_per_lecture_type(
     table = format_vision_report(report)
     assert "slides" in table and "blackboard" in table and "TOTAL" in table
     assert "FAILED" in table and "missed: a < c < b" in table
-    assert "1/2" in table  # blank boards read as blank
+    assert "1/3" in table  # blank boards read as blank
     assert table.index("NOT blank") < table.index("lec_3.png")  # an invented reading first
 
 
