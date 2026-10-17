@@ -355,8 +355,9 @@ is no reason to stop a run of up to 80 calls.
 
 ### D15: Score board reading by character error rate and formula recall, over lecture types
 
-*Chose:* 30 labelled keyframes from six openly licensed lectures, at least 5 per lecture type
-(slides, blackboard, whiteboard, handwriting), each with its text, formulas as LaTeX and a diagram line.
+*Chose:* 30 labelled keyframes from six lectures whose licence or lecturer allows sharing, at
+least 5 per lecture type (slides, blackboard, whiteboard, handwriting), each with its text,
+formulas as LaTeX and a diagram line.
 `eval --score-vision` scores the character error rate of the text and the share of labelled formulas
 found in the answer's LaTeX, per lecture type (#58, architecture.md 4.4).
 
