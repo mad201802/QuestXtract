@@ -266,6 +266,21 @@ open that side. Only the question list shrinks, so `segment_id` and `visual_ids`
 An invalid range raises `ValueError`. `topic=` is **experimental**: no stage produces topics yet,
 so it warns and matches nothing.
 
+### Reading a quiz.json
+
+`read_quiz` reads a `quiz.json` ([schema](src/questxtract/quiz.schema.json)) and checks the rules
+its schema cannot express; `validate_quiz` does the same for a document already in memory. Pass
+the source `questions.json` to also check that each item's question exists and that a stem
+marked `spoken` is the question as it was said:
+
+```python
+from questxtract import read_questions, read_quiz
+
+quiz = read_quiz("lecture.quiz.json", read_questions("lecture.questions.json"))
+```
+
+Every problem is listed in one `SchemaError`, one line each, with its path.
+
 ### Swapping the ASR engine
 
 The ASR engine is a pluggable backend behind `Config.asr_backend`, not a hardcoded import.

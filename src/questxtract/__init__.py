@@ -25,6 +25,7 @@ from .models import (
     Word,
 )
 from .pipeline import STAGES, process, run, stage
+from .quiz_schema import read_quiz, validate_quiz
 from .schema import Question
 
 try:
@@ -55,10 +56,12 @@ __all__ = [
     "filter_questions",
     "process",
     "read_questions",
+    "read_quiz",
     "register_backend",
     "resolve_backend",
     "result_to_json",
     "run",
     "stage",
+    "validate_quiz",
     "write_questions",
 ]
