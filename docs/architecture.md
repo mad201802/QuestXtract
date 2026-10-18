@@ -212,12 +212,12 @@ Dropping alignment also keeps the install small: `whisperx` pulls torch and the 
 `faster-whisper` runs on standalone C++ CTranslate2. **There is no torch in the base install**
 (13.2).
 
-### 2.4 Optional: vision-informed second ASR pass (planned, #62)
+### 2.4 Optional: vision-informed second ASR pass (not planned)
 
 Whisper mangles domain vocabulary (*supremum*, *Cauchy*, *epsilon*), and the board has those words
-written on it. The plan: collect terms from the board states (section 6) and re-transcribe with
-faster-whisper's `hotwords`. Off by default (`hotwords_from_vision`, not read yet), and worth
-building only once the eval harness shows vocabulary errors costing questions.
+written on it. The idea: collect terms from the board states (section 6) and re-transcribe with
+faster-whisper's `hotwords`. Not planned (#62): it is worth building only once the eval harness
+shows vocabulary errors costing questions. `hotwords_from_vision` is off by default and not read.
 
 ### 2.5 Words are the atomic unit
 
@@ -429,8 +429,8 @@ segment at capture time would bake in a wrong join, and would make vision uncach
 Optional enrichment of the audio with what is on the board or the slides, off unless
 `vision_enabled`. The `layout` stage asks a VLM once where the content is and what kind it is
 (6.2). The `vision` stage samples the recording inside that region (6.3), cuts it into stable views
-with one keyframe each (6.4) and has a VLM read each keyframe (6.5). De-occlusion (6.3) and the
-ink curve (6.4) are not built.
+with one keyframe each (6.4) and has a VLM read each keyframe (6.5). The ink curve (6.4) is not
+built yet; de-occlusion (6.3) is not planned.
 
 ### 6.1 The regime problem, and why not OCR
 
@@ -484,21 +484,22 @@ as an unreadable `.env`, stops the run, as it does for captioning.
 
 **Cached per request, not per stage.** The request, frames included, is cached like a caption
 (10.4), and only a valid answer is, so a probe that failed is asked again next run while a probe
-that worked costs nothing. The three frames are decoded again each run, a few seeks.
+that worked costs nothing. The three frames are decoded again each run, a few seeks. The views
+`vision` cuts (6.4) are cached in `views.json` keyed on the content region (11.2), so views cut
+from the full-frame fallback are not reused once the probe answers.
 
 **Known limitations.** One answer holds for the whole recording: a layout that changes
-mid-lecture (the camera switches to a screenshare) keeps the first answer. `vision.json` is keyed on
-the config (11.2), not on the layout, so board states captured with the full-frame fallback are
-reused until `--from-scratch` or a vision setting changes.
+mid-lecture (the camera switches to a screenshare) keeps the first answer.
 
 ### 6.3 Frame sampling and de-occlusion
 
 Sample at `vision_fps` (1) through PyAV, crop to the layout probe's `content_region` (6.2),
-grayscale, downscale to about 480p. Not built yet (#127): where the camera is **static**, a per-pixel temporal median over a window of frames removes
-the lecturer standing in front of the board
-(`np.median(np.stack(window_frames), axis=0)`). Where it **pans** (MIT 18.100B), the median is
-meaningless, so a motion check (median absolute frame difference) switches to picking the
-lowest-motion frame per board state and handing it to the VLM as is. No OpenCV, no stabilisation.
+grayscale, downscale to about 480p.
+
+**De-occlusion (not planned, #127).** A per-pixel temporal median over a window of frames would
+remove a lecturer standing in front of a static board, and a motion check would pick the
+lowest-motion frame where the camera pans (MIT 18.100B). Neither is built. The keyframe choice of
+6.4 passes over frames with someone in front of the board; its known gaps are listed there.
 
 ### 6.4 Board states
 
@@ -512,9 +513,9 @@ recording's end. Each view's keyframe is its sharpest sample (mean gradient) amo
 those that still match it, so a frame with someone in front of the board is not picked. Over
 `vision_max_states` views, the shortest is merged into its shorter neighbour until the cap holds.
 On a tablet lecture the views are page switches and annotations added to the same slide; a
-panning chalkboard camera adds a view per pan, which the cap absorbs until motion gating (6.3)
-lands. A lecturer standing still in front of the board for the whole hold is a view of its own
-until de-occlusion.
+panning chalkboard camera adds a view per pan, which the cap absorbs. A lecturer standing still in
+front of the board for the whole hold is a view of its own, with the board partly hidden in its
+keyframe (6.3).
 
 **Ink curve (planned, #133).** Count ink pixels per sampled frame after an adaptive threshold. A
 rising curve means writing, a sharp drop is an erase, and the local maximum before a drop is the
@@ -527,12 +528,12 @@ ink delta.
 One VLM call per view, sent as prompt v0 was measured on #52: the prompt
 (`VISION_PROMPT_VERSION`), filled in with the layout probe's `kind` (6.2) and what was said
 while the view was on screen (up to 1500 characters), as the system message, and the keyframe
-alone, as a PNG data URL, as the user message. In M3 the previous state's description and the ink
-difference join it. Out, under a strict JSON schema and checked again in code: `description`,
-`text`, `latex` (or null) and `confidence`. The prompt asks for what is visible only, with
-`[unreadable]` for a word it cannot read. Cached per request, the image included (10.4), so no
-keyframe is sent twice. `latex` is there because prose does not compile, and the M4 animations
-need formulas.
+alone, as a PNG data URL, as the user message. The previous state's description and the ink
+difference are to join it (planned, #137). Out, under a strict JSON schema and checked again in
+code: `description`, `text`, `latex` (or null) and `confidence`. The prompt asks for what is
+visible only, with `[unreadable]` for a word it cannot read. Cached per request, the image
+included (10.4), so no keyframe is sent twice. `latex` is there because prose does not compile,
+and the M3 animations need formulas.
 
 Each keyframe that was read is written to the cache as `<source_hash>/keyframes/<content
 hash>.png`, and `keyframe_path` holds that path relative to `cache_dir`: a cached result stays
@@ -996,7 +997,8 @@ failed probe is not stored and is asked again.
 **Vision is the second exception.** Each reading depends on the transcript (the speech is in the
 prompt) and may fail, and a stage-level entry would replay both a stale reading and a failed
 one. So `vision` declares no `cache=`: it caches the sampled views itself in `views.json`, keyed
-on the sampling settings, and each reading per request, only once the answer is valid (6.5).
+on the content region and the sampling settings, and each reading per request, only once the
+answer is valid (6.5).
 
 A stage that reads a config field and forgets to list it in `uses` serves stale results: the one
 bug class this design still has. Keep `uses` next to the signature so the two are reviewed
@@ -1131,8 +1133,9 @@ run.
 | `note` | Free text from the reviewer. |
 | `metadata` | Any extra key-value data, such as a topic tag or a quiz difficulty. |
 
-Keeping edits across a re-run (#15, not built yet) means copying `review` across by question id,
-which is why question and sentence ids are content hashes (section 5) rather than indices.
+A re-run does not keep the edits: copying `review` across by question id is not planned (#15).
+Question and sentence ids are content hashes (section 5) rather than indices, so they survive a
+re-run and the wrapper can carry edits across by id.
 
 ### 12.3 quiz.json
 
@@ -1251,8 +1254,9 @@ checks it: `grep '@stage'` over the stage modules returns the contents of `STAGE
 ### 13.2 Dependencies
 
 **Base** (`pyproject.toml`): `av` (container probe and audio extraction), `faster-whisper` (ASR),
-`numpy` and `onnxruntime`. `ctranslate2`, `tokenizers`, `huggingface-hub` and `tqdm` arrive
-transitively through faster-whisper.
+`numpy` and `onnxruntime`, plus `tomli` on Python 3.10 for the config file (3.11 has `tomllib`).
+`ctranslate2`, `tokenizers`, `huggingface-hub` and `tqdm` arrive transitively through
+faster-whisper.
 
 **Extras:** `[llm]` -> `openai` (the LLM detector and vision: one key, one dependency). The CLI's
 progress bar is a few lines of `print`, not `tqdm`.
@@ -1274,11 +1278,11 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 |---|---|---|---|
 | `models.py`, `config.py`, `pipeline.py` | the contract itself | done | |
 | `media.py` | 1 ingest | done: probe, source hash, audio extraction to a temporary WAV | |
-| `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not built | #62 |
+| `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not planned | |
 | `sentences.py` | 3 sentences | done | |
 | `segments.py` | 4 segments | done | |
-| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5) and the interval join; de-occlusion and the ink curve are not built | #127 |
-| `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery are not built | #48, #78 |
+| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5) and the interval join; the ink curve (6.4) is not built, de-occlusion (6.3) is not planned | #133 |
+| `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery wait for a labelled miss (7.1) | |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |
 | `endpoint.py` | not a stage | done: client and requests for the judge and vision (10) | |

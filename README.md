@@ -244,7 +244,7 @@ The pipeline is a list of `Context -> Context` functions. Passing your own `stag
 whole plugin system: swap the detector, drop a stage, add an enrichment step:
 
 ```python
-run(ctx, [*STAGES[2:6], my_detector, *STAGES[7:]])
+run(ctx, [my_detector if s.__name__ == "detect" else s for s in STAGES[2:]])
 ```
 
 ### Filtering questions

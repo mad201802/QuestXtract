@@ -41,7 +41,7 @@ class Config:
     initial_prompt: str = _PUNCTUATION_PROMPT
 
     # --- 2.4 vision-informed second ASR pass ---
-    hotwords_from_vision: bool = False  # not read yet, #62
+    hotwords_from_vision: bool = False  # not read, not planned (#62)
 
     # --- 3.1 sentences ---
     max_sentence_words: int = 60
