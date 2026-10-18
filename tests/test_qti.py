@@ -36,11 +36,7 @@ def test_an_item_becomes_a_single_choice_item_with_its_key_and_feedback(
     item = quiz_to_qti(make_quiz("q_aaa")).items[0]
     assert (item.identifier, item.title, item.language) == ("quiz_q_aaa", "Question q_aaa", "en")
     assert item.prompt == "Which sort is stable: 2 < 3 & 4 > 1?"
-    assert item.interaction.interaction_type == "choiceInteraction"
-    assert item.interaction.max_choices == 1
-    (declaration,) = item.response_declarations
-    assert (declaration.base_type, declaration.cardinality) == ("identifier", "single")
-    assert declaration.correct_values == ("a",)
+    assert item.correct_option == "a"
     assert [(option.identifier, option.text) for option in item.options] == [
         ("a", "Merge sort"),
         ("b", "Quicksort"),
@@ -49,7 +45,6 @@ def test_an_item_becomes_a_single_choice_item_with_its_key_and_feedback(
     assert item.options[1].feedback == "Partitioning can reorder equal keys."
     assert item.explanation == "A stable sort keeps equal keys in order."
     assert item.points == 2.0
-    assert item.provenance is not None
     assert (item.provenance.source_question_id, item.provenance.start) == ("q_aaa", 1.5)
 
 
@@ -80,7 +75,7 @@ def test_instructions_reach_the_test(make_quiz: MakeQuiz) -> None:
     assert assessment.instructions == "Pick one answer."
     assert assessment.shuffle_items
     assert not assessment.show_feedback
-    assert assessment.items[0].interaction.shuffle
+    assert assessment.items[0].shuffle_options
 
 
 def test_rejected_items_are_left_out(make_quiz: MakeQuiz) -> None:
@@ -95,9 +90,7 @@ def test_rejected_items_are_left_out(make_quiz: MakeQuiz) -> None:
 def test_zero_points_are_allowed(make_quiz: MakeQuiz) -> None:
     quiz = make_quiz("q_aaa")
     quiz["questions"][0]["points"] = 0
-    outcomes = quiz_to_qti(quiz).items[0].outcome_declarations
-    score = next(outcome for outcome in outcomes if outcome.identifier == "SCORE")
-    assert score.normal_maximum is None
+    assert quiz_to_qti(quiz).items[0].points == 0.0
 
 
 @pytest.mark.parametrize(

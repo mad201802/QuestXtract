@@ -402,8 +402,9 @@ schemas' `https` imports, and `xmlschema`'s export corrupts `XInclude.xsd`, whic
 UTF-16. Validating in the tests proves the writer, whose output depends only on the quiz's
 fields, without a runtime dependency or a network call on every export.
 
-*Cost:* a first `ci-check.sh` needs the network once. A user's package is not validated when it
-is written, so the tests must cover every shape the writer can produce.
+*Cost:* the XSD tests need the network once; offline, `ci-check.sh` skips them, so only CI is
+sure to run them. A user's package is not validated when it is written, so the tests must cover
+every shape the writer can produce.
 
 ## 4. Requirements traceability (→ report ch. 6)
 

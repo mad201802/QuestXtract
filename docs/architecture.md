@@ -1204,7 +1204,8 @@ metadata/questxtract.json      provenance, review status and the origin of every
   XSD cannot: the correct response and every feedback name an option, every `href` and
   dependency resolves, identifiers are unique. `scripts/fetch_qti_xsd.py` downloads the 17
   schema files once, pinned by SHA-256, into `.cache/qti-xsd/`, and the tests compile them from
-  there with network access off. The package itself does not depend on the XSDs.
+  there with network access off. Without that copy they are skipped, except in CI, where they
+  fail. The package itself does not depend on the XSDs.
 - **Determinism.** The same input gives the same bytes: entries are written in a fixed order with
   the date 1980-01-01, deflate, Unix permissions `0644` and no clock or platform data.
 

@@ -31,44 +31,11 @@ class QtiExportError(SchemaError):
 
 @dataclass(frozen=True, kw_only=True)
 class AssessmentOption:
-    """An option of a choice interaction, with the feedback shown when it is chosen."""
+    """An option of the choice interaction, with the feedback shown when it is chosen."""
 
     identifier: str
     text: str
-    feedback: str | None = None
-
-
-@dataclass(frozen=True, kw_only=True)
-class ResponseDeclaration:
-    """A response variable and its answer key."""
-
-    identifier: str
-    base_type: str
-    cardinality: str
-    correct_values: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, kw_only=True)
-class Interaction:
-    """The interaction presented to a learner."""
-
-    interaction_type: str
-    response_identifier: str
-    min_choices: int | None = None
-    max_choices: int | None = None
-    shuffle: bool = False
-
-
-@dataclass(frozen=True, kw_only=True)
-class OutcomeDeclaration:
-    """An outcome variable set by response processing."""
-
-    identifier: str
-    base_type: str = "float"
-    cardinality: str = "single"
-    default_value: str | None = None
-    normal_maximum: float | None = None
-    normal_minimum: float | None = None
+    feedback: str
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -82,46 +49,23 @@ class Provenance:
 
 @dataclass(frozen=True, kw_only=True)
 class AssessmentItem:
-    """One QTI assessment item.
+    """One single-choice QTI assessment item.
 
-    ``explanation`` is shown after every option's own feedback. ``metadata`` goes to the
-    package's JSON sidecar as it is.
+    ``correct_option`` is the identifier of the one correct option. ``explanation`` is shown
+    after every option's own feedback. ``metadata`` goes to the package's JSON sidecar as it is.
     """
 
     identifier: str
     title: str
     prompt: str
     language: str
-    response_declarations: tuple[ResponseDeclaration, ...]
-    interaction: Interaction
-    options: tuple[AssessmentOption, ...] = ()
-    explanation: str | None = None
-    points: float = 1.0
-    provenance: Provenance | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-    @property
-    def has_feedback(self) -> bool:
-        """Whether any option has feedback to show."""
-        return any(option.feedback is not None for option in self.options)
-
-    @property
-    def outcome_declarations(self) -> tuple[OutcomeDeclaration, ...]:
-        """``SCORE`` and ``MAXSCORE``, plus ``FEEDBACK`` when there is feedback to show."""
-        maximum = float(self.points)
-        normalised = maximum > 0  # normal-maximum must be > 0
-        outcomes = [
-            OutcomeDeclaration(
-                identifier="SCORE",
-                default_value=repr(0.0),
-                normal_maximum=maximum if normalised else None,
-                normal_minimum=0.0 if normalised else None,
-            ),
-            OutcomeDeclaration(identifier="MAXSCORE", default_value=repr(maximum)),
-        ]
-        if self.has_feedback:
-            outcomes.append(OutcomeDeclaration(identifier="FEEDBACK", base_type="identifier"))
-        return tuple(outcomes)
+    options: tuple[AssessmentOption, ...]
+    correct_option: str
+    shuffle_options: bool
+    explanation: str
+    points: float
+    provenance: Provenance
+    metadata: dict[str, Any]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -258,21 +202,9 @@ def _item(
         title=f"Question {source_id}",
         prompt=prompt,
         language=language,
-        response_declarations=(
-            ResponseDeclaration(
-                identifier="RESPONSE",
-                base_type="identifier",
-                cardinality="single",
-                correct_values=(option_ids[0],),
-            ),
-        ),
-        interaction=Interaction(
-            interaction_type="choiceInteraction",
-            response_identifier="RESPONSE",
-            max_choices=1,
-            shuffle=shuffle_options,
-        ),
         options=tuple(options),
+        correct_option=option_ids[0],
+        shuffle_options=shuffle_options,
         explanation=explanation,
         points=float(points),
         provenance=Provenance(source_question_id=source_id, start=float(start), end=float(end)),
