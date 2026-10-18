@@ -66,6 +66,18 @@ reads.
 | `--from-scratch` | nothing | off | Transcribes again even if a cached transcript exists. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
+### `questxtract qti <quiz.json>`
+
+Exports a quiz file as a QTI 3.0 ZIP package for an LMS. Every item becomes a single-choice
+item scored against its correct option, with each option's explanation as feedback; the quiz's
+instructions set shuffling and whether feedback is shown. Items a reviewer marked `rejected` are
+left out. The same quiz file always gives the same ZIP, byte for byte.
+
+| Option | Takes | Default | What it does |
+|---|---|---|---|
+| `-o`, `--output` | a path | required | Where to write the ZIP. Its folder must exist. |
+| `-h`, `--help` | nothing | | Shows the options. |
+
 ### Everywhere
 
 | Option | What it does |
@@ -191,6 +203,12 @@ almost instantly. It works the other way round too.
 
 ```bash
 questxtract process lecture.transcript.json -o -
+```
+
+**Export for an LMS (QTI 3.0)**
+
+```bash
+questxtract qti lecture.quiz.json -o lecture.qti.zip   # every item but the rejected ones
 ```
 
 **See which questions the threshold threw away.** This is a development tool, not a CLI

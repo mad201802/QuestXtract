@@ -35,6 +35,7 @@ turns them into study material. It **extracts** questions, it never invents them
 | ⏱️ **Timestamps** | Every question carries its position in the recording |
 | ✏️ **Human in the loop** | A `review` block per question for teacher edits, never overwritten by the pipeline |
 | 📦 **JSON export** | `questions.json` with a fixed key set and a formal JSON Schema |
+| 🎓 **LMS export** | `questxtract qti` writes a `quiz.json` as a QTI 3.0 package an LMS can import |
 
 Planned: quiz generation (#79). What is built today:
 [architecture.md 13.3](docs/architecture.md#133-status).
@@ -316,6 +317,10 @@ uv sync --dev
 scripts/ci-check.sh        # what CI runs: ruff (auto-fix), ruff format, mypy --strict, pytest (coverage gate 70%)
 uv run pytest tests/test_detect.py -q   # the inner loop
 ```
+
+`ci-check.sh` first downloads, once, the QTI 3.0 XSDs the tests validate packages against
+(`scripts/fetch_qti_xsd.py`, into `.cache/qti-xsd/`). Offline, it skips those tests with a
+warning; CI always runs them.
 
 How the pipeline works and where each stage lives: [docs/architecture.md](docs/architecture.md).
 Why it looks that way: [docs/design_decisions.md](docs/design_decisions.md). Conventions for

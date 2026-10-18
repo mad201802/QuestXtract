@@ -25,6 +25,8 @@ from .models import (
     Word,
 )
 from .pipeline import STAGES, process, run, stage
+from .qti import QtiExportError
+from .qti_v3 import export_qti
 from .quiz_schema import read_quiz, validate_quiz
 from .schema import Question
 
@@ -42,6 +44,7 @@ __all__ = [
     "Layout",
     "MediaError",
     "QAPair",
+    "QtiExportError",
     "Question",
     "QuestionCandidate",
     "SchemaError",
@@ -52,6 +55,7 @@ __all__ = [
     "Word",
     "__version__",
     "extract_audio",
+    "export_qti",
     "filter_document",
     "filter_questions",
     "process",
