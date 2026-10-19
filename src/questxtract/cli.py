@@ -1,4 +1,4 @@
-"""Command line interface: ``process``, ``transcribe``, ``eval`` and ``quiz``.
+"""Command line interface: ``process``, ``transcribe``, ``eval``, ``quiz`` and ``qti``.
 
 Every command and option, with recipes: docs/cli.md.
 """
@@ -18,6 +18,8 @@ from .evaluate import evaluate, format_report
 from .export import result_to_json, write_questions
 from .models import Context, Stage, Transcript
 from .pipeline import STAGES, run
+from .qti import QtiExportError
+from .qti_v3 import export_qti
 from .vision import has_video
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
@@ -230,10 +232,10 @@ def _with_llm(config: Config) -> Config:
     return config
 
 
-# Vision flags (#61). The vision design is still moving in M3 (ink curve #133, layout probe #57,
-# de-occlusion #127). When vision gains a setting, decide whether it gets a flag here or stays
-# TOML-only, and update together: `_config`, this check, the `process` parser, the
-# "Reading the board" section in README.md, the option and error tables in docs/cli.md, and
+# Vision flags (#61). The vision design is still moving in M3 (ink curve #133). When vision
+# gains a setting, decide whether it gets a flag here or stays TOML-only, and update together:
+# `_config`, this check, the `process` parser, the "Reading the board" section in README.md,
+# the option and error tables in docs/cli.md, and
 # test_every_vision_setting_has_a_flag_decision in tests/test_cli.py, which fails until you do.
 def _with_vision(config: Config, source: Path) -> Config:
     """Check that vision can read the board before transcription and sampling run.
@@ -336,6 +338,17 @@ def _quiz(args: argparse.Namespace) -> int:
     del args
     print("error: quiz is not implemented yet (#79)", file=sys.stderr)
     return 1
+
+
+def _qti(args: argparse.Namespace) -> int:
+    """Export quiz.json as a QTI 3.0 package."""
+    try:
+        export_qti(args.quiz, args.output)
+    except QtiExportError as exc:
+        print(f"error: qti: {exc}", file=sys.stderr)
+        return 1
+    print(f"QTI 3.0 package -> {args.output}", file=sys.stderr)
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -481,6 +494,11 @@ def build_parser() -> argparse.ArgumentParser:
     quiz.add_argument("questions", help="a questions.json written by `process`")
     quiz.add_argument("-o", "--output", help="write the quiz here")
     quiz.set_defaults(handler=_quiz)
+
+    qti = subs.add_parser("qti", help="export quiz.json as a QTI 3.0 package")
+    qti.add_argument("quiz", help="a quiz.json")
+    qti.add_argument("-o", "--output", required=True, help="write the QTI ZIP package here")
+    qti.set_defaults(handler=_qti)
 
     return parser
 

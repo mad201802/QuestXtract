@@ -37,7 +37,7 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 |---|---|---|---|
 | `-o`, `--output` | a path | next to the input | Where to write the questions. `-o -` prints them to the terminal instead. A folder in the path that doesn't exist yet is created. |
 | `-t`, `--threshold` | a number, 0 to 1 | `0.4` | Keeps only questions with at least this confidence. Lower gives more questions, including more false ones; higher gives fewer. |
-| `-m`, `--model` | a model name | `turbo` | The Whisper model used to transcribe. Only matters for `.mp4` input. See [Choosing a model](#choosing-a-model). |
+| `-m`, `--model` | a model name | `turbo` | The Whisper model used to transcribe. Only matters for `.mp4` or `.mp3` input. See [Choosing a model](#choosing-a-model). |
 | `--from-scratch` | nothing | off | Ignores cached results and recomputes everything, transcription included. |
 | `--detector` | `rules` or `llm` | `rules` | How questions are found: fast offline rules, or a language model that reads the transcript. See [Finding questions with an LLM](#finding-questions-with-an-llm). |
 | `--llm-model` | a model name | `gpt-5.6-terra` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
@@ -47,7 +47,7 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--vision-model` | a model name | `gpt-5.6-luna` | The model that reads the board, as the endpoint names it. It must take images. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
-The vision options may still change while the vision work continues in M3 (#133, #57, #127). The other vision settings (`vision_fps`, `vision_max_states`, `vision_change_fraction`, `vision_change_hold`) are set in the TOML file only.
+The vision options may still change while the vision work continues in M3 (#133). The other vision settings (`vision_fps`, `vision_max_states`, `vision_change_fraction`, `vision_change_hold`) are set in the TOML file only.
 
 One thing to know about `-t` with the rules: a question with no answer scores at most `0.55`, so
 a threshold above `0.55` keeps only questions the next sentence answers. With `--detector llm`
@@ -65,6 +65,18 @@ reads.
 | `-m`, `--model` | a model name | `turbo` | The Whisper model used to transcribe. |
 | `--from-scratch` | nothing | off | Transcribes again even if a cached transcript exists. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
+
+### `questxtract qti <quiz.json>`
+
+Exports a quiz file as a QTI 3.0 ZIP package for an LMS. Every item becomes a single-choice
+item scored against its correct option, with each option's explanation as feedback; the quiz's
+instructions set shuffling and whether feedback is shown. Items a reviewer marked `rejected` are
+left out. The same quiz file always gives the same ZIP, byte for byte.
+
+| Option | Takes | Default | What it does |
+|---|---|---|---|
+| `-o`, `--output` | a path | required | Where to write the ZIP. Its folder must exist. |
+| `-h`, `--help` | nothing | | Shows the options. |
 
 ### Everywhere
 
@@ -143,7 +155,7 @@ Without `-o`, output lands next to the input, named after it:
 | Input | `process` writes | `transcribe` writes |
 |---|---|---|
 | `lecture.mp4` | `lecture.questions.json` | `lecture.transcript.json` |
-| `lecture.transcript.json` | `lecture.questions.json` | (needs an `.mp4`) |
+| `lecture.transcript.json` | `lecture.questions.json` | (needs an `.mp4` or `.mp3`) |
 
 When vision has read the board, the keyframe images are copied into a folder next to the
 questions file and named after it (`lecture.keyframes/` for `lecture.questions.json`); the file
@@ -191,6 +203,12 @@ almost instantly. It works the other way round too.
 
 ```bash
 questxtract process lecture.transcript.json -o -
+```
+
+**Export for an LMS (QTI 3.0)**
+
+```bash
+questxtract qti lecture.quiz.json -o lecture.qti.zip   # every item but the rejected ones
 ```
 
 **See which questions the threshold threw away.** This is a development tool, not a CLI
@@ -298,9 +316,10 @@ from the same folder every time to benefit from it.
 | `--from-scratch` | yes, and it recomputes everything else too |
 | the video file itself | yes: the cache is keyed on the file's content |
 
-A `.json` transcript input never touches the cache. There is nothing expensive left to save.
+A `.json` transcript input has no transcription to save. Only the requests to the model are
+cached, with `--detector llm` (see [Finding questions with an LLM](#finding-questions-with-an-llm)).
 
-Within one run, a slide or page that comes back with nothing changed is not read again either: its
+Within one run, a slide or page that comes back with nothing changed is not read again: its
 earlier reading is copied, also with `--from-scratch`, and counted in `stats.vision_reused`. This
 is not the cache, so it works on a first run too ([architecture.md 6.5](architecture.md#65-captioning)).
 

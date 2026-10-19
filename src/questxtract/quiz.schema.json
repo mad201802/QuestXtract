@@ -1,0 +1,304 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "quiz.json",
+  "description": "Version 1 schema for quiz.json, separate from questions.json. The quiz-generation module produces this format from extracted questions, and export modules use it to generate QTI, LaTeX, or HTML. Version 1 supports only single-answer multiple-choice questions. The output must be deterministic (#79): two runs on the same input must produce identical files, so no timestamps of the run or absolute paths are stored. Each item's provenance.source_question_id is the only place a source question id is stored. Feedback is not stored; exporters build it from solution. JSON Schema cannot express every constraint, so a Python application-level validator must also check that: (1) the option referenced by correct_response.option_ids exists in options; (2) option_explanations has exactly one entry for every option id and no other keys; (3) option ids are unique within a question; (4) every quiz item id equals \"quiz_\" + provenance.source_question_id, and no two items share a source_question_id, so item ids are unique; (5) every provenance.source_question_id exists in the source questions.json; (6) provenance.end is greater than or equal to provenance.start; (7) a prompt with origin \"spoken\" equals the source question's original_text when that is not null, else its text. Every text with origin \"spoken\" must be verbatim from the transcript and anything reworded marked \"generated\", but options and explanations cannot be checked without the transcript, so for them this is a rule for the writer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "title",
+    "language",
+    "status",
+    "source",
+    "instructions",
+    "generation",
+    "questions"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+$",
+      "minLength": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^quiz_[A-Za-z0-9_-]+$",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review"]
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "instructions": {
+      "$ref": "#/$defs/instructions"
+    },
+    "generation": {
+      "$ref": "#/$defs/generation"
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/choiceSingleQuestion"
+      }
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "questions_path",
+        "questions_schema_version",
+        "questions_hash"
+      ],
+      "properties": {
+        "questions_path": {
+          "description": "The source questions.json as a file name or a path relative to quiz.json, never absolute, so the value is the same on every run and machine.",
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "pattern": "^(/|\\\\|[A-Za-z]:)"
+          }
+        },
+        "questions_schema_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "questions_hash": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "instructions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shuffle_questions",
+        "shuffle_options",
+        "show_feedback"
+      ],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "shuffle_questions": {
+          "type": "boolean"
+        },
+        "shuffle_options": {
+          "type": "boolean"
+        },
+        "show_feedback": {
+          "type": "boolean"
+        }
+      }
+    },
+    "generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "model",
+        "prompt_version"
+      ],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["manual", "rule_based", "llm", "hybrid"]
+        },
+        "model": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "prompt_version": {
+          "type": ["string", "null"],
+          "minLength": 1
+        }
+      }
+    },
+    "generatedText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "origin"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "origin": {
+          "description": "spoken: verbatim from the transcript. generated: anything reworded or newly written.",
+          "type": "string",
+          "enum": ["spoken", "generated"]
+        }
+      }
+    },
+    "option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+          "minLength": 1
+        },
+        "text": {
+          "$ref": "#/$defs/generatedText"
+        }
+      }
+    },
+    "options": {
+      "description": "One correct option and at least two distractors.",
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "$ref": "#/$defs/option"
+      }
+    },
+    "correctResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["option_ids"],
+      "properties": {
+        "option_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "solution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["explanation", "option_explanations"],
+      "properties": {
+        "explanation": {
+          "$ref": "#/$defs/generatedText"
+        },
+        "option_explanations": {
+          "description": "One entry per option, keyed by option id.",
+          "type": "object",
+          "minProperties": 3,
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_.-]*$": {
+              "$ref": "#/$defs/generatedText"
+            }
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_question_id", "start", "end"],
+      "properties": {
+        "source_question_id": {
+          "type": "string",
+          "pattern": "^q_[A-Za-z0-9_-]+$",
+          "minLength": 1
+        },
+        "start": {
+          "description": "Start of the source segment, in seconds from the beginning of the recording.",
+          "type": "number",
+          "minimum": 0
+        },
+        "end": {
+          "description": "End of the source segment, in seconds from the beginning of the recording.",
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "note", "metadata"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pending", "accepted", "rejected"]
+        },
+        "note": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "metadata": {
+          "description": "Free-form, as in questions.json.",
+          "type": "object"
+        }
+      }
+    },
+    "choiceSingleQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "prompt",
+        "interaction_type",
+        "points",
+        "options",
+        "correct_response",
+        "solution",
+        "provenance",
+        "review"
+      ],
+      "properties": {
+        "id": {
+          "description": "Derived from provenance.source_question_id as \"quiz_\" + source_question_id.",
+          "type": "string",
+          "pattern": "^quiz_q_[A-Za-z0-9_-]+$",
+          "minLength": 1
+        },
+        "prompt": {
+          "$ref": "#/$defs/generatedText"
+        },
+        "interaction_type": {
+          "const": "choice_single"
+        },
+        "points": {
+          "type": "number",
+          "minimum": 0
+        },
+        "options": {
+          "$ref": "#/$defs/options"
+        },
+        "correct_response": {
+          "$ref": "#/$defs/correctResponse"
+        },
+        "solution": {
+          "$ref": "#/$defs/solution"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "review": {
+          "$ref": "#/$defs/review"
+        }
+      }
+    }
+  }
+}
