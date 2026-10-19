@@ -353,6 +353,59 @@ is no reason to stop a run of up to 80 calls.
 
 *Cost:* one more module. A vision cache key hashes the whole keyframe, up to a few MB per request.
 
+### D15: quiz.json v1 is single choice, origin-tagged, deterministic, and checked without jsonschema
+
+*Chose:* a separate `quiz.json` with its own schema (#146, architecture.md 12.3), agreed with the
+quiz command's owner (#79) and the exporters (#67, #37):
+
+- Single choice only, at least three options: one correct and at least two distractors.
+- Every text (stem, options, explanations) carries `origin`, `spoken` or `generated`. A stem is
+  `spoken` only when it is the question as it was said, which for a question the LLM judge
+  reworded is `original_text`, not `text`.
+- No run timestamps, no absolute paths and no `feedback` block, so the same input gives a
+  byte-identical file; exporters build feedback from `solution`.
+- The source question id lives only in each item's `provenance`; the item id is derived from it,
+  and two items may not share a source.
+- `review.status` is `pending`, `accepted` or `rejected`.
+- A runtime validator in plain Python for the rules JSON Schema cannot express; the schema
+  itself is enforced with `jsonschema` in the tests only.
+
+*Alternative:* `generated_at` and a `feedback` block per item, as in the first draft; a list of
+source ids in `source`; `jsonschema` as a runtime dependency that checks everything at once.
+
+*Why:* requirement 4.5 says the extraction never invents a question, so the one place that does
+write new text must say which text that is, per field. A file that changes on every run cannot
+be diffed or cached, and feedback derived from `solution` cannot drift from it. A second list of
+source ids would be one more thing to keep in sync with the items. `rejected` replaces
+`questions.json`'s `deleted` and `false_positive`, because a generated item is not a false
+detection. `jsonschema` would add a runtime dependency for checks the writer's tests already make.
+
+*Cost:* a reader that skips `read_quiz` gets no structural check at runtime. Spoken options and
+explanations cannot be checked, because `quiz.json` holds no transcript.
+
+### D16: QTI 3.0 from quiz.json, validated against the official XSDs in the tests only
+
+*Chose:* `questxtract qti` reads `quiz.json` (D15), not `questions.json`, and writes QTI 3.0
+only (#67, architecture.md 12.4). The tests validate every package they write against the
+1EdTech XSDs, from a local copy that `scripts/fetch_qti_xsd.py` downloads once: the raw bytes of
+all 17 files the two schemas import, each pinned by SHA-256, mapped from their URLs with
+`xmlschema`'s `uri_mapper`. CI caches the copy and fails when it is missing.
+
+*Alternative:* text-entry items from `questions.json`; QTI 2.x beside 3.0; the XSDs committed to
+the repository; validation at runtime, always or behind a `--validate` flag; lxml, or
+`xmlschema`'s own export of the schemas.
+
+*Why:* `quiz.json` has what a scorable item needs (options, a correct answer, points,
+explanations), and only a separate generative command may write that text (requirement 4.5).
+The item XSD alone is 18 MB, about 1.5 MB compressed in every clone. lxml cannot follow the
+schemas' `https` imports, and `xmlschema`'s export corrupts `XInclude.xsd`, which is served in
+UTF-16. Validating in the tests proves the writer, whose output depends only on the quiz's
+fields, without a runtime dependency or a network call on every export.
+
+*Cost:* the XSD tests need the network once; offline, `ci-check.sh` skips them, so only CI is
+sure to run them. A user's package is not validated when it is written, so the tests must cover
+every shape the writer can produce.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |

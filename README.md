@@ -35,6 +35,7 @@ turns them into study material. It **extracts** questions, it never invents them
 | ⏱️ **Timestamps** | Every question carries its position in the recording |
 | ✏️ **Human in the loop** | A `review` block per question for teacher edits, never overwritten by the pipeline |
 | 📦 **JSON export** | `questions.json` with a fixed key set and a formal JSON Schema |
+| 🎓 **LMS export** | `questxtract qti` writes a `quiz.json` as a QTI 3.0 package an LMS can import |
 
 Planned: quiz generation (#79). What is built today:
 [architecture.md 13.3](docs/architecture.md#133-status).
@@ -243,7 +244,7 @@ The pipeline is a list of `Context -> Context` functions. Passing your own `stag
 whole plugin system: swap the detector, drop a stage, add an enrichment step:
 
 ```python
-run(ctx, [*STAGES[2:6], my_detector, *STAGES[7:]])
+run(ctx, [my_detector if s.__name__ == "detect" else s for s in STAGES[2:]])
 ```
 
 ### Filtering questions
@@ -265,6 +266,21 @@ A question is kept when `start <= question.start < end`, in seconds; leave out e
 open that side. Only the question list shrinks, so `segment_id` and `visual_ids` still resolve.
 An invalid range raises `ValueError`. `topic=` is **experimental**: no stage produces topics yet,
 so it warns and matches nothing.
+
+### Reading a quiz.json
+
+`read_quiz` reads a `quiz.json` ([schema](src/questxtract/quiz.schema.json)) and checks the rules
+its schema cannot express; `validate_quiz` does the same for a document already in memory. Pass
+the source `questions.json` to also check that each item's question exists and that a stem
+marked `spoken` is the question as it was said:
+
+```python
+from questxtract import read_questions, read_quiz
+
+quiz = read_quiz("lecture.quiz.json", read_questions("lecture.questions.json"))
+```
+
+Every problem is listed in one `SchemaError`, one line each, with its path.
 
 ### Swapping the ASR engine
 
@@ -301,6 +317,10 @@ uv sync --dev
 scripts/ci-check.sh        # what CI runs: ruff (auto-fix), ruff format, mypy --strict, pytest (coverage gate 70%)
 uv run pytest tests/test_detect.py -q   # the inner loop
 ```
+
+`ci-check.sh` first downloads, once, the QTI 3.0 XSDs the tests validate packages against
+(`scripts/fetch_qti_xsd.py`, into `.cache/qti-xsd/`). Offline, it skips those tests with a
+warning; CI always runs them.
 
 How the pipeline works and where each stage lives: [docs/architecture.md](docs/architecture.md).
 Why it looks that way: [docs/design_decisions.md](docs/design_decisions.md). Conventions for
