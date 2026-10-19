@@ -96,6 +96,10 @@ Results go to `spike-results/`, which Git ignores.
    uv run python scripts/score_vision.py spike-results/glm-ocr spike-results/qwen3-vl-2b
    ```
 
+   The score is word-sequence similarity (0 to 1) against the reference reading: how many of the
+   frame's words a reader returned, in order. It is not a character error rate or a formula
+   recall, so do not compare it with those.
+
 6. **Post on #144** the table, both `ollama ps` outputs (memory, and whether it ran on the GPU)
    and your computer (model, RAM, GPU).
 
