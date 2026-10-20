@@ -152,8 +152,8 @@ _FRAMING_STOPWORDS = (
 
 # A head word without a '?' stays under the 0.45 gate: on the reference recordings every such
 # sentence was a statement ("What I mean is ...", "So when we ...").
-# ponytail: #48, recovering a question the ASR left unpunctuated needs a second, independent
-# gate (a local answer slot, architecture.md 7.1); add it when a labelled question is lost to it.
+# Recovering a question the ASR left unpunctuated needs a second, independent gate (a local
+# answer slot, architecture.md 7.1); add it when a labelled question is lost to it.
 _SCORES = {
     "mark": 0.6,
     "wh": 0.4,

@@ -43,7 +43,9 @@ uv run python scripts/extract_keyframes.py lecture.mp4 -o keyframes/ --max-views
 
 Raw answers of the model comparison, one line per call: `results/<run>/results.jsonl`, written by
 `scripts/compare_vision.py` (frame, model, seconds, token counts, the answer or the error).
-`results/tesseract/` holds the OCR text. The comparison and its caveats are on #52.
+The OCR baseline is GLM-OCR: `results/glm-ocr/` and `results/glm-ocr-q8-local/` hold its plain text,
+and `results/tesseract/` a classic OCR engine's, for comparison. The comparisons and their caveats
+are on #52 and #143.
 
 | Run | Models | Frames |
 |---|---|---|
@@ -57,6 +59,54 @@ Raw answers of the model comparison, one line per call: `results/<run>/results.j
 | `claude-hand-graded` | Claude Sonnet 5.5 reading each frame itself and answering in the prompt v0 format. **Not independent**: the same reader wrote the reference text the other models are scored against. | MIT and TTK |
 | `claude-independent-agent` | A fresh Claude agent with no context, given only the prompt and the frames, told to open nothing else | MIT and TTK |
 | `qwen3-vl-2b-instruct-local` | Qwen3-VL 2B through Ollama | MIT |
+| `glm-ocr` | GLM-OCR (`zai-org/GLM-OCR`, 0.9B) on Idun's hosted service, prompt "Text Recognition:" | MIT and TTK at 360p |
+| `glm-ocr-q8-local` | GLM-OCR `glm-ocr:q8_0` through Ollama on an 8 GB MacBook Air M2, same prompt; `ollama-ps.txt` holds the memory in use | MIT and TTK at 360p |
+
+## Run the OCR comparison on your own computer
+
+GLM-OCR and Qwen3-VL 2B on the 10 committed frames, through a local Ollama: the laptop
+measurement of #144. Works on macOS, Windows and Linux; about 10 minutes plus the downloads.
+Results go to `spike-results/`, which Git ignores.
+
+1. **Install Ollama** from [ollama.com](https://ollama.com) (on macOS also `brew install
+   ollama`, on Windows also `winget install Ollama.Ollama`).
+2. **Start it.** The app keeps running in the background (menu bar or tray). Check with
+   `ollama ps`; if it cannot connect, run `ollama serve` in a terminal of its own and leave it open.
+3. **Download the two models** (about 4-6 GB of disk):
+
+   ```bash
+   ollama pull glm-ocr:q8_0
+   ollama pull qwen3-vl:2b-instruct
+   ```
+
+4. **Run them**, from the repository folder after `uv sync --dev`. The same commands work in
+   Terminal, Git Bash and PowerShell; keep the quotes, the script expands the patterns itself:
+
+   ```bash
+   uv run python scripts/compare_vision.py "tests/data/vision/*.png" -m glm-ocr:q8_0 --ocr "Text Recognition:" --base-url http://localhost:11434/v1 -o spike-results/glm-ocr
+   ollama ps
+   uv run python scripts/compare_vision.py "tests/data/vision/mit_*.png" -m qwen3-vl:2b-instruct --base-url http://localhost:11434/v1 --kind blackboard -o spike-results/qwen3-vl-2b
+   uv run python scripts/compare_vision.py "tests/data/vision/ttk*.png" -m qwen3-vl:2b-instruct --base-url http://localhost:11434/v1 --kind tablet -o spike-results/qwen3-vl-2b
+   ollama ps
+   ```
+
+5. **Score them** against the reference reading:
+
+   ```bash
+   uv run python scripts/score_vision.py spike-results/glm-ocr spike-results/qwen3-vl-2b
+   ```
+
+   The score is word-sequence similarity (0 to 1) against the reference reading: how many of the
+   frame's words a reader returned, in order. It is not a character error rate or a formula
+   recall, so do not compare it with those.
+
+6. **Post on #144** the table, both `ollama ps` outputs (memory, and whether it ran on the GPU)
+   and your computer (model, RAM, GPU).
+
+Close heavy apps first: a model stays loaded for 5 minutes after use, and two at once can slow an
+8 GB machine down (`ollama stop <model>` unloads one). The first frame of a run includes loading
+the model. A second run appends to the same `results.jsonl`, so delete its folder before running
+again.
 
 ## Licences
 

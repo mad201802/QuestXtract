@@ -4,9 +4,9 @@ Three stages. ``layout`` asks the model once where the content is and what it is
 ``vision`` can crop to it and tell the captioning prompt which kind of frame it reads.
 
 Capture and the join are two stages, not one, because of architecture.md 11.1 rule 4:
-capture is expensive and caches as ``vision.json``, while the interval join is eight lines
-and always recomputes. Nailing one board state to one segment at capture time would bake in
-a wrong join that every consumer inherits.
+capture is expensive and caches its views in ``views.json`` and each reading per request,
+while the interval join is eight lines and always recomputes. Nailing one board state to one
+segment at capture time would bake in a wrong join that every consumer inherits.
 
 All three no-op themselves when vision is off, rather than being filtered out by the runner
 (rule 3).
@@ -43,6 +43,19 @@ from .models import (
 _COMPARE_HEIGHT = 480  # architecture.md 6.3: change detection compares frames at about 480p
 _GRAY = np.array([0.299, 0.587, 0.114], dtype=np.float32)  # ITU-R BT.601 luma weights
 _NOISE = 32  # grey levels a pixel must move by to count as changed, above codec noise
+
+# A page that comes back reuses its earlier reading (architecture.md 6.5). The detail limits are
+# about twice the codec noise between frames of one page in TTK4225 2026-09-14 (#138).
+_REUSE_KINDS = ("slides", "handwriting", "screencast")  # boards are #133's; unknown may be one
+_REUSE_CANDIDATE = 0.01  # share of the small copies' pixels that may differ for a candidate
+# The detail check compares the mean brightness of squares at full resolution: (side in px, step
+# in px between square starts, most the mean may move on the same page). The small squares find a
+# decimal point, the large ones a broad faint mark; codec noise is larger in the small ones.
+_DETAIL_SQUARES = ((4, 2, 20.0), (8, 4, 11.0))
+_DETAIL_COLOUR = 12.0  # most an 8 px square's mean colour (Cb, Cr) may move on the same page
+_YCBCR = np.array(  # ITU-R BT.601 RGB to Y, Cb and Cr, without offsets: only differences matter
+    [[0.299, 0.587, 0.114], [-0.169, -0.331, 0.5], [0.5, -0.419, -0.081]], dtype=np.float32
+)
 
 # The prompt and the schema are module-level, version-tagged, so a prompt change is a reviewable
 # diff. Both are part of every request, so a change to either asks again (endpoint.ask's cache).
@@ -269,35 +282,141 @@ def vision(ctx: Context) -> Context:
     the cache. A reading that fails leaves that one view out with a warning; when the first
     readings all fail, the rest are not sent. Frames are cropped to the ``layout`` stage's
     ``content_region`` and its ``kind`` goes into the prompt; one answer holds for the whole
-    recording. De-occlusion is not built.
+    recording. On slides, handwriting and screencasts, a page that comes back with the same
+    content reuses its earlier reading in this run, with no model call (:func:`_earlier`),
+    counted in ``stats.vision_reused``. De-occlusion is not built.
     """
     if not ctx.config.vision_enabled or not has_video(ctx.source):
         return ctx
     config, report = ctx.config, ctx.progress
     views = _cut(ctx)
+    reuse = ctx.layout.kind in _REUSE_KINDS
+    readings: list[_Reading] = []
     visual: list[VisualContext] = []
-    failed = 0
+    failed = reused = 0
     for index, view in enumerate(views):
         if report:
             report("vision", 0.5 + 0.5 * index / len(views))
-        speech = _speech(ctx.sentences, view.start, view.end)
-        fields = _caption(config, view.keyframe, speech, kind=ctx.layout.kind)
-        if fields is None:
-            failed += 1
-            if not visual and failed >= _GIVE_UP_AFTER:
-                warnings.warn(
-                    f"vision: the first {failed} keyframes could not be read, so the rest are "
-                    "not sent; check vision_model, the API key and the endpoint",
-                    UserWarning,
-                    stacklevel=2,
-                )
-                break
-            continue
+        picture = _decoded(view.keyframe) if reuse else None
+        small = None if picture is None else _for_comparison(picture)
+        fields = _earlier(picture, small, readings, views)
+        if fields is not None:
+            reused += 1
+        else:
+            speech = _speech(ctx.sentences, view.start, view.end)
+            fields = _caption(config, view.keyframe, speech, kind=ctx.layout.kind)
+            if fields is None:
+                failed += 1
+                if not visual and failed >= _GIVE_UP_AFTER:
+                    warnings.warn(
+                        f"vision: the first {failed} keyframes could not be read, so the rest "
+                        "are not sent; check vision_model, the API key and the endpoint",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    break
+                continue
+            if small is not None:
+                readings.append(_Reading(small=small, view=index, fields=fields))
         path = _store(view.keyframe, config, ctx.source_hash)
         visual.append(VisualContext(start=view.start, end=view.end, keyframe_path=path, **fields))
     ctx.visual = tuple(visual)
     ctx.stats["vision_failed"] = len(views) - len(visual)
+    ctx.stats["vision_reused"] = reused
     return ctx
+
+
+@dataclass(frozen=True, kw_only=True)
+class _Reading:
+    """A reading that worked in this run, kept so that a page coming back can reuse it.
+
+    Args:
+        small: The small grey copy of its keyframe (:func:`_for_comparison`); the full
+            keyframe is not held here, it stays in the views.
+        view: Which view it read, by index.
+        fields: What the model read: the :class:`VisualContext` fields.
+
+    """
+
+    small: Frame
+    view: int
+    fields: dict[str, Any]
+
+
+def _earlier(
+    picture: Frame | None,
+    small: Frame | None,
+    readings: Sequence[_Reading],
+    views: Sequence[_View],
+) -> dict[str, Any] | None:
+    """Return the reading of an earlier keyframe that shows the same page, or ``None``.
+
+    Two steps, because the views' measure alone misses a small change: a new digit or a
+    decimal point is a few hundredths of a percent of the pixels, and a change of colour at the
+    same brightness is none. The reading whose small copy differs least, and by at most
+    ``_REUSE_CANDIDATE``, is the candidate; it is reused only when :func:`_same_page` passes at
+    full resolution, in colour. An earlier keyframe that cannot be decoded is not reused.
+    """
+    if picture is None or small is None:
+        return None
+    candidates = [r for r in readings if r.small.shape == small.shape]
+    if not candidates:
+        return None
+    closest = min(candidates, key=lambda r: _changed(r.small, small))
+    if _changed(closest.small, small) > _REUSE_CANDIDATE:
+        return None
+    before = _decoded(views[closest.view].keyframe)
+    if before is None or before.shape != picture.shape or not _same_page(before, picture):
+        return None
+    return closest.fields
+
+
+def _same_page(before: Frame, after: Frame) -> bool:
+    """Whether no square of the picture changed its mean brightness or colour beyond codec noise.
+
+    Each size in ``_DETAIL_SQUARES`` has its own limit, and its squares overlap, so a mark lies
+    whole in at least one: a decimal point in a small one, a broad faint mark in a large one. A
+    mean, rather than single pixels, averages the codec's ringing at the edges away. Colour (Cb,
+    Cr) has its own limit, so red turned to green of the same brightness is a change. The last
+    rows and columns are repeated up to a whole square, so a change at the border is compared
+    too. A mark fainter than the codec noise is not told apart: the codec mostly erases it.
+    """
+    change = (before.astype(np.float32) - after.astype(np.float32)) @ _YCBCR.T
+    largest = max(side for side, _, _ in _DETAIL_SQUARES)
+    border = ((0, -change.shape[0] % largest), (0, -change.shape[1] % largest), (0, 0))
+    change = np.pad(change, border, mode="edge")
+    for side, step, limit in _DETAIL_SQUARES:
+        means = _square_means(change, side, step)
+        if means[..., 0].max() > limit:
+            return False
+    return bool(_square_means(change[..., 1:], largest, largest // 2).max() <= _DETAIL_COLOUR)
+
+
+def _square_means(change: np.ndarray[Any, Any], side: int, step: int) -> np.ndarray[Any, Any]:
+    """Absolute mean of every ``side`` px square starting on a multiple of ``step`` px.
+
+    ``change`` is height x width x channels, its height and width multiples of ``side``.
+    Summed from ``step`` px cells, so the overlapping squares cost little.
+    """
+    height, width, channels = change.shape[0] // step, change.shape[1] // step, change.shape[2]
+    cells = change.reshape(height, step, width, step, channels).sum(axis=(1, 3))
+    span = side // step
+    rows, columns = height - span + 1, width - span + 1
+    squares = sum(cells[i : i + rows, j : j + columns] for i in range(span) for j in range(span))
+    means: np.ndarray[Any, Any] = np.abs(np.asarray(squares)) / side**2
+    return means
+
+
+def _decoded(png: bytes) -> Frame | None:
+    """Return the RGB picture in a keyframe PNG, or ``None`` when it cannot be decoded."""
+    try:
+        codec = av.CodecContext.create("png", "r")
+        frames = [frame for packet in codec.parse(png) for frame in codec.decode(packet)]
+    except (av.error.FFmpegError, ValueError):
+        return None
+    if not frames or not isinstance(frames[0], av.VideoFrame):
+        return None
+    return np.asarray(frames[0].to_ndarray(format="rgb24"), dtype=np.uint8)  # rgb24 is uint8
 
 
 def _cut(ctx: Context) -> list[_View]:

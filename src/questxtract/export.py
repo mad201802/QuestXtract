@@ -6,9 +6,9 @@ One rule governs the shape: **do not drop ``None`` on serialisation.** A fixed k
 emitted, always, ``null`` included, so consumers never have to defensively ``.get()`` a
 missing ``answer``. Segments and board states are listed once and referenced by id. The
 format is also the edit surface (FR5): ``review`` is the one block people own. A re-run does
-not carry those edits over yet; merging them back by question id is #15. Keyframes travel
-with the file: :func:`write_questions` copies them next to it. Formal description:
-``questions.schema.json``.
+not carry those edits over, and merging them back by question id is not planned (#15).
+Keyframes travel with the file: :func:`write_questions` copies them next to it. Formal
+description: ``questions.schema.json``.
 """
 
 from __future__ import annotations

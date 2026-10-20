@@ -1,4 +1,5 @@
 import base64
+import dataclasses
 import inspect
 from pathlib import Path
 
@@ -18,8 +19,13 @@ from questxtract.vision import (
     _PROMPT,
     VISION_PROMPT_VERSION,
     _caption,
+    _changed,
+    _decoded,
     _for_comparison,
     _merge_shortest,
+    _png,
+    _Reading,
+    _same_page,
     _sample_frames,
     _speech,
     _store,
@@ -811,3 +817,227 @@ def test_a_damaged_keyframe_in_the_cache_is_sampled_again(context, fake_llm, tmp
     again = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
     assert again.visual == first.visual and not client.requests  # same images, so cache hits
     assert damaged.read_bytes() == good
+
+
+# --- reusing a reading when a slide comes back (#138) ---
+
+
+def _glyph(page, x, y, segments):
+    """Draw a seven-segment digit, 24 x 44 px, with segments named a to g."""
+    bars = {
+        "a": (y, y + 5, x, x + 24),
+        "b": (y, y + 24, x + 19, x + 24),
+        "c": (y + 20, y + 44, x + 19, x + 24),
+        "d": (y + 39, y + 44, x, x + 24),
+        "e": (y + 20, y + 44, x, x + 5),
+        "f": (y, y + 24, x, x + 5),
+        "g": (y + 20, y + 25, x, x + 24),
+    }
+    for name in segments:
+        y0, y1, x0, x1 = bars[name]
+        page[y0:y1, x0:x1] = 40
+
+
+def _page(*, digit="3", point=0, sign="<", note=0, colour=(200, 40, 40)):
+    """A 640 x 360 page of text-like lines with the small details a reuse must not miss.
+
+    The details have the sizes they have on a 720p page, since the detail check works in
+    pixels; the page is smaller only to keep the tests fast. ``point`` is the side of a decimal
+    point in px, off the 4 px grid; ``note`` draws a handwritten stroke this many grey levels
+    darker than the page; ``colour`` keeps the grey level of the default red when it is
+    (0, 130, 100).
+    """
+    page = np.full((360, 640, 3), 240, np.uint8)
+    page[20:50, 40:600] = 30  # the title
+    for row, width in enumerate((450, 520, 360, 490)):
+        page[70 + 30 * row : 77 + 30 * row, 40 : 40 + width] = 40  # a line of text
+    page[195:209, 40:350] = colour
+    _glyph(page, 40, 250, "abcdg" if digit == "3" else "abcdefg")
+    for row in range(25):  # a 25 px "<" or ">", 4 px thick
+        slant = abs(row - 12) * 20 // 12
+        column = 110 + (slant if sign == "<" else 20 - slant)
+        page[255 + row, column : column + 4] = 40
+    if point:
+        page[271 : 271 + point, 71 : 71 + point] = 40
+    for row in range(30 if note else 0):  # a handwritten stroke
+        page[310 + row, 200 + 3 * row : 208 + 3 * row] = 240 - note
+    return page
+
+
+def _other_page():
+    page = np.full((360, 640, 3), 240, np.uint8)
+    page[150:180, 100:550] = 30
+    page[210:300, 150:450] = 120
+    return page
+
+
+def _pages(path, pages, seconds=4, rate=2, quantizer=8):
+    """``pages`` in order, ``seconds`` each, at a fixed quantizer (2 to 31). The default 8 gives
+    about the codec noise of a compressed screen recording, and keeps a 2 px dot."""
+    with av.open(str(path), "w", format="mp4") as container:
+        stream = container.add_stream("mpeg4", rate=rate)
+        stream.height, stream.width = pages[0].shape[:2]
+        stream.pix_fmt = "yuv420p"
+        stream.options = {"qmin": str(quantizer), "qmax": str(quantizer)}
+        for page in pages:
+            for _ in range(seconds * rate):
+                for packet in stream.encode(av.VideoFrame.from_ndarray(page, format="rgb24")):
+                    container.mux(packet)
+        for packet in stream.encode():
+            container.mux(packet)
+    return path
+
+
+def _paged_lecture(context, video, cache, kind="slides", **config):
+    """:func:`_lecture` with the layout probe's answer already given."""
+    ctx = _lecture(context, video, cache, **config)
+    ctx.layout = Layout(kind=kind)
+    return ctx
+
+
+@pytest.mark.parametrize("kind", ["slides", "handwriting", "screencast"])
+def test_a_page_that_comes_back_is_read_once(context, fake_llm, tmp_path, kind):
+    """#138 AC: A, B, A gives three board states but two readings; the third copies the first,
+    through the codec noise of a compressed screen recording (``_pages``)."""
+    client = fake_llm(_board(text="page A"), _board(text="page B"))
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page()])
+    ctx = run(_paged_lecture(context, video, tmp_path / "cache", kind), VISION_STAGES)
+
+    first, middle, again = ctx.visual
+    assert len(client.requests) == 2
+    assert again.text == first.text == "page A" and middle.text == "page B"
+    assert (round(again.start), round(again.end)) == (8, 12)
+    assert len({s.id for s in ctx.visual}) == 3
+    # other speech on the return, so the request cache could not have caught it
+    assert _speech(ctx.sentences, first.start, first.end) != _speech(
+        ctx.sentences, again.start, again.end
+    )
+    assert ctx.stats["vision_reused"] == 1
+
+
+def test_under_harder_compression_a_page_is_read_again(context, fake_llm, tmp_path):
+    """#138: noise above the detail limits is not told from a change, so the page is read again."""
+    client = fake_llm(_board(text="page A"), _board(text="page B"), _board(text="page A again"))
+    pages = [_page(), _other_page(), _page()]
+    video = _pages(tmp_path / "lecture.mp4", pages, quantizer=24)
+    ctx = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert len(client.requests) == 3 and ctx.stats["vision_reused"] == 0
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        pytest.param({"digit": "8"}, id="digit"),
+        pytest.param({"point": 4}, id="decimal-point-4px"),
+        pytest.param({"point": 2}, id="decimal-point-2px"),
+        pytest.param({"sign": ">"}, id="inequality-sign"),
+        pytest.param({"note": 48}, id="low-contrast-note"),
+        pytest.param({"colour": (0, 130, 100)}, id="colour-of-equal-grey"),
+    ],
+)
+def test_a_page_back_with_a_small_change_is_read_again(context, fake_llm, tmp_path, change):
+    """#138 AC: a change the views' measure barely sees still gets a new reading."""
+    small = _changed(_for_comparison(_page()), _for_comparison(_page(**change)))
+    assert small < 0.02  # under vision_change_fraction: the views alone would call it the same
+
+    client = fake_llm(_board(text="page A"), _board(text="page B"), _board(text="page A changed"))
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page(**change)])
+    ctx = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert len(client.requests) == 3
+    assert ctx.visual[2].text == "page A changed"
+    assert ctx.stats["vision_reused"] == 0
+
+
+def test_a_reading_that_failed_is_not_reused(context, fake_llm, tmp_path):
+    """#138 AC: only a reading that worked is copied; a later return is asked again."""
+    client = fake_llm(
+        openai.OpenAIError("Connection error."), _board(text="page B"), _board(text="page A")
+    )
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page()])
+    with pytest.warns(UserWarning, match="keyframe left out"):
+        ctx = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert len(client.requests) == 3
+    assert [s.text for s in ctx.visual] == ["page B", "page A"]
+    assert ctx.stats["vision_reused"] == 0 and ctx.stats["vision_failed"] == 1
+
+
+@pytest.mark.parametrize("kind", ["blackboard", "whiteboard", "unknown"])
+def test_boards_and_unknown_frames_are_read_every_time(context, fake_llm, tmp_path, kind):
+    """#138 AC: a board, or what the probe could not name, is never copied (#133 owns boards)."""
+    client = fake_llm(_board(text="page A"), _board(text="page B"), _board(text="page A again"))
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page()])
+    ctx = run(_paged_lecture(context, video, tmp_path / "cache", kind), VISION_STAGES)
+    assert len(client.requests) == 3
+    assert ctx.stats["vision_reused"] == 0
+
+
+def test_a_rerun_from_the_caches_reuses_the_same_way(context, fake_llm, tmp_path):
+    """#138 AC: views from views.json and readings from the request cache give the same states."""
+    client = fake_llm(_board(text="page A"), _board(text="page B"))
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page()])
+    first = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    again = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert again.visual == first.visual
+    assert len(client.requests) == 2  # the second run asks nothing
+    assert again.stats["vision_reused"] == 1
+
+
+def test_from_scratch_still_reuses_within_the_run(context, fake_llm, tmp_path):
+    """#138 AC: --from-scratch skips the caches, not the reuse, which is never cached."""
+    client = fake_llm(_board(text="page A"), _board(text="page B"))
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page()])
+    run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    fresh = run(
+        _paged_lecture(context, video, tmp_path / "cache", from_scratch=True), VISION_STAGES
+    )
+    assert len(client.requests) == 4  # A and B asked again, the return copied again
+    assert fresh.stats["vision_reused"] == 1
+
+
+def test_the_lookup_keeps_only_small_copies_and_readings(context, fake_llm, tmp_path, monkeypatch):
+    """#138 AC: what the run holds per reading is a small grey copy, an index and the fields.
+    Full-resolution pictures are decoded while their view is handled (the current keyframe for
+    its small copy, an earlier one again for the detail check) and never kept."""
+    assert {f.name for f in dataclasses.fields(_Reading)} == {"small", "view", "fields"}
+    kept = []
+
+    def recorded(**fields):
+        kept.append(_Reading(**fields))
+        return kept[-1]
+
+    monkeypatch.setattr(vision_module, "_Reading", recorded)
+    fake_llm(_board(text="page A"), _board(text="page B"))
+    double = np.ones((2, 2, 1), np.uint8)  # 720p, so the small copy is smaller than the keyframe
+    pages = [np.kron(page, double) for page in (_page(), _other_page(), _page())]
+    video = _pages(tmp_path / "lecture.mp4", pages)
+    run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+
+    assert [r.view for r in kept] == [0, 1]  # the reused third page added nothing
+    for reading in kept:
+        assert reading.small.ndim == 2 and reading.small.shape == (360, 640)  # 720p, halved
+        assert set(reading.fields) == {"description", "text", "latex", "confidence"}
+
+
+@pytest.mark.parametrize("size", [(720, 1280), (363, 645)])
+def test_a_mark_at_the_border_is_a_change(size):
+    """#138: the last rows and columns, past a whole square, are compared too."""
+    before = np.full((*size, 3), 240, np.uint8)
+    after = before.copy()
+    after[-2:, -2:] = 40  # a 2 px mark in the bottom right corner
+    assert _same_page(before, before.copy())
+    assert not _same_page(before, after)
+
+
+def test_a_keyframe_that_cannot_be_decoded_is_read_as_usual(
+    context, fake_llm, tmp_path, monkeypatch
+):
+    """#138: no picture, no reuse; the reading itself does not need to decode the PNG."""
+    assert _decoded(PNG) is None
+    page = _page()
+    assert np.array_equal(_decoded(_png(page)), page)
+
+    monkeypatch.setattr(vision_module, "_decoded", lambda png: None)
+    client = fake_llm(_board(text="page A"), _board(text="page B"), _board(text="page A again"))
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page()])
+    ctx = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert len(client.requests) == 3 and ctx.stats["vision_reused"] == 0
