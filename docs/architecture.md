@@ -394,6 +394,38 @@ questxtract eval tests/data/ --board    # the same, with the committed board sta
 > **Decision.** `questxtract/evaluate.py`. The report includes a threshold sweep over
 > `min_confidence`, so the NFR2 tradeoff is visible rather than assumed.
 
+### 4.4 Vision
+
+The vision model (section 6) is scored the same way, on labelled keyframes instead of labelled
+questions: `tests/data/vision/<name>.frames.jsonl`, one line per frame with its lecture type
+(`slides`, `blackboard`, `whiteboard` or `handwriting`, as the layout probe of 6.2 names them),
+the text on the board, each formula as LaTeX and a line on any diagram. The set spans several lecturers per type, because QuestXtract has to
+read any teacher's board, not only the reference recordings'. Sources, licences and labelling
+conventions: [`tests/data/vision/README.md`](../tests/data/vision/README.md).
+
+```bash
+questxtract eval --score-vision tests/data/vision/    # vision_model, per lecture type
+```
+
+Each frame is read by `vision.read_keyframe`, the function the vision stage uses (6.5), so eval
+scores what a run sends: `vision_model` (`--vision-model`), prompt v0 with the label's kind, as
+when the layout probe gets the kind right, and no speech; cached per request. Per frame: the
+**character error rate** of `text` (edits per label character, casefolded and with whitespace
+collapsed, capped at 1) and **formula recall**, a labelled formula counting as found when some
+run of whole LaTeX tokens in the answer is within one edit per four of its tokens, after removing
+spacing and sizing commands; a short formula must match exactly. A blank board has no error
+rate, since any text would score 1; it counts as read when the answer has no text but
+`[unreadable]`. A frame the model cannot read scores as an empty answer, a blank one as not read. The report gives all
+three per lecture type and in total, then every frame, worst first.
+
+CI checks the labels (every type has at least 5 frames, every frame exists), not the scores: they
+need a real model.
+
+> **Decision.** Character error rate, the standard measure for reading text from images, written
+> out in a few lines rather than added as a dependency. Formulas are matched loosely, because two
+> correct LaTeX spellings of one formula differ in spacing and braces. `diagram` is labelled but
+> not scored: comparing two descriptions needs a judge, not an edit distance.
+
 ---
 
 ## 5. Data model
@@ -1351,7 +1383,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
 | `quiz_schema.py` | not a stage | done: the `quiz.json` reader and validator (12.3); the `quiz` command that writes the file is not built | #79 |
 | `filtering.py` | not a stage | time and text filters done; `topic=` is experimental, no stage produces topics | |
-| `evaluate.py` | not a stage | done; NFR2 gated in pytest | |
+| `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --score-vision` (4.4) | |
 | `qti.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 package of a `quiz.json` (12.4) | |
 | `cli.py` | not a stage | `process`, `transcribe`, `filter`, `eval` and `qti` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
 

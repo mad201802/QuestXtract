@@ -115,6 +115,7 @@ questxtract eval tests/data/          # table, sweep, missed questions and false
 questxtract eval tests/data/ --json   # the same report, machine-readable
 questxtract eval tests/data/ --board  # with the board states committed beside the transcripts
 questxtract eval tests/data/ --detector llm --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
+questxtract eval --score-vision tests/data/vision/   # how well vision_model reads slides and boards
 ```
 
 #### Setting up the API key

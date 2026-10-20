@@ -458,6 +458,27 @@ lecture where it helps, and the board states it reads are the input the VLM pass
 *Cost:* `source: "combined"` is not produced by default. The board states committed for the
 eval are one model's reading and must be regenerated, not edited, when vision changes.
 
+### D20: Score board reading by character error rate and formula recall, over lecture types
+
+*Chose:* 30 labelled keyframes from six lectures whose licence or lecturer allows sharing, at
+least 5 per lecture type (slides, blackboard, whiteboard, handwriting), each with its text,
+formulas as LaTeX and a diagram line.
+`eval --score-vision` scores the character error rate of the text and the share of labelled formulas
+found in the answer's LaTeX, per lecture type (#58, architecture.md 4.4).
+
+*Alternative:* word similarity against one reader's reference text on the two reference
+recordings, as the model spike did (#52).
+
+*Why:* QuestXtract has to read any teacher's board, so a number from two recordings says little;
+the lecture types fail differently (chalk ghosts, a lecturer in front of a whiteboard, a webcam
+column over tablet notes). Character error rate is the usual measure for reading text from
+images and does not depend on how the answer splits words. Formulas are scored on their own
+because the M4 animations need them as LaTeX, and prose that reads well can still drop them.
+
+*Cost:* the labels were drafted by an LLM and wait for a human check. Recordings that allow
+redistribution are mostly university lecture halls; a document camera over paper is not covered
+yet. Diagrams are labelled but not scored.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |

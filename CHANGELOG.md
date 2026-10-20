@@ -4,6 +4,12 @@
 
 ### Added
 
+- `eval --score-vision`: scores `vision_model` (or `--vision-model`) on 30 labelled keyframes in
+  `tests/data/vision/`, from six lectures over four lecture types (slides, blackboard,
+  whiteboard, handwriting), each recording one whose licence or lecturer allows sharing. It
+  reports the character error rate of the text, blank boards read as blank, and the share of
+  formulas read, per lecture type and per frame. Answers are cached, so a second run makes no
+  calls. (#58)
 - `questxtract filter lecture.questions.json --text WORDS --from TIME --to TIME` keeps the
   questions where every word appears, said or written on the board on screen while they were
   asked, and that fall in the time range, without running the pipeline again. Times are seconds,
