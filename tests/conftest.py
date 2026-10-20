@@ -133,6 +133,7 @@ class FakeLLM:
     def __init__(self, replies: tuple[Any, ...]) -> None:
         self.replies = list(replies)
         self.requests: list[dict[str, Any]] = []
+        self.usage: Any = None  # set to SimpleNamespace(prompt_tokens=..., completion_tokens=...)
         self.chat = self.completions = self
 
     def create(self, **request: Any) -> Any:
@@ -141,7 +142,8 @@ class FakeLLM:
         if isinstance(reply, Exception):
             raise reply
         content = reply if isinstance(reply, str) else json.dumps(reply)
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+        message = SimpleNamespace(content=content)
+        return SimpleNamespace(choices=[SimpleNamespace(message=message)], usage=self.usage)
 
 
 @pytest.fixture

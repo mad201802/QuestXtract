@@ -948,6 +948,13 @@ cached the same way under `.questxtract/vision/`, keyed on the keyframe image in
 lines, and a layout probe (6.2) under `.questxtract/layout/`, keyed on its three frames. Only a valid JSON answer is cached; a failed request is asked again on the next run. A cache entry that cannot be read
 is asked again, and a cache that cannot be written costs only the saving: the answer is returned.
 
+What the calls cost lands in `questions.json`'s `stats`, per caller, whenever that caller
+runs: `judge_*` for the LLM detector, `layout_*` for the layout probe (6.2) and `vision_*` for
+the board readings (6.5). Each caller has `_requests` (every request sent, a repeat included),
+`_input_tokens` and `_output_tokens` (as the API reports them in `usage`; 0 from a server that
+reports none) and `_ms`. A run served from the cache shows 0 for all four, which is how to tell
+it made no calls. Prices are not applied: they depend on the provider and the date.
+
 > **Decision.** `questxtract/llm.py` (the judge), `questxtract/endpoint.py` (client and requests,
 > shared with vision). Config: `detector` (`rules`), `base_url`, `api_key` (from
 > `OPENAI_API_KEY`), `judge_model`, `judge_window` (10), `judge_batch_size` (8),

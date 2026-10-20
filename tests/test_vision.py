@@ -2,6 +2,7 @@ import base64
 import dataclasses
 import inspect
 from pathlib import Path
+from types import SimpleNamespace
 
 import av
 import numpy as np
@@ -819,6 +820,38 @@ def test_a_damaged_keyframe_in_the_cache_is_sampled_again(context, fake_llm, tmp
     assert damaged.read_bytes() == good
 
 
+# --- what the vision calls cost (#123) ---
+
+
+def test_stats_record_what_the_readings_cost(context, fake_llm, tmp_path):
+    """#123: requests, tokens and time per caller; a cached re-run reads as no calls."""
+    client = fake_llm(_board())
+    client.usage = SimpleNamespace(prompt_tokens=700, completion_tokens=150)
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    ctx = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert ctx.stats["vision_requests"] == 3
+    assert (ctx.stats["vision_input_tokens"], ctx.stats["vision_output_tokens"]) == (2100, 450)
+    assert ctx.stats["vision_ms"] >= 0
+
+    again = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    cost = ("vision_requests", "vision_input_tokens", "vision_output_tokens", "vision_ms")
+    assert [again.stats[k] for k in cost] == [0, 0, 0, 0]
+
+
+def test_the_layout_probe_records_its_cost_even_when_it_fails(context, fake_llm, tmp_path):
+    client = fake_llm(openai.OpenAIError("Connection error."))
+    client.usage = SimpleNamespace(prompt_tokens=2000, completion_tokens=40)
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    with pytest.warns(UserWarning, match="layout probe failed"):
+        ctx = layout(_lecture(context, video, tmp_path / "cache"))
+    assert ctx.stats["layout_requests"] == 1  # sent, though nothing came back
+    assert ctx.stats["layout_input_tokens"] == 0
+    client = fake_llm(_probe())
+    client.usage = SimpleNamespace(prompt_tokens=2000, completion_tokens=40)
+    ctx = layout(_lecture(context, video, tmp_path / "cache"))
+    assert (ctx.stats["layout_requests"], ctx.stats["layout_input_tokens"]) == (1, 2000)
+
+
 # --- reusing a reading when a slide comes back (#138) ---
 
 
@@ -913,6 +946,7 @@ def test_a_page_that_comes_back_is_read_once(context, fake_llm, tmp_path, kind):
         ctx.sentences, again.start, again.end
     )
     assert ctx.stats["vision_reused"] == 1
+    assert ctx.stats["vision_requests"] == 2  # a copied reading costs no request (#123)
 
 
 def test_under_harder_compression_a_page_is_read_again(context, fake_llm, tmp_path):
