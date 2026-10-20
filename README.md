@@ -329,7 +329,7 @@ How the pipeline works and where each stage lives: [docs/architecture.md](docs/a
 Why it looks that way: [docs/design_decisions.md](docs/design_decisions.md). Conventions for
 people and coding agents: [CLAUDE.md](CLAUDE.md).
 
-CI runs on Linux, macOS and Windows against Python 3.10 and 3.13 for every pull request; green CI
+CI runs on Linux against Python 3.10 for every pull request; green CI
 is required before merging into `main`.
 
 ## Releasing
