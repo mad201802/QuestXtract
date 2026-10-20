@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, TypeVar
@@ -294,6 +294,13 @@ class VisualContext:
         """Stable identifier from the lifetime and keyframe; a new caption keeps it."""
         key = f"{self.start:.3f}|{self.end:.3f}|{self.keyframe_path}"
         return f"v_{hashlib.sha1(key.encode()).hexdigest()[:6]}"
+
+
+def overlapping(
+    visual: Sequence[VisualContext], start: float, end: float
+) -> tuple[VisualContext, ...]:
+    """Board states whose lifetime overlaps the half-open interval ``[start, end)``."""
+    return tuple(v for v in visual if v.start < end and v.end > start)
 
 
 @dataclass(frozen=True, kw_only=True)

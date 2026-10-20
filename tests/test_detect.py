@@ -1,6 +1,9 @@
+from pathlib import Path
+
 import pytest
 
-from questxtract.detect import detect_questions, question_type, score_sentence
+from questxtract import Config, Context, Sentence, VisualContext
+from questxtract.detect import detect, detect_questions, question_type, score_sentence
 
 
 def test_an_unmarked_head_word_is_not_a_candidate(sentences):
@@ -269,3 +272,78 @@ def test_framing_penalty_leaves_content_questions_alone(text: str) -> None:
     score, reasons = score_sentence(text)
     assert "framing" not in reasons
     assert score == 1.0
+
+
+def _asked(text: str, start: float = 10.0, end: float = 12.0) -> Sentence:
+    return Sentence(id="s1", text=text, word_start=0, word_end=1, start=start, end=end)
+
+
+SUPREMUM = VisualContext(start=0.0, end=60.0, text="Def: sup S = least upper bound of S")
+
+
+def test_without_board_states_scores_are_unchanged(sentences):
+    plain = detect_questions(sentences)
+    assert detect_questions(sentences, visual=(), board_delta=0.10) == plain
+    ctx = detect(Context(source=Path("l.mp4"), config=Config(), sentences=sentences))
+    assert ctx.candidates == plain
+    assert not any("board_overlap" in c.reasons for c in ctx.candidates)
+
+
+def test_the_board_is_off_by_default():
+    ctx = Context(
+        source=Path("l.mp4"),
+        config=Config(),
+        sentences=(_asked("The least upper bound, here?"),),
+        visual=(SUPREMUM,),
+    )
+    assert detect(ctx).candidates[0].reasons == ("mark",)
+
+
+def test_a_question_about_the_board_gets_the_delta_and_a_reason():
+    (candidate,) = detect_questions(
+        [_asked("The least upper bound, here?")], visual=(SUPREMUM,), board_delta=0.10
+    )
+    assert candidate.score == 0.7  # 0.6 for the '?' alone
+    assert candidate.reasons == ("mark", "board_overlap")
+
+
+def test_the_detect_stage_reads_the_board_and_the_delta_from_config():
+    ctx = Context(
+        source=Path("l.mp4"),
+        config=Config(board_overlap_delta=0.2),
+        sentences=(_asked("The least upper bound, here?"),),
+        visual=(SUPREMUM,),
+    )
+    assert detect(ctx).candidates[0].score == 0.8
+
+
+@pytest.mark.parametrize(
+    ("text", "board", "delta"),
+    [
+        ("Is that the one here?", SUPREMUM, 0.10),  # only stopwords in common ("the")
+        ("The least upper bound, here?", VisualContext(start=20.0, end=30.0, text="bound"), 0.10),
+        ("The least upper bound, here?", SUPREMUM, 0.0),  # off
+    ],
+)
+def test_no_delta_without_a_shared_content_word_on_screen(text, board, delta):
+    (candidate,) = detect_questions([_asked(text)], visual=(board,), board_delta=delta)
+    assert "board_overlap" not in candidate.reasons
+    assert candidate.score == score_sentence(text)[0]
+
+
+def test_the_board_never_makes_a_candidate():
+    # A wh-word without a '?' scores 0.40, under the gate; the board does not lift it.
+    assert detect_questions([_asked("What we call the upper bound")], visual=(SUPREMUM,)) == ()
+    assert (
+        detect_questions(
+            [_asked("What we call the upper bound")], visual=(SUPREMUM,), board_delta=0.10
+        )
+        == ()
+    )
+
+
+def test_the_board_delta_is_clamped():
+    (candidate,) = detect_questions(
+        [_asked("What is an upper bound?")], visual=(SUPREMUM,), board_delta=0.10
+    )
+    assert candidate.score == 1.0 and candidate.reasons[-1] == "board_overlap"
