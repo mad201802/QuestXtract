@@ -1,0 +1,494 @@
+{
+  "vision_model": "gpt-5.6-luna",
+  "vision_prompt_version": "v0",
+  "board_states": [
+    {
+      "start": 0.0,
+      "end": 1.0,
+      "description": "The frame shows the OBS Studio interface with a recursive display-capture preview; no lecture slide, board, or handwritten notes are visible.",
+      "text": "",
+      "latex": null,
+      "confidence": 1.0
+    },
+    {
+      "start": 1.0,
+      "end": 75.0,
+      "description": "A slide asks how impulse responses and BIBO stability are connected in LTI systems. Hand-drawn ovals and boxed regions surround signal symbols, with a central convolution-like expression leading by an arrow to a boxed output expression.",
+      "text": "how do impulse responses and BIBO stability connect, in LTI\nsystems?\nU\nh\nU\ny\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - - 1",
+      "latex": "h * U \\Rightarrow y",
+      "confidence": 0.76
+    },
+    {
+      "start": 75.0,
+      "end": 93.0,
+      "description": "A slide titled “Definition: absolute integrability” states the criterion for a function to be absolutely integrable. The integral expression is loosely circled with handwritten marks and an arrow pointing toward it.",
+      "text": "Definition: absolute integrability\nf(t) absolutely integrable iff\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 2",
+      "latex": "f(t)\\text{ absolutely integrable iff}\\quad \\int_{-\\infty}^{+\\infty}|f(t)|\\,dt<+\\infty",
+      "confidence": 0.98
+    },
+    {
+      "start": 93.0,
+      "end": 125.0,
+      "description": "A slide presents Question 1 about whether the unit step function is absolutely integrable over the whole real line. It lists five multiple-choice answers, with large hand-drawn circles and other annotations over the slide.",
+      "text": "Question 1\nIs the unit step function 1(t) absolutely integrable over the interval (−∞,∞)?\nPotential answers:\nI: Yes, because it is bounded.\nII: No, because its integral over (−∞,∞) diverges.\nIII: Yes, because it is zero for t ≤ 0.\nIV: No, because it is discontinuous at t = 0.\nV: I do not know.\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 3",
+      "latex": "1(t)\n(-\\infty,\\infty)\nt \\leq 0\nt = 0",
+      "confidence": 0.98
+    },
+    {
+      "start": 125.0,
+      "end": 177.0,
+      "description": "A slide presents Question 2 about whether a right-sided decaying exponential signal is absolutely integrable. Below the answer choices is a hand-drawn decaying exponential curve starting at t=0, with the area beneath the curve shaded; large handwritten marks appear to the right.",
+      "text": "Question 2\nIs the signal x(t) = e⁻ᵗ for t ≥ 0, x(t) = 0 for t < 0, absolutely integrable?\nPotential answers:\nI: No, because it grows exponentially as t → ∞.\nII: Yes, because it is a decaying function.\nIII: Yes, because ∫₀∞ |e⁻ᵗ| dt = 1.\nIV: No, because it is not defined for t < 0.\nV: I do not know.\nF I 9?\nF\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 4",
+      "latex": "x(t)=e^{-t}\\text{ for }t\\ge 0,\\quad x(t)=0\\text{ for }t<0\n\\int_0^\\infty |e^{-t}|\\,dt=1",
+      "confidence": 0.88
+    },
+    {
+      "start": 177.0,
+      "end": 186.0,
+      "description": "A lecture slide titled “Question 2” asks whether a one-sided decaying exponential signal is absolutely integrable and lists five possible answers. Below the slide is a hand-drawn decaying curve on coordinate axes with several black annotations, including a boxed “F.”",
+      "text": "Question 2\nIs the signal x(t) = e⁻ᵗ for t ≥ 0, x(t) = 0 for t < 0, absolutely integrable?\nPotential answers:\nI: No, because it grows exponentially as t → ∞.\nII: Yes, because it is a decaying function.\nIII: Yes, because ∫₀∞ |e⁻ᵗ| dt = 1.\nIV: No, because it is not defined for t < 0.\nV: I do not know.\nF\nI\n9\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 4",
+      "latex": "x(t)=e^{-t},\n t\\ge 0,\n x(t)=0,\n t<0,\n\\int_{0}^{\\infty}|e^{-t}|\\,dt=1",
+      "confidence": 0.91
+    },
+    {
+      "start": 186.0,
+      "end": 258.0,
+      "description": "A slide titled “Question 3” asks whether the signal sin(t) is absolutely integrable over the entire real line. It lists five potential answers and shows a sinusoidal waveform along the bottom, with part of its early segment highlighted in red.",
+      "text": "Question 3\nIs the signal x(t) = sin(t) absolutely integrable over (−∞,∞)?\nPotential answers:\nI: Yes, because it is periodic.\nII: No, because ∫₋∞^∞ |sin(t)| dt diverges.\nIII: Yes, because its amplitude is bounded.\nIV: No, because it is not a decaying signal.\nV: I do not know.\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 5",
+      "latex": "x(t)=\\sin(t)\n(-\\infty,\\infty)\n\\int_{-\\infty}^{\\infty}|\\sin(t)|\\,dt",
+      "confidence": 0.98
+    },
+    {
+      "start": 258.0,
+      "end": 284.0,
+      "description": "A lecture slide asks whether x(t) = sin(t) is absolutely integrable over the entire real line. It lists five possible answers and shows hand-drawn black sinusoidal and red absolute-value-like waveforms continuing across the bottom.",
+      "text": "Question 3\nIs the signal x(t) = sin(t) absolutely integrable over (−∞, ∞)?\nPotential answers:\nI: Yes, because it is periodic.\nII: No, because ∫−∞∞ |sin(t)| dt diverges.\nIII: Yes, because its amplitude is bounded.\nIV: No, because it is not a decaying signal.\nV: I do not know.\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 5",
+      "latex": "x(t)=\\sin(t)\n(-\\infty,\\infty)\n\\int_{-\\infty}^{\\infty}|\\sin(t)|\\,dt",
+      "confidence": 0.98
+    },
+    {
+      "start": 284.0,
+      "end": 323.0,
+      "description": "A slide titled “Question 3” asks whether the signal sin(t) is absolutely integrable over the entire real line. It lists five potential answers, with option II circled in red, and shows a hand-drawn repeating oscillatory waveform with shaded positive lobes and red annotations along the bottom.",
+      "text": "Question 3\nIs the signal x(t) = sin(t) absolutely integrable over (−∞, ∞)?\nPotential answers:\nI: Yes, because it is periodic.\nII: No, because ∫−∞∞ |sin(t)| dt diverges.\nIII: Yes, because its amplitude is bounded.\nIV: No, because it is not a decaying signal.\nV: I do not know.\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 5",
+      "latex": "x(t)=\\sin(t)\n\\int_{-\\infty}^{\\infty}|\\sin(t)|\\,dt",
+      "confidence": 0.98
+    },
+    {
+      "start": 323.0,
+      "end": 378.0,
+      "description": "A lecture slide asks whether the signal is absolutely integrable and lists five potential answers. Handwritten annotations show a decaying curve sketch, the labels t and t^alpha, and a note 1/t near the bottom.",
+      "text": "Question 4\nIs the signal x(t) = 1/(1 + t²) absolutely integrable?\nPotential answers:\nI: Yes, because ∫₋∞^∞ |1/(1 + t²)| dt = π.\nII: No, because it is not a decaying exponential.\nIII: Yes, because it is symmetric about t = 0.\nIV: No, because it is not periodic.\nV: I do not know.\nt\n t^α\n1/t\nI.\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 6",
+      "latex": "x(t)=\\frac{1}{1+t^2}\n\\int_{-\\infty}^{\\infty}\\left|\\frac{1}{1+t^2}\\right|\\,dt=\\pi\nt=0\nt^\\alpha\n\\frac{1}{t}",
+      "confidence": 0.97
+    },
+    {
+      "start": 378.0,
+      "end": 444.0,
+      "description": "A slide titled “Question 4” asks whether the signal shown is absolutely integrable. It presents five possible answers, with blue handwritten annotations, a sketch of a decaying curve over axes in the upper right, and a handwritten decay-rate expression near the bottom.",
+      "text": "Question 4\nIs the signal x(t) = 1/(1 + t²) absolutely integrable?\nPotential answers:\nI: Yes, because ∫₋∞^∞ |1/(1 + t²)| dt = π.\nII: No, because it is not a decaying exponential.\nIII: Yes, because it is symmetric about t = 0.\nIV: No, because it is not periodic.\nV: I do not know.\nt\nt^α\n[unreadable]\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 6",
+      "latex": "x(t)=\\frac{1}{1+t^2}\n\\int_{-\\infty}^{\\infty}\\left|\\frac{1}{1+t^2}\\right|\\,dt=\\pi\nt^\\alpha",
+      "confidence": 0.9
+    },
+    {
+      "start": 444.0,
+      "end": 477.0,
+      "description": "A lecture slide labeled Question 4 asks whether the signal is absolutely integrable. It lists five potential answers, with the second answer partly obscured by black ink. Hand-drawn annotations include a red-and-blue sketch of a decaying curve/area, axes labeled with t, and blue notes near the lower part of the slide.",
+      "text": "Question 4\nIs the signal x(t) = 1/(1 + t²) absolutely integrable?\nPotential answers:\nI: Yes, because\nII: No, because [unreadable]\nIII: Yes, because it is symmetric about t = 0.\nIV: No, because it is not periodic.\nV: I do not know.\nt\nt^α\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 6",
+      "latex": "x(t)=\\frac{1}{1+t^2}\n\\int_{-\\infty}^{\\infty}\\left|\\frac{1}{1+t^2}\\right|\\,dt=\\pi\nt^\\alpha",
+      "confidence": 0.86
+    },
+    {
+      "start": 477.0,
+      "end": 481.0,
+      "description": "A handwritten convolution-style equation is shown on a gridded digital whiteboard, with an integral relating y(now) to h(x) and u(now−x).",
+      "text": "N\ny(now) = ∫ h(x) u(now−x)",
+      "latex": "y(\\mathrm{now}) = \\int h(x)u(\\mathrm{now}-x)\\,dx",
+      "confidence": 0.82
+    },
+    {
+      "start": 481.0,
+      "end": 508.0,
+      "description": "A gridded board shows two overlaid irregular waveforms, one blue and one red, varying around a common horizontal level. The blue curve has a pronounced deep downward trough near the center and a rounded trough at the right, while the red curve has several sharp dips and peaks; separate red and blue U-shaped marks appear in the lower-right area.",
+      "text": "",
+      "latex": null,
+      "confidence": 0.96
+    },
+    {
+      "start": 508.0,
+      "end": 520.0,
+      "description": "A gridded drawing shows several overlaid red and blue wavy curves: a long upper pair of curves and a separate oscillating red curve below. Near the center is a small red handwritten label, and on the right a blue U-shaped mark lies between two red vertical strokes.",
+      "text": "vs\nU",
+      "latex": null,
+      "confidence": 0.73
+    },
+    {
+      "start": 520.0,
+      "end": 534.0,
+      "description": "A lecture slide titled “Preliminaries” presents BIBO stability and the forced response of an LTI system. The BIBO implication is enclosed by black handwritten annotations, and the forced-response convolution integral appears below.",
+      "text": "Preliminaries\nBIBO stability\n|u(t)| < γ_u  ⇒  |y(t)| < γ_y\nForced response\ny_forced response(t) = h * u(t) = ∫₀ᵗ h(τ)u(t − τ)dτ\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 8",
+      "latex": "|u(t)| < \\gamma_u \\implies |y(t)| < \\gamma_y\ny_{\\mathrm{forced\\ response}}(t)=h*u(t)=\\int_0^t h(\\tau)u(t-\\tau)\\,d\\tau",
+      "confidence": 0.98
+    },
+    {
+      "start": 534.0,
+      "end": 543.0,
+      "description": "A slide titled “Preliminaries” presents BIBO stability as an implication from a bounded input to a bounded output, followed by the forced-response convolution formula. Black handwritten boxes, arrows, and numbered annotations surround the BIBO-stability statement.",
+      "text": "Preliminaries\nBIBO stability\n[unreadable]\nForced response\nfooter: LTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 8\n1\n2\n3",
+      "latex": "|u(t)| < \\gamma_u \\implies |y(t)| < \\gamma_y\ny_{\\mathrm{forced\\ response}}(t) = h * u(t) = \\int_0^t h(\\tau)u(t-\\tau)\\,d\\tau",
+      "confidence": 0.91
+    },
+    {
+      "start": 543.0,
+      "end": 563.0,
+      "description": "A slide titled “Preliminaries” presents BIBO stability and the forced response of a system. A handwritten black outline and arrow emphasize the BIBO stability panel; the lower panel shows a convolution-integral expression.",
+      "text": "Preliminaries\nBIBO stability\nForced response\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 8",
+      "latex": "|u(t)| < \\gamma_u \\ \\Longrightarrow\\ |y(t)| < \\gamma_y\ny_{\\mathrm{forced\\ response}}(t) = h * u(t) = \\int_0^t h(\\tau)u(t-\\tau)\\,d\\tau",
+      "confidence": 0.99
+    },
+    {
+      "start": 563.0,
+      "end": 570.0,
+      "description": "A lecture slide titled “Preliminaries” presents BIBO stability and the forced-response convolution formula. Black handwritten annotations outline the two sections and show the differential equation at the bottom.",
+      "text": "Preliminaries\nBIBO stability\n|u(t)| < γ_u ⇒ |y(t)| < γ_y\nForced response\ny_forced response(t) = h * u(t) = ∫₀ᵗ h(τ)u(t − τ)dτ\nẏ = −y²",
+      "latex": "|u(t)| < \\gamma_u \\Rightarrow |y(t)| < \\gamma_y\ny_{\\mathrm{forced\\ response}}(t)=h*u(t)=\\int_0^t h(\\tau)u(t-\\tau)\\,d\\tau\n\\dot{y}=-y^2",
+      "confidence": 0.98
+    },
+    {
+      "start": 570.0,
+      "end": 596.0,
+      "description": "A lecture slide titled “Preliminaries” presents BIBO stability and the forced-response convolution formula. Black handwritten annotations highlight the two sections, add a differential equation near the bottom, and sketch a small boxed symbol on the right.",
+      "text": "Preliminaries\nBIBO stability\nForced response\nLTI systems: continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 8",
+      "latex": "|u(t)| < \\gamma_u \\ \\Longrightarrow\\ |y(t)| < \\gamma_y\ny_{\\text{forced response}}(t)=h*u(t)=\\int_{0}^{t}h(\\tau)u(t-\\tau)\\,d\\tau\n\\dot{y}=-y+u",
+      "confidence": 0.88
+    },
+    {
+      "start": 596.0,
+      "end": 621.0,
+      "description": "A lecture slide titled “Preliminaries” presents BIBO stability and the forced response of an LTI system. Black handwritten annotations highlight “LTI” and show the differential equation \\(\\dot y=-y+u\\) near the bottom.",
+      "text": "Preliminaries\nBIBO stability\nLTI\nForced response\nτ\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 8",
+      "latex": "|u(t)| < \\gamma_u \\Longrightarrow |y(t)| < \\gamma_y\ny_{\\mathrm{forced\\ response}}(t)=h*u(t)=\\int_0^t h(\\tau)u(t-\\tau)\\,d\\tau\n\\dot{y}=-y+u",
+      "confidence": 0.96
+    },
+    {
+      "start": 621.0,
+      "end": 663.0,
+      "description": "A lecture slide titled “Preliminaries” presents BIBO stability and the forced response of an LTI system. Black handwritten annotations underline the stability section, box the convolution integral, and add an incomplete “y =” near the bottom.",
+      "text": "Preliminaries\nBIBO stability\n|u(t)| < γu  ⇒  |y(t)| < γy\nForced response\nyforced response (t) = h ∗ u(t) = ∫₀ᵗ h(τ)u(t − τ)dτ\ny =\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 8",
+      "latex": "|u(t)| < \\gamma_u \\quad\\Longrightarrow\\quad |y(t)| < \\gamma_y\ny_{\\text{forced response}}(t)=h*u(t)=\\int_{0}^{t}h(\\tau)u(t-\\tau)\\,d\\tau\ny=",
+      "confidence": 0.96
+    },
+    {
+      "start": 663.0,
+      "end": 760.0,
+      "description": "A lecture slide states the theorem relating BIBO stability of an LTI system to absolute integrability of its impulse response. Below it, a handwritten piecewise impulse response is shown, with the labels “A.I.!” and numbered options 1, 2, and 3.",
+      "text": "Theorem: an LTI system is BIBO stable if and only if its impulse response\nis absolutely integrable\nh(t) BIBO stable if and only if\nA.I.!\n1\n2\n3\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 9",
+      "latex": "h(t)\\text{ BIBO stable if and only if }\\int_{-\\infty}^{+\\infty}|h(\\tau)|\\,d\\tau<+\\infty\nh(t)=\\begin{cases}0,&t<0\\\\\\cos(10t),&t\\ge 0\\end{cases}",
+      "confidence": 0.96
+    },
+    {
+      "start": 760.0,
+      "end": 797.0,
+      "description": "A slide states the theorem relating BIBO stability of an LTI system to absolute integrability of its impulse response. Handwritten notes show a piecewise definition of h(t), with a decaying/oscillatory sketch at the upper right and numbered annotations along the bottom.",
+      "text": "Theorem: an LTI system is BIBO stable if and only if its impulse response\nis absolutely integrable\nh(t) BIBO stable if and only if\nA.L.\n1\n2\n3",
+      "latex": "\\int_{-\\infty}^{+\\infty} |h(\\tau)|\\,d\\tau < +\\infty\nh(t)=\\begin{cases}0,&t<0\\\\\\cos(10t),&t>0\\end{cases}",
+      "confidence": 0.94
+    },
+    {
+      "start": 797.0,
+      "end": 833.0,
+      "description": "A red hand-drawn oscillating waveform is shown across the upper part of the gridded board, with a handwritten “h” to its right. Below it is a convolution expression involving u and h, followed by an arrow pointing toward t approaching infinity.",
+      "text": "h\nu\nu * h\nt → ∞",
+      "latex": "u * h \\to t + \\infty",
+      "confidence": 0.72
+    },
+    {
+      "start": 833.0,
+      "end": 838.0,
+      "description": "A red hand-drawn waveform is enclosed in a large rounded rectangular outline and labeled “h” on the right. Below it is a notation involving u and the convolution u*h, followed by an upward arrow and u tending to infinity.",
+      "text": "h\nu\nu * h\nu → ∞",
+      "latex": "h\nu * h\nu \\to \\infty",
+      "confidence": 0.78
+    },
+    {
+      "start": 838.0,
+      "end": 852.0,
+      "description": "A red sketch on a blue grid shows two large vertically oriented oval outlines, each containing a smaller oval, with a small red dot between them. A handwritten “U” appears on the left.",
+      "text": "U",
+      "latex": null,
+      "confidence": 0.95
+    },
+    {
+      "start": 852.0,
+      "end": 882.0,
+      "description": "A gridded digital whiteboard shows a red diagram with two large oval regions, each containing a smaller circle. Curved red arrows connect the regions, and black and red sinusoidal/wavy signals are drawn inside outlined ovals and near the top of the diagram.",
+      "text": "U",
+      "latex": null,
+      "confidence": 0.94
+    },
+    {
+      "start": 882.0,
+      "end": 927.0,
+      "description": "A gridded drawing shows several large red looped regions and arrows, with black connecting paths between marked points. It includes resistor-like zigzag symbols inside a lower-left oval and a top red enclosure, plus labeled points and a question mark near the bottom.",
+      "text": "U\nA\na\nC\n2\n3?",
+      "latex": null,
+      "confidence": 0.66
+    },
+    {
+      "start": 927.0,
+      "end": 938.0,
+      "description": "A gridded digital whiteboard shows a red schematic with two large looping paths, arrows, and a central spring-like waveform. Black curved connectors link the central-left point to numbered points on the right, with cosine labels near the top and bottom.",
+      "text": "U\ncos(10t)\ncos(12t).\n1\n2\n3?",
+      "latex": "\\cos(10t)\n\\cos(12t)",
+      "confidence": 0.72
+    },
+    {
+      "start": 938.0,
+      "end": 964.0,
+      "description": "No lecture board, slide, or written notes are visible in the frame.",
+      "text": "",
+      "latex": null,
+      "confidence": 1.0
+    },
+    {
+      "start": 964.0,
+      "end": 1037.0,
+      "description": "A gridded whiteboard shows a hand-drawn interconnected system diagram with black nodes, curved red paths, arrows, and spring-like elements. Sinusoidal labels appear near the upper-right and lower-center parts of the diagram.",
+      "text": "V B,\nU\nB₀\ncos(10t)\n?\ncos(12t)\n3?\n2",
+      "latex": "\\cos(10t)\n\\cos(12t)",
+      "confidence": 0.56
+    },
+    {
+      "start": 1037.0,
+      "end": 1059.0,
+      "description": "A gridded digital whiteboard shows a blue, irregular time-varying waveform along the bottom with a horizontal baseline and a right-pointing time axis labeled t. Above it is a black step-like rectangular pulse, with a small handwritten x-like label to its left.",
+      "text": "x\nt",
+      "latex": null,
+      "confidence": 0.88
+    },
+    {
+      "start": 1059.0,
+      "end": 1105.0,
+      "description": "A red oval highlights a black x-like mark and a step-shaped graph. Below is a hand-drawn time-domain diagram with blue waveforms, a green rectangular signal, black shaded or marked regions, a vertical scale labeled 1, 2, 3, and t at the far right.",
+      "text": "x\n1\n2\n3\n[unreadable]\nnow\nt",
+      "latex": null,
+      "confidence": 0.72
+    },
+    {
+      "start": 1105.0,
+      "end": 1119.0,
+      "description": "A Bing search-results page is visible, focused on convolution resources from Swarthmore College. The left column shows several search results and snippets, while the right column lists related search suggestions under a “Deep dive into swarthmore convolution” heading.",
+      "text": "Linear Physical Systems Analysis\nhttps://lpsa.swarthmore.edu › Convolution › Convolution.html\nThe Convolution as A Sum of Impulse Responses - Swarthmore College\nVisualizing the Convolution ...\nAn Example of The\n(the Matlab script, Convolution.m, was used to create all of the graphs in this section.) To understand\nhow convolution works, we represent the continuous function shown above by a discrete function, as\nshown below, where we take a sample of the input every 0.1 seconds. The approximation can be taken a\nstep further by replacing each rectangular blo...\nSee more on lpsa.swarthmore.edu\nSwarthmore College\nhttps://cheever.domains.swarthmore.edu › Ref › LPSA › Convolution › Sys...\nConvolution: A Systems Approach - cheever.domains.swarthmore.edu\nConvolution is a powerful tool for determining the output of a system to any input. The Convolution\nTheorem is developed here in a ...\nSwarthmore College\nhttps://cheever.domains.swarthmore.edu › homework › node\nE12 2022 Asn 3 | Online Homework System - Swarthmore College\nFind the convolution of f(t) and h(t) defined as a piecewise function and verify the result below by\nevaluating at t=1, 2 and 3 seconds. ...\nWikipedia\nhttps://en.wikipedia.org › wiki › Convolution\nDeep dive into swarthmore convolution\nswartsmore convolution theorem\ncheever domains Swarthmore\nerik cheever swartsome\nlinear physical systems pdf\nconvolution demo\nconvolution simulation\nconvolution graph demo\nconvolution color chart",
+      "latex": null,
+      "confidence": 0.93
+    },
+    {
+      "start": 1119.0,
+      "end": 1132.0,
+      "description": "A web search results page about convolution, including links to Wikipedia and Swarthmore College materials. A right-hand panel lists related searches about convolution.",
+      "text": "E12 2022 ASI 31 Online Homework System - Swarthmore College\nFinding the convolution of f (t) and h (t) defined as a piecewise function and verify the result below by evaluating at t=1, 2 and 3 seconds. ...\nWikipedia\nhttps://en.wikipedia.org › wiki › Convolution\nConvolution - Wikipedia\nSee Convolution theorem for a derivation of that property of convolution. Conversely, convolution can be derived as the inverse ...\nLinear Physical Systems Analysis\nhttps://lpsa.swarthmore.edu › Convolution\nSimple Convolution - lpsa.swarthmore.edu\nThis animation shows how the impulse response is time reversed and then it slides by the input as t varies. The final result (the ...\nLinear Physical Systems Analysis\nhttps://lpsa.swarthmore.edu › Convolution › sbh.html\nLinear Physical Systems - Erik Cheever - Swarthmore College\nThere is some fairly complicated math involved in convolution, so before starting on the math, let's start with an example to motivate ...\nLinear Physical Systems Analysis\nhttps://lpsa.swarthmore.edu › Convolution › SysConvolve.pdf · PDF file\nA Systems Approach to the Convolution Theorem - Swarthmore College\nThe Convolution Theorem: A Systems Approach Convolution is a powerful tool for determining the ...\nDeep dive into swarthmore convolution\nswartsmore convolution theorem\ncheever domains Swarthmore\nerik cheever swartsome\nlinear physical systems pdf\nconvolution demo\nconvolution simulation\nconvolution graph demo\nconvolution color chart",
+      "latex": null,
+      "confidence": 0.96
+    },
+    {
+      "start": 1132.0,
+      "end": 1136.0,
+      "description": "A gridded digital whiteboard shows several hand-drawn signal-like curves and annotations. A large red oval/arrow highlights a black sketch in the upper portion, while the lower portion contains overlapping blue, green, and black waveforms with marked points and a horizontal time direction.",
+      "text": "1\n2\n3\n[unreadable]\nt",
+      "latex": null,
+      "confidence": 0.55
+    },
+    {
+      "start": 1136.0,
+      "end": 1153.0,
+      "description": "The frame shows a hand-drawn signal diagram on graph paper. A red oval encloses black symbols and a stepped/curved shape near the top, while the lower half contains overlapping blue and green waveforms with black annotations and a time marker at the right.",
+      "text": "x\n1\n2\n3\n[unreadable]\n[unreadable]\nnow\nt",
+      "latex": "x\n1\n2\n3\nt",
+      "confidence": 0.46
+    },
+    {
+      "start": 1153.0,
+      "end": 1178.0,
+      "description": "The board shows a decaying positive curve beginning at t = 0 and approaching zero as t increases, with the area beneath the curve shaded. The horizontal axis is labeled t, and the curve is annotated with a blue, partially unclear mark.",
+      "text": "t ≥ 0\nt\n[unreadable]",
+      "latex": "h(t)=\\frac{1}{1+t}",
+      "confidence": 0.91
+    },
+    {
+      "start": 1178.0,
+      "end": 1282.0,
+      "description": "The board shows a handwritten definition of h(t) as a fraction for nonnegative t, alongside a graph of a decaying curve. Below is a convolution-style sketch with a blue step signal, red circular markings and arrows, black curves labeled 1 and 2, and a question mark.",
+      "text": "h(t) =\nt ≥ 0\n* h\n1\n2\n?",
+      "latex": "h(t)=\\frac{1}{1+t},\\quad t\\ge 0",
+      "confidence": 0.84
+    },
+    {
+      "start": 1282.0,
+      "end": 1343.0,
+      "description": "The board shows a response function h(t)=1/(1+t), a time-axis sketch with a decaying curve and shaded/marked convolution area, and a boxed expression for the response as u convolved with h at the present time. A lower sketch illustrates several numbered signal components and their combination over time.",
+      "text": "h(t) =\ny_FR (now)\nu * h (now)\n* h\n1\n2\n3?",
+      "latex": "h(t)=\\frac{1}{1+t}\ny_{FR}(\\mathrm{now})\n(u*h)(\\mathrm{now})",
+      "confidence": 0.87
+    },
+    {
+      "start": 1343.0,
+      "end": 1377.0,
+      "description": "The board shows a decaying impulse-response-style graph associated with h(t), overlaid with several colored signals, including a green rectangular/step-like signal and a red oscillating waveform. On the right is a boxed convolution/integral expression, and the lower portion contains a colored block-diagram-like sketch with two paths labeled 1 and 2 and a question mark.",
+      "text": "h(t) =\nY_FR (now)\nU * h (now)\n* h\nt\n1\n2\n?",
+      "latex": "h(t)=\\frac{1}{1+t}\nY_{FR}(\\mathrm{now})\n\\int u*h(\\mathrm{now})",
+      "confidence": 0.73
+    },
+    {
+      "start": 1377.0,
+      "end": 1414.0,
+      "description": "The board shows a handwritten definition of h(t), a decaying graph with oscillatory red and blue marks near the horizontal axis, and a separate magenta graph that rises and then levels off. Below are two curved sketches labeled 1 and 2, with a question mark to the right.",
+      "text": "h(t) =\nt\n*h\n1\n2\n3?\ng\n∞",
+      "latex": "h(t)=\\frac{1}{1+t}",
+      "confidence": 0.82
+    },
+    {
+      "start": 1414.0,
+      "end": 1448.0,
+      "description": "The board shows the definition of a function h(t), a decaying graph with oscillatory annotations, and a lower sketch connecting two circled points. There are also arrows and labels suggesting a convolution or mapping diagram.",
+      "text": "h(t) = (1/(1+t))\n* h\n1    2    3?",
+      "latex": "h(t)=\\frac{1}{1+t}",
+      "confidence": 0.82
+    },
+    {
+      "start": 1448.0,
+      "end": 1530.0,
+      "description": "A graph labeled h(t) shows a blue oscillating, step-like waveform whose alternating positive and negative excursions decrease toward a black horizontal baseline. On the right is a green oval enclosing a separate step-shaped line, with an additional green curved mark below it.",
+      "text": "h(t)",
+      "latex": "h(t)",
+      "confidence": 0.93
+    },
+    {
+      "start": 1530.0,
+      "end": 1636.0,
+      "description": "A gridded whiteboard shows a hand-drawn decaying waveform labeled h(t), with alternating blue rectangular excursions beneath it. On the right is a green circled step-like sketch with a downward arrow toward a short green note; additional blue handwritten marks and numbers appear along the bottom.",
+      "text": "h(t)\nA.1?    1 2 3\n4 ~ ?\nun? out.",
+      "latex": "h(t)",
+      "confidence": 0.62
+    },
+    {
+      "start": 1636.0,
+      "end": 1648.0,
+      "description": "A slide states the theorem relating BIBO stability of an LTI system to absolute integrability of its impulse response. Handwritten notes give a piecewise impulse response that is zero for negative time and cosine-shaped for positive time, with magenta annotations and a small numbered list at the bottom.",
+      "text": "Theorem: an LTI system is BIBO stable if and only if its impulse response\nis absolutely integrable\nh(t) BIBO stable if and only if\nA.I.\n1\n2\n3\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 9",
+      "latex": "h(t)\\text{ is BIBO stable if and only if }\\int_{-\\infty}^{+\\infty}|h(\\tau)|\\,d\\tau<+\\infty\nh(t)=\\begin{cases}0,&t<0\\\\\\cos(10t),&t>0\\end{cases}",
+      "confidence": 0.95
+    },
+    {
+      "start": 1648.0,
+      "end": 1754.0,
+      "description": "The frame shows a hand-drawn signal diagram. At left, a blue sequence of alternating rectangular pulses lies beneath a decreasing black curve labeled h(t); at right, a large blue outlined shape contains a green stepped waveform, with arrows and handwritten annotations below.",
+      "text": "h(t)\nB)\nA. 1 2 3\n4 ~ ?\nun[unreadable] out.",
+      "latex": "h(t)",
+      "confidence": 0.54
+    },
+    {
+      "start": 1754.0,
+      "end": 1794.0,
+      "description": "A gridded digital whiteboard shows the label h(t), overlapping blue and green stepped pulse trains on the left, and a blue rectangular pulse waveform enclosed by large blue and green oval-shaped curves on the right. Additional handwritten annotations and arrows appear along the bottom and between the sketches.",
+      "text": "h(t)\nB\nA.1?    1 2 B\ny ~ ?\n[unreadable] out.",
+      "latex": "h(t)",
+      "confidence": 0.62
+    },
+    {
+      "start": 1794.0,
+      "end": 1811.0,
+      "description": "The board shows several hand-drawn signal waveforms: overlapping blue and green stepped oscillations at upper left, a blue square wave with trailing ellipsis at upper right, and a large green oscillatory waveform whose amplitude and spacing change across the lower right. There are horizontal arrows and marked points around the upper-left waveforms, with a small handwritten list near the bottom left.",
+      "text": "h(t)\n…\nA: 1 2 3\n4 5 9",
+      "latex": "h(t)",
+      "confidence": 0.72
+    },
+    {
+      "start": 1811.0,
+      "end": 1819.0,
+      "description": "The frame shows handwritten signal sketches on graph paper: a stepped waveform at upper left, a blue square wave at upper right, and several green oscillating/rising waveforms across the lower right. A green-outlined box near the bottom contains three handwritten digits.",
+      "text": "h(t)\n123",
+      "latex": "h(t)",
+      "confidence": 0.91
+    },
+    {
+      "start": 1819.0,
+      "end": 1823.0,
+      "description": "A lecture slide states the theorem connecting BIBO stability of an LTI system with absolute integrability of its impulse response. Handwritten annotations show a piecewise example for h(t), with a decaying/oscillatory sketch near the integral condition and numbered notes at the bottom.",
+      "text": "Theorem: an LTI system is BIBO stable if and only if its impulse response\nis absolutely integrable\nBIBO stable if and only if\nA.I.\n1\n2\n3\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 9",
+      "latex": "h(t)\\text{ is BIBO stable if and only if }\\int_{-\\infty}^{+\\infty}|h(\\tau)|\\,d\\tau<+\\infty\nh(t)=\\begin{cases}0, & t<0\\\\\\cos(10t), & t\\ge 0\\end{cases}",
+      "confidence": 0.84
+    },
+    {
+      "start": 1823.0,
+      "end": 1834.0,
+      "description": "A slide states the theorem relating BIBO stability of an LTI system to absolute integrability of its impulse response. It also shows a handwritten example impulse response, h(t)=cos(10t) for t≥0, with magenta annotations highlighting the integral condition and parts of the example.",
+      "text": "Theorem: an LTI system is BIBO stable if and only if its impulse response\nis absolutely integrable\nh(t) BIBO stable if and only if ∫₋∞⁺∞ |h(τ)| dτ < +∞\nh(t) = cos(10t)   t ≥ 0\nA.I. [unreadable] 1 2 3\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 9",
+      "latex": "\\int_{-\\infty}^{+\\infty}|h(\\tau)|\\,d\\tau<+\\infty\nh(t)=\\cos(10t),\\quad t\\ge 0",
+      "confidence": 0.88
+    },
+    {
+      "start": 1834.0,
+      "end": 1839.0,
+      "description": "The board shows handwritten signal sketches: several alternating square-wave traces near the upper left, a separate square wave across the upper right, and large green oscillations with increasing amplitude toward the right. A rounded rectangle near the bottom contains a handwritten number sequence.",
+      "text": "h(t)\n123",
+      "latex": "h(t)",
+      "confidence": 0.86
+    },
+    {
+      "start": 1839.0,
+      "end": 1844.0,
+      "description": "A lecture slide states the theorem relating BIBO stability of an LTI system to absolute integrability of its impulse response. Below it, handwritten notes give an example involving h(t)=cos(10t) for t≥0, with numbered annotations and magenta highlighting around the integral condition and the number 2.",
+      "text": "Theorem: an LTI system is BIBO stable if and only if its impulse response\nis absolutely integrable\nh(t) BIBO stable if and only if\nA.L.,\n1\n2\n3\nLTI systems in continuous time - how do impulse responses and BIBO stability connect, in LTI systems? - main slides - 9",
+      "latex": "\\int_{-\\infty}^{+\\infty} |h(\\tau)|\\,d\\tau < +\\infty\nh(t)=\\cos(10t),\\quad t\\ge 0",
+      "confidence": 0.9
+    },
+    {
+      "start": 1844.0,
+      "end": 1847.0,
+      "description": "A gridded drawing page shows the label h(t) at upper left, overlapping blue and green square-wave sketches with arrows, a separate blue square wave at upper right, and a large green oscillatory curve below whose amplitude grows toward the right. A rounded rectangle near the bottom contains the digits 123.",
+      "text": "h(t)\n123",
+      "latex": "h(t)",
+      "confidence": 0.96
+    },
+    {
+      "start": 1847.0,
+      "end": 1858.0,
+      "description": "A gridded digital whiteboard shows the handwritten label h(t), several blue and green oscillating rectangular waveforms with arrows and marked points, a larger enclosed pulse-train sketch at upper right with a dashed continuation, and two large green spiral/oval sketches connected by a curved line below.",
+      "text": "h(t)",
+      "latex": "h(t)",
+      "confidence": 0.91
+    },
+    {
+      "start": 1858.0,
+      "end": 1868.0,
+      "description": "A gridded whiteboard shows the handwritten label h(t) and several blue and green oscillating square-wave traces. Arrows and curved green outlines connect the left waveform to a larger repeated waveform on the right, with two large spiral-like green sketches below.",
+      "text": "h(t)",
+      "latex": "h(t)",
+      "confidence": 0.93
+    },
+    {
+      "start": 1868.0,
+      "end": 1897.0,
+      "description": "A graph-paper canvas shows a large green closed oval or loop surrounding a rough central vertical sketch with several small circular and angular shapes. A small isolated green square appears near the upper left of the drawing.",
+      "text": "",
+      "latex": null,
+      "confidence": 0.98
+    },
+    {
+      "start": 1897.0,
+      "end": 1900.0,
+      "description": "A graph-paper-style whiteboard is visible with blue square grid lines and part of a large green oval or looped curve. A small green angular/vertical sketch appears inside the lower-central portion of the loop; most of the board is obscured by an interface overlay.",
+      "text": "",
+      "latex": null,
+      "confidence": 0.86
+    },
+    {
+      "start": 1900.0,
+      "end": 1906.05,
+      "description": "A slide states the theorem relating BIBO stability of an LTI system to absolute integrability of its impulse response. Below it is a handwritten example defining h(t) as a cosine for nonnegative time, with “h(t)” circled and the number 2 boxed in magenta.",
+      "text": "Theorem: an LTI system is BIBO stable if and only if its impulse response\nis absolutely integrable\nh(t) BIBO stable if and only if\nh(t) = cos(10t)  t ≥ 0\nA.I.   1   2   3",
+      "latex": "\\int_{-\\infty}^{+\\infty} |h(\\tau)|\\,d\\tau < +\\infty\nh(t)=\\cos(10t),\\quad t\\ge 0",
+      "confidence": 0.94
+    }
+  ]
+}

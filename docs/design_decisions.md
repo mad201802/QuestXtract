@@ -440,6 +440,24 @@ rarely shows a page unchanged twice, so it saves little; a slide deck the lectur
 through saves the most. A mark fainter than the codec noise allows, about 48 grey levels of
 contrast, can go unnoticed.
 
+### D19: The board as a detection delta, built and left off
+
+*Chose:* a candidate sharing a content word with the text of the board on screen gets
+`board_overlap_delta` and the reason `board_overlap` (#60, architecture.md 7.3), measured on the
+three reference recordings with committed board states (`eval --board`), and shipped at 0.0.
+
+*Alternative:* ship it on at 0.10, as planned; or let the board lift sentences over the gate.
+
+*Why:* with the delta on, recall, precision and F1 at the default threshold were unchanged. The
+rule scores nearly every board-matching candidate 1.0 already, so a clamped additive delta has
+nothing to add, and the two it did move were noise. Letting the board make candidates would
+undo the gate's reason for being, that a question word without a `?` is a statement on these
+recordings. The code stays: it is the measured negative result, it is one setting away for a
+lecture where it helps, and the board states it reads are the input the VLM pass needs.
+
+*Cost:* `source: "combined"` is not produced by default. The board states committed for the
+eval are one model's reading and must be regenerated, not edited, when vision changes.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |

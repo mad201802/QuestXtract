@@ -85,9 +85,11 @@ left out. The same quiz file always gives the same ZIP, byte for byte.
 | `--version` | Prints the installed version. |
 | `-h`, `--help` | Without a command, lists the commands; after one, lists that command's options. |
 
-`questxtract eval <files|dirs> [--json]` scores the pipeline against the labelled set: recall,
+`questxtract eval <files|dirs> [--json] [--board]` scores the pipeline against the labelled set: recall,
 precision, false positives by kind, a threshold sweep, and every miss
-([tests/data/README.md](../tests/data/README.md)). It takes `--detector`, `--llm-model` and
+([tests/data/README.md](../tests/data/README.md)). `--board` adds the board states committed
+beside each transcript (`<name>.visual.json`), as if `--vision` had read them, and names the
+recordings that had them on the report's first line. It takes `--detector`, `--llm-model` and
 `--llm-url` too, so the rules and a model can be compared on the same recordings; the report's
 first line names the detector, the model and the prompt version. `questxtract quiz <questions.json>` is
 reserved for quiz generation; it is not implemented yet (#79) and exits with a one-line error.

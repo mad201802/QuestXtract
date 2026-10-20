@@ -29,7 +29,16 @@ import numpy as np
 
 from . import endpoint
 from .config import Config
-from .models import Context, Layout, Progress, Segment, Sentence, VisualContext, stage
+from .models import (
+    Context,
+    Layout,
+    Progress,
+    Segment,
+    Sentence,
+    VisualContext,
+    overlapping,
+    stage,
+)
 
 _COMPARE_HEIGHT = 480  # architecture.md 6.3: change detection compares frames at about 480p
 _GRAY = np.array([0.299, 0.587, 0.114], dtype=np.float32)  # ITU-R BT.601 luma weights
@@ -583,13 +592,6 @@ def has_video(path: Path) -> bool:
             return bool(container.streams.video)
     except (av.error.FFmpegError, OSError):
         return False
-
-
-def overlapping(
-    visual: Sequence[VisualContext], start: float, end: float
-) -> tuple[VisualContext, ...]:
-    """Board states whose lifetime overlaps the half-open interval ``[start, end)``."""
-    return tuple(v for v in visual if v.start < end and v.end > start)
 
 
 def _sample_frames(

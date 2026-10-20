@@ -4,6 +4,11 @@
 
 ### Added
 
+- Detection can read the board: with vision on and `board_overlap_delta` set, a question that
+  shares a word with the text of the board on screen while it was asked gets that boost, the
+  reason `board_overlap`, and `source: "combined"` in `questions.json`. Off by default (0.0): at
+  0.10 it changed nothing on the labelled recordings. `eval --board` scores them with the board
+  states committed beside their transcripts. (#60)
 - Vision reads a slide or page that comes back only once per run. On slides, handwriting and
   screencasts, a keyframe that shows the same content as one read earlier in the run copies that
   reading instead of asking the model again; it stays a board state of its own, with its own

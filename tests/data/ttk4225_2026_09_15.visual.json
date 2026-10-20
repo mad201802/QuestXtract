@@ -1,0 +1,646 @@
+{
+  "vision_model": "gpt-5.6-luna",
+  "vision_prompt_version": "v0",
+  "board_states": [
+    {
+      "start": 0.0,
+      "end": 30.0,
+      "description": "A peach-colored slide asks what is meant by “sinusoidal fidelity,” with a green hand-drawn outline and arrow highlighting the phrase. A small footer identifies the lecture topic and slide number.",
+      "text": "what do we mean with “sinusoidal fidelity”? \nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - - 1",
+      "latex": null,
+      "confidence": 0.98
+    },
+    {
+      "start": 30.0,
+      "end": 47.0,
+      "description": "A three-dimensional plot shows a red spiral-like trajectory that oscillates while extending along the time axis, with projections or components along the real and imaginary axes.",
+      "text": "Im{x(t)}\nRe{x(t)}\nt",
+      "latex": "\\operatorname{Im}\\{x(t)\\}\n\\operatorname{Re}\\{x(t)\\}",
+      "confidence": 0.72
+    },
+    {
+      "start": 47.0,
+      "end": 91.0,
+      "description": "The frame shows two hand-drawn time-varying signals in an upper plot, labeled S1(t) and S2(t), with a horizontal time axis. Below is a second diagram with axes labeled S2 and S1, several curved trajectories or loops, marked points, and a red horizontal axis labeled t.",
+      "text": "S1(t)\nS2(t)\nt\n1\nS2\nS1\n0\nt",
+      "latex": "S_1(t)\nS_2(t)\nt\nS_2\nS_1\nt",
+      "confidence": 0.82
+    },
+    {
+      "start": 91.0,
+      "end": 126.0,
+      "description": "The board shows a handwritten complex-signal expression at the top and a large oval sketch below, labeled “3D,” with a prominent curved mark inside it.",
+      "text": "3D",
+      "latex": "x(t)=\\operatorname{Re}(z(t))+i\\operatorname{Im}(z(t))",
+      "confidence": 0.58
+    },
+    {
+      "start": 126.0,
+      "end": 142.0,
+      "description": "The board shows a handwritten identity relating the real part of a complex exponential to a real exponential envelope multiplied by a rotating complex exponential. Below it are a boxed exponential term, a decaying curve, and a spiral-like trajectory in the complex plane with horizontal and vertical axes.",
+      "text": "y(t) = Re(e^(σ+jω)t) = e^(σt) Re(e^(jωt))\ne^(σt)\ne^(jωt)",
+      "latex": "y(t)=\\operatorname{Re}\\left(e^{(\\sigma+j\\omega)t}\\right)=e^{\\sigma t}\\operatorname{Re}\\left(e^{j\\omega t}\\right)\ne^{\\sigma t}\ne^{j\\omega t}",
+      "confidence": 0.82
+    },
+    {
+      "start": 142.0,
+      "end": 240.0,
+      "description": "A three-dimensional coordinate plot shows a red spiraling trajectory whose loops widen toward one end and contract toward the other, forming a funnel-like envelope around the axes.",
+      "text": "Im{x(t)}\nRe{x(t)}\nt",
+      "latex": "\\operatorname{Im}\\{x(t)\\}\n\\operatorname{Re}\\{x(t)\\}",
+      "confidence": 0.72
+    },
+    {
+      "start": 240.0,
+      "end": 278.0,
+      "description": "A slide introduces complex exponentials as eigenfunctions for LTI systems. It shows the convolution response formula and a complex-plane trajectory labeled by real and imaginary parts, with a time parameter; green handwritten annotations mark exponential terms and the real/imaginary axes.",
+      "text": "Preliminary fact: complex exponentials are eigenfunctions for LTI systems\nu(t) = e^{st}  ⇒  y_forced(t) = h * u(t) = ∫ h(τ)e^{s(t−τ)}dτ = u(t) ∫ h(τ)e^{−sτ}dτ\nIm(u(t))\nRe(u(t))\nt\ne^{σt}\ne^{jωt}\nIm\nRe\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 2",
+      "latex": "u(t)=e^{st}\\quad\\Rightarrow\\quad y_{\\mathrm{forced}}(t)=h*u(t)=\\int_{-\\infty}^{t}h(\\tau)e^{s(t-\\tau)}\\,d\\tau=u(t)\\int_{-\\infty}^{t}h(\\tau)e^{-s\\tau}\\,d\\tau\n\\Im(u(t))\n\\Re(u(t))\ne^{\\sigma t}\ne^{j\\omega t}",
+      "confidence": 0.97
+    },
+    {
+      "start": 278.0,
+      "end": 330.0,
+      "description": "A lecture slide states a preliminary fact about complex exponentials as eigenfunctions of LTI systems. It shows a convolution integral identity and a three-dimensional trajectory plot with red spiraling curves and large green hand-drawn loops, alongside handwritten complex-plane axes and exponential annotations.",
+      "text": "Preliminary fact: complex exponentials are eigenfunctions for LTI systems\nu(t)\ny_forced(t)\nh * u(t)\nIm(u(t))\nRe(u(t))\nt\nIm\nRe\ne^{σt}\ne^{jωt}\ne^{?t}\n1\n2\n3\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 2",
+      "latex": "u(t)=e^{st}\\ \\Longrightarrow\\ y_{\\mathrm{forced}}(t)=h*u(t)=\\int_{-\\infty}^{t}h(\\tau)e^{s(t-\\tau)}\\,d\\tau=u(t)\\int_{-\\infty}^{t}h(\\tau)e^{-s\\tau}\\,d\\tau",
+      "confidence": 0.83
+    },
+    {
+      "start": 330.0,
+      "end": 390.0,
+      "description": "A lecture slide states that complex exponentials are eigenfunctions of LTI systems. It shows a convolution/integral expression for the forced output and a red spiral trajectory in the complex plane labeled by its real and imaginary components and time, with green handwritten annotations around the figure.",
+      "text": "Preliminary fact: complex exponentials are eigenfunctions for LTI systems\nu(t)\n yforced(t)\nIm(u(t))\nRe(u(t))\nt\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 2\ne^{σt}\ne^{jωt}\ne^{[unreadable]t}\n1\n2\n3",
+      "latex": "u(t)=e^{st}\n y_{\\mathrm{forced}}(t)=h*u(t)=\\int_{-\\infty}^{t}h(\\tau)e^{s(t-\\tau)}\\,d\\tau=u(t)\\int_{-\\infty}^{t}h(\\tau)e^{-s\\tau}\\,d\\tau\n\\mathop{\\Im}(u(t))\n\\mathop{\\Re}(u(t))\ne^{\\sigma t}\ne^{j\\omega t}",
+      "confidence": 0.84
+    },
+    {
+      "start": 390.0,
+      "end": 407.0,
+      "description": "A slide states that complex exponentials are eigenfunctions of LTI systems. It shows the forced-output convolution integral and a red three-dimensional spiral trajectory for the complex signal, with real and imaginary axes and time labeled; green handwritten annotations and sketches surround the figure.",
+      "text": "Preliminary fact: complex exponentials are eigenfunctions for LTI systems\nIm(u(t))\nRe(u(t))\nt\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 2\nC\nσt",
+      "latex": "u(t)=e^{st}\\quad\\Longrightarrow\\quad y_{\\mathrm{forced}}(t)=h*u(t)=\\int_{-\\infty}^{t}h(\\tau)e^{s(t-\\tau)}\\,d\\tau=u(t)\\int_{-\\infty}^{t}h(\\tau)e^{-s\\tau}\\,d\\tau",
+      "confidence": 0.86
+    },
+    {
+      "start": 407.0,
+      "end": 485.0,
+      "description": "A slide states that complex exponentials are eigenfunctions for LTI systems and shows the convolution response to an exponential input. Below, a red spiral trajectory in the complex plane is labeled by its real and imaginary components and parameterized by time.",
+      "text": "Preliminary fact: complex exponentials are eigenfunctions for LTI systems\nu(t−τ)\nu(t)\ne^{st}\ny_forced(t)\nℜ(u(t))\nℑ(u(t))\nt\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 2",
+      "latex": "u(t)=e^{st}\\quad\\Longrightarrow\\quad y_{\\mathrm{forced}}(t)=h*u(t)=\\int_{-\\infty}^{t}h(\\tau)e^{s(t-\\tau)}\\,d\\tau=u(t)\\int_{-\\infty}^{t}h(\\tau)e^{-s\\tau}\\,d\\tau",
+      "confidence": 0.96
+    },
+    {
+      "start": 485.0,
+      "end": 558.0,
+      "description": "A complex plane is drawn with blue real and imaginary axes labeled Re and Im. Two green vectors extend from the origin into the first quadrant, and a modulus multiplication equation appears on the right.",
+      "text": "Im\n|x| · |y|\n= |z|\nRe",
+      "latex": "\\lvert x\\rvert \\cdot \\lvert y\\rvert\n\\lvert z\\rvert",
+      "confidence": 0.86
+    },
+    {
+      "start": 558.0,
+      "end": 602.0,
+      "description": "A complex-plane diagram is shown with blue real and imaginary axes, a large green circle centered near the origin, and several green vectors in the first quadrant, including a longer resultant-like vector. A modulus equation appears on the right.",
+      "text": "Im\nR_e\n|x| · |y| = |z|",
+      "latex": "\\operatorname{Im}\n\\operatorname{Re}\n|x|\\,|y|=|z|",
+      "confidence": 0.87
+    },
+    {
+      "start": 602.0,
+      "end": 635.0,
+      "description": "A hand-drawn coordinate-style diagram shows a vertical axis labeled Im, a diagonal axis labeled Re, and a long horizontal, slightly curved axis labeled t. A red curved trace appears on the left near the axes, with a small red square near their intersection.",
+      "text": "Im\nRe\nt",
+      "latex": null,
+      "confidence": 0.98
+    },
+    {
+      "start": 635.0,
+      "end": 668.0,
+      "description": "A hand-drawn 3D coordinate diagram shows a red signal winding through the space of time and complex-valued amplitude, with black axes labeled for imaginary part, real part, and time. Below it is a smaller blue complex-plane sketch with an axis, a marked point, and a short curved trajectory.",
+      "text": "Im\nRe\nt\nIm\nz\nRe",
+      "latex": "\\mathrm{Im}\n\\mathrm{Re}\nt\n\\mathrm{Im}\nz\n\\mathrm{Re}",
+      "confidence": 0.86
+    },
+    {
+      "start": 668.0,
+      "end": 698.0,
+      "description": "A hand-drawn coordinate-style diagram shows a horizontal axis labeled f and a vertical axis labeled Im, with a diagonal direction labeled Re. Red and blue curved traces loop and rise across the axes; a smaller blue complex-plane sketch below has perpendicular axes, a slanted vector, and an angle mark.",
+      "text": "Im\nRe\nf\nIm\nR",
+      "latex": null,
+      "confidence": 0.86
+    },
+    {
+      "start": 698.0,
+      "end": 716.0,
+      "description": "A gridded board shows a coordinate-style diagram with black axes and arrows, several red and blue curved paths, and a smaller blue rotation/vector sketch below with an indicated angle.",
+      "text": "lm\nRe\nr\nlm\nR",
+      "latex": "\\ell_m\n\\mathrm{Re}\nr\n\\ell_m\nR",
+      "confidence": 0.78
+    },
+    {
+      "start": 716.0,
+      "end": 740.0,
+      "description": "A slide states a preliminary fact about complex exponentials as eigenfunctions of LTI systems. It shows the convolution derivation of the forced output and a three-dimensional spiral trajectory labeled by its real and imaginary components over time.",
+      "text": "Preliminary fact: complex exponentials are eigenfunctions for LTI systems\nu(t) = e^{st} ⇒ y_forced(t) = h * u(t) = ∫_{−∞}^{t} h(τ)e^{s(t−τ)}dτ = u(t) ∫_{−∞}^{t} h(τ)e^{−sτ}dτ\nℑ(u(t))\nℜ(u(t))\nt\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 2",
+      "latex": "u(t)=e^{st}\\Rightarrow y_{\\mathrm{forced}}(t)=h*u(t)=\\int_{-\\infty}^{t}h(\\tau)e^{s(t-\\tau)}\\,d\\tau=u(t)\\int_{-\\infty}^{t}h(\\tau)e^{-s\\tau}\\,d\\tau",
+      "confidence": 0.98
+    },
+    {
+      "start": 740.0,
+      "end": 773.0,
+      "description": "A hand-drawn time-domain signal is plotted as a wavy blue curve above a horizontal time axis, with a vertical axis and a marked point labeled “now.”",
+      "text": "S₁(t)\nnow\nt",
+      "latex": "S_1(t)",
+      "confidence": 0.93
+    },
+    {
+      "start": 773.0,
+      "end": 801.0,
+      "description": "A hand-drawn graph shows two time-varying signals, one blue and one red, plotted against a horizontal time axis. Several hatched regions appear beneath the curves, with the current time marked “now” and a legend identifying the corresponding accumulated signals.",
+      "text": "S₁(t)\nS₂\nS̄₁\nS̄₂\nnow\nt",
+      "latex": "S_1(t)\nS_2\n\\bar{S}_1\n\\bar{S}_2\nt",
+      "confidence": 0.94
+    },
+    {
+      "start": 801.0,
+      "end": 824.0,
+      "description": "A gridded board shows blue and red time-domain waveforms plotted on horizontal and vertical axes, labeled as two signal components. At the bottom, a green equation combines the two components into a complex-valued signal.",
+      "text": "S₁(t)\nS₂\nS̅₁\nS̅₂\nt\nnow\ns*(t) = S₁(t) + i S₂(t).",
+      "latex": "S_1(t)\nS_2\n\\overline{S}_1\n\\overline{S}_2\nt\ns^*(t)=S_1(t)+iS_2(t)",
+      "confidence": 0.88
+    },
+    {
+      "start": 824.0,
+      "end": 838.0,
+      "description": "A hand-drawn time-axis diagram shows red and blue oscillating signal traces, with labels for S₁(t) and S₂ and a marked point labeled “now.” A green equation at the bottom combines the two components into a complex signal.",
+      "text": "S₁(t)\nS₂\nS̄₁\nS̄₂\nnow\nt\nx(t) = S₁(t) + i S₂(t)",
+      "latex": "S_1(t)\nS_2\n\\overline{S_1}\n\\overline{S_2}\nx(t)=S_1(t)+iS_2(t)",
+      "confidence": 0.86
+    },
+    {
+      "start": 838.0,
+      "end": 891.0,
+      "description": "A hand-drawn three-dimensional coordinate sketch shows red signal-like curves along axes, with the component signals labeled S1 and S2 on the right. The bottom of the board gives the complex-signal relation combining the two components.",
+      "text": "C\nIm\n0\n1\nt\nS1\nS2\nnow\n⋆(t) = S1(t) + i S2(t)",
+      "latex": "\\star(t)=S_1(t)+iS_2(t)",
+      "confidence": 0.84
+    },
+    {
+      "start": 891.0,
+      "end": 919.0,
+      "description": "A slide states a preliminary fact about complex exponentials in LTI systems and shows the convolution response to an exponential input. Below, a red three-dimensional spiral trajectory is plotted with imaginary and real components on two axes and time along the third.",
+      "text": "Preliminary fact: complex exponentials are eigenfunctions for LTI systems\nIm(u(t))\nRe(u(t))\nt\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 2",
+      "latex": "u(t)=e^{st}\\quad\\Longrightarrow\\quad y_{\\mathrm{forced}}(t)=h*u(t)=\\int_{-\\infty}^{t}h(\\tau)e^{s(t-\\tau)}\\,d\\tau=u(t)\\int_{-\\infty}^{t}h(\\tau)e^{-s\\tau}\\,d\\tau",
+      "confidence": 0.96
+    },
+    {
+      "start": 919.0,
+      "end": 937.0,
+      "description": "A dark slide titled “From transient overlap to sinusoidal fidelity” shows a cyan helical sinusoid winding through a three-dimensional coordinate system, with the real and imaginary directions perpendicular to the time axis.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{iωt}H(t)\nI\nR\nt",
+      "latex": "u(t)=e^{i\\omega t}H(t)\n\\mathcal{I}\n\\mathcal{R}\nt",
+      "confidence": 0.91
+    },
+    {
+      "start": 937.0,
+      "end": 956.0,
+      "description": "A handwritten piecewise definition of u(t) is shown: it is zero for negative time and an exponential for nonnegative time. Below it, the parameter s is identified with jω.",
+      "text": "u(t) =\n0     t < 0\ne^{st}     t ≥ 0\ns = jω",
+      "latex": "u(t)=\\begin{cases}0,&t<0\\\\e^{st},&t\\ge 0\\end{cases}\n s=j\\omega",
+      "confidence": 0.98
+    },
+    {
+      "start": 956.0,
+      "end": 981.0,
+      "description": "A slide titled “From transient overlap to sinusoidal fidelity” shows a cyan three-dimensional helical trajectory for a complex exponential, extending along a diagonal time axis. The transverse axes are labeled with real and imaginary components, and the legend identifies the plotted signal.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{iωt} H(t)\nI\nR\nt",
+      "latex": "u(t)=e^{i\\omega t}H(t)",
+      "confidence": 0.93
+    },
+    {
+      "start": 981.0,
+      "end": 1012.0,
+      "description": "A black lecture slide is visible in the video preview. It contains a pale blue oscillatory curve beginning near the origin, drawn over angled axes with several small mathematical annotations.",
+      "text": "[unreadable]",
+      "latex": null,
+      "confidence": 0.28
+    },
+    {
+      "start": 1012.0,
+      "end": 1036.0,
+      "description": "A slide titled about complex exponentials as eigenfunctions of LTI systems. It shows a convolution calculation for an exponential input and a three-dimensional-looking spiral trajectory in the complex plane, with real and imaginary axes and time indicated.",
+      "text": "Preliminary fact: complex exponentials are eigenfunctions for LTI systems\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 2",
+      "latex": "u(t)=e^{st}\n y_{\\mathrm{forced}}(t)=h*u(t)=\\int_{-\\infty}^{t}h(\\tau)e^{s(t-\\tau)}\\,d\\tau=u(t)\\int_{-\\infty}^{t}h(\\tau)e^{-s\\tau}\\,d\\tau\n\\Im(u(t))\n\\Re(u(t))\nt",
+      "confidence": 0.93
+    },
+    {
+      "start": 1036.0,
+      "end": 1066.0,
+      "description": "A slide titled “From transient overlap to sinusoidal fidelity” shows a cyan oscillating input waveform, a green first-order impulse-response curve, and a magenta product/convolution-related waveform. At right is a complex-plane diagram labeled “convolution integral,” with a dashed circular locus and a marked point.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{iωt}H(t)\nh(t₀−t): first order\nh(t₀−t)e^{iωt}\nt₀ = −2.2\nℜ\nconvolution integral\nh(t₀)\nt\nbefore the input starts, no overlap, output zero",
+      "latex": "u(t)=e^{i\\omega t}H(t)\nh(t_0-t):\\ \\text{first order}\nh(t_0-t)e^{i\\omega t}\nt_0=-2.2",
+      "confidence": 0.88
+    },
+    {
+      "start": 1066.0,
+      "end": 1083.0,
+      "description": "A dark slide titled “From transient overlap to sinusoidal fidelity” shows a 3D-style diagram of oscillatory trajectories and their overlap, with a small complex-plane sketch at right labeled as a convolution integral. A caption at the bottom notes that the transient overlap is still growing.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{iωt} H(t)\nh(t₀−t): first order\nh(t₀−t)e^{iωt}\nt₀ = 3.3\nQ\nR\nconvolution integral\ntransient: the overlap is still growing",
+      "latex": "u(t)=e^{i\\omega t}H(t)\nh(t_0-t)\\text{: first order}\nh(t_0-t)e^{i\\omega t}\nt_0=3.3",
+      "confidence": 0.86
+    },
+    {
+      "start": 1083.0,
+      "end": 1113.0,
+      "description": "A dark slide titled “From transient overlap to sinusoidal fidelity” shows a three-dimensional complex-valued time plot with cyan, green, and magenta trajectories, a translucent plane, and real/imaginary axes. At right is a smaller complex-plane plot labeled as a convolution integral, with a looping magenta trajectory.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{iωt} H(t)\nh(t₀−t): first order\nh(t₀−t)e^{iωt}\nt₀ = 9.5\nℑ\nℜ\nt\nconvolution integral\nℑ\nℜ\n[unreadable]ic regime: approximately fixed shape, pure rotation",
+      "latex": "u(t)=e^{i\\omega t}H(t)\nh(t_0-t):\\ \\text{first order}\nh(t_0-t)e^{i\\omega t}\nt_0=9.5",
+      "confidence": 0.84
+    },
+    {
+      "start": 1113.0,
+      "end": 1139.0,
+      "description": "A gridded whiteboard shows several overlapping blue, red, and green curves along a horizontal baseline, with a steep vertical feature near the center-right. The label “u” is circled in red above the curves, and “c” appears near the right end of the baseline.",
+      "text": "u\nc",
+      "latex": "u\nc",
+      "confidence": 0.93
+    },
+    {
+      "start": 1139.0,
+      "end": 1156.0,
+      "description": "A dark slide titled “From transient overlap to sinusoidal fidelity” shows three colored curves evolving along a time axis: a cyan oscillatory input, a green first-order response, and a magenta modulated response. At right, a small complex-plane diagram labeled with real and imaginary axes illustrates the convolution integral as a rotating spiral-like trajectory.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{iωt}H(t)\nh(t₀ − t): first order\nh(t₀ − t)e^{iωt}\nt₀ = 9.5\nconvolution integral\nt\nR\n[unreadable]\n[unreadable] regime: approximately fixed shape, pure rotation",
+      "latex": "u(t)=e^{i\\omega t}H(t)\nh(t_0-t)\\colon\\ \\text{first order}\nh(t_0-t)e^{i\\omega t}\nt_0=9.5",
+      "confidence": 0.84
+    },
+    {
+      "start": 1156.0,
+      "end": 1180.0,
+      "description": "A slide states that complex exponentials are eigenfunctions of LTI systems. It shows a convolution derivation for an exponential input and a three-dimensional spiral trajectory whose axes represent the imaginary and real parts of the signal and time.",
+      "text": "Preliminary fact: complex exponentials are eigenfunctions for LTI systems\nu(t) = e^{st}  ⇒  y_forced(t) = h * u(t) = ∫_{−∞}^{t} h(τ)e^{s(t−τ)}dτ = u(t) ∫_{−∞}^{t} h(τ)e^{−sτ}dτ\nℑ(u(t))\nℜ(u(t))\nt\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 2",
+      "latex": "u(t)=e^{st}\\ \\Rightarrow\\ y_{\\mathrm{forced}}(t)=h*u(t)=\\int_{-\\infty}^{t}h(\\tau)e^{s(t-\\tau)}\\,d\\tau=u(t)\\int_{-\\infty}^{t}h(\\tau)e^{-s\\tau}\\,d\\tau\n\\Im(u(t))\n\\Re(u(t))",
+      "confidence": 0.94
+    },
+    {
+      "start": 1180.0,
+      "end": 1214.0,
+      "description": "A slide states that complex exponentials are eigenfunctions of LTI systems. It shows the convolution response to an exponential input and a three-dimensional spiral trajectory labeled by the real and imaginary parts of u(t) and time t, with green handwritten annotations around the equation and diagram.",
+      "text": "Preliminary fact: complex exponentials are eigenfunctions for LTI systems\nu(t) = e^{st} ⇒ y_forced(t) = h * u(t) = ∫_{−∞}^{t} h(τ)e^{s(t−τ)}dτ = u(t)∫_{−∞}^{t} h(τ)e^{−sτ}dτ\nℑ(u(t))\nℜ(u(t))\nt\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 2",
+      "latex": "u(t)=e^{st}\\ \\Longrightarrow\\ y_{\\mathrm{forced}}(t)=h*u(t)=\\int_{-\\infty}^{t}h(\\tau)e^{s(t-\\tau)}\\,d\\tau=u(t)\\int_{-\\infty}^{t}h(\\tau)e^{-s\\tau}\\,d\\tau\n\\Im(u(t))\n\\Re(u(t))\nt",
+      "confidence": 0.97
+    },
+    {
+      "start": 1214.0,
+      "end": 1245.0,
+      "description": "A slide states a preliminary fact about complex exponentials and LTI systems. It shows an input–output convolution equation and a red spiral trajectory plotted in the complex plane with axes labeled by the real and imaginary parts; green handwritten annotations and arrows overlay the slide.",
+      "text": "Preliminary fact: complex exponentials are eigenfunctions for LTI systems\nu(t)\ny_{forced}(t)\nIm(u(t))\nRe(u(t))\nt\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 2",
+      "latex": "u(t)=e^{st}\\longrightarrow y_{forced}(t)=h*u(t)=\\int_{-\\infty}^{t}h(\\tau)e^{s(t-\\tau)}\\,d\\tau=u(t)\\int_{-\\infty}^{t}h(\\tau)e^{-s\\tau}\\,d\\tau",
+      "confidence": 0.91
+    },
+    {
+      "start": 1245.0,
+      "end": 1265.0,
+      "description": "A slide states that complex exponentials are eigenfunctions of LTI systems. It shows the convolution/eigenfunction equation, a three-dimensional red spiral trajectory labeled by the real and imaginary parts of u(t) and time, and a green block diagram mapping u through a block B to αu.",
+      "text": "Preliminary fact: complex exponentials are eigenfunctions for LTI systems\n𝓘(u(t))\nℜ(u(t))\nt\nu\nB\nαu\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 2",
+      "latex": "u(t)=e^{st}\\Rightarrow y_{\\mathrm{forced}}(t)=h*u(t)=\\int_{-\\infty}^{t}h(\\tau)e^{s(t-\\tau)}\\,d\\tau=u(t)\\int_{-\\infty}^{t}h(\\tau)e^{-s\\tau}\\,d\\tau",
+      "confidence": 0.94
+    },
+    {
+      "start": 1265.0,
+      "end": 1293.0,
+      "description": "A slide titled “Interesting property for BIBO stable systems” presents two limiting integral expressions involving h(τ) and complex exponentials, followed by the statement that they exist and are finite. Below is a three-dimensional sketch with axes/labels and several red elliptical curves surrounding green marks near the center.",
+      "text": "Interesting property for BIBO stable systems\nexist and are finite\n𝓘\n𝓡\nt\nh Ai\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 5",
+      "latex": "\\lim_{t\\to+\\infty}\\int_{-\\infty}^{t} h(\\tau)e^{j\\omega\\tau}\\,d\\tau\n\\lim_{t\\to+\\infty}\\int_{-\\infty}^{t} h(\\tau)e^{-j\\omega\\tau}\\,d\\tau",
+      "confidence": 0.93
+    },
+    {
+      "start": 1293.0,
+      "end": 1327.0,
+      "description": "A slide titled “From transient overlap to sinusoidal fidelity” shows three color-coded trajectories in a three-dimensional complex-plane/time diagram, with a smaller complex-plane plot at right labeled as the convolution integral. The trajectories illustrate a cyan oscillatory path, a green decaying first-order response, and a magenta combined response.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{iωt}H(t)\nh(t₀−t): first order\nh(t₀−t)e^{iωt}\nt₀ = 9.5\nℑ\nℜ\nt\nconvolution integral\nℜ\n[unreadable]ic regime: approximately fixed shape, pure rotation",
+      "latex": "u(t)=e^{i\\\\omega t}H(t)\nh(t_0-t):\\ \\text{first order}\nh(t_0-t)e^{i\\\\omega t}\nt_0=9.5",
+      "confidence": 0.83
+    },
+    {
+      "start": 1327.0,
+      "end": 1349.0,
+      "description": "A slide titled “Interesting property for BIBO stable systems” states two limiting integral expressions and says they exist and are finite. Below is a three-dimensional-looking diagram with red elliptical shapes, dashed and solid axes labeled with imaginary/real components and t, plus green handwritten annotations and sketches.",
+      "text": "Interesting property for BIBO stable systems\nexist and are finite\n𝓘\n𝓡\nt\nh A'\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 5",
+      "latex": "\\lim_{t\\to+\\infty}\\int_{-\\infty}^{t} h(\\tau)e^{j\\omega\\tau}\\,d\\tau \\quad \\text{and} \\quad \\lim_{t\\to+\\infty}\\int_{-\\infty}^{t} h(\\tau)e^{-j\\omega\\tau}\\,d\\tau",
+      "confidence": 0.92
+    },
+    {
+      "start": 1349.0,
+      "end": 1387.0,
+      "description": "A slide titled “Interesting property for BIBO stable systems” presents two limiting convolution-integral expressions and states that they exist and are finite. The lower half contains a three-dimensional diagram with red and green looping curves, gray axes, and labels including J, R, and t, with additional green handwritten annotations and circles.",
+      "text": "Interesting property for BIBO stable systems\nh  A'\nexist and are finite\nJ\nR\nt\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 5",
+      "latex": "\\lim_{t\\to +\\infty}\\int_{-\\infty}^{t}h(\\tau)e^{j\\omega\\tau}\\,d\\tau\n\\lim_{t\\to +\\infty}\\int_{-\\infty}^{t}h(\\tau)e^{-j\\omega\\tau}\\,d\\tau",
+      "confidence": 0.94
+    },
+    {
+      "start": 1387.0,
+      "end": 1418.0,
+      "description": "A slide titled “Focus for now” introduces BIBO-stable systems and steady-state sinusoidal response. Below the equations is a complex-plane-style diagram with red looping curves, labeled real/imaginary directions and time, plus a green point and arrow.",
+      "text": "Focus for now\nlook only at BIBO stable systems, and at\nu(t) = cos(ωt) = (e^{jωt} + e^{-jωt})/2\nso that the decaying terms below disappear\nand we can focus on the steady-state sinusoidal response – i.e., the factors\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 4",
+      "latex": "u(t)=\\cos(\\omega t)=\\frac{e^{j\\omega t}+e^{-j\\omega t}}{2}\n\\int_{-\\infty}^{t}h(\\tau)e^{j\\omega\\tau}\\,d\\tau\n\\int_{-\\infty}^{t}h(\\tau)e^{-j\\omega\\tau}\\,d\\tau",
+      "confidence": 0.98
+    },
+    {
+      "start": 1418.0,
+      "end": 1452.0,
+      "description": "A slide titled “Interesting property for BIBO stable systems” displays two limiting integrals involving the impulse response h and positive and negative complex exponentials. Below is a three-dimensional red looping trajectory around dashed and solid axes, with handwritten green annotations and two small green sketches at left.",
+      "text": "Interesting property for BIBO stable systems\nlim ... ∫ ... h(τ)e^{jωτ}dτ and lim ... ∫ ... h(τ)e^{-jωτ}dτ\nexist and are finite\n[axis label]\n[axis label]\nt\nh\nA′\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 5",
+      "latex": "\\lim_{t\\to+\\infty}\\int_{-\\infty}^{t}h(\\tau)e^{j\\omega\\tau}\\,d\\tau \\quad \\text{and} \\quad \\lim_{t\\to+\\infty}\\int_{-\\infty}^{t}h(\\tau)e^{-j\\omega\\tau}\\,d\\tau",
+      "confidence": 0.91
+    },
+    {
+      "start": 1452.0,
+      "end": 1490.0,
+      "description": "Slide titled “From transient overlap to sinusoidal fidelity.” It shows a cyan oscillating complex trajectory, a green first-order response along a sloping time axis, and a small complex-plane diagram on the right labeled as a convolution integral.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{iωt}H(t)\nh(t₀ − t): first order\nh(t₀ − t)e^{iωt}\nt₀ = −3.9\nℑ\nℜ\nt\nconvolution integral\nh(t₀)\nR",
+      "latex": "u(t)=e^{i\\omega t}H(t)\nh(t_0-t)\\text{: first order}\nh(t_0-t)e^{i\\omega t}\nt_0=-3.9",
+      "confidence": 0.86
+    },
+    {
+      "start": 1490.0,
+      "end": 1523.0,
+      "description": "A slide titled “From transient overlap to sinusoidal fidelity” shows three colored trajectories: a cyan oscillatory signal, a green truncated response, and a magenta modulated response. The diagram includes complex-plane axes, a translucent slicing plane, and a smaller right-hand plot labeled as a convolution integral.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{iωt}H(t)\nh(t₀−t) : first order\nh(t₀−t)e^{iωt}\nt₀ = 14.2\nI\nR\nt\nconvolution integral\nR\nic regime: approximately fixed shape, pure rotation",
+      "latex": "u(t)=e^{i\\omega t}H(t)\nh(t_0-t)\\colon\\ \\text{first order}\nh(t_0-t)e^{i\\omega t}\nt_0=14.2",
+      "confidence": 0.84
+    },
+    {
+      "start": 1523.0,
+      "end": 1555.0,
+      "description": "A slide titled “From transient overlap to sinusoidal fidelity” shows a three-dimensional trajectory of a complex-valued signal, with colored curves for the input, a first-order response, and their modulated product. At right, a projection labeled “convolution integral” shows a magenta spiral-like trajectory in the complex plane; a partially visible caption at the bottom mentions an approximately fixed shape and pure rotation.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{iωt} H(t)\nh(t₀−t): first order\nh(t₀−t)e^{iωt}\nt₀ = 16.6\nC\nR\nt\nconvolution integral\nR\nh(t₀)\n[unreadable]ic regime: approximately fixed shape, pure rotation",
+      "latex": "u(t)=e^{i\\omega t}H(t)\nh(t_0-t)\\text{: first order}\nh(t_0-t)e^{i\\omega t}\nt_0=16.6",
+      "confidence": 0.78
+    },
+    {
+      "start": 1555.0,
+      "end": 1575.0,
+      "description": "A slide titled “Interesting property for BIBO stable systems” states two limiting integral conditions and that they exist and are finite. Below is a three-dimensional diagram with red looping trajectories around axes labeled J and R, with t marked along one axis; green handwritten annotations and arrows appear around the slide.",
+      "text": "Interesting property for BIBO stable systems\nexist and are finite\nJ\nR\nt\nh\nA'\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 5",
+      "latex": "\\lim_{t\\to+\\infty}\\int_{-\\infty}^{t}h(\\tau)e^{j\\omega\\tau}\\,d\\tau\n\\lim_{t\\to+\\infty}\\int_{-\\infty}^{t}h(\\tau)e^{-j\\omega\\tau}\\,d\\tau",
+      "confidence": 0.94
+    },
+    {
+      "start": 1575.0,
+      "end": 1593.0,
+      "description": "A dark slide titled “From transient overlap to sinusoidal fidelity” shows a three-dimensional complex-plane trajectory: a cyan oscillatory input, a green first-order response, and a magenta product/convolution trajectory. On the right is a smaller complex-plane plot labeled “convolution integral,” showing a magenta spiral-like curve.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{st} H(t)\nh(t₀−t): first order\nh(t₀−t)e^{st}\nt₀ = 16.6\nℑ\nℜ\nt\nconvolution integral\nℜ\n[unreadable]ic regime: approximately fixed shape, pure rotation",
+      "latex": "u(t)=e^{st}H(t)\nh(t_0-t)\\text{: first order}\nh(t_0-t)e^{st}\nt_0=16.6",
+      "confidence": 0.78
+    },
+    {
+      "start": 1593.0,
+      "end": 1613.0,
+      "description": "A slide titled “Interesting property for BIBO stable systems” shows two truncated Fourier-type integrals and a three-dimensional diagram with real and imaginary axes and a time trajectory drawn as looping red curves. Green handwritten annotations and arrows highlight parts of the slide.",
+      "text": "Interesting property for BIBO stable systems\nand\nexist and are finite\n𝓘\n𝓡\nt\nh\nA′\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 5",
+      "latex": "\\lim_{t\\to+\\infty}\\int_{-\\infty}^{t} h(\\tau)e^{j\\omega\\tau}\\,d\\tau\n\\lim_{t\\to+\\infty}\\int_{-\\infty}^{t} h(\\tau)e^{-j\\omega\\tau}\\,d\\tau",
+      "confidence": 0.91
+    },
+    {
+      "start": 1613.0,
+      "end": 1630.0,
+      "description": "A slide titled about the implication of BIBO stability for sinusoidal fidelity. It shows a cosine input represented as the sum of two complex exponentials and the corresponding forced output, with several overlapping green hand-drawn circular loops below.",
+      "text": "Implication for BIBO stable systems: Sinusoidal fidelity\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 6",
+      "latex": "u(t)=\\cos(\\omega t)=\\frac{1}{2}\\left(e^{j\\omega t}+e^{-j\\omega t}\\right)\\quad\\Longrightarrow\\quad y_{\\mathrm{forced}}(t)\\xrightarrow{t\\to\\infty}|H(j\\omega)|\\cos\\left(\\omega t+\\angle H(j\\omega)\\right)",
+      "confidence": 0.98
+    },
+    {
+      "start": 1630.0,
+      "end": 1652.0,
+      "description": "A lecture slide titled “Implication for BIBO stable systems: Sinusoidal fidelity” shows the cosine input represented as a sum of two complex exponentials and the corresponding forced output expression. Green marker annotations loosely circle the input identity and form several overlapping oval loops across the lower half of the slide.",
+      "text": "Implication for BIBO stable systems: Sinusoidal fidelity\nu(t) = cos(ωt) = 1/2 (e^{jωt} + e^{-jωt})\ny_forced(t)\nt→∞\n|H(jω)| cos(ωt + ∠H(jω))\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 6",
+      "latex": "u(t)=\\cos(\\omega t)=\\frac{1}{2}\\left(e^{j\\omega t}+e^{-j\\omega t}\\right)\\ \\Longrightarrow\\ y_{\\mathrm{forced}}(t)\\xrightarrow[t\\to\\infty]{}|H(j\\omega)|\\cos\\left(\\omega t+\\angle H(j\\omega)\\right)",
+      "confidence": 0.99
+    },
+    {
+      "start": 1652.0,
+      "end": 1666.0,
+      "description": "A slide titled “Implication for BIBO stable systems: Sinusoidal fidelity” shows the cosine input represented as a sum of two complex exponentials and the corresponding long-time forced output of an LTI system. Below, green handwritten annotations and several overlapping oscillatory curves appear on coordinate axes.",
+      "text": "Implication for BIBO stable systems: Sinusoidal fidelity\n[unreadable]\n[unreadable]\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 6",
+      "latex": "u(t)=\\cos(\\omega t)=\\frac{1}{2}\\left(e^{j\\omega t}+e^{-j\\omega t}\\right) \\Longrightarrow y_{\\mathrm{forced}}(t) \\xrightarrow[t\\to\\infty]{} |H(j\\omega)|\\cos\\left(\\omega t+\\angle H(j\\omega)\\right)",
+      "confidence": 0.91
+    },
+    {
+      "start": 1666.0,
+      "end": 1691.0,
+      "description": "A slide titled about sinusoidal fidelity for BIBO-stable systems. It shows a sinusoidal-input/output equation at the top and a green handwritten LTI block diagram illustrating an input formed from a star and triangle, with corresponding sad and happy-face outputs and waveform sketches.",
+      "text": "Implication for BIBO stable systems: Sinusoidal fidelity\nu = ★ + △\nLTI\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 6",
+      "latex": "u(t)=\\cos(\\omega t)=\\frac{1}{2}\\left(e^{j\\omega t}+e^{-j\\omega t}\\right)\n y_{\\mathrm{forced}}(t)\\xrightarrow[t\\to\\infty]{}\\lvert H(j\\omega)\\rvert\\cos\\left(\\omega t+\\angle H(j\\omega)\\right)\nu=\\star+\\triangle",
+      "confidence": 0.96
+    },
+    {
+      "start": 1691.0,
+      "end": 1771.0,
+      "description": "A slide titled “Implication for BIBO stable systems: Sinusoidal fidelity” shows the cosine decomposition into complex exponentials and the corresponding steady-state forced output of an LTI system. Green handwritten annotations include an LTI block, arrows, waveform-like sketches, circled symbols, and several partially illegible differential-equation-like expressions.",
+      "text": "Implication for BIBO stable systems: Sinusoidal fidelity\n[LTI]\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 6",
+      "latex": "u(t)=\\cos(\\omega t)=\\frac{1}{2}\\left(e^{j\\omega t}+e^{-j\\omega t}\\right)\\quad\\Longrightarrow\\quad y_{\\mathrm{forced}}(t)\\xrightarrow[t\\to\\infty]{}|H(j\\omega)|\\cos\\left(\\omega t+\\angle H(j\\omega)\\right)",
+      "confidence": 0.91
+    },
+    {
+      "start": 1771.0,
+      "end": 1849.0,
+      "description": "A slide about sinusoidal fidelity for BIBO-stable systems shows the cosine input decomposed into two complex exponentials and the corresponding steady-state forced response. Green handwritten annotations illustrate two components passing through an LTI block, with additional differential-expression notes on the right.",
+      "text": "Implication for BIBO stable systems: Sinusoidal fidelity\nLTI\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 6",
+      "latex": "u(t)=\\cos(\\omega t)=\\frac{1}{2}\\left(e^{j\\omega t}+e^{-j\\omega t}\\right)\n y_{\\mathrm{forced}}(t)\\xrightarrow[t\\to\\infty]{}\\lvert H(j\\omega)\\rvert\\cos\\left(\\omega t+\\angle H(j\\omega)\\right)",
+      "confidence": 0.94
+    },
+    {
+      "start": 1849.0,
+      "end": 1893.0,
+      "description": "A black slide titled “From transient overlap to sinusoidal fidelity” shows three colored time-domain curves, including a cyan oscillatory signal, a green first-order response, and a magenta product/response curve. At right, a shaded projection plane connects the time-domain trajectory to a complex-plane spiral labeled as a convolution integral.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{iωt}H(t)\nh(t₀−t): first order\nh(t₀−t)e^{iωt}\nt₀ = 16.6\nIm\nRe\nt\nconvolution integral\nRe\nIm\nh(t₀)\n[unreadable]ic regime: approximately fixed shape, pure rotation",
+      "latex": "u(t)=e^{i\\omega t}H(t)\nh(t_0-t):\\ \\text{first order}\nh(t_0-t)e^{i\\omega t}\nt_0=16.6",
+      "confidence": 0.86
+    },
+    {
+      "start": 1893.0,
+      "end": 1942.0,
+      "description": "A slide titled about sinusoidal fidelity in BIBO-stable systems shows a cosine input represented as the sum of two complex exponentials, leading to the steady-state forced response scaled and phase-shifted by the frequency response. Green handwritten annotations circle parts of the equation and sketch an LTI block with rotating-wave/phasor-like loops.",
+      "text": "Implication for BIBO stable systems: Sinusoidal fidelity\nu(t) = cos(ωt) = 1/2(e^{jωt} + e^{-jωt})\ny_forced(t)  t→∞  |H(jω)| cos(ωt + ∠H(jω))\nLTI\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 6",
+      "latex": "u(t)=\\cos(\\omega t)=\\frac{1}{2}\\left(e^{j\\omega t}+e^{-j\\omega t}\\right)",
+      "confidence": 0.94
+    },
+    {
+      "start": 1942.0,
+      "end": 2005.0,
+      "description": "A slide titled “From transient overlap to sinusoidal fidelity” shows a complex-plane-style 3D diagram with a blue oscillatory helix, a green decaying first-order response, and a magenta product/overlap curve. At right, a separate complex-plane plot labeled as a convolution integral shows a magenta spiral-like trajectory.",
+      "text": "From transient overlap to sinusoidal fidelity\nfirst order\nconvolution integral\n[unreadable]ic regime: approximately fixed shape, pure rotation",
+      "latex": "t_0=16.6\nu(t)=e^{i\\omega t}H(t)\nh(t_0-t)e^{i\\omega t}\nh(t_0-t)\n\\operatorname{Re}\n\\operatorname{Im}\nt",
+      "confidence": 0.86
+    },
+    {
+      "start": 2005.0,
+      "end": 2021.0,
+      "description": "No lecture slide, whiteboard, or blackboard is visible in the frame.",
+      "text": "",
+      "latex": null,
+      "confidence": 1.0
+    },
+    {
+      "start": 2021.0,
+      "end": 2040.0,
+      "description": "A dark slide titled “From transient overlap to sinusoidal fidelity” shows three colored complex-valued trajectories in a three-dimensional plot, with a translucent vertical plane and arrows indicating progression toward time t. At right, a smaller complex-plane diagram is labeled as a convolution integral and shows a magenta spiral-like curve within a dashed circular boundary.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{iωt} H(t)\nh(t₀−t): ω_d = ω\nh(t₀−t)e^{iωt}\nt₀ = 8.2\nR\nI\nconvolution integral\nt\nR\nI\nic regime: approximately fixed shape, pure rotation",
+      "latex": "u(t)=e^{i\\omega t}H(t)\nh(t_0-t):\\ \\omega_d=\\omega\nh(t_0-t)e^{i\\omega t}\nt_0=8.2",
+      "confidence": 0.86
+    },
+    {
+      "start": 2040.0,
+      "end": 2066.0,
+      "description": "A slide illustrates the transition from transient overlap to sinusoidal fidelity using colored trajectories in a complex-plane-style 3D plot. A large central trajectory connects to a right-side inset showing a convolution integral and rotating complex-plane curves.",
+      "text": "From transient overlap to sinusoidal fidelity\nt₀ = 18.0\nu(t) = e^{iωt} H(t)\nh(t₀−t): ω_d = ω\nh(t₀−t)e^{iωt}\nconvolution integral\nu(t₀)\nt\nRe\nIm\n[unreadable]ic regime: approximately fixed shape, pure rotation",
+      "latex": "u(t)=e^{i\\omega t}H(t)\nh(t_0-t):\\ \\omega_d=\\omega\nh(t_0-t)e^{i\\omega t}\nt_0=18.0",
+      "confidence": 0.84
+    },
+    {
+      "start": 2066.0,
+      "end": 2088.0,
+      "description": "A slide titled “From transient overlap to sinusoidal fidelity” shows colored complex-plane trajectories: a blue oscillatory input, a green impulse-response-related curve, and a magenta overlap/product trajectory. A smaller right-hand plot is labeled as a convolution integral, with real and imaginary axes.",
+      "text": "From transient overlap to sinusoidal fidelity\nt₀ = 7.0\nu(t) = e^{iωt}H(t)\nh(t₀−t); ω_d = 2.5ω\nh(t₀−t)e^{iωt}\nC\nR\nconvolution integral\nt\nR",
+      "latex": "t_0=7.0\nu(t)=e^{i\\omega t}H(t)\nh(t_0-t),\\quad \\omega_d=2.5\\omega\nh(t_0-t)e^{i\\omega t}",
+      "confidence": 0.82
+    },
+    {
+      "start": 2088.0,
+      "end": 2117.0,
+      "description": "A slide titled “From transient overlap to sinusoidal fidelity” shows colored oscillatory trajectories evolving toward a complex-plane convolution integral. The right side contains a circular/spiraling plot with axes labeled R and t, while the central figure includes a 3D-style axis and several colored curves.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = [unreadable]\nt₀ = 18.0\nℂ\nR\nconvolution integral\ny(t₀)\nt\nR\n[unreadable]ic regime: approximately fixed shape, pure rotation",
+      "latex": "t_0=18.0\ny(t_0)",
+      "confidence": 0.78
+    },
+    {
+      "start": 2117.0,
+      "end": 2131.0,
+      "description": "A gridded board shows a broad red oscillatory curve extending across the frame and a tightly packed, rapidly oscillating green curve near its left edge. A small green square mark appears above the green oscillations.",
+      "text": "",
+      "latex": null,
+      "confidence": 0.99
+    },
+    {
+      "start": 2131.0,
+      "end": 2156.0,
+      "description": "A graph-paper grid shows two smooth oscillatory curves, one red and one blue. The curves have similar wave-like shapes but are phase-shifted, with the red curve peaking earlier on the left and again near the right before dropping sharply, while the blue curve rises to a later right-side peak; a small blue square is near the upper right.",
+      "text": "",
+      "latex": null,
+      "confidence": 0.99
+    },
+    {
+      "start": 2156.0,
+      "end": 2172.0,
+      "description": "A slide titled “From transient overlap to sinusoidal fidelity” shows three color-coded complex-valued curves evolving with time, along with 3D-style axes labeled R and ℑ and a translucent plane. At right, a small R–ℑ plot is labeled “convolution integral,” and a partially visible caption appears along the bottom.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{iωt}H(t)\nh(t₀−t); ω_d = 2.5ω\nh(t₀−t)e^{iωt}\nt₀ = 12.4\nℑ\nR\nt\nconvolution integral\nR\n[unreadable]ic regime: approximately fixed shape, pure rotation",
+      "latex": "u(t)=e^{i\\omega t}H(t)\nh(t_0-t);\\ \\omega_d=2.5\\omega\nh(t_0-t)e^{i\\omega t}\nt_0=12.4",
+      "confidence": 0.84
+    },
+    {
+      "start": 2172.0,
+      "end": 2190.0,
+      "description": "A slide titled “Implication for BIBO stable systems: Sinusoidal fidelity” shows a cosine input represented as two complex exponentials and the corresponding steady-state forced output scaled by the system magnitude and phase-shifted. Green handwritten annotations below include an LTI box and a sketch of an oscillatory waveform or signal transformation.",
+      "text": "Implication for BIBO stable systems: Sinusoidal fidelity\nu(t) = cos(ωt) = 1/2(e^{jωt} + e^{-jωt})\ny_forced(t)  t→∞  |H(jω)| cos(ωt + ∠H(jω))\nu\ncos?\nLTI\n+\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 6",
+      "latex": "u(t)=\\cos(\\omega t)=\\frac{1}{2}\\left(e^{j\\omega t}+e^{-j\\omega t}\\right)\ny_{\\mathrm{forced}}(t)\\xrightarrow[t\\to\\infty]{}\\lvert H(j\\omega)\\rvert\\cos\\left(\\omega t+\\angle H(j\\omega)\\right)",
+      "confidence": 0.89
+    },
+    {
+      "start": 2190.0,
+      "end": 2217.0,
+      "description": "A gridded whiteboard shows two smooth oscillating curves, one red and one blue. The curves have similar wave-like shapes but are shifted relative to each other, with differing peak and trough positions; neither has labeled axes.",
+      "text": "",
+      "latex": null,
+      "confidence": 1.0
+    },
+    {
+      "start": 2217.0,
+      "end": 2275.0,
+      "description": "A slide titled “Final result: sinusoidal fidelity” presents the steady sinusoidal-response formula and a highlighted key fact about stable LTI systems preserving sinusoidal shape while changing amplitude and phase.",
+      "text": "Final result: sinusoidal fidelity\ny(t) = |W(jω)| cos(ωt + φ + ∠ W(jω)) + vanishing terms\nKey fact: stable LTI systems preserve sinu-\nsoidal shape. Only amplitude and phase change\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 9",
+      "latex": "y(t)=|W(j\\omega)|\\cos\\left(\\omega t+\\varphi+\\angle W(j\\omega)\\right)+\\text{vanishing terms}",
+      "confidence": 0.98
+    },
+    {
+      "start": 2275.0,
+      "end": 2337.0,
+      "description": "No lecture slide, board, or handwritten notes are visible; the frame shows a video-management webpage with small graph thumbnails.",
+      "text": "",
+      "latex": null,
+      "confidence": 0.99
+    },
+    {
+      "start": 2337.0,
+      "end": 2384.0,
+      "description": "A gridded board shows a horizontal time axis with a right-pointing arrow labeled t and a blue waveform whose oscillation frequency varies along time: broad oscillations, a tightly packed high-frequency section, and broader oscillations again. Blue “u” and red “y” are written near the top.",
+      "text": "u\ny\nt",
+      "latex": null,
+      "confidence": 0.93
+    },
+    {
+      "start": 2384.0,
+      "end": 2443.0,
+      "description": "A gridded digital whiteboard shows several overlaid blue and red oscillating waveforms along a horizontal time axis, with transient-looking rapid oscillations near the left and larger oscillations extending to the right. Blue and red annotations mark portions of the signals, and the axis points rightward.",
+      "text": "u\ny\nx",
+      "latex": null,
+      "confidence": 0.9
+    },
+    {
+      "start": 2443.0,
+      "end": 2476.0,
+      "description": "A presentation slide titled “Final result: sinusoidal fidelity” shows an output cosine formula with a magnitude factor, phase shift, and vanishing terms. A highlighted box states the key fact about stable LTI systems preserving sinusoidal shape, with handwritten annotations around the formula.",
+      "text": "Final result: sinusoidal fidelity\ny(t) = |W(jω)| cos(ωt + φ + ∠ W(jω)) + vanishing terms\nKey fact: stable LTI systems preserve sinu-\nsoidal shape. Only amplitude and phase change\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 9",
+      "latex": "y(t)=\\lvert W(j\\omega)\\rvert\\cos\\left(\\omega t+\\varphi+\\angle W(j\\omega)\\right)+\\text{vanishing terms}",
+      "confidence": 0.98
+    },
+    {
+      "start": 2476.0,
+      "end": 2512.0,
+      "description": "A lecture slide presents the final result for sinusoidal fidelity: an LTI-system output is expressed as a sinusoid with modified amplitude and phase plus vanishing terms. A highlighted box states that stable LTI systems preserve sinusoidal shape, while blue handwritten annotations mark parts of the equation and include “LTI” and crossed-out “BIBO” near the bottom.",
+      "text": "Final result: sinusoidal fidelity\ny(t) = |W(jω)| cos(ωt + φ + ∠ W(jω)) + vanishing terms\nKey fact: stable LTI systems preserve sinu-\nsoidal shape. Only amplitude and phase change\nLTI\nBIBO\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 9",
+      "latex": "y(t)=\\lvert W(j\\omega)\\rvert\\cos\\left(\\omega t+\\varphi+\\angle W(j\\omega)\\right)+\\text{vanishing terms}",
+      "confidence": 0.93
+    },
+    {
+      "start": 2512.0,
+      "end": 2548.0,
+      "description": "A slide titled “Frequency response of an LTI” shows the relation from h(t) to H(s) to H(jω), followed by three bullet points about magnitude, phase, and the zero-frequency special case. Blue handwritten annotations circle H(jω) and sketch a frequency-axis diagram with a horizontal ω axis, a vertical axis, and curved response shapes.",
+      "text": "Frequency response of an LTI\nh(t) ⇒ H(s) ⇒ H(jω)\nand\n|H(jω)| = amplification/attenuation of input sinusoids at ω\n∠ H(jω) = associated phase shift\nSpecial case: ω = 0 ⇒ static gain\nω\n[unreadable]\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 10",
+      "latex": "h(t) \\Rightarrow H(s) \\Rightarrow H(j\\omega)\n\\lvert H(j\\omega)\\rvert = \\text{amplification/attenuation of input sinusoids at }\\omega\n\\angle H(j\\omega) = \\text{associated phase shift}\n\\text{Special case: }\\omega=0 \\Rightarrow \\text{static gain}",
+      "confidence": 0.93
+    },
+    {
+      "start": 2548.0,
+      "end": 2579.0,
+      "description": "A slide titled “Frequency response of an LTI” shows the progression from the impulse response to the transfer function and its frequency response, followed by three bullet points defining magnitude, phase, and static gain. A hand-drawn plot below includes a horizontal axis labeled ω, a vertical axis with an unclear handwritten label, several oscillating curves, and a handwritten R above the plot.",
+      "text": "Frequency response of an LTI\nh(t) ⇒ H(s) ⇒ H(jω)\nand\n|H(jω)| = amplification/attenuation of input sinusoids at ω\n∠ H(jω) = associated phase shift\nSpecial case: ω = 0 ⇒ static gain\nR\nω\nm\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 10",
+      "latex": "h(t) \\Rightarrow H(s) \\Rightarrow H(j\\omega)\n|H(j\\omega)| = \\text{amplification/attenuation of input sinusoids at }\\omega\n\\angle H(j\\omega) = \\text{associated phase shift}\n\\omega = 0 \\Rightarrow \\text{static gain}",
+      "confidence": 0.93
+    },
+    {
+      "start": 2579.0,
+      "end": 2604.0,
+      "description": "A slide presents the final sinusoidal-response result for a stable LTI system, with a displayed output formula and a highlighted statement that sinusoidal shape is preserved while amplitude and phase change. Blue handwritten annotations and strike-through marks appear around the slide, including “BIBO” near the lower right.",
+      "text": "Final result: sinusoidal fidelity\ny(t) = |W(jω)| cos(ωt + φ + ∠ W(jω)) + vanishing terms\nKey fact: stable LTI systems preserve sinu-\nsoidal shape. Only amplitude and phase change\nBIBO\nLTI systems in continuous time - what do we mean with “sinusoidal fidelity”? - main slides - 9",
+      "latex": "y(t)=|W(j\\omega)|\\cos\\left(\\omega t+\\varphi+\\angle W(j\\omega)\\right)+\\text{vanishing terms}",
+      "confidence": 0.96
+    },
+    {
+      "start": 2604.0,
+      "end": 2622.0,
+      "description": "A gridded whiteboard shows two overlaid oscillatory waveforms, one blue and one red, along a horizontal axis pointing right. The curves include several marked or boxed regions, dense scribbling near the center-left, and large labels above the graph.",
+      "text": "u\ny\nx\n[unreadable]",
+      "latex": "u\ny\nx",
+      "confidence": 0.72
+    },
+    {
+      "start": 2622.0,
+      "end": 2653.0,
+      "description": "A slide titled “From transient overlap to sinusoidal fidelity” shows three color-coded complex trajectories—blue, green, and magenta—illustrating transient overlap and rotation, with a shaded plane in the center. On the right, a “convolution integral” diagram shows a magenta spiral-like curve inside a dashed circular path, with real-axis and time-direction annotations.",
+      "text": "From transient overlap to sinusoidal fidelity\nu(t) = e^{iωt}H(t)\nh(t₀ − t) : ω_d = ω\nh(t₀ − t)e^{iωt}\nt₀ = 10.1\nC\nR\nconvolution integral\nt\nR\nic regime: approximately fixed shape, pure rotation",
+      "latex": "u(t)=e^{i\\omega t}H(t)\nh(t_0-t):\\ \\omega_d=\\omega\nh(t_0-t)e^{i\\omega t}\nt_0=10.1",
+      "confidence": 0.82
+    }
+  ]
+}

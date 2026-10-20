@@ -382,6 +382,15 @@ positive with the label kind it hit; `--json` carries the same lists.
 CI runs it through pytest (`tests/test_evaluate.py`), which asserts pooled recall >= 0.50 over
 the reference recordings, in well under a second.
 
+`--board` scores the run with the board read: the board states in `<name>.visual.json` beside a
+transcript go into the run in place of the vision stage's, which has no video to read here. The
+files are one vision run per recording (`scripts/board_states.py`), committed so the comparison
+needs no video and no model; a recording without one runs without the board.
+
+```bash
+questxtract eval tests/data/ --board    # the same, with the committed board states
+```
+
 > **Decision.** `questxtract/evaluate.py`. The report includes a threshold sweep over
 > `min_confidence`, so the NFR2 tradeoff is visible rather than assumed.
 
@@ -580,8 +589,8 @@ judge.
 
 ### 6.6 Consumers
 
-- **Detection** (section 7): a small positive delta when a question shares content words with the
-  board state on screen while it was asked (#60).
+- **Detection** (7.3): a small positive delta when a question shares a content word with the
+  text of a board state on screen while it was asked.
 - **A second, VLM pass** over the question/answer pairs (not built): the frames on screen go into
   the prompt, where they matter most: "what does this term mean?" is unanswerable from audio
   alone.
@@ -684,6 +693,14 @@ rather than written up front, and deliberately short: they only keep the obvious
 the content call is the LLM detector's. Tags follow the annotation guidelines, which label them `rhetorical`: a
 penalty with a reason code, not a veto.
 
+**Board context.** A candidate that shares a content word with the `text` of a board state on
+screen while it was asked (the board state's lifetime overlaps the sentence) gets
+`board_overlap_delta` added, clamped, and the reason `board_overlap`; its `source` is then
+`combined` (12.1). Off by default (`0.0`): see the results below. Content words are the sentence's words minus the framing stopwords below. It
+comes after the gate: the board raises a candidate's confidence, it never makes one. A lecturer
+asking while pointing at the board is asking about the board. Only the `text` counts, not the
+model's `description`, which paraphrases and would match anything.
+
 Framing examines the whole sentence, so "The field, what is it?" keeps its content word.
 The stopwords are wh-words, positive auxiliaries, discourse markers, prepositions,
 pronouns, articles and a few fillers; negation (`not`, "can't"), numbers and ordinary
@@ -701,6 +718,13 @@ that changes the numbers; issues link here instead of copying them.
 | TTK4225 2026-09-14 | 41 | 39 | 10 | 2 | 0.95 | 0.80 | 0.87 |
 | TTK4225 2026-09-15 | 60 | 59 | 18 | 1 | 0.98 | 0.77 | 0.86 |
 | **Pooled** | 129 | 126 | 28 | 3 | **0.98** | 0.82 | 0.89 |
+
+With the board (`eval --board`, `board_overlap_delta = 0.10`) every row is the same.
+`board_overlap` fires on 38 of the 230 candidates, but 36 of them already score 1.0, a `?` and an
+interrogative head, so the clamped delta moves two: a check-in (*"How much are we together on
+this, people 1, 2, 3?"*, 0.33 to 0.39) and a framing question, neither near the 0.40 gate. The
+sweep moves only off the default: precision 0.82 to 0.81 at 0.35, recall 0.44 to 0.45 at 0.65
+and 0.70. A delta on a saturated score has nothing to add, so `board_overlap_delta` stays 0.0.
 
 NFR2 holds with room, and `question_mark_rate` is 0.99, so 3.1's bet holds. The sweep: recall
 0.99 / precision 0.56 up to a threshold of 0.30, 0.98 / 0.82 from 0.35 to 0.55, 0.44 / 0.86 from
@@ -720,6 +744,7 @@ on another (#92). 2 hit
 beyond that is the LLM detector's (section 10).
 
 > **Decision.** `questxtract/detect.py`, cue tables inline as module constants.
+> `board_overlap_delta` (0.0, off).
 
 ---
 
@@ -1123,8 +1148,9 @@ one more top-level list pointing at visual ids.
 - `answer` is `null` when no answer was found. Its `start`/`end` span its own sentences
   (`sentence_ids`), not the question.
 - `original_text` is set when the LLM detector reworded the question, `null` otherwise.
-- `source` says what the question was read from; only `audio` is produced until vision lands,
-  `visual` and `combined` are reserved.
+- `source` says what the question was read from: `audio`, or `combined` when the board on
+  screen raised its score (`board_overlap`, 7.3). `visual` is reserved for a question read from
+  the board alone.
 - `topic` on a segment stays `null` until something produces topics.
 - `keyframe_path` is relative to the JSON file: writing it copies each keyframe from the cache
   into a folder named after it (`lecture.questions.json` gets `lecture.keyframes/<visual id>.<ext>`),

@@ -63,6 +63,7 @@ class Config:
     # --- 7 detection ---
     min_question_score: float = 0.45
     max_question_chars: int = 350
+    board_overlap_delta: float = 0.0  # off: 0.10 moved nothing at the gate (architecture.md 7.3)
 
     # --- 8 answer search (answers beyond the adjacent seed come from the LLM detector) ---
     answer_seed_max_gap_seconds: float = 1.0

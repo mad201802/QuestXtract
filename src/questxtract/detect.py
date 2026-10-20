@@ -5,7 +5,8 @@ code, which is what makes both the review workflow and the LLM judge's job possi
 (architecture.md 7).
 
 Sentences are only extracted, never invented: every candidate's text is a span of the
-transcript.
+transcript. Board states, when vision ran, only add to the score of a candidate the rules
+already found (architecture.md 7.3); they never make one.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
-from .models import Context, QuestionCandidate, Sentence, stage
+from .models import Context, QuestionCandidate, Sentence, VisualContext, overlapping, stage
 
 _WH_WORDS = frozenset({"who", "what", "when", "where", "why", "how", "which", "whose", "whom"})
 # A wh-word with a contracted verb is still that wh-word: "What's ...?", "Who'd ...?".
@@ -274,8 +275,18 @@ def _uncontract(word: str) -> str:
     return base if base in _WH_WORDS and suffix in _WH_CONTRACTIONS else word
 
 
+def _content_words(text: str) -> frozenset[str]:
+    """Return the words of ``text`` that carry content: lower-cased, minus framing stopwords."""
+    return frozenset(_uncontract(word) for word in _words(text)) - _FRAMING_STOPWORDS
+
+
 def detect_questions(
-    sentences: Sequence[Sentence], *, threshold: float = 0.45, max_chars: int = 350
+    sentences: Sequence[Sentence],
+    *,
+    threshold: float = 0.45,
+    max_chars: int = 350,
+    visual: Sequence[VisualContext] = (),
+    board_delta: float = 0.0,
 ) -> tuple[QuestionCandidate, ...]:
     """Find the question candidates among ``sentences``.
 
@@ -283,6 +294,10 @@ def detect_questions(
         sentences: The transcript's sentences, in recording order.
         threshold: Minimum score for a sentence to be reported.
         max_chars: A sentence longer than this is rejected outright (architecture.md 7.3).
+        visual: Board states, empty when vision is off.
+        board_delta: Added to a candidate's score, with the reason ``board_overlap``, when it
+            shares a content word with the ``text`` of a board state on screen while it was
+            asked. Applied after the gate, so it never makes a candidate.
 
     Returns:
         The candidates, in recording order.
@@ -295,6 +310,11 @@ def detect_questions(
             continue
         score, reasons = score_sentence(text)
         if score >= threshold:
+            if board_delta > 0 and _on_the_board(
+                text, overlapping(visual, sentence.start, sentence.end)
+            ):
+                score = min(1.0, score + board_delta)
+                reasons = (*reasons, "board_overlap")
             out.append(
                 QuestionCandidate(
                     sentence_id=sentence.id,
@@ -307,13 +327,21 @@ def detect_questions(
     return tuple(out)
 
 
+def _on_the_board(text: str, states: Sequence[VisualContext]) -> bool:
+    """Whether ``text`` shares a content word with the text of any of ``states``."""
+    words = _content_words(text)
+    return any(words & _content_words(state.text) for state in states)
+
+
 @stage("detect")
 def detect(ctx: Context) -> Context:
-    """Score ``ctx.sentences`` into ``ctx.candidates``."""
+    """Score ``ctx.sentences`` into ``ctx.candidates``, with ``ctx.visual`` as context."""
     ctx.candidates = detect_questions(
         ctx.sentences,
         threshold=ctx.config.min_question_score,
         max_chars=ctx.config.max_question_chars,
+        visual=ctx.visual,
+        board_delta=ctx.config.board_overlap_delta,
     )
     ctx.stats["candidates"] = len(ctx.candidates)
     return ctx
