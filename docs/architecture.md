@@ -18,8 +18,10 @@ In: a lecture video. Out: a JSON file of the questions that were actually asked,
 timestamp, a confidence, an answer span where the lecture contains one, and enough provenance to
 jump back to the exact seconds in the recording.
 
-The package's job stops there. Everything downstream - the editor, the quiz UI, the LMS glue -
-lives in a wrapper around it. That boundary is why the package may reach the network at all
+The package's job stops at files: that JSON, a quiz made from it (section 12.3) and an LMS
+package of that quiz (section 12.4).
+Everything downstream - the editor, the quiz UI, the upload and the rest of the LMS glue - lives
+in a wrapper around it. That boundary is why the package may reach the network at all
 (section 10): the caller decides whether to configure an endpoint, not us.
 
 The central difficulty, which every design decision below follows from: **a lecture is not a
@@ -380,6 +382,15 @@ positive with the label kind it hit; `--json` carries the same lists.
 CI runs it through pytest (`tests/test_evaluate.py`), which asserts pooled recall >= 0.50 over
 the reference recordings, in well under a second.
 
+`--board` scores the run with the board read: the board states in `<name>.visual.json` beside a
+transcript go into the run in place of the vision stage's, which has no video to read here. The
+files are one vision run per recording (`scripts/board_states.py`), committed so the comparison
+needs no video and no model; a recording without one runs without the board.
+
+```bash
+questxtract eval tests/data/ --board    # the same, with the committed board states
+```
+
 > **Decision.** `questxtract/evaluate.py`. The report includes a threshold sweep over
 > `min_confidence`, so the NFR2 tradeoff is visible rather than assumed.
 
@@ -465,25 +476,28 @@ built yet; de-occlusion (6.3) is not planned.
 ### 6.1 The regime problem, and why not OCR
 
 Slides and screencasts are easy (near-duplicate frame dedupe, then text). Chalkboards, whiteboards
-and handwriting are hard, and FR4 plus the MIT reference recording put us there. OCR engines
-(Tesseract, PaddleOCR, EasyOCR) are printed-text models: close to useless on chalk, and they
-cannot represent a diagram at all. A VLM reads handwriting, diagrams and slides and emits LaTeX in
-one call, through the same optional client as the LLM detector (section 10), so it adds no
-dependency. `vision` is one `STAGES` entry, so a local OCR pass or a stub that loads pre-captioned
-frames in tests replaces that one entry.
+and handwriting are hard, and FR4 plus the MIT reference recording put us there. An OCR model
+returns the text and formulas it sees and nothing more: it cannot describe a diagram, does not
+tell the board from the room or the app around it, and does not say what it could not read. A VLM
+reads handwriting, diagrams and slides and emits LaTeX in one call, through the same optional
+client as the LLM detector (section 10), so it adds no dependency. `vision` is one `STAGES` entry,
+so a local OCR pass or a stub that loads pre-captioned frames in tests replaces that one entry.
 
-**Model and prompt (spike #52).** The default `vision_model` is `gpt-5.6-luna` at the API's
-default image detail. Of the hosted models compared on chalkboard and tablet frames, it is the
-cheapest that stays under the customer's cost per lecture, it fills `latex` on every formula
-frame, and it reads about as well as models that cost an order of magnitude more (`gpt-4o`,
-`gpt-4o-mini`). `detail: low` is not used: it garbles handwriting. A classic OCR engine
-(Tesseract) reads printed slide text partly and no handwriting or chalk. Printed slides read as
-well at 640x360 as at 720p, at half the image tokens; chalk was only tried at 720p. An open
-model reaches the same endpoint through `base_url` (10.1): the strongest one measured is Qwen3.8-27B
-on Idun's hosted service, while a 2B model on a laptop reads worse and leaves `latex` empty.
-Prompt v0 and its output schema, matching `VisualContext`, are in
-[`tests/data/vision/`](../tests/data/vision/README.md); the comparison, its caveats (a few frames,
-one run per model) and the raw answers are on #52 and in `tests/data/vision/results/`.
+**Model and prompt (spike #52).** The default `vision_model` is `gpt-5.6-luna` at the API's default
+image detail. Of the hosted models compared on chalkboard and tablet frames, it is the cheapest that
+stays under the customer's cost per lecture, it fills `latex` on every formula frame, and it reads
+about as well as models that cost an order of magnitude more (`gpt-4o`, `gpt-4o-mini`).
+`detail: low` is not used: it garbles handwriting. The OCR baseline is GLM-OCR (0.9B, open weights,
+on Idun's hosted service and on an 8 GB laptop through Ollama): it reads most of the text and
+formulas on chalk and printed slides, less than the vision models, and answers in plain text with
+formulas inline as `$...$`, with no description and no confidence, and it also reads the room and
+the app interface (an exit sign, the tablet app's menu). Printed slides read as well at 640x360 as
+at 720p, at half the image tokens; chalk was only tried at 720p. An open model reaches the same
+endpoint through `base_url` (10.1): the strongest one measured is Qwen3.8-27B on Idun's hosted
+service, while a 2B model on a laptop reads worse and leaves `latex` empty. Prompt v0 and its output
+schema, matching `VisualContext`, are in [`tests/data/vision/`](../tests/data/vision/README.md); the
+comparison, its caveats (a few frames, one run per model) and the raw answers are on #52 and in
+`tests/data/vision/results/`.
 
 ### 6.2 Layout probe
 
@@ -565,6 +579,27 @@ visible only, with `[unreadable]` for a word it cannot read. Cached per request,
 included (10.4), so no keyframe is sent twice. `latex` is there because prose does not compile,
 and the M3 animations need formulas.
 
+**A page that comes back is not read again.** Lecturers return to earlier slides and pages, and
+each return is a view of its own. The request cache cannot catch it: two captures of one page
+differ by codec noise, and the speech sent with them differs. So on `slides`, `handwriting` and
+`screencast` (the layout probe's kind, 6.2), each keyframe is first compared with the keyframes
+already read in this run; boards are left to the ink curve (6.4), and `unknown` may be a board. The
+comparison has two steps, because a share of changed pixels misses a small change: a new digit is
+a few hundredths of a percent of the page, and a change of colour at the same brightness is none.
+The earlier keyframe whose small grey copy (6.3) differs least, by at most 1 %, is the candidate.
+Its reading is copied only if, at full resolution, no 4 px square's mean brightness moved by more
+than 20 levels, no 8 px square's by more than 11, and no 8 px square's mean colour (Cb, Cr) by more
+than 12; the squares overlap, and the last rows and columns are compared too. The new board state
+keeps its own times, keyframe and id, so questions asked during it still link to it, and counts in
+`stats.vision_reused`. A reading that failed is never copied. The limits are set from the codec
+noise of TTK4225 2026-09-14, between frames of one page and between its pages coming back after
+H.264 encoding, so anything unsure is read again: a pen cursor that moved, like a new decimal
+point, gives a new reading, and so does a page whose codec noise exceeds the limits, as it can in
+a recording compressed harder than a screen capture. A mark fainter than about twice that noise, roughly 48
+grey levels of contrast on a light page, can go unnoticed. The reuse lives within the run, also
+with `--from-scratch`; only the small copies are kept, and full-resolution pictures are decoded
+while their view is handled.
+
 Each keyframe that was read is written to the cache as `<source_hash>/keyframes/<content
 hash>.png`, and `keyframe_path` holds that path relative to `cache_dir`: a cached result stays
 valid from another working directory, and the board-state id does not depend on where the cache
@@ -586,8 +621,11 @@ judge.
 
 ### 6.6 Consumers
 
-- **Detection** (section 7): a small positive delta when a question shares content words with the
-  board state on screen while it was asked (#60).
+- **Detection** (7.3): a small positive delta when a question shares a content word with the
+  text of a board state on screen while it was asked.
+- **Search** (`filtering.py`, `questxtract filter`): a text query matches every word against
+  what was said and the board states in a question's `visual_ids` together, as whole words and
+  ignoring case, so "what if this is zero?" is found by a word only the board shows.
 - **A second, VLM pass** over the question/answer pairs (not built): the frames on screen go into
   the prompt, where they matter most: "what does this term mean?" is unanswerable from audio
   alone.
@@ -690,6 +728,14 @@ rather than written up front, and deliberately short: they only keep the obvious
 the content call is the LLM detector's. Tags follow the annotation guidelines, which label them `rhetorical`: a
 penalty with a reason code, not a veto.
 
+**Board context.** A candidate that shares a content word with the `text` of a board state on
+screen while it was asked (the board state's lifetime overlaps the sentence) gets
+`board_overlap_delta` added, clamped, and the reason `board_overlap`; its `source` is then
+`combined` (12.1). Off by default (`0.0`): see the results below. Content words are the sentence's words minus the framing stopwords below. It
+comes after the gate: the board raises a candidate's confidence, it never makes one. A lecturer
+asking while pointing at the board is asking about the board. Only the `text` counts, not the
+model's `description`, which paraphrases and would match anything.
+
 Framing examines the whole sentence, so "The field, what is it?" keeps its content word.
 The stopwords are wh-words, positive auxiliaries, discourse markers, prepositions,
 pronouns, articles and a few fillers; negation (`not`, "can't"), numbers and ordinary
@@ -707,6 +753,13 @@ that changes the numbers; issues link here instead of copying them.
 | TTK4225 2026-09-14 | 41 | 39 | 10 | 2 | 0.95 | 0.80 | 0.87 |
 | TTK4225 2026-09-15 | 60 | 59 | 18 | 1 | 0.98 | 0.77 | 0.86 |
 | **Pooled** | 129 | 126 | 28 | 3 | **0.98** | 0.82 | 0.89 |
+
+With the board (`eval --board`, `board_overlap_delta = 0.10`) every row is the same.
+`board_overlap` fires on 38 of the 230 candidates, but 36 of them already score 1.0, a `?` and an
+interrogative head, so the clamped delta moves two: a check-in (*"How much are we together on
+this, people 1, 2, 3?"*, 0.33 to 0.39) and a framing question, neither near the 0.40 gate. The
+sweep moves only off the default: precision 0.82 to 0.81 at 0.35, recall 0.44 to 0.45 at 0.65
+and 0.70. A delta on a saturated score has nothing to add, so `board_overlap_delta` stays 0.0.
 
 NFR2 holds with room, and `question_mark_rate` is 0.99, so 3.1's bet holds. The sweep: recall
 0.99 / precision 0.56 up to a threshold of 0.30, 0.98 / 0.82 from 0.35 to 0.55, 0.44 / 0.86 from
@@ -726,6 +779,7 @@ on another (#92). 2 hit
 beyond that is the LLM detector's (section 10).
 
 > **Decision.** `questxtract/detect.py`, cue tables inline as module constants.
+> `board_overlap_delta` (0.0, off).
 
 ---
 
@@ -929,6 +983,13 @@ cached the same way under `.questxtract/vision/`, keyed on the keyframe image in
 lines, and a layout probe (6.2) under `.questxtract/layout/`, keyed on its three frames. Only a valid JSON answer is cached; a failed request is asked again on the next run. A cache entry that cannot be read
 is asked again, and a cache that cannot be written costs only the saving: the answer is returned.
 
+What the calls cost lands in `questions.json`'s `stats`, per caller, whenever that caller
+runs: `judge_*` for the LLM detector, `layout_*` for the layout probe (6.2) and `vision_*` for
+the board readings (6.5). Each caller has `_requests` (every request sent, a repeat included),
+`_input_tokens` and `_output_tokens` (as the API reports them in `usage`; 0 from a server that
+reports none) and `_ms`. A run served from the cache shows 0 for all four, which is how to tell
+it made no calls. Prices are not applied: they depend on the provider and the date.
+
 > **Decision.** `questxtract/llm.py` (the judge), `questxtract/endpoint.py` (client and requests,
 > shared with vision). Config: `detector` (`rules`), `base_url`, `api_key` (from
 > `OPENAI_API_KEY`), `judge_model`, `judge_window` (10), `judge_batch_size` (8),
@@ -1129,8 +1190,9 @@ one more top-level list pointing at visual ids.
 - `answer` is `null` when no answer was found. Its `start`/`end` span its own sentences
   (`sentence_ids`), not the question.
 - `original_text` is set when the LLM detector reworded the question, `null` otherwise.
-- `source` says what the question was read from; only `audio` is produced until vision lands,
-  `visual` and `combined` are reserved.
+- `source` says what the question was read from: `audio`, or `combined` when the board on
+  screen raised its score (`board_overlap`, 7.3). `visual` is reserved for a question read from
+  the board alone.
 - `topic` on a segment stays `null` until something produces topics.
 - `keyframe_path` is relative to the JSON file: writing it copies each keyframe from the cache
   into a folder named after it (`lecture.questions.json` gets `lecture.keyframes/<visual id>.<ext>`),
@@ -1167,11 +1229,77 @@ A re-run does not keep the edits: copying `review` across by question id is not 
 Question and sentence ids are content hashes (section 5) rather than indices, so they survive a
 re-run and the wrapper can carry edits across by id.
 
-### 12.3 quiz.json (planned, #79)
+### 12.3 quiz.json
 
-A different command producing a different file: `questxtract quiz questions.json -o quiz.json`.
-It is the only part of the system allowed to write text that was not spoken, and keeping it out
-of the extraction pipeline is what keeps requirement 4.5 checkable.
+A different command producing a different file: `questxtract quiz questions.json -o quiz.json`
+(planned, #79). It is the only part of the system allowed to write text that was not spoken, and
+keeping it out of the extraction pipeline is what keeps requirement 4.5 checkable.
+
+Schema 1.0, formally [`quiz.schema.json`](../src/questxtract/quiz.schema.json), which ships in
+the package. Items are single choice: at least three options, exactly one of them correct, a
+`solution` with an explanation and one `option_explanations` entry per option. Every text
+(stem, options, explanations) is `{text, origin}`: `spoken` only when it is verbatim from the
+lecture, `generated` for anything reworded or newly written. `provenance` ties an item to its
+source question (`source_question_id`, `start`, `end`), and the item id is `"quiz_"` plus that
+id. Every item has a `review` block (`pending`, `accepted`, `rejected`) that the teacher owns.
+The file holds no run timestamps and no absolute paths, so the same input gives the same bytes;
+exporters build feedback from `solution`.
+
+`validate_quiz` (in `quiz_schema.py`) checks what the schema cannot: the correct option exists,
+explanations match the options one to one, option ids are unique, item ids are derived and
+unique, `end >= start`, and, given the source `questions.json`, the source question exists and a
+`spoken` stem is that question as it was said (`original_text` when the judge reworded it, else
+`text`). `read_quiz` refuses another major version, then validates. Spoken options and
+explanations cannot be checked without the transcript, so they stay a rule for the writer. The
+validator is plain Python: `jsonschema` checks the schema in the tests only.
+
+### 12.4 QTI 3.0 package
+
+`questxtract qti quiz.json -o quiz.qti.zip` turns a quiz (section 12.3) into a 1EdTech QTI 3.0
+content package an LMS can import: `qti.py` maps the quiz to a model, `qti_v3.py` writes the XML
+and the ZIP. The file is read through `read_quiz`, which refuses another major version and the
+errors across fields; the structure is not checked at runtime, so `qti.py` checks every field it
+uses and names its path.
+
+```text
+items/<item id>.xml            one qti-assessment-item per quiz item, in document order
+assessmentTest.xml             one linear test part and section referencing every item
+imsmanifest.xml                the content package manifest
+metadata/questxtract.json      provenance, review status and the origin of every text
+```
+
+- **Selection.** Every item except those whose `review.status` is `rejected`.
+- **Items.** A `qti-choice-interaction` with `max-choices="1"` and one `qti-simple-choice` per
+  option. Identifiers are the quiz's item and option ids, which are already XML identifiers.
+  `RESPONSE` is a single identifier whose correct response is the correct option. Any other
+  `interaction_type`, which a newer 1.x quiz may add, fails with its path instead of being
+  exported as single choice; so do `NaN` and infinite numbers, which `json.loads` accepts.
+- **Scoring.** `SCORE` (float, default `0.0`) and `MAXSCORE` (the item's points). With points
+  above zero, `SCORE` carries `normal-maximum` and `normal-minimum`. Explicit response
+  processing from the Core subset: a match against the correct response sets `SCORE` to
+  `MAXSCORE`, otherwise to `0.0`. The `match_correct` template is not used, because it always
+  scores 1.
+- **Feedback.** Response processing sets the `FEEDBACK` outcome to the chosen option. Each option
+  has a `qti-modal-feedback` with its own explanation, then the general one, both from
+  `solution`. No response, no feedback.
+- **Instructions.** `show_feedback` becomes `show-feedback` on the test part's
+  `qti-item-session-control`, `shuffle_options` the interaction's `shuffle`,
+  `shuffle_questions` a `qti-ordering shuffle="true"` in the section, and `text` a candidate
+  `qti-rubric-block`.
+- **XML.** Items and the test use the default namespace `imsqtiasi_v3p0` with an
+  `xsi:schemaLocation` to the 3.0.1 XSD, as every official example does, never prefixes. The
+  manifest uses the QTI 3.0 content-package namespace and `schemaversion` `3.0.0`, the only value
+  the implementation guide and the 3.0.0 CP XSD allow. Every file but the manifest is a resource;
+  the JSON sidecar is `type="extension"`.
+- **Validation.** The tests validate every package they write against the official XSDs (items
+  and test against ASI 3.0.1, the manifest against the content-package XSD), then check what an
+  XSD cannot: the correct response and every feedback name an option, every `href` and
+  dependency resolves, identifiers are unique. `scripts/fetch_qti_xsd.py` downloads the 17
+  schema files once, pinned by SHA-256, into `.cache/qti-xsd/`, and the tests compile them from
+  there with network access off. Without that copy they are skipped, except in CI, where they
+  fail. The package itself does not depend on the XSDs.
+- **Determinism.** The same input gives the same bytes: entries are written in a fixed order with
+  the date 1980-01-01, deflate, Unix permissions `0644` and no clock or platform data.
 
 ---
 
@@ -1181,7 +1309,7 @@ of the extraction pipeline is what keeps requirement 4.5 checkable.
 
 ```
 src/questxtract/
-  __init__.py      public API: process(), run(), STAGES, read/write, filters
+  __init__.py      public API: process(), run(), STAGES, read/write, filters, export_qti()
   models.py        Word, AsrSegment, Transcript, Sentence, Segment, VisualContext,
                    QuestionCandidate, QAPair, Context, SchemaError, the @stage decorator
   config.py        one flat frozen Config dataclass, every default
@@ -1197,11 +1325,14 @@ src/questxtract/
   endpoint.py      the OpenAI-compatible client and requests, shared by judge and vision
   score.py         9 score: confidence, threshold
   export.py        questions.json writer and reader, with questions.schema.json
-  filtering.py     time filter, experimental topic filter
+  quiz_schema.py   quiz.json reader and validator, with quiz.schema.json
+  qti.py           QTI model and the quiz.json mapping
+  qti_v3.py        QTI 3.0 XML and the ZIP package
+  filtering.py     time and text filters, experimental topic filter
   evaluate.py      labelled-set metrics
   schema.py        Question, a standalone shape the pipeline does not produce
   pipeline.py      STAGES, run(), process(), cache, progress
-  cli.py           process / transcribe / eval / quiz
+  cli.py           process / transcribe / filter / eval / quiz / qti
 
 tests/            flat, one test module per source module, plus conftest.py
 ```
@@ -1243,16 +1374,18 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not planned | |
 | `sentences.py` | 3 sentences | done | |
 | `segments.py` | 4 segments | done | |
-| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5) and the interval join; the ink curve (6.4) is not built, de-occlusion (6.3) is not planned | #133 |
+| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5), reusing the reading of a page that comes back (6.5) and the interval join; the ink curve (6.4) is not built, de-occlusion (6.3) is not planned | #133 |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery wait for a labelled miss (7.1) | |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |
 | `endpoint.py` | not a stage | done: client and requests for the judge and vision (10) | |
 | `score.py` | 9 score | done: confidence and threshold | |
-| `export.py` | 10 export | done; keeping review edits across re-runs is not planned (12.2) | |
-| `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |
+| `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
+| `quiz_schema.py` | not a stage | done: the `quiz.json` reader and validator (12.3); the `quiz` command that writes the file is not built | #79 |
+| `filtering.py` | not a stage | time and text filters done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --score-vision` (4.4) | |
-| `cli.py` | not a stage | `process`, `transcribe` and `eval` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
+| `qti.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 package of a `quiz.json` (12.4) | |
+| `cli.py` | not a stage | `process`, `transcribe`, `filter`, `eval` and `qti` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
 running list of what this document describes and the code does not yet do.
@@ -1269,6 +1402,7 @@ Explicit boundaries, so the package does not grow into them by accident.
   is a separate application. This package's part is that its JSON round-trips (section 12.2).
 - **exerplaza.com upload** is likewise a separate consumer of the exported JSON. Nothing in
   `questxtract` talks to exerplaza directly.
+- **No LMS upload**; `qti` only writes a ZIP (section 12.4).
 - **The labelled dataset** is test
   material under `tests/data/`, not an importable subpackage. The *harness* that reads it is
   `evaluate.py` (section 4), because NFR2 is a CI gate and the threshold sweep is library code.

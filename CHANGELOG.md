@@ -10,6 +10,23 @@
   reports the character error rate of the text, blank boards read as blank, and the share of
   formulas read, per lecture type and per frame. Answers are cached, so a second run makes no
   calls. (#58)
+- `questxtract filter lecture.questions.json --text WORDS --from TIME --to TIME` keeps the
+  questions where every word appears, said or written on the board on screen while they were
+  asked, and that fall in the time range, without running the pipeline again. Times are seconds,
+  `M:SS` or `H:MM:SS`. It prints the result, or writes it with `-o`. `filter_questions` and
+  `filter_document` take the same `text=`. (#136)
+- Detection can read the board: with vision on and `board_overlap_delta` set, a question that
+  shares a word with the text of the board on screen while it was asked gets that boost, the
+  reason `board_overlap`, and `source: "combined"` in `questions.json`. Off by default (0.0): at
+  0.10 it changed nothing on the labelled recordings. `eval --board` scores them with the board
+  states committed beside their transcripts. (#60)
+- Vision reads a slide or page that comes back only once per run. On slides, handwriting and
+  screencasts, a keyframe that shows the same content as one read earlier in the run copies that
+  reading instead of asking the model again; it stays a board state of its own, with its own
+  times, and is counted in `stats.vision_reused`. A page whose changes exceed the limits of that
+  comparison, such as new ink, a new decimal point or a moved pen cursor, is read again; a very
+  faint mark can go unnoticed. Blackboards, whiteboards and frames the layout probe could not name
+  are always read. (#138)
 - Vision finds the slides or board first: three frames from across the recording go to
   `vision_model` in one request, which answers where the content is and what kind it is
   (`slides`, `blackboard`, `whiteboard`, `handwriting`, `screencast` or `unknown`). Frames are
@@ -20,6 +37,18 @@
   pick its model for one run, over `questxtract.toml`; `--llm-url` now also serves vision. With
   vision on, a recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript gets a
   note that the board is not read, and runs without vision. (#61)
+- `quiz.json` schema 1.0 (`quiz.schema.json`, shipped in the package), the format the coming
+  `quiz` command writes and the QTI and Exerplaza exporters read: single-choice items with at
+  least three options, every text marked `spoken` or `generated`, a solution with one explanation
+  per option, the source question's id and times, and a teacher `review` block. `read_quiz` and
+  `validate_quiz` check a file against the rules the schema cannot express and list every
+  problem with its path. (#146)
+- `questxtract qti quiz.json -o quiz.qti.zip` (and `export_qti()`) writes a `quiz.json` as a
+  QTI 3.0 package an LMS can import: one single-choice item per quiz item, worth its points and
+  scored against its correct option, with each option's explanation as feedback. The quiz's
+  instructions set shuffling, whether feedback is shown and the instructions text. Items a
+  reviewer marked `rejected` are left out. The same quiz gives the same ZIP, byte for byte, and
+  every package the tests write is validated against the official 1EdTech XSDs. (#67)
 - Vision: with `vision_enabled = true` (in `questxtract.toml`) and a recording with a video
   track, the slides or board are read. Each stable view's keyframe goes to `vision_model`,
   together with what was said while it was on screen, and comes back as a board state in
@@ -29,6 +58,11 @@
   out with a warning and is counted in `stats.vision_failed`; when the first three fail, the rest
   are not sent. Needs the `llm` extra and an API key, or `base_url` for a local server, checked
   before transcription starts. (#59)
+- `questions.json`'s `stats` records what the model calls cost, per caller: `judge_*` with
+  `--detector llm`, `layout_*` and `vision_*` with vision on. Each has `_requests`,
+  `_input_tokens`, `_output_tokens` and `_ms`, all 0 when the answers came from the cache.
+  Multiply by your provider's prices for the cost of a lecture. Not a schema change: `stats`
+  takes any integer key. (#123)
 - `process` and `transcribe` accept `.mp3` recordings as well as `.mp4`. A recording without a
   video track, an MP3 or an audio-only MP4, is transcribed as usual and has no board to read.
   (#117)

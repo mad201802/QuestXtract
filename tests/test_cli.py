@@ -8,16 +8,19 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import openai
 import pytest
+from jsonschema import Draft202012Validator
 
 from questxtract import Transcript, asr, cli
 from questxtract.cli import main
 from questxtract.config import Config
+from questxtract.export import SCHEMA_PATH
 from questxtract.pipeline import STAGES
 from questxtract.sentences import split_sentences
 
@@ -258,7 +261,9 @@ def test_help_documents_the_options_with_examples(capsys: pytest.CaptureFixture[
     with pytest.raises(SystemExit) as top:
         main(["--help"])
     assert top.value.code == 0
-    assert "questxtract transcribe lecture.mp4" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "questxtract transcribe lecture.mp4" in out
+    assert "questxtract filter lecture.questions.json" in out
 
     with pytest.raises(SystemExit):
         main(["process", "--help"])
@@ -560,7 +565,7 @@ def test_eval_receives_file_settings_and_reasoning_timeout(tmp_path, monkeypatch
     )
     seen = []
 
-    def evaluate(paths, config):
+    def evaluate(paths, config, board=False):
         seen.append(config)
         return {}
 
@@ -778,3 +783,155 @@ def test_every_vision_setting_has_a_flag_decision() -> None:
     for field, (flag, value) in _VISION_FLAGS.items():
         config = cli._config(cli.build_parser().parse_args(["process", "lecture.mp4", *flag]))
         assert getattr(config, field) == value, flag
+
+
+# --- filter (#136) --------------------------------------------------------------
+
+_TTK = Path(__file__).parent / "data" / "ttk4225_2026_09_14.transcript.json"
+
+
+@pytest.fixture
+def questions_file(tmp_path: Path) -> Path:
+    """The TTK4225 questions, with a board state (and its keyframe) on the first question."""
+    path = tmp_path / "lecture.questions.json"
+    assert main(["process", str(_TTK), "-o", str(path)]) == 0
+    data = json.loads(path.read_text(encoding="utf-8"))
+    first = data["questions"][0]
+    data["visuals"] = [
+        {
+            "id": "v_board",
+            "start": first["start"],
+            "end": first["end"],
+            "keyframe_path": "lecture.keyframes/v_board.png",
+            "description": "",
+            "text": "Zyzzyva",
+            "latex": None,
+            "confidence": 0.9,
+        }
+    ]
+    first["visual_ids"] = ["v_board"]
+    (tmp_path / "lecture.keyframes").mkdir()
+    (tmp_path / "lecture.keyframes" / "v_board.png").write_bytes(b"png")
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
+
+
+def _filtered(capsys: pytest.CaptureFixture[str], *args: str) -> dict[str, Any]:
+    assert main(["filter", *args]) == 0
+    data: dict[str, Any] = json.loads(capsys.readouterr().out)
+    return data
+
+
+def test_filter_prints_the_questions_matching_the_board_by_default(
+    questions_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    capsys.readouterr()
+    before = sorted(questions_file.parent.iterdir())
+    data = _filtered(capsys, str(questions_file), "--text", "ZYZZYVA")
+    first = json.loads(questions_file.read_text(encoding="utf-8"))["questions"][0]
+    assert data["questions"] == [first]
+    assert data["visuals"][0]["keyframe_path"] == "lecture.keyframes/v_board.png"
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    Draft202012Validator(schema).validate(data)
+    assert sorted(questions_file.parent.iterdir()) == before  # nothing written
+
+
+def test_filter_reads_times_as_seconds_or_minutes(
+    questions_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    capsys.readouterr()
+    by_seconds = _filtered(capsys, str(questions_file), "--from", "300", "--to", "1200.5")
+    by_clock = _filtered(capsys, str(questions_file), "--from", "5:00", "--to", "0:20:00.5")
+    starts = [q["start"] for q in by_clock["questions"]]
+    assert by_clock == by_seconds and starts
+    assert all(300 <= start < 1200.5 for start in starts)
+
+
+@pytest.mark.parametrize("bad", ["5x", "1:2:3:4", "5:60", "5:-1", ""])
+def test_filter_rejects_a_time_it_cannot_read(
+    questions_file: Path, capsys: pytest.CaptureFixture[str], bad: str
+) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        main(["filter", str(questions_file), "--from", bad])
+    assert exit_info.value.code == 2
+    assert "expected seconds, M:SS or H:MM:SS" in capsys.readouterr().err
+
+
+def test_filter_needs_text_or_a_time(
+    questions_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    capsys.readouterr()
+    assert main(["filter", str(questions_file)]) == 1
+    assert capsys.readouterr().err == "error: give --text, --from or --to\n"
+
+
+def test_filter_into_another_folder_keeps_the_keyframes_found(
+    questions_file: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = tmp_path / "out" / "board.json"
+    assert main(["filter", str(questions_file), "--text", "zyzzyva", "-o", str(out)]) == 0
+    total = len(json.loads(questions_file.read_text(encoding="utf-8"))["questions"])
+    assert capsys.readouterr().err.endswith(f"1 of {total} questions -> {out}\n")
+    keyframe = json.loads(out.read_text(encoding="utf-8"))["visuals"][0]["keyframe_path"]
+    assert keyframe == "../lecture.keyframes/v_board.png"
+    assert (out.parent / keyframe).is_file()
+
+    beside = tmp_path / "board.json"
+    assert main(["filter", str(questions_file), "--text", "zyzzyva", "-o", str(beside)]) == 0
+    keyframe = json.loads(beside.read_text(encoding="utf-8"))["visuals"][0]["keyframe_path"]
+    assert keyframe == "lecture.keyframes/v_board.png"
+
+
+def test_filter_onto_another_drive_points_at_the_keyframe_absolutely(
+    questions_file: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def other_drive(path: object, start: object = None) -> str:
+        raise ValueError("path is on mount 'C:', start on mount 'D:'")
+
+    monkeypatch.setattr(cli.os.path, "relpath", other_drive)
+    out = tmp_path / "out" / "board.json"
+    assert main(["filter", str(questions_file), "--text", "zyzzyva", "-o", str(out)]) == 0
+    keyframe = Path(json.loads(out.read_text(encoding="utf-8"))["visuals"][0]["keyframe_path"])
+    assert keyframe.is_absolute() and keyframe.is_file()
+
+
+# --- qti (#67) ----------------------------------------------------------------
+
+
+def test_qti_exports_a_quiz_and_leaves_rejected_items_out(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    quiz = make_quiz("q_aaa", "q_bbb")
+    quiz["questions"][1]["review"]["status"] = "rejected"
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(quiz), encoding="utf-8")
+
+    assert main(["qti", "lecture.quiz.json", "-o", "lecture.zip"]) == 0
+
+    assert capsys.readouterr().err == "QTI 3.0 package -> lecture.zip\n"
+    with zipfile.ZipFile(tmp_path / "lecture.zip") as package:
+        items = [name for name in package.namelist() if name.startswith("items/")]
+        assert items == ["items/quiz_q_aaa.xml"]
+        assert b"qti-choice-interaction" in package.read(items[0])
+
+
+@pytest.mark.parametrize("content", [None, "{", '{"schema_version": "2.0", "questions": []}'])
+def test_qti_bad_input_gets_one_line_and_no_output(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], content: str | None
+) -> None:
+    source = tmp_path / "quiz.json"
+    if content is not None:
+        source.write_text(content, encoding="utf-8")
+    output = tmp_path / "out.zip"
+
+    assert main(["qti", str(source), "-o", str(output)]) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("error: qti: ") and err.count("\n") == 1
+    assert not output.exists()
+
+
+def test_qti_has_no_version_or_filter_flags(capsys: pytest.CaptureFixture[str]) -> None:
+    for flag in ("--version", "--only-keep"):
+        with pytest.raises(SystemExit):
+            main(["qti", "quiz.json", "-o", "out.zip", flag])
+        assert f"unrecognized arguments: {flag}" in capsys.readouterr().err

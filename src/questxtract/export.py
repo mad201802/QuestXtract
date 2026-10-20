@@ -20,15 +20,21 @@ from pathlib import Path
 from typing import Any
 
 from .llm import JUDGE_PROMPT_VERSION
-from .models import Context, QAPair, SchemaError, Segment, Sentence, VisualContext
+from .models import (
+    Context,
+    QAPair,
+    SchemaError,
+    Segment,
+    Sentence,
+    VisualContext,
+    overlapping,
+)
 from .score import confidence_label
-from .vision import overlapping
 
 SCHEMA_VERSION = "2.2"
 SCHEMA_PATH = Path(__file__).with_name("questions.schema.json")
 
 _CONFIG_KEYS = ("model_size", "language", "min_confidence")
-_SOURCE = "audio"  # questions are only read from speech until the vision milestones (M2/M3)
 
 
 def result_to_dict(ctx: Context, keyframes: Mapping[str, str] | None = None) -> dict[str, Any]:
@@ -127,7 +133,8 @@ def _question(
         "confidence": pair.confidence,
         "confidence_label": confidence_label(pair.confidence),
         "question_type": pair.question.question_type,
-        "source": _SOURCE,
+        # "combined": the board on screen raised its score (architecture.md 7.3)
+        "source": "combined" if "board_overlap" in pair.question.reasons else "audio",
         "answer": _answer(pair, by_id),
         "segment_id": segment,
         "sentence_id": pair.question.sentence_id,

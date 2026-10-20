@@ -17,6 +17,7 @@ from questxtract.evaluate import (
     character_error_rate,
     evaluate,
     evaluate_vision,
+    format_report,
     format_vision_report,
     formula_found,
     match,
@@ -111,6 +112,52 @@ def test_evaluate_skips_labels_without_a_transcript(tmp_path: Path) -> None:
 def test_evaluate_rejects_a_directory_with_nothing_to_score(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="no \\*.labels.jsonl"):
         evaluate([tmp_path])
+
+
+def _write_board(folder: Path, text: str) -> None:
+    states = [
+        {
+            "start": 0.0,
+            "end": 13.0,
+            "description": "",
+            "text": text,
+            "latex": None,
+            "confidence": 0.9,
+        }
+    ]
+    data = {"vision_model": "m", "vision_prompt_version": "v0", "board_states": states}
+    (folder / "lec.visual.json").write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_evaluate_reads_the_board_states_only_with_board(tmp_path: Path) -> None:
+    # Under a 0.30 gate the unmarked "Is it closed under division" is a candidate at 0.40,
+    # unanswered (0.22); "division" on the board lifts it to 0.50 (0.28), over 0.25.
+    labels = [{"start": 7.0, "end": 9.0, "text": "Is it closed under division", "kind": "content"}]
+    folder = _write(tmp_path, labels)
+    _write_board(folder, "a = b / c (division)")
+    config = Config(min_question_score=0.3, min_confidence=0.25, board_overlap_delta=0.1)
+    plain = evaluate([folder], config)
+    assert plain["board"] == [] and plain["total"]["tp"] == 0
+    board = evaluate([folder], config, board=True)
+    assert board["board"] == ["lec"] and board["total"]["tp"] == 1
+    assert "board states for lec" in format_report(board)
+
+
+def test_evaluate_board_runs_a_recording_without_board_states_as_before(tmp_path: Path) -> None:
+    folder = _write(
+        tmp_path, [{"start": 0.0, "end": 1.5, "text": "What is a field?", "kind": "content"}]
+    )
+    report = evaluate([folder], board=True)
+    assert report["board"] == [] and report["total"] == evaluate([folder])["total"]
+
+
+def test_cli_eval_board(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    folder = _write(
+        tmp_path, [{"start": 0.0, "end": 1.5, "text": "What is a field?", "kind": "content"}]
+    )
+    _write_board(folder, "field")
+    assert main(["eval", str(folder), "--board", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["board"] == ["lec"]
 
 
 def test_cli_eval_prints_table_and_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

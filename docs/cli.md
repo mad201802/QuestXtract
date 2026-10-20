@@ -10,6 +10,7 @@ inside, [architecture.md](architecture.md).
 questxtract process lecture.mp4                # video -> lecture.questions.json
 questxtract transcribe lecture.mp4             # transcription only -> lecture.transcript.json
 questxtract process lecture.transcript.json    # questions from an existing transcript
+questxtract filter lecture.questions.json --text eigenvalue   # the questions about a word
 ```
 
 Run `questxtract --help`, or `questxtract <command> --help`, for the same information in the
@@ -66,6 +67,34 @@ reads.
 | `--from-scratch` | nothing | off | Transcribes again even if a cached transcript exists. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
+### `questxtract filter <questions.json>`
+
+Keeps the questions of a questions file that mention some words or fall in a time range, without
+running the pipeline again. It prints the result unless `-o` is given. The result is a questions
+file like the input, with only the matching questions.
+
+| Option | Takes | Default | What it does |
+|---|---|---|---|
+| `--text` | words | | Keeps questions where every word appears, as a whole word and ignoring case, somewhere in the question, the sentence it was spoken in, its answer, its `review` text, or the text, LaTeX or description of a board state on screen while it was asked. The words may come from different places: `--text "eigenvalue zero"` finds "what if this is zero?" asked under a board that says "eigenvalue". `eigenvalue` does not find `eigenvalues`. |
+| `--from` | a time | start | Keeps questions asked at or after this time: seconds (`300`), `M:SS` (`5:00`) or `H:MM:SS` (`1:05:00`). |
+| `--to` | a time | end | Keeps questions asked before this time, in the same forms. |
+| `-o`, `--output` | a path | the terminal | Where to write the result. Keyframe paths are rewritten so the images are still found from there. |
+| `-h`, `--help` | nothing | | Shows the options and examples. |
+
+Give at least one of `--text`, `--from` and `--to`; together, a question must match all of them.
+
+### `questxtract qti <quiz.json>`
+
+Exports a quiz file as a QTI 3.0 ZIP package for an LMS. Every item becomes a single-choice
+item scored against its correct option, with each option's explanation as feedback; the quiz's
+instructions set shuffling and whether feedback is shown. Items a reviewer marked `rejected` are
+left out. The same quiz file always gives the same ZIP, byte for byte.
+
+| Option | Takes | Default | What it does |
+|---|---|---|---|
+| `-o`, `--output` | a path | required | Where to write the ZIP. Its folder must exist. |
+| `-h`, `--help` | nothing | | Shows the options. |
+
 ### Everywhere
 
 | Option | What it does |
@@ -73,9 +102,11 @@ reads.
 | `--version` | Prints the installed version. |
 | `-h`, `--help` | Without a command, lists the commands; after one, lists that command's options. |
 
-`questxtract eval <files|dirs> [--json]` scores the pipeline against the labelled set: recall,
+`questxtract eval <files|dirs> [--json] [--board]` scores the pipeline against the labelled set: recall,
 precision, false positives by kind, a threshold sweep, and every miss
-([tests/data/README.md](../tests/data/README.md)). It takes `--detector`, `--llm-model` and
+([tests/data/README.md](../tests/data/README.md)). `--board` adds the board states committed
+beside each transcript (`<name>.visual.json`), as if `--vision` had read them, and names the
+recordings that had them on the report's first line. It takes `--detector`, `--llm-model` and
 `--llm-url` too, so the rules and a model can be compared on the same recordings; the report's
 first line names the detector, the model and the prompt version. With `--score-vision`, it
 scores the vision model instead (`--vision-model`, at `--llm-url` if given) on the labelled
@@ -149,6 +180,8 @@ Without `-o`, output lands next to the input, named after it:
 | `lecture.mp4` | `lecture.questions.json` | `lecture.transcript.json` |
 | `lecture.transcript.json` | `lecture.questions.json` | (needs an `.mp4` or `.mp3`) |
 
+`filter` prints to the terminal unless `-o` names a file.
+
 When vision has read the board, the keyframe images are copied into a folder next to the
 questions file and named after it (`lecture.keyframes/` for `lecture.questions.json`); the file
 refers to them by relative path, so move or share the two together. With `-o -` nothing is
@@ -197,6 +230,12 @@ almost instantly. It works the other way round too.
 questxtract process lecture.transcript.json -o -
 ```
 
+**Export for an LMS (QTI 3.0)**
+
+```bash
+questxtract qti lecture.quiz.json -o lecture.qti.zip   # every item but the rejected ones
+```
+
 **See which questions the threshold threw away.** This is a development tool, not a CLI
 command:
 
@@ -204,6 +243,13 @@ command:
 questxtract transcribe lecture.mp4
 uv run python scripts/dropped_questions.py lecture.transcript.json -o lecture.questions.json
 # writes lecture.questions.json (kept) and lecture.questions.dropped.json (dropped)
+```
+
+**Find the questions about a word, said or on the board**
+
+```bash
+questxtract filter lecture.questions.json --text eigenvalue
+questxtract filter lecture.questions.json --text "transfer function" --from 5:00 --to 20:00 -o tf.json
 ```
 
 **Start over** after changing the code or when you suspect a stale result:
@@ -269,6 +315,12 @@ questxtract eval tests/data/ --detector llm --llm-url http://localhost:11434/v1 
 Another `-t` or a second `eval` makes no calls; a different model, endpoint, transcript or
 prompt asks again (a new questxtract version may change the prompt). `--from-scratch` ignores the cache.
 
+**What it cost.** The `stats` block of `questions.json` counts the model calls of the run:
+`judge_requests`, `judge_input_tokens`, `judge_output_tokens` and `judge_ms`, and the same with
+`layout_` and `vision_` when vision is on. Tokens are what the endpoint reports (0 from a server
+that reports none); a run answered from the cache shows 0. Multiply by your provider's prices
+for the cost of a lecture.
+
 **When the endpoint fails.** You asked for the model, so there is no quiet fallback to the rules:
 the run stops with one `error:` line (see [When something goes wrong](#when-something-goes-wrong)).
 Parts already answered stay cached, so running the same command again picks up where it stopped.
@@ -304,6 +356,10 @@ from the same folder every time to benefit from it.
 
 A `.json` transcript input has no transcription to save. Only the requests to the model are
 cached, with `--detector llm` (see [Finding questions with an LLM](#finding-questions-with-an-llm)).
+
+Within one run, a slide or page that comes back with nothing changed is not read again: its
+earlier reading is copied, also with `--from-scratch`, and counted in `stats.vision_reused`. This
+is not the cache, so it works on a first run too ([architecture.md 6.5](architecture.md#65-captioning)).
 
 ## When something goes wrong
 

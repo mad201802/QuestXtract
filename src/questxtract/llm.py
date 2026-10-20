@@ -26,6 +26,16 @@ from .models import Context, QAPair, QuestionCandidate, Sentence, stage
 # The prompt and the schema are module-level, version-tagged, so a prompt change is a reviewable
 # diff. A change to either changes the cache key, so no stale answer is replayed.
 JUDGE_PROMPT_VERSION = "v5"
+# Always in stats once the judge runs, 0 included, so a cached run reads as "no calls".
+_STATS = (
+    "judge_dropped",
+    "judge_rejected",
+    "judge_skipped",
+    "judge_requests",
+    "judge_input_tokens",
+    "judge_output_tokens",
+    "judge_ms",
+)
 
 _KINDS = ("content", "rhetorical", "check_in", "procedural")
 _FIELDS = ("reason", "kind", "question", "answer_sentence_ids", "confidence")
@@ -167,6 +177,7 @@ def _ask(
     candidates: Sequence[Sentence],
     repeats: Counter[str],
     *,
+    usage: Counter[str],
     again: bool = False,
 ) -> dict[str, Any]:
     """Ask the model to judge ``candidates`` in ``excerpt``; cached on the request.
@@ -196,7 +207,7 @@ def _ask(
     }
     if config.judge_reasoning_effort:
         request["reasoning_effort"] = config.judge_reasoning_effort
-    return endpoint.ask(config, request, name="judge")
+    return endpoint.ask(config, request, name="judge", usage=usage)
 
 
 def _pairs(
@@ -283,10 +294,11 @@ def _batch(
 ) -> tuple[list[QAPair], Counter[str]]:
     """Judge one request's candidates, asking once more for any the answer left out."""
     stats: Counter[str] = Counter()
-    judgements = _ask(config, excerpt, candidates, repeats)
+    judgements = _ask(config, excerpt, candidates, repeats, usage=stats)
     missing = [s for s in candidates if s.id not in judgements]
     if missing:  # a server that ignores the schema can still skip some
-        judgements = {**_ask(config, excerpt, missing, repeats, again=True), **judgements}
+        again = _ask(config, excerpt, missing, repeats, usage=stats, again=True)
+        judgements = {**again, **judgements}
         stats["judge_skipped"] += sum(1 for s in candidates if s.id not in judgements)
     return _pairs(judgements, excerpt, candidates, rules, stats), stats
 
@@ -322,7 +334,7 @@ def judge(ctx: Context) -> Context:
     batches = _batches(
         positions, len(sentences), ctx.config.judge_window, ctx.config.judge_batch_size
     )
-    ctx.stats.update(judge_dropped=0, judge_rejected=0, judge_skipped=0)
+    ctx.stats.update(dict.fromkeys(_STATS, 0))
     pairs: list[QAPair] = []
     pool = ThreadPoolExecutor(max(1, ctx.config.judge_parallel))
     try:
