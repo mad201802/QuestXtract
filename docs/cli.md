@@ -319,6 +319,10 @@ from the same folder every time to benefit from it.
 A `.json` transcript input has no transcription to save. Only the requests to the model are
 cached, with `--detector llm` (see [Finding questions with an LLM](#finding-questions-with-an-llm)).
 
+Within one run, a slide or page that comes back with nothing changed is not read again: its
+earlier reading is copied, also with `--from-scratch`, and counted in `stats.vision_reused`. This
+is not the cache, so it works on a first run too ([architecture.md 6.5](architecture.md#65-captioning)).
+
 ## When something goes wrong
 
 | Exit code | Meaning |

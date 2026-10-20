@@ -538,6 +538,27 @@ visible only, with `[unreadable]` for a word it cannot read. Cached per request,
 included (10.4), so no keyframe is sent twice. `latex` is there because prose does not compile,
 and the M3 animations need formulas.
 
+**A page that comes back is not read again.** Lecturers return to earlier slides and pages, and
+each return is a view of its own. The request cache cannot catch it: two captures of one page
+differ by codec noise, and the speech sent with them differs. So on `slides`, `handwriting` and
+`screencast` (the layout probe's kind, 6.2), each keyframe is first compared with the keyframes
+already read in this run; boards are left to the ink curve (6.4), and `unknown` may be a board. The
+comparison has two steps, because a share of changed pixels misses a small change: a new digit is
+a few hundredths of a percent of the page, and a change of colour at the same brightness is none.
+The earlier keyframe whose small grey copy (6.3) differs least, by at most 1 %, is the candidate.
+Its reading is copied only if, at full resolution, no 4 px square's mean brightness moved by more
+than 20 levels, no 8 px square's by more than 11, and no 8 px square's mean colour (Cb, Cr) by more
+than 12; the squares overlap, and the last rows and columns are compared too. The new board state
+keeps its own times, keyframe and id, so questions asked during it still link to it, and counts in
+`stats.vision_reused`. A reading that failed is never copied. The limits are set from the codec
+noise of TTK4225 2026-09-14, between frames of one page and between its pages coming back after
+H.264 encoding, so anything unsure is read again: a pen cursor that moved, like a new decimal
+point, gives a new reading, and so does a page whose codec noise exceeds the limits, as it can in
+a recording compressed harder than a screen capture. A mark fainter than about twice that noise, roughly 48
+grey levels of contrast on a light page, can go unnoticed. The reuse lives within the run, also
+with `--from-scratch`; only the small copies are kept, and full-resolution pictures are decoded
+while their view is handled.
+
 Each keyframe that was read is written to the cache as `<source_hash>/keyframes/<content
 hash>.png`, and `keyframe_path` holds that path relative to `cache_dir`: a cached result stays
 valid from another working directory, and the board-state id does not depend on where the cache
@@ -1285,7 +1306,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not planned | |
 | `sentences.py` | 3 sentences | done | |
 | `segments.py` | 4 segments | done | |
-| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5) and the interval join; the ink curve (6.4) is not built, de-occlusion (6.3) is not planned | #133 |
+| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5), reusing the reading of a page that comes back (6.5) and the interval join; the ink curve (6.4) is not built, de-occlusion (6.3) is not planned | #133 |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery wait for a labelled miss (7.1) | |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |
