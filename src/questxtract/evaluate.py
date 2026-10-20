@@ -9,7 +9,8 @@ human typed and the ASR is not what is being evaluated here. Matching is one-to-
 overlap first, so one long sentence cannot satisfy two labels.
 
 The labelled *dataset* lives under ``tests/data/<name>.labels.jsonl``, next to the
-``<name>.transcript.json`` it is timed against; this module is the code that reads it.
+``<name>.transcript.json`` it is timed against and, for a recording whose board was read, the
+``<name>.visual.json`` board states; this module is the code that reads it.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from typing import Any
 
 from .config import Config
 from .llm import JUDGE_PROMPT_VERSION
-from .models import Context, Transcript, Word
+from .models import Context, Transcript, VisualContext, Word
 from .pipeline import STAGES, run
 
 _MIN_OVERLAP = 0.5
@@ -74,17 +75,22 @@ def match(predictions: Sequence[Span], labels: Sequence[Span]) -> dict[int, int]
     return pairs
 
 
-def evaluate(paths: Sequence[str | Path], config: Config | None = None) -> dict[str, Any]:
+def evaluate(
+    paths: Sequence[str | Path], config: Config | None = None, *, board: bool = False
+) -> dict[str, Any]:
     """Score the pipeline against every labelled recording under ``paths``.
 
     ``paths`` are ``*.labels.jsonl`` files or directories holding them. A label file with no
     ``<name>.transcript.json`` beside it cannot be scored and is listed under ``skipped``.
     ``config`` defaults to ``Config()``; pass one with ``detector="llm"`` to score the LLM
-    detector (its answers are cached, so a second run makes no calls).
+    detector (its answers are cached, so a second run makes no calls). With ``board``, the
+    board states in ``<name>.visual.json`` beside a transcript go into the run, as if vision
+    had read them; a recording without that file runs without them.
 
     Returns:
-        The report: the ``detector`` that ran, the gate ``threshold``, per-recording and
-        pooled ``total`` metrics, and a pooled ``sweep`` over the confidence threshold.
+        The report: the ``detector`` that ran, the gate ``threshold``, the recordings run
+        with ``board`` states, per-recording and pooled ``total`` metrics, and a pooled
+        ``sweep`` over the confidence threshold.
 
     Raises:
         FileNotFoundError: If a path does not exist.
@@ -95,6 +101,7 @@ def evaluate(paths: Sequence[str | Path], config: Config | None = None) -> dict[
     threshold = config.min_confidence
     runs: dict[str, tuple[list[dict[str, Any]], list[dict[str, Any]], tuple[Word, ...]]] = {}
     skipped: list[str] = []
+    with_board: list[str] = []
     for labels_path in _label_files(paths):
         name = labels_path.name.removesuffix(".labels.jsonl")
         transcript_path = labels_path.with_name(f"{name}.transcript.json")
@@ -104,7 +111,12 @@ def evaluate(paths: Sequence[str | Path], config: Config | None = None) -> dict[
         transcript = Transcript.from_file(transcript_path)
         if name in runs:
             raise ValueError(f"duplicate recording name: {name}")
-        runs[name] = (_read_labels(labels_path), _predict(transcript, config), transcript.words)
+        visual_path = labels_path.with_name(f"{name}.visual.json")
+        visual = _read_visual(visual_path) if board and visual_path.is_file() else ()
+        if visual:
+            with_board.append(name)
+        predictions = _predict(transcript, config, visual)
+        runs[name] = (_read_labels(labels_path), predictions, transcript.words)
     if not runs:
         raise ValueError(f"no *.labels.jsonl with a matching *.transcript.json under {paths}")
 
@@ -114,6 +126,7 @@ def evaluate(paths: Sequence[str | Path], config: Config | None = None) -> dict[
     return {
         "detector": _detector(config),
         "threshold": threshold,
+        "board": with_board,
         "recordings": {name: _metrics(_counts(*r, threshold)) for name, r in runs.items()},
         "total": pooled(threshold),
         "sweep": [
@@ -129,7 +142,8 @@ def format_report(report: dict[str, Any]) -> str:
     """Render :func:`evaluate`'s report as a plain-text table plus its failure cases."""
     rows = [*report["recordings"].items(), ("TOTAL", report["total"])]
     lines = [
-        f"detector {report['detector']}, threshold {report['threshold']:.2f}",
+        f"detector {report['detector']}, threshold {report['threshold']:.2f}"
+        + (f", board states for {', '.join(report['board'])}" if report["board"] else ""),
         f"{'recording':<22}{'content':>8}{'tp':>5}{'fp':>5}{'fn':>5}"
         f"{'recall':>8}{'prec':>7}{'f1':>7}{'?-rate':>8}",
     ]
@@ -179,6 +193,12 @@ def _read_labels(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in lines if line.strip()]
 
 
+def _read_visual(path: Path) -> tuple[VisualContext, ...]:
+    """Read the board states of a ``<name>.visual.json`` (``scripts/board_states.py``)."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return tuple(VisualContext(**state) for state in data["board_states"])
+
+
 def _detector(config: Config) -> str:
     """Name what found the questions, so a pasted report says which model and prompt."""
     if config.detector != "llm":
@@ -186,10 +206,16 @@ def _detector(config: Config) -> str:
     return f"llm {config.judge_model} (prompt {JUDGE_PROMPT_VERSION})"
 
 
-def _predict(transcript: Transcript, config: Config) -> list[dict[str, Any]]:
-    """Run stages 3 onward with the emission gate open, so the sweep sees every candidate."""
+def _predict(
+    transcript: Transcript, config: Config, visual: tuple[VisualContext, ...] = ()
+) -> list[dict[str, Any]]:
+    """Run stages 3 onward with the emission gate open, so the sweep sees every candidate.
+
+    ``visual`` stands in for what the vision stage would have read; that stage itself has no
+    video to read here and leaves it as it is.
+    """
     config = config.replace(min_confidence=0.0)
-    ctx = Context(source=Path("eval"), config=config, transcript=transcript)
+    ctx = Context(source=Path("eval"), config=config, transcript=transcript, visual=visual)
     ctx.duration = transcript.duration
     ctx = run(ctx, STAGES[_AFTER_TRANSCRIBE:])
     return [

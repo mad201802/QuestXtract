@@ -27,8 +27,8 @@ from typing import Any
 
 from .models import SchemaError
 
-#: Where a question was detected from. "visual" and "combined" are reserved for the
-#: vision milestone (M2/M3); only "audio" is produced today.
+#: Where a question was detected from. "combined" when the board on screen raised its
+#: score; "visual" is reserved for questions read from the board alone.
 _VALID_SOURCES = frozenset({"audio", "visual", "combined"})
 
 
@@ -49,7 +49,7 @@ class Question:
         end: End time in seconds. Must be strictly greater than ``start``.
         confidence: Detection confidence in ``[0, 1]``.
         source: Where the question was detected. One of ``"audio"``, ``"visual"``,
-            ``"combined"``. Only ``"audio"`` is produced until the vision stage exists.
+            ``"combined"``; ``"visual"`` is not produced yet.
         visual_context: Board or slide context overlapping the question. Empty tuple
             until the vision stage (M2/M3) fills it in.
         topic: A topic or segment label for this question, or ``None`` until the

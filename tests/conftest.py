@@ -156,3 +156,65 @@ def fake_llm(monkeypatch: pytest.MonkeyPatch) -> Callable[..., FakeLLM]:
         return client
 
     return install
+
+
+def _make_quiz(*source_ids: str, **overrides: Any) -> dict[str, Any]:
+    """Build a schema-valid ``quiz.json``: one single-choice item per source question id.
+
+    Each item has options ``a`` (correct), ``b`` and ``c``. ``overrides`` replace top-level
+    keys; change nested values on the returned dict.
+    """
+
+    def text(value: str, origin: str = "generated") -> dict[str, str]:
+        return {"text": value, "origin": origin}
+
+    def item(source_id: str) -> dict[str, Any]:
+        return {
+            "id": "quiz_" + source_id,
+            "prompt": text("Which sort is stable: 2 < 3 & 4 > 1?", "spoken"),
+            "interaction_type": "choice_single",
+            "points": 2,
+            "options": [
+                {"id": "a", "text": text("Merge sort")},
+                {"id": "b", "text": text("Quicksort")},
+                {"id": "c", "text": text("Heapsort")},
+            ],
+            "correct_response": {"option_ids": ["a"]},
+            "solution": {
+                "explanation": text("A stable sort keeps equal keys in order."),
+                "option_explanations": {
+                    "a": text("Merging never swaps equal keys."),
+                    "b": text("Partitioning can reorder equal keys."),
+                    "c": text("Sifting can reorder equal keys."),
+                },
+            },
+            "provenance": {"source_question_id": source_id, "start": 1.5, "end": 4.0},
+            "review": {"status": "pending", "note": None, "metadata": {}},
+        }
+
+    quiz: dict[str, Any] = {
+        "schema_version": "1.0",
+        "id": "quiz_lecture",
+        "title": "Sorting",
+        "language": "en",
+        "status": "draft",
+        "source": {
+            "questions_path": "lecture.questions.json",
+            "questions_schema_version": "2.1",
+            "questions_hash": "9f2a",
+        },
+        "instructions": {
+            "shuffle_questions": False,
+            "shuffle_options": False,
+            "show_feedback": True,
+        },
+        "generation": {"method": "llm", "model": "gpt-5.6-terra", "prompt_version": "v0"},
+        "questions": [item(source_id) for source_id in source_ids],
+    }
+    quiz.update(overrides)
+    return quiz
+
+
+@pytest.fixture
+def make_quiz() -> Callable[..., dict[str, Any]]:
+    return _make_quiz

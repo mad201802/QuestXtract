@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -560,7 +561,7 @@ def test_eval_receives_file_settings_and_reasoning_timeout(tmp_path, monkeypatch
     )
     seen = []
 
-    def evaluate(paths, config):
+    def evaluate(paths, config, board=False):
         seen.append(config)
         return {}
 
@@ -778,3 +779,45 @@ def test_every_vision_setting_has_a_flag_decision() -> None:
     for field, (flag, value) in _VISION_FLAGS.items():
         config = cli._config(cli.build_parser().parse_args(["process", "lecture.mp4", *flag]))
         assert getattr(config, field) == value, flag
+
+
+# --- qti (#67) ----------------------------------------------------------------
+
+
+def test_qti_exports_a_quiz_and_leaves_rejected_items_out(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    quiz = make_quiz("q_aaa", "q_bbb")
+    quiz["questions"][1]["review"]["status"] = "rejected"
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(quiz), encoding="utf-8")
+
+    assert main(["qti", "lecture.quiz.json", "-o", "lecture.zip"]) == 0
+
+    assert capsys.readouterr().err == "QTI 3.0 package -> lecture.zip\n"
+    with zipfile.ZipFile(tmp_path / "lecture.zip") as package:
+        items = [name for name in package.namelist() if name.startswith("items/")]
+        assert items == ["items/quiz_q_aaa.xml"]
+        assert b"qti-choice-interaction" in package.read(items[0])
+
+
+@pytest.mark.parametrize("content", [None, "{", '{"schema_version": "2.0", "questions": []}'])
+def test_qti_bad_input_gets_one_line_and_no_output(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], content: str | None
+) -> None:
+    source = tmp_path / "quiz.json"
+    if content is not None:
+        source.write_text(content, encoding="utf-8")
+    output = tmp_path / "out.zip"
+
+    assert main(["qti", str(source), "-o", str(output)]) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("error: qti: ") and err.count("\n") == 1
+    assert not output.exists()
+
+
+def test_qti_has_no_version_or_filter_flags(capsys: pytest.CaptureFixture[str]) -> None:
+    for flag in ("--version", "--only-keep"):
+        with pytest.raises(SystemExit):
+            main(["qti", "quiz.json", "-o", "out.zip", flag])
+        assert f"unrecognized arguments: {flag}" in capsys.readouterr().err

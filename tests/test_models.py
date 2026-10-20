@@ -11,6 +11,7 @@ from questxtract import (
     VisualContext,
     Word,
 )
+from questxtract.models import overlapping
 
 
 def test_visual_context_id_is_stable_and_survives_a_new_caption():
@@ -18,6 +19,14 @@ def test_visual_context_id_is_stable_and_survives_a_new_caption():
     recaptioned = VisualContext(start=0.0, end=5.0, keyframe_path="frames/1.jpg", description="x")
     assert board.id == recaptioned.id and board.id.startswith("v_")
     assert board.id != VisualContext(start=5.0, end=9.0, keyframe_path="frames/2.jpg").id
+
+
+def test_overlapping_uses_half_open_intervals():
+    states = (VisualContext(start=0.0, end=5.0), VisualContext(start=5.0, end=20.0))
+    assert overlapping(states, 1.0, 2.0) == (states[0],)
+    assert overlapping(states, 4.0, 6.0) == states
+    assert overlapping(states, 5.0, 6.0) == (states[1],)  # touching at 5.0 is not overlapping
+    assert overlapping(states, 30.0, 40.0) == ()
 
 
 def test_transcript_to_dict_round_trips_through_from_dict(transcript):
