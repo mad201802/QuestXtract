@@ -33,6 +33,7 @@ turns them into study material. It **extracts** questions, it never invents them
 | 🖼️ **Board and slides** | Optional: a vision model finds the slides or board in the frame, whatever the recording style, then reads each view into text, LaTeX and a description, linked to the questions asked while it was on screen |
 | ❓ **Question detection** | Fast offline rules, or an LLM you pick (local in Ollama, or hosted) that reads the transcript; a confidence score and the reasons for every question |
 | ⏱️ **Timestamps** | Every question carries its position in the recording |
+| 🔎 **Search** | Find the questions by words said or written on the board while they were asked, and by time |
 | ✏️ **Human in the loop** | A `review` block per question for teacher edits, never overwritten by the pipeline |
 | 📦 **JSON export** | `questions.json` with a fixed key set and a formal JSON Schema |
 | 🎓 **LMS export** | `questxtract qti` writes a `quiz.json` as a QTI 3.0 package an LMS can import |
@@ -62,6 +63,7 @@ Requires Python 3.10+ on Linux, macOS or Windows.
 questxtract process lecture.mp4                # video -> lecture.questions.json
 questxtract transcribe lecture.mp4             # transcription only -> lecture.transcript.json
 questxtract process lecture.transcript.json    # questions from an existing transcript
+questxtract filter lecture.questions.json --text eigenvalue   # the questions about a word
 ```
 
 The input decides how much runs: an `.mp4` or `.mp3` goes through every stage (an audio-only
@@ -264,11 +266,15 @@ window = filter_questions(ctx, start=300, end=600)  # new Context, ctx untouched
 
 data = read_questions("lecture.questions.json")
 window = filter_document(data, start=300, end=600)  # new dict, same schema
+board = filter_document(data, text="eigenvalue")  # said, or on the board on screen
 ```
 
 A question is kept when `start <= question.start < end`, in seconds; leave out either bound to
 open that side. Only the question list shrinks, so `segment_id` and `visual_ids` still resolve.
-An invalid range raises `ValueError`. `topic=` is **experimental**: no stage produces topics yet,
+An invalid range raises `ValueError`. `text=` keeps a question when every word of it appears, as
+a whole word and ignoring case, in the question, its answer, its `review` text, or a board state
+in its `visual_ids`; `questxtract filter` does the same from the command line
+([docs/cli.md](docs/cli.md)). `topic=` is **experimental**: no stage produces topics yet,
 so it warns and matches nothing.
 
 ### Reading a quiz.json

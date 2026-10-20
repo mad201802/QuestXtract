@@ -4,6 +4,11 @@
 
 ### Added
 
+- `questxtract filter lecture.questions.json --text WORDS --from TIME --to TIME` keeps the
+  questions where every word appears, said or written on the board on screen while they were
+  asked, and that fall in the time range, without running the pipeline again. Times are seconds,
+  `M:SS` or `H:MM:SS`. It prints the result, or writes it with `-o`. `filter_questions` and
+  `filter_document` take the same `text=`. (#136)
 - Detection can read the board: with vision on and `board_overlap_delta` set, a question that
   shares a word with the text of the board on screen while it was asked gets that boost, the
   reason `board_overlap`, and `source: "combined"` in `questions.json`. Off by default (0.0): at

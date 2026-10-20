@@ -591,6 +591,9 @@ judge.
 
 - **Detection** (7.3): a small positive delta when a question shares a content word with the
   text of a board state on screen while it was asked.
+- **Search** (`filtering.py`, `questxtract filter`): a text query matches every word against
+  what was said and the board states in a question's `visual_ids` together, as whole words and
+  ignoring case, so "what if this is zero?" is found by a word only the board shows.
 - **A second, VLM pass** over the question/answer pairs (not built): the frames on screen go into
   the prompt, where they matter most: "what does this term mean?" is unanswerable from audio
   alone.
@@ -1293,11 +1296,11 @@ src/questxtract/
   quiz_schema.py   quiz.json reader and validator, with quiz.schema.json
   qti.py           QTI model and the quiz.json mapping
   qti_v3.py        QTI 3.0 XML and the ZIP package
-  filtering.py     time filter, experimental topic filter
+  filtering.py     time and text filters, experimental topic filter
   evaluate.py      labelled-set metrics
   schema.py        Question, a standalone shape the pipeline does not produce
   pipeline.py      STAGES, run(), process(), cache, progress
-  cli.py           process / transcribe / eval / quiz / qti
+  cli.py           process / transcribe / filter / eval / quiz / qti
 
 tests/            flat, one test module per source module, plus conftest.py
 ```
@@ -1347,10 +1350,10 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `score.py` | 9 score | done: confidence and threshold | |
 | `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
 | `quiz_schema.py` | not a stage | done: the `quiz.json` reader and validator (12.3); the `quiz` command that writes the file is not built | #79 |
-| `filtering.py` | not a stage | time filter done; `topic=` is experimental, no stage produces topics | |
+| `filtering.py` | not a stage | time and text filters done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest | |
 | `qti.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 package of a `quiz.json` (12.4) | |
-| `cli.py` | not a stage | `process`, `transcribe`, `eval` and `qti` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
+| `cli.py` | not a stage | `process`, `transcribe`, `filter`, `eval` and `qti` work ([cli.md](cli.md)); `quiz` exits 1 | #79 |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
 running list of what this document describes and the code does not yet do.

@@ -10,6 +10,7 @@ inside, [architecture.md](architecture.md).
 questxtract process lecture.mp4                # video -> lecture.questions.json
 questxtract transcribe lecture.mp4             # transcription only -> lecture.transcript.json
 questxtract process lecture.transcript.json    # questions from an existing transcript
+questxtract filter lecture.questions.json --text eigenvalue   # the questions about a word
 ```
 
 Run `questxtract --help`, or `questxtract <command> --help`, for the same information in the
@@ -65,6 +66,22 @@ reads.
 | `-m`, `--model` | a model name | `turbo` | The Whisper model used to transcribe. |
 | `--from-scratch` | nothing | off | Transcribes again even if a cached transcript exists. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
+
+### `questxtract filter <questions.json>`
+
+Keeps the questions of a questions file that mention some words or fall in a time range, without
+running the pipeline again. It prints the result unless `-o` is given. The result is a questions
+file like the input, with only the matching questions.
+
+| Option | Takes | Default | What it does |
+|---|---|---|---|
+| `--text` | words | | Keeps questions where every word appears, as a whole word and ignoring case, somewhere in the question, the sentence it was spoken in, its answer, its `review` text, or the text, LaTeX or description of a board state on screen while it was asked. The words may come from different places: `--text "eigenvalue zero"` finds "what if this is zero?" asked under a board that says "eigenvalue". `eigenvalue` does not find `eigenvalues`. |
+| `--from` | a time | start | Keeps questions asked at or after this time: seconds (`300`), `M:SS` (`5:00`) or `H:MM:SS` (`1:05:00`). |
+| `--to` | a time | end | Keeps questions asked before this time, in the same forms. |
+| `-o`, `--output` | a path | the terminal | Where to write the result. Keyframe paths are rewritten so the images are still found from there. |
+| `-h`, `--help` | nothing | | Shows the options and examples. |
+
+Give at least one of `--text`, `--from` and `--to`; together, a question must match all of them.
 
 ### `questxtract qti <quiz.json>`
 
@@ -159,6 +176,8 @@ Without `-o`, output lands next to the input, named after it:
 | `lecture.mp4` | `lecture.questions.json` | `lecture.transcript.json` |
 | `lecture.transcript.json` | `lecture.questions.json` | (needs an `.mp4` or `.mp3`) |
 
+`filter` prints to the terminal unless `-o` names a file.
+
 When vision has read the board, the keyframe images are copied into a folder next to the
 questions file and named after it (`lecture.keyframes/` for `lecture.questions.json`); the file
 refers to them by relative path, so move or share the two together. With `-o -` nothing is
@@ -220,6 +239,13 @@ command:
 questxtract transcribe lecture.mp4
 uv run python scripts/dropped_questions.py lecture.transcript.json -o lecture.questions.json
 # writes lecture.questions.json (kept) and lecture.questions.dropped.json (dropped)
+```
+
+**Find the questions about a word, said or on the board**
+
+```bash
+questxtract filter lecture.questions.json --text eigenvalue
+questxtract filter lecture.questions.json --text "transfer function" --from 5:00 --to 20:00 -o tf.json
 ```
 
 **Start over** after changing the code or when you suspect a stale result:
