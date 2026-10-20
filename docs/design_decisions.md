@@ -237,7 +237,7 @@ developers. Internally we still fail fast — no silent defaults.
 ### D10 — Quality gates are part of the architecture
 
 *Chose:* uv for builds, ruff (lint + format), mypy `--strict`, pytest with a 70 % coverage
-gate and `--import-mode=importlib`, CI on Linux/macOS/Windows × Python 3.10/3.13. Planned
+gate and `--import-mode=importlib`, CI on Linux, Python 3.10. Planned
 modules are *not* scaffolded; the owning issue creates them against the documented boundary.
 
 *Why:* with five part-time contributors the type checker and the tests are the review
@@ -406,6 +406,20 @@ fields, without a runtime dependency or a network call on every export.
 sure to run them. A user's package is not validated when it is written, so the tests must cover
 every shape the writer can produce.
 
+### D17: CI runs on Linux and Python 3.10 only
+
+*Chose:* one test job on `ubuntu-latest` with Python 3.10, the `requires-python` floor (#159).
+The `ci` gate job keeps its name, so the required status check does not change.
+
+*Alternative:* the 3 OS x Python 3.10/3.13 matrix; Linux with 3.10 and 3.13; self-hosted runners.
+
+*Why:* the matrix started 6 jobs per push, macOS and Windows minutes bill at a higher rate than
+Linux, and the team ran out of Actions credits (#158). The package is pure Python with no
+system binaries, and mypy already checks against 3.10.
+
+*Cost:* macOS, Windows and Python 3.13 support (NFR1) is claimed, not tested. `pathlib`,
+`encoding="utf-8"` and the BOM handling stay in the code to keep it likely to work.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |
@@ -421,7 +435,7 @@ every shape the writer can produce.
 | FR9 progress for long recordings | `Progress = Callable[[str, float], None]`, emitted once per stage by the runner (#14) | done for stage granularity |
 | FR10 show detection confidence | `QAPair.confidence` + `confidence_label` + `reasons` | done |
 | FR11 filter by time/topic | time: `filter_questions` / `filter_document` over `QAPair.start` / exported `start`, half-open `[start, end)` (#16). topic: experimental `topic=` on the same functions, matching `segments[].topic`; `Segment` is a *time* unit, not a topic one (architecture.md 3.2), so the label is still missing | time done, topic unbacked (experimental hook) |
-| NFR1 Python ≥ 3.10, Linux/macOS/Windows | CI matrix; no system binaries, no ffmpeg on PATH | done |
+| NFR1 Python ≥ 3.10, Linux/macOS/Windows | Linux CI on Python 3.10 (macOS, Windows untested); no system binaries, no ffmpeg on PATH | done |
 | NFR2 recall ≥ 50 % on labelled set | #11 dataset under `tests/data/`, `evaluate.py` harness (#12) | stub |
 | NFR3 docstrings, type hints, tests, ≥ 70 % coverage | ruff `D` rules, mypy strict, pytest gate | done |
 | NFR4 tested on every PR | GitHub Actions (#19) | done |

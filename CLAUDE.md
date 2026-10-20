@@ -8,8 +8,7 @@ Five-person course project; milestones, priorities and sprints live on GitHub.
 
 - Setup once: `uv sync --dev`. Run everything through `uv run`.
 - Before every commit: `scripts/ci-check.sh` (ruff with auto-fix, ruff format, mypy strict,
-  pytest with the 70% coverage gate). CI runs the same on Linux, macOS and Windows, Python 3.10
-  and 3.13.
+  pytest with the 70% coverage gate). CI runs the same on Linux, Python 3.10.
 - Inner loop: `uv run pytest tests/test_<module>.py -q`.
 - Detection quality: `uv run questxtract eval tests/data/`. `tests/test_evaluate.py` fails if
   pooled recall drops below 0.50 (NFR2).
