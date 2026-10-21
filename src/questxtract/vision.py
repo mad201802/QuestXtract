@@ -18,6 +18,7 @@ import base64
 import hashlib
 import json
 import math
+import re
 import warnings
 from collections import Counter
 from collections.abc import Iterable, Iterator, Sequence
@@ -65,6 +66,20 @@ _SPEECH_CHARS = 1500  # the speech sent with one keyframe: its own view's words,
 _GIVE_UP_AFTER = 3  # failed readings in a row, before any success, that stop the captioning
 
 _FIELDS = ("description", "text", "latex", "confidence")
+
+# The OCR reader (architecture.md 6.5): GLM-OCR's task prompt, as measured in #52 and #143.
+_OCR_PROMPT = "Text Recognition:"
+_OCR_UNMEASURED = 0.5  # confidence when the server returns no token probabilities
+# ``$$...$$`` may span lines; a single ``$...$`` stays on one line, opens before and closes
+# after a non-space, and does not close before a digit, so a price ("$5 and $10") is no formula.
+_OCR_FORMULA = re.compile(r"\$\$(.+?)\$\$|\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\d)", re.DOTALL)
+_OCR_CIRCLED = re.compile(r"\\textcircled\{([^}]*)\}")
+_OCR_COMMAND = re.compile(r"\\(?:mathrm|text|mathbf|mathit)\{([^}]*)\}|\\([A-Za-z]+)")
+# Endpoints that refused ``logprobs`` in this process: asked without it from then on.
+_NO_LOGPROBS: set[str | None] = set()
+# Formula segments that are labels, not formulas: a circled number, a number with a unit,
+# or a single symbol (a variable named in a sentence).
+_OCR_LABEL = re.compile(r"\\textcircled\{[^}]*\}|[\d.,\s]*\\mathrm\{[^}]*\}|\\[A-Za-z]+|\S")
 
 _PROMPT = """\
 You read one frame from a lecture recording: a slide, a blackboard, a whiteboard or tablet notes.
@@ -283,7 +298,8 @@ def vision(ctx: Context) -> Context:
     A no-op unless ``config.vision_enabled``, and for a source with no video track (an MP3, or
     a transcript): there is no board to read. Otherwise the recording is sampled at
     ``vision_fps`` and cut into stable views, one keyframe each; each keyframe is read by
-    ``vision_model`` together with what was said while its view was on screen, and stored in
+    ``vision_model`` together with what was said while its view was on screen (or, with
+    ``vision_reader = "ocr"``, by ``vision_ocr_model`` alone: :func:`_read_ocr`), and stored in
     the cache. A reading that fails leaves that one view out with a warning; when the first
     readings all fail, the rest are not sent. Frames are cropped to the ``layout`` stage's
     ``content_region`` and its ``kind`` goes into the prompt; one answer holds for the whole
@@ -316,7 +332,8 @@ def vision(ctx: Context) -> Context:
                 if not visual and failed >= _GIVE_UP_AFTER:
                     warnings.warn(
                         f"vision: the first {failed} keyframes could not be read, so the rest "
-                        "are not sent; check vision_model, the API key and the endpoint",
+                        "are not sent; check vision_model or vision_ocr_model, the API key and "
+                        "the endpoint",
                         UserWarning,
                         stacklevel=2,
                     )
@@ -844,6 +861,8 @@ def read_keyframe(
 
     """
     image = _data_url(png)
+    if config.vision_reader == "ocr":
+        return _read_ocr(config, image, usage)
     # As prompt v0 was measured in #52: the prompt, with its kind and speech filled in, as the
     # system message, and the image alone as the user message.
     prompt = _PROMPT.replace("{kind}", kind).replace("{speech}", speech.strip() or "-")
@@ -869,6 +888,114 @@ def read_keyframe(
         "latex": (latex or "").strip() or None,
         "confidence": min(1.0, max(0.0, float(confidence))),
     }
+
+
+def _read_ocr(config: Config, image: str, usage: Counter[str] | None) -> dict[str, Any] | None:
+    """Read one keyframe with the OCR model: its text and formulas, no description.
+
+    The image and the task prompt go in one user message, as GLM-OCR expects, with the token
+    probabilities asked for (:func:`_from_ocr`). A server that refuses them (HTTP 400) is asked
+    again without, then and for the rest of the process; its confidence is "not measured".
+    Cached, retried and tolerated exactly as the vision model's reading (:func:`read_keyframe`).
+    """
+    request: dict[str, Any] = {
+        "model": config.vision_ocr_model,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": image}},
+                    {"type": "text", "text": _OCR_PROMPT},
+                ],
+            }
+        ],
+    }
+    url = config.vision_url
+    if url not in _NO_LOGPROBS:
+        request["logprobs"] = True
+    try:
+        try:
+            answer = _ask_ocr(config, request, usage)
+        except endpoint.Refused:
+            if "logprobs" not in request:
+                raise
+            # Some servers do not take logprobs: ask without, and confidence is "not measured".
+            _NO_LOGPROBS.add(url)
+            del request["logprobs"]
+            answer = _ask_ocr(config, request, usage)
+    except (ConnectionError, endpoint.InvalidAnswer) as exc:
+        warnings.warn(f"vision: keyframe left out: {exc}", UserWarning, stacklevel=3)
+        return None
+    return {key: answer[key] for key in _FIELDS}
+
+
+def _ask_ocr(config: Config, request: dict[str, Any], usage: Counter[str] | None) -> dict[str, Any]:
+    return endpoint.ask(
+        config,
+        request,
+        name="vision",
+        valid=_readable,
+        usage=usage,
+        vision=True,
+        convert=_from_ocr,
+    )
+
+
+def _from_ocr(choice: Any) -> dict[str, Any] | None:
+    r"""Turn an OCR answer (plain text, formulas inline as ``$...$``) into the board fields.
+
+    ``latex`` holds the formula segments that are not labels (:func:`ocr_formulas`), one per
+    line. ``text`` is the words: formulas are left out, since they are in ``latex``, and labels
+    are written plainly (``\textcircled{2}`` as ``(2)``, ``1\mathrm{Hz}`` as ``1 Hz``), so
+    it reads like the vision model's ``text``. ``description`` stays empty, since an OCR model
+    does not describe. ``confidence`` is the mean probability of the answer's tokens
+    when the server returns them, else 0.5, which means "not measured". ``None`` when the
+    answer is not text.
+    """
+    content = getattr(choice.message, "content", None)
+    if not isinstance(content, str):
+        return None
+    formulas = ocr_formulas(content)
+    text = _OCR_FORMULA.sub(lambda m: _plain_label(m[1] or m[2]), content)
+    text = "\n".join(" ".join(line.split()) for line in text.splitlines())
+    return {
+        "description": "",
+        "text": text.strip(),
+        "latex": "\n".join(formulas) or None,
+        "confidence": _token_confidence(choice),
+    }
+
+
+def _plain_label(segment: str) -> str:
+    """Return a label segment as plain text, or ``""`` for a formula (it is in ``latex``)."""
+    segment = segment.strip()
+    if not _OCR_LABEL.fullmatch(segment):
+        return ""
+    segment = _OCR_CIRCLED.sub(r"(\1)", segment)
+    return _OCR_COMMAND.sub(lambda m: f" {m[1]}" if m[1] is not None else m[2], segment).strip()
+
+
+def ocr_formulas(text: str) -> list[str]:
+    r"""Return the formulas in OCR text: its ``$...$`` and ``$$...$$`` segments, labels left out.
+
+    A label is a segment that is only a circled number (``\textcircled{4}``), a number with
+    a unit (``1\mathrm{Hz}``), or a single symbol (``X``, ``\pi``).
+    """
+    formulas: list[str] = []
+    for match in _OCR_FORMULA.finditer(text):
+        formula = (match[1] or match[2]).strip()
+        if formula and not _OCR_LABEL.fullmatch(formula):
+            formulas.append(formula)
+    return formulas
+
+
+def _token_confidence(choice: Any) -> float:
+    """Mean probability of the answer's tokens, or 0.5 when the server sent none."""
+    tokens = getattr(getattr(choice, "logprobs", None), "content", None) or ()
+    values = [t.logprob for t in tokens if isinstance(getattr(t, "logprob", None), (int, float))]
+    if not values:
+        return _OCR_UNMEASURED
+    return round(min(1.0, max(0.0, sum(math.exp(v) for v in values) / len(values))), 3)
 
 
 def _readable(answer: dict[str, Any]) -> bool:

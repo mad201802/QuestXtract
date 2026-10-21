@@ -211,6 +211,29 @@ vision_model = "Qwen/Qwen3.8-27B-FP8"          # the default, on NTNU's LLM serv
 Without `vision_base_url`, vision goes where `base_url` (`--llm-url`) points when that is set,
 with the judge's key, and to NTNU's service otherwise.
 
+`--vision-reader ocr` (or `vision_reader = "ocr"`) reads the keyframes with GLM-OCR instead,
+through the same endpoint: faster and lighter, with the text and formulas but no description.
+The vision model still finds the board first, once per lecture, so the room and the app around
+it are cropped away before OCR reads the frame. GLM-OCR also runs on an 8 GB laptop through
+Ollama. Give it a small vision model for finding the board too, or every run warns that it reads
+the full frame, room included:
+
+```bash
+ollama pull glm-ocr:q8_0
+ollama pull qwen3-vl:2b-instruct
+```
+
+```toml
+vision_enabled = true
+vision_reader = "ocr"
+vision_base_url = "http://localhost:11434/v1"
+vision_ocr_model = "glm-ocr:q8_0"
+vision_model = "qwen3-vl:2b-instruct"   # finds the board; leave it out to read the full frame
+```
+
+A server that does not return token probabilities still works; its readings get confidence 0.5,
+which means "not measured".
+
 A lecture costs one model call to find the slides or board and at most 3 per minute to read
 them, at least 80 allowed, so up to 270 for a 90-minute lecture (`vision_states_per_minute`,
 `vision_min_states`), plus a resend when a call fails. A slide or page that comes back later in the

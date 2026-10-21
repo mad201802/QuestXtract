@@ -772,6 +772,7 @@ def test_without_a_vision_flag_or_setting_vision_stays_off() -> None:
 _VISION_FLAGS: dict[str, tuple[list[str], Any]] = {
     "vision_enabled": (["--vision"], True),
     "vision_model": (["--vision-model", "some-model"], "some-model"),
+    "vision_reader": (["--vision-reader", "ocr"], "ocr"),
 }
 _VISION_SETTINGS_FILE_ONLY = {
     "vision_fps",
@@ -780,6 +781,7 @@ _VISION_SETTINGS_FILE_ONLY = {
     "vision_change_fraction",
     "vision_change_hold",
     "vision_base_url",  # an endpoint is set once per machine; --llm-url still moves vision too
+    "vision_ocr_model",  # one OCR model is measured; --vision-reader picks the reader
 }
 
 
