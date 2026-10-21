@@ -407,7 +407,11 @@ def test_a_correct_answer_scores_the_maximum_and_any_other_zero(
 ) -> None:
     processing = _item(_export(tmp_path, make_quiz("q_aaa"))).find(f"{_Q}responseProcessing")
     assert processing is not None
-    assert processing.get("template") is None
+    # The standard template is named for engines that support only templates; the item's own
+    # rules below are preferred by every engine that runs them.
+    assert processing.get("template") == (
+        "http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"
+    )
     response_if = processing.find(f"{_Q}responseCondition/{_Q}responseIf")
     assert response_if is not None
     match = response_if.find(f"{_Q}match")

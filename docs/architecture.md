@@ -1367,8 +1367,8 @@ The element names below are QTI 3.0's; the QTI 2.1 bullet says how 2.1 spells th
 - **Scoring.** `SCORE` (float, default `0.0`) and `MAXSCORE` (the item's points). With points
   above zero, `SCORE` carries `normal-maximum` and `normal-minimum`. Explicit response
   processing from the Core subset: a match against the correct response sets `SCORE` to
-  `MAXSCORE`, otherwise to `0.0`. The `match_correct` template is not used, because it always
-  scores 1.
+  `MAXSCORE`, otherwise to `0.0`. Scoring never relies on the `match_correct` template, which
+  always scores 1; 2.1 only names it beside the rules, as the QTI 2.1 bullet says.
 - **Feedback.** Response processing sets the `FEEDBACK` outcome to the chosen option. Each option
   has a `qti-modal-feedback` with its own explanation, then the general one, both from
   `solution`. No response, no feedback.
@@ -1389,7 +1389,12 @@ The element names below are QTI 3.0's; the QTI 2.1 bullet says how 2.1 spells th
   `imscp_v1p1`, `schema` `QTIv2.1 Package` and `schemaversion` `1.0.0`, which the profile
   requires, and the resource types `imsqti_test_xmlv2p1` and `imsqti_item_xmlv2p1`. The profile
   has no `extension` type, so the sidecar is `webcontent`. Its `format` is `questxtract-qti-2.1`,
-  where 3.0 writes `questxtract-qti-3.0`.
+  where 3.0 writes `questxtract-qti-3.0`. `responseProcessing` also names the standard
+  `match_correct` template beside the rules: QTI 2.1 makes generalized response processing
+  optional (information model 8.1), and Blackboard skips questions whose response processing it
+  does not support. An engine that runs the item's own rules prefers them (8.2); one that
+  supports only templates scores 1 and shows no feedback per option. No 2.1 package has been
+  imported into a real LMS yet.
 - **Validation.** The tests validate every package they write against the official XSDs of its
   version: items and test against ASI 3.0.1 or 2.1.2, the manifest against that version's
   content-package XSD. They then check what an XSD cannot: the correct response and every

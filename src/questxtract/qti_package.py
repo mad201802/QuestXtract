@@ -25,10 +25,13 @@ _WRITERS: dict[str, Callable[[AssessmentTest], list[tuple[str, bytes]]]] = {
     "3.0": qti_v3.package_entries,
 }
 QTI_VERSIONS = tuple(_WRITERS)  # ("2.1", "3.0"), the choices of `questxtract qti --qti-version`
+DEFAULT_QTI_VERSION = "3.0"  # export_qti, write_qti_package and the CLI flag all default to it
 _ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)  # the earliest date a ZIP entry can carry
 
 
-def export_qti(quiz_path: str | Path, output_path: str | Path, *, version: str = "3.0") -> None:
+def export_qti(
+    quiz_path: str | Path, output_path: str | Path, *, version: str = DEFAULT_QTI_VERSION
+) -> None:
     """Read a ``quiz.json`` and write it as a QTI package of the given version.
 
     Every item becomes a single-choice item scored against its correct option, with each
@@ -38,7 +41,8 @@ def export_qti(quiz_path: str | Path, output_path: str | Path, *, version: str =
     Args:
         quiz_path: A ``quiz.json``, schema version 1.x.
         output_path: Where to write the ZIP. Its folder must exist.
-        version: The QTI version, one of :data:`QTI_VERSIONS`: ``"2.1"`` or ``"3.0"``.
+        version: The QTI version, one of :data:`QTI_VERSIONS`: ``"2.1"`` or ``"3.0"``, by
+            default :data:`DEFAULT_QTI_VERSION`.
 
     Raises:
         QtiExportError: If ``version`` is not supported (before anything is read), if the quiz
@@ -57,7 +61,7 @@ def export_qti(quiz_path: str | Path, output_path: str | Path, *, version: str =
 
 
 def write_qti_package(
-    assessment: AssessmentTest, path: str | Path, *, version: str = "3.0"
+    assessment: AssessmentTest, path: str | Path, *, version: str = DEFAULT_QTI_VERSION
 ) -> None:
     """Write an assessment test as a QTI ZIP package of the given version.
 

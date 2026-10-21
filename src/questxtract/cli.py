@@ -21,7 +21,7 @@ from .filtering import filter_document
 from .models import Context, Sentence, Stage, Transcript
 from .pipeline import STAGES, cached_transcript, run
 from .qti import QtiExportError
-from .qti_package import QTI_VERSIONS, export_qti
+from .qti_package import DEFAULT_QTI_VERSION, QTI_VERSIONS, export_qti
 from .quiz import MAX_OPTIONS, MIN_OPTIONS, STRICTNESS, build_quiz, file_hash, quiz_to_json
 from .vision import has_video
 
@@ -858,8 +858,8 @@ def build_parser() -> argparse.ArgumentParser:
     qti.add_argument(
         "--qti-version",
         choices=QTI_VERSIONS,
-        default="3.0",
-        help="QTI version of the package: 2.1 (Blackboard, Canvas) or 3.0 (default: 3.0)",
+        default=DEFAULT_QTI_VERSION,
+        help=f"QTI version of the package: 2.1 or 3.0 (default: {DEFAULT_QTI_VERSION})",
     )
     qti.set_defaults(handler=_qti)
 

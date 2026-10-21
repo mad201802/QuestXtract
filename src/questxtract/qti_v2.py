@@ -2,8 +2,9 @@
 
 The same content as :mod:`questxtract.qti_v3`, in the ASI 2.1.2 binding: elements and attributes
 are camelCase, without the ``qti-`` prefix, and there is no content body, so modal feedback and
-the rubric block hold their paragraphs directly. The manifest follows the QTI 2.1 profile of
-content packaging 1.2. :func:`package_entries` is the whole interface;
+the rubric block hold their paragraphs directly. Response processing also names the standard
+``match_correct`` template, for an engine that supports only templates. The manifest follows the
+QTI 2.1 profile of content packaging 1.2. :func:`package_entries` is the whole interface;
 :mod:`questxtract.qti_package` adds the JSON sidecar and writes the ZIP.
 """
 
@@ -19,6 +20,8 @@ CP_NS = "http://www.imsglobal.org/xsd/imscp_v1p1"
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
 _QTI_XSD = "http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1p2.xsd"  # ASI 2.1.2
 _CP_XSD = "http://www.imsglobal.org/xsd/qti/qtiv2p1/qtiv2p1_imscpv1p2_v1p0.xsd"
+# The standard template that sets SCORE to 1 for the correct response, else 0 (info model 8.1.1).
+_MATCH_CORRECT = "http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"
 # The namespaces are literal attributes on unqualified tags: ElementTree's
 # tostring(default_namespace=...) rejects unqualified attributes, and register_namespace is
 # process-global. The official 1EdTech 2.1 examples use the default namespace too.
@@ -91,9 +94,12 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
             interaction, "simpleChoice", {"identifier": option.identifier}
         ).text = option.text
 
-    # Explicit response processing, not the match_correct template: the template always
-    # scores 1, whatever the item is worth.
-    processing = ElementTree.SubElement(root, "responseProcessing")
+    # Explicit response processing, so a correct answer scores the item's points and FEEDBACK
+    # names the chosen option. It also names the match_correct template: generalized response
+    # processing is optional in QTI 2.1 (info model 8.1), and an engine that supports only the
+    # standard templates, as Blackboard may, can score with the template instead. When an item
+    # gives both, its own rules are preferred (8.2). The template scores 1 and sets no FEEDBACK.
+    processing = ElementTree.SubElement(root, "responseProcessing", {"template": _MATCH_CORRECT})
     condition = ElementTree.SubElement(processing, "responseCondition")
     response_if = ElementTree.SubElement(condition, "responseIf")
     match = ElementTree.SubElement(response_if, "match")

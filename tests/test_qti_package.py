@@ -17,7 +17,12 @@ import pytest
 
 from questxtract import qti_v2, qti_v3
 from questxtract.qti import METADATA_PATH, QtiExportError, quiz_to_qti
-from questxtract.qti_package import QTI_VERSIONS, export_qti, write_qti_package
+from questxtract.qti_package import (
+    DEFAULT_QTI_VERSION,
+    QTI_VERSIONS,
+    export_qti,
+    write_qti_package,
+)
 
 MakeQuiz = Callable[..., dict[str, Any]]
 _WRITERS: dict[str, ModuleType] = {"2.1": qti_v2, "3.0": qti_v3}
@@ -36,8 +41,9 @@ def _export(
         return {entry: package.read(entry) for entry in package.namelist()}
 
 
-def test_the_versions_are_2_1_and_3_0() -> None:
+def test_the_versions_are_2_1_and_3_0_and_3_0_is_the_default() -> None:
     assert QTI_VERSIONS == ("2.1", "3.0")
+    assert DEFAULT_QTI_VERSION == "3.0"
 
 
 @pytest.mark.parametrize("version", QTI_VERSIONS)
@@ -97,6 +103,14 @@ def test_every_entry_has_the_fixed_date_and_is_deflated(
         assert info.compress_type == zipfile.ZIP_DEFLATED
         assert info.create_system == 3
         assert info.external_attr >> 16 == 0o100644
+
+
+@pytest.mark.parametrize("version", QTI_VERSIONS)
+def test_every_xml_entry_declares_utf_8(tmp_path: Path, make_quiz: MakeQuiz, version: str) -> None:
+    package = _export(tmp_path, make_quiz("q_aaa"), version=version)
+    for name, data in package.items():
+        if name.endswith(".xml"):
+            assert data.startswith(b"<?xml version='1.0' encoding='utf-8'?>\n<"), name
 
 
 def test_an_output_in_a_missing_folder_fails_readably(tmp_path: Path, make_quiz: MakeQuiz) -> None:

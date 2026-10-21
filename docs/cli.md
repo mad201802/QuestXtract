@@ -125,15 +125,22 @@ Give at least one of `--text`, `--from` and `--to`; together, a question must ma
 ### `questxtract qti <quiz.json>`
 
 Exports a quiz file as a QTI ZIP package for an LMS: QTI 3.0 by default, or QTI 2.1 for an LMS
-that does not import 3.0, such as Blackboard or Canvas. Every item becomes a single-choice item
-scored against its correct option, with each option's explanation as feedback; the quiz's
-instructions set shuffling and whether feedback is shown. Items a reviewer marked `rejected` are
-left out. The same quiz file and version always give the same ZIP, byte for byte.
+that does not import 3.0. Every item becomes a single-choice item scored against its correct
+option, with each option's explanation as feedback; the quiz's instructions set shuffling and
+whether feedback is shown. Items a reviewer marked `rejected` are left out. The same quiz file
+and version always give the same ZIP, byte for byte.
+
+**QTI 2.1 has not been tried in a real LMS yet.** Blackboard imports QTI 2.1 only, and Canvas New
+Quizzes imports 2.x but not 3.0, but no package has been imported into either. Blackboard skips
+questions whose response processing it does not support. Each 2.1 item scores with its own rules
+and also names the standard `match_correct` template, which an LMS that supports only templates
+can use instead: there an item scores 1 and shows no feedback per option. After an import, check
+that every question arrived.
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|
 | `-o`, `--output` | a path | required | Where to write the ZIP. Its folder must exist. |
-| `--qti-version` | `2.1` or `3.0` | `3.0` | The QTI version of the package. Blackboard imports 2.1 only; Canvas imports 2.1 but not 3.0. |
+| `--qti-version` | `2.1` or `3.0` | `3.0` | The QTI version of the package: 2.1 for an LMS that does not import 3.0, with the caveat above. |
 | `-h`, `--help` | nothing | | Shows the options. |
 
 ### Everywhere
@@ -284,7 +291,7 @@ questxtract qti lecture.quiz.json -o lecture.qti.zip
 
 ```bash
 questxtract qti lecture.quiz.json -o lecture.qti.zip   # QTI 3.0, every item but the rejected ones
-questxtract qti lecture.quiz.json -o lecture.qti21.zip --qti-version 2.1   # for Blackboard, Canvas
+questxtract qti lecture.quiz.json -o lecture.qti21.zip --qti-version 2.1   # QTI 2.1, see the caveat
 ```
 
 **See which questions the threshold threw away.** This is a development tool, not a CLI
