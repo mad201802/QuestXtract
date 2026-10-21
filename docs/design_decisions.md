@@ -406,6 +406,35 @@ fields, without a runtime dependency or a network call on every export.
 sure to run them. A user's package is not validated when it is written, so the tests must cover
 every shape the writer can produce.
 
+### D17: QTI 2.1 beside 3.0, one export_qti that dispatches by version
+
+*Chose:* `questxtract qti --qti-version 2.1` writes a QTI 2.1 package (ASI 2.1.2, with the QTI
+2.1 profile of content packaging 1.2) beside the 3.0 one of D16, which stays the default (#163,
+architecture.md 12.4). Both come from the same model in `qti.py`, with the same items, explicit
+response processing, feedback and instructions. One `export_qti(..., version=...)` checks the
+version before it reads the quiz and dispatches through a table in `qti_package.py` to one writer
+module per version; the ZIP and the JSON sidecar are shared. The tests validate every 2.1 package
+against the official 2.1 XSDs, from the same pinned offline mirror as 3.0.
+
+*Alternative:* QTI 1.2, which Canvas and Brightspace import; QTI 2.2, the current 2.x; the
+`match_correct` and `map_response` response processing templates; 2.1 as the default; a separate
+`export_qti_v2` function.
+
+*Why:* few LMS import 3.0 yet. Blackboard imports QTI 2.1 packages only and Canvas New Quizzes
+imports 1.2 and 2.x, so one 2.1 package reaches both, where 1.2 would miss Blackboard. No LMS
+checked asks for 2.2, which has its own namespace. The templates set only `SCORE`, not the
+`FEEDBACK` outcome the per-option feedback needs, and `match_correct` scores 1 whatever the item
+is worth. With 3.0 as the default, `qti` without the flag writes the same bytes as before. One
+function with a version argument keeps one public name and one CLI path, and a version is one
+writer module plus one table entry.
+
+*Cost:* 2.1 is deprecated for 1EdTech certification: no new 2.1 certifications after 2023-12-31,
+and every 2.1 system certification expired on 2024-12-31. A valid package is not a proven import:
+Blackboard writes that questions using the optional QTI response processing are skipped, which
+may cover the explicit processing here, and no package has been imported into a real LMS yet. A
+second XSD tree, 37 files, joins the CI cache, and a cold cache needs www.imsglobal.org and
+www.w3.org once.
+
 ### D17: CI runs on Linux and Python 3.10 only
 
 *Chose:* one test job on `ubuntu-latest` with Python 3.10, the `requires-python` floor (#159).
