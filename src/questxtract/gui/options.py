@@ -39,6 +39,7 @@ OUTPUTS: dict[str, str] = {
     "questions": "process",
     "transcript": "transcribe",
     "quiz": "process",
+    "qti": "qti",
 }
 # Options `transcribe` takes; every other option belongs to `process`.
 TRANSCRIBE_DESTS: frozenset[str] = frozenset({"config", "output", "model", "from_scratch"})

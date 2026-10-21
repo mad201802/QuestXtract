@@ -13,16 +13,32 @@ from typing import Any
 
 from ..cli import PROCESS_INPUTS, TRANSCRIBE_INPUTS, RunResult, check_input, execute
 from ..models import Progress
+from ..quiz_schema import read_quiz
 from .options import OPTIONS, OUTPUTS, TRANSCRIBE_DESTS, Option
 
 
 def inputs_for(output: str) -> tuple[str, ...]:
-    """Return the file suffixes an output takes: a transcript output only takes recordings."""
-    return TRANSCRIBE_INPUTS if OUTPUTS[output] == "transcribe" else PROCESS_INPUTS
+    """Return the file suffixes an output takes: recordings for a transcript, a quiz.json for QTI.
+
+    A transcript output only takes recordings; the QTI output takes a quiz.json, checked by
+    name in :func:`source_problem`.
+    """
+    command = OUTPUTS[output]
+    if command == "qti":
+        return (".json",)
+    return TRANSCRIBE_INPUTS if command == "transcribe" else PROCESS_INPUTS
 
 
 def source_problem(path: Path, output: str) -> str | None:
     """Why ``path`` cannot be run for ``output``, in the CLI's own words; ``None`` if it can."""
+    if OUTPUTS[output] == "qti":
+        if not path.is_file():
+            return f"{path}: no such file"
+        try:
+            read_quiz(path)
+        except (OSError, ValueError):
+            return f"{path}: expected a quiz.json written by the Quiz output"
+        return None
     try:
         check_input(path, inputs_for(output))
     except (OSError, ValueError) as exc:
@@ -60,6 +76,10 @@ def to_argv(
             "the LLM detector needs a model name, or leave the field empty for the default"
         )
     command = OUTPUTS[output]
+    if command == "qti":
+        if output_path is None:
+            raise ValueError("the QTI output needs a file to write the package to")
+        return ["qti", str(source), "--output", str(output_path)]
     argv = [command, str(source)]
     if output_path is not None:
         argv += ["--output", str(output_path)]

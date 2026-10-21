@@ -174,3 +174,48 @@ def test_the_quiz_output_writes_questions_and_quiz_next_to_each_other(
     assert result.path == tmp_path / "lecture.quiz.json" and result.path.is_file()
     assert output.is_file()
     assert "quiz items" in result.summary
+
+
+def test_the_qti_output_exports_the_quiz_the_quiz_output_made(
+    tmp_path: Path, fake_llm: Callable[..., Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC: QTI takes a quiz.json and writes the same package the CLI's `qti` writes."""
+    import zipfile
+
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")
+    fake_llm(
+        {
+            "quiz_material": True,
+            "stem": "Which property makes a sort stable?",
+            "correct_answer": "Equal keys keep their order",
+            "correct_explanation": "That is the definition of stability.",
+            "explanation": "Stability is about the order of equal keys.",
+            "distractor_1": "It sorts in place",
+            "why_wrong_1": "In place is about memory, not order.",
+            "distractor_2": "It runs in linear time",
+            "why_wrong_2": "Speed says nothing about stability.",
+        }
+    )
+    quiz = gui.run(
+        TRANSCRIPT,
+        "quiz",
+        {"llm_url": "http://localhost:11434/v1"},
+        tmp_path / "lecture.questions.json",
+    ).path
+    package = tmp_path / "lecture.qti.zip"
+
+    result = gui.run(quiz, "qti", {}, package)
+
+    assert result.path == package and zipfile.is_zipfile(package)
+    assert any(name.startswith("items/") for name in zipfile.ZipFile(package).namelist())
+
+
+def test_the_qti_output_refuses_a_file_that_is_not_a_quiz(tmp_path: Path) -> None:
+    """AC: QTI takes a quiz.json; anything else is refused with a message naming it."""
+    assert "expected a quiz.json" in gui.source_problem(TRANSCRIPT, "qti")
+
+
+def test_the_qti_output_needs_a_file_to_write(tmp_path: Path) -> None:
+    """AC: no output file means no run: the window asks for one first."""
+    with pytest.raises(ValueError, match="needs a file"):
+        gui.to_argv(tmp_path / "quiz.json", "qti", {})

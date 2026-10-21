@@ -589,7 +589,7 @@ def execute(
     progress: Progress | None = None,
     stop: Callable[[], bool] | None = None,
 ) -> RunResult:
-    """Run ``process`` or ``transcribe`` from its command-line arguments, without printing.
+    """Run ``process``, ``transcribe`` or ``qti`` from its command-line arguments, unprinted.
 
     The graphical app (issue #124) builds the same arguments a user would type and runs them
     here, so it gets the CLI's own parsing, defaults and checks. Errors raise: ``ValueError``
@@ -614,7 +614,13 @@ def execute(
         return _process_run(args, progress, stop)
     if args.command == "transcribe":
         return _transcribe_run(args, progress, stop)
-    raise ValueError(f"the app runs process or transcribe, not {args.command}")
+    if args.command == "qti":
+        try:
+            export_qti(args.quiz, args.output)
+        except QtiExportError as exc:
+            raise ValueError(f"qti: {exc}") from None
+        return RunResult(Path(args.output), "QTI 3.0 package")
+    raise ValueError(f"the app runs process, transcribe or qti, not {args.command}")
 
 
 def _time(value: str) -> float:
