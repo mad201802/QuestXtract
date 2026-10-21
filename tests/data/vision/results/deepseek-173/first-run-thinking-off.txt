@@ -1,0 +1,115 @@
+===== vision, 30 keyframes, REASONING OFF: deepseek-ai/DeepSeek-V4.1-Flash-1017 (start 11:59:58)
+vision model deepseek-ai/DeepSeek-V4.1-Flash-1017 (prompt v0)
+lecture type   frames failed    CER  blank  formulas  found  recall
+slides              6      0   0.07      -        26     26    1.00
+blackboard          9      0   0.35    0/1        23     16    0.70
+whiteboard          6      0   0.16      -        10     10    1.00
+handwriting         9      0   0.21      -        18     15    0.83
+TOTAL              30      0   0.21    0/1        77     67    0.87
+
+per frame, worst text first (a blank board: read as blank or not):
+  NOT blank    0/0  blackboard  mit_18_100b_l1_00072.0.png
+       1.00    1/2  blackboard  mit_6_042j_2010_l1_02061.0.png
+             missed: \forall n \in \mathbb{Z}, n \ge 2 \Rightarrow n^2 \ge 4
+       0.63    1/5  blackboard  mit_6_042j_2010_l1_01001.0.png
+             missed: a = 95{,}800
+             missed: b = 217{,}519
+             missed: c = 414{,}560
+             missed: d = 422{,}481
+       0.55    6/6  blackboard  mit_18_100b_l1_01507.0.png
+       0.46    0/0  handwriting ttk4225_2026_09_14_01731.0.png
+       0.42    2/2  whiteboard  uw_machine_intelligence_l13_03420.0.png
+       0.39    2/2  handwriting ttk4225_2026_09_14_00758.0.png
+       0.38    1/2  handwriting ttk4225_2026_09_14_01265.0.png
+             missed: t \ge 0
+       0.31    3/3  handwriting math231_2020_r2_00410.0.png
+       0.25    2/3  blackboard  mit_18_100b_l1_02898.0.png
+             missed: 0 + X = X
+       0.24    1/1  whiteboard  uw_machine_intelligence_l13_03811.0.png
+       0.21    1/1  blackboard  mit_6_042j_2010_l1_01812.0.png
+       0.20    7/7  slides      mit_18_404j_l1_01365.0.png
+       0.17    4/4  handwriting math231_2020_r2_00306.0.png
+       0.14    1/1  handwriting math231_2020_r2_00180.0.png
+       0.12    7/7  whiteboard  uw_machine_intelligence_l13_02881.0.png
+       0.12    1/2  blackboard  mit_18_100b_l1_03415.0.png
+             missed: 0 < x \text{ and } 0 < y \Rightarrow 0 < xy
+       0.10    0/0  whiteboard  uw_machine_intelligence_l13_01366.0.png
+       0.08    3/3  slides      mit_18_404j_l1_02009.0.png
+       0.06    8/8  slides      mit_18_404j_l1_03284.0.png
+       0.06    0/0  whiteboard  uw_machine_intelligence_l13_00571.0.png
+       0.06    2/4  handwriting ttk4225_2026_09_14_00423.0.png
+             missed: t^{\alpha}
+             missed: \frac{1}{t^{1.1}}
+       0.05    2/2  slides      mit_18_404j_l1_01009.0.png
+       0.04    2/2  blackboard  mit_6_042j_2010_l1_01470.0.png
+       0.04    6/6  slides      mit_18_404j_l1_01785.0.png
+       0.04    0/0  whiteboard  uw_machine_intelligence_l13_04659.0.png
+       0.02    0/0  handwriting math231_2020_r2_00018.0.png
+       0.01    2/2  blackboard  mit_18_100b_l1_00746.0.png
+       0.01    2/2  handwriting ttk4225_2026_09_14_00257.0.png
+       0.00    0/0  slides      mit_18_404j_l1_00264.0.png
+===== finished 12:00:39
+===== judge, 3 lectures, REASONING OFF: deepseek-ai/DeepSeek-V4.1-Flash-1017 (start 12:00:39)
+detector llm deepseek-ai/DeepSeek-V4.1-Flash-1017 (prompt v5), threshold 0.40
+recording              content   tp   fp   fn  recall   prec     f1  ?-rate
+mit_18_100b_l1              28   27    2    1    0.96   0.93   0.95    1.00
+ttk4225_2026_09_14          41   41    8    0    1.00   0.84   0.91    1.00
+ttk4225_2026_09_15          60   59    8    1    0.98   0.88   0.93    0.98
+TOTAL                      129  127   18    2    0.98   0.88   0.93    0.99
+
+false positives by label kind: rhetorical 14, check_in 4
+
+sweep:
+  0.00  recall 0.98  precision 0.87  f1 0.92
+  0.05  recall 0.98  precision 0.88  f1 0.93
+  0.10  recall 0.98  precision 0.88  f1 0.93
+  0.15  recall 0.98  precision 0.88  f1 0.93
+  0.20  recall 0.98  precision 0.88  f1 0.93
+  0.25  recall 0.98  precision 0.88  f1 0.93
+  0.30  recall 0.98  precision 0.88  f1 0.93
+  0.35  recall 0.98  precision 0.88  f1 0.93
+  0.40  recall 0.98  precision 0.88  f1 0.93
+  0.45  recall 0.98  precision 0.88  f1 0.93
+  0.50  recall 0.98  precision 0.88  f1 0.93
+  0.55  recall 0.98  precision 0.88  f1 0.93
+  0.60  recall 0.98  precision 0.88  f1 0.93
+  0.65  recall 0.98  precision 0.88  f1 0.93
+  0.70  recall 0.98  precision 0.88  f1 0.93
+  0.75  recall 0.96  precision 0.88  f1 0.92
+  0.80  recall 0.93  precision 0.89  f1 0.91
+  0.85  recall 0.88  precision 0.89  f1 0.88
+  0.90  recall 0.78  precision 0.90  f1 0.84
+  0.95  recall 0.38  precision 0.96  f1 0.54
+  1.00  recall 0.01  precision 1.00  f1 0.01
+
+mit_18_100b_l1: missed content questions
+     468.6  But now the question is then, how do we make this into survival?
+mit_18_100b_l1: false positives
+    2874.7  rhetorical 0.90  And so I'm adding O2 to O1, right?
+    2935.5  rhetorical 0.90  So the rational numbers are a field, right?
+
+ttk4225_2026_09_14: missed content questions
+ttk4225_2026_09_14: false positives
+       0.9  rhetorical 0.90  Does H convolved with U give the fourth response?
+      12.7  rhetorical 0.85  Is bounded input bounded output stability an important property?
+     602.8  check_in   0.90  Okay, so there's no linearity?
+     605.4  check_in   0.90  Okay, so if it is autonomous, we cannot do it?
+     649.2  rhetorical 0.75  What is the definition of convolution?
+     837.1  rhetorical 0.65  Doesn't it go like this?
+    1287.3  check_in   0.85  What would you say, people?
+    1412.3  rhetorical 0.85  Didn't we say that this area goes to infinity if I go to infinity?
+
+ttk4225_2026_09_15: missed content questions
+     336.6  Can this one be...
+ttk4225_2026_09_15: false positives
+      41.6  rhetorical 0.90  What do we mean by representing signals?
+     917.5  rhetorical 0.90  What am I drawing here?
+     969.2  rhetorical 0.75  Isn't this real part, imaginary part, time?
+    1034.1  rhetorical 0.95  How do I visualize it?
+    1123.2  rhetorical 0.90  What am I doing?
+    1286.2  rhetorical 0.90  Why is it important?
+    1506.0  rhetorical 0.95  What does it mean?
+    1742.6  check_in   0.80  Is it one, two, three, or four?
+
+skipped (no transcript): tests/data/_example.labels.jsonl
+===== finished 12:02:13
