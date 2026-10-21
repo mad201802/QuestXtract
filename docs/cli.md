@@ -266,6 +266,16 @@ almost instantly. It works the other way round too.
 questxtract process lecture.transcript.json -o -
 ```
 
+**Everything in one run: the board, the LLM detector and a quiz.** Vision reads the board on
+NTNU's service with `QUESTXTRACT_VISION_API_KEY`; the judge and the quiz go to OpenAI with
+`OPENAI_API_KEY`. It writes `lecture.questions.json`, the keyframes in `lecture.keyframes/` and
+`lecture.quiz.json`; `qti` then packs the quiz for an LMS.
+
+```bash
+questxtract process lecture.mp4 --vision --detector llm --quiz
+questxtract qti lecture.quiz.json -o lecture.qti.zip
+```
+
 **Export for an LMS (QTI 3.0)**
 
 ```bash

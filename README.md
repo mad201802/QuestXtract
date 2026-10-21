@@ -221,6 +221,18 @@ view out with a warning, and the run goes on. Example output:
 count the whole lecture. How it works:
 [architecture.md 6](docs/architecture.md#6-vision).
 
+### Everything in one run
+
+Reading the board, the LLM detector and the quiz run together in one command. Vision goes to
+NTNU's service with `QUESTXTRACT_VISION_API_KEY`, the judge and the quiz to OpenAI with
+`OPENAI_API_KEY`, and every key is checked before anything slow starts:
+
+```bash
+questxtract process lecture.mp4 --vision --detector llm --quiz
+# -> lecture.questions.json, lecture.keyframes/ and lecture.quiz.json
+questxtract qti lecture.quiz.json -o lecture.qti.zip   # the quiz as a QTI 3.0 package for an LMS
+```
+
 ### Output
 
 `questions.json` lists every question with its text, `start`/`end` in seconds, `confidence`, the
