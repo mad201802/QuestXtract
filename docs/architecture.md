@@ -1101,8 +1101,8 @@ these defaults. `--config PATH` selects the only file to read; otherwise `questx
 the working directory is read if present. `load_config` checks keys against the dataclass fields
 and values against their annotations. The CLI validates the resulting choices and ranges before
 running stages or writing output. Relative paths remain relative to the working directory.
-`Config.api_key` reads `OPENAI_API_KEY` from the environment first, then from that directory's
-UTF-8 `.env` file. It never stores the key in the dataclass or expands shell expressions.
+`Config.api_key` and `Config.vision_api_key` read the key for their endpoint (10.1) from the
+environment first, then from that directory's UTF-8 `.env` file. It never stores the key in the dataclass or expands shell expressions.
 Secret-like TOML keys are rejected. Library callers can use `load_config` from `config.py`
 explicitly; constructing `Config()` alone does not read TOML.
 

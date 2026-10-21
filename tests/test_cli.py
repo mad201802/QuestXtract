@@ -719,14 +719,14 @@ def test_vision_reads_the_board_with_the_model_given(
     client = fake_llm(_BOARD)
     video = make_mp4(tmp_path / "lecture.mp4", video=True)
 
-    assert main(["process", str(video), "--vision", "--vision-model", "qwen3.8-27b"]) == 0
+    assert main(["process", str(video), "--vision", "--vision-model", "Qwen/Qwen3.8-27B"]) == 0
 
     assert "Reading the board" in capsys.readouterr().err
     data = json.loads((tmp_path / "lecture.questions.json").read_text(encoding="utf-8"))
     assert [v["text"] for v in data["visuals"]] == ["Stable sort"]
     assert data["questions"] and all(q["visual_ids"] for q in data["questions"])
-    assert data["config"]["vision_model"] == "qwen3.8-27b"
-    assert {request["model"] for request in client.requests} == {"qwen3.8-27b"}
+    assert data["config"]["vision_model"] == "Qwen/Qwen3.8-27B"
+    assert {request["model"] for request in client.requests} == {"Qwen/Qwen3.8-27B"}
 
 
 def test_no_vision_turns_off_vision_from_the_settings_file(
@@ -1109,3 +1109,33 @@ def test_one_run_reads_the_board_finds_the_questions_and_writes_the_quiz(
     assert models.routes == {(NTNU_LLM_URL, "ntnu-test")}
     assert {(r["model"], r["reasoning_effort"]) for _, r in models.requests} == {(DEEPSEEK, "none")}
     assert "2 quiz items" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("flags", "model_flag"),
+    [
+        (["--detector", "llm", "--llm-model", "gpt-4o"], "--llm-model"),
+        (["--vision"], "--vision-model"),
+    ],
+)
+def test_an_openai_model_on_ntnus_service_fails_before_transcription(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    flags: list[str],
+    model_flag: str,
+) -> None:
+    """#173 review: an OpenAI model name from an older setup is refused before anything slow,
+    and the hint names the flag that sets the model."""
+    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "ntnu-test")  # the old name still found
+    if "--vision" in flags:
+        Path("questxtract.toml").write_text('vision_model = "gpt-4o"\n', encoding="utf-8")
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+
+    assert main(["process", str(video), *flags]) == 1
+
+    err = capsys.readouterr().err
+    assert "gpt-4o is not a model on NTNU's LLM service" in err and fake_asr == []
+    assert f"--llm-url https://api.openai.com/v1 {model_flag} gpt-4o" in err

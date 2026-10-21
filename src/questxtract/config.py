@@ -14,6 +14,7 @@ import sys
 from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any, get_args, get_type_hints
+from urllib.parse import urlsplit
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -126,8 +127,16 @@ class Config:
 
     @property
     def vision_api_key(self) -> str | None:
-        """The key for :attr:`vision_url`, never stored in Config."""
-        return endpoint_key(self.vision_url)
+        """The key for :attr:`vision_url`, never stored in Config.
+
+        A ``vision_base_url`` of its own that is neither NTNU's service nor OpenAI (another
+        hosted vision model) reads ``QUESTXTRACT_VISION_API_KEY``, so the OpenAI key is never
+        sent to a host set up for vision alone.
+        """
+        url = self.vision_url
+        if self.vision_base_url is not None and not is_ntnu(url) and not is_openai(url):
+            return _read_key((VISION_KEY_ENV,))
+        return endpoint_key(url)
 
     def replace(self, **changes: Any) -> Config:
         """Return a copy with ``changes`` applied.
@@ -215,14 +224,30 @@ def load_config(path: Path | None = None) -> Config:
     return defaults.replace(**values)
 
 
+def _endpoint(url: str) -> tuple[str, str]:
+    """Return the host (lower case, default port dropped) and path (no trailing slash) of ``url``.
+
+    The scheme does not count: a key belongs to the service, however its URL is written.
+    """
+    parts = urlsplit(url.strip())
+    host = (parts.hostname or "").lower()
+    try:
+        port = parts.port
+    except ValueError:  # not a number: not a service we know
+        port = -1
+    if port not in (None, 80, 443):
+        host = f"{host}:{port}"
+    return host, parts.path.rstrip("/")
+
+
 def is_ntnu(url: str | None) -> bool:
     """Whether ``url`` is NTNU's LLM service."""
-    return url is not None and url.rstrip("/") == NTNU_LLM_URL
+    return url is not None and _endpoint(url) == _endpoint(NTNU_LLM_URL)
 
 
 def is_openai(url: str | None) -> bool:
     """Whether ``url`` is OpenAI: ``None`` (the SDK's own default) or :data:`OPENAI_URL`."""
-    return url is None or url.rstrip("/") == OPENAI_URL
+    return url is None or _endpoint(url) == _endpoint(OPENAI_URL)
 
 
 def endpoint_key(url: str | None) -> str | None:
@@ -233,7 +258,11 @@ def endpoint_key(url: str | None) -> str | None:
     goes anywhere else. Every other endpoint (OpenAI, OpenRouter, a local server) reads
     ``OPENAI_API_KEY``, which a local server may leave unset.
     """
-    names = (NTNU_KEY_ENV, VISION_KEY_ENV) if is_ntnu(url) else (OPENAI_KEY_ENV,)
+    return _read_key((NTNU_KEY_ENV, VISION_KEY_ENV) if is_ntnu(url) else (OPENAI_KEY_ENV,))
+
+
+def _read_key(names: tuple[str, ...]) -> str | None:
+    """Return the first of ``names`` set in the environment, else the first set in ``.env``."""
     for name in names:
         if name in os.environ:
             return os.environ[name]

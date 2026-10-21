@@ -88,7 +88,7 @@ not used.
 | `--options` | a number, 3 to 5 | `3` | Options per item, one of them correct. |
 | `--transcript` | a path | the cached transcript | The lecture's transcript, for what was said around each question. |
 | `--quiz-model` | a model name | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | The model that writes the quiz (`quiz_model`). |
-| `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint, as for `process`. |
+| `--llm-url` | a URL | NTNU's LLM service | An OpenAI-compatible endpoint, as for `process`. |
 | `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | As for `process`. |
 | `--config` | a path | `questxtract.toml` | The settings file. `quiz_model`, `quiz_strictness` and `quiz_options` can be set there. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |

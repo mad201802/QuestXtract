@@ -232,7 +232,8 @@ def test_vision_follows_base_url_unless_it_has_its_own(monkeypatch):
     own = Config(base_url="http://localhost:11434/v1", vision_base_url="http://vlm/v1")
 
     assert (local.vision_url, local.vision_api_key) == ("http://localhost:11434/v1", "sk-local")
-    assert (own.vision_url, own.vision_api_key) == ("http://vlm/v1", "sk-local")
+    # a host of its own for vision keeps its own key: the OpenAI key never goes there (#173)
+    assert (own.vision_url, own.vision_api_key) == ("http://vlm/v1", "vision-key")
 
 
 def test_the_old_reasoning_name_in_the_settings_file_still_applies(tmp_path, monkeypatch):
@@ -246,3 +247,15 @@ def test_the_old_reasoning_name_in_the_settings_file_still_applies(tmp_path, mon
     )
     with pytest.raises(ValueError, match="set reasoning_effort only"):
         load_config()
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["https://LLM.hpc.ntnu.no/v1", "https://llm.hpc.ntnu.no:443/v1/", "http://llm.hpc.ntnu.no/v1"],
+)
+def test_any_spelling_of_ntnus_url_gets_the_ntnu_key(monkeypatch, url):
+    """#173 review: the key goes with the service, however its URL is written."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+    assert Config(base_url=url).api_key == "ntnu-key"
+    assert Config(base_url="https://api.openai.com/v1").api_key == "sk-openai"

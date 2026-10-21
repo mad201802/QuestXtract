@@ -265,7 +265,7 @@ def _with_quiz(config: Config, what: str) -> None:
         raise ValueError(
             f"quiz_options / --options must be between {MIN_OPTIONS} and {MAX_OPTIONS}"
         )
-    _check_endpoint(config, what)
+    _check_endpoint(config, what, model_flag="--quiz-model")
 
 
 def _with_llm(config: Config) -> Config:
@@ -284,28 +284,47 @@ def _with_llm(config: Config) -> Config:
             timeout_seconds=max(config.timeout_seconds, _THINKING_TIMEOUT_SECONDS)
         )
     if config.detector == "llm":
-        _check_endpoint(config, "--detector llm")
+        _check_endpoint(config, "--detector llm", model_flag="--llm-model")
     return config
 
 
-def _check_endpoint(config: Config, what: str, *, vision: bool = False) -> None:
-    """Raise ``ValueError`` if ``what`` cannot reach its model: no extra, or no key for it.
+_MODEL_FLAGS = {
+    "--llm-model": "judge_model",
+    "--quiz-model": "quiz_model",
+    "--vision-model": "vision_model",
+}
 
-    The key goes with the endpoint (:func:`config.key_env`): NTNU's LLM service, the default,
-    needs ``QUESTXTRACT_NTNU_API_KEY``; OpenAI needs ``OPENAI_API_KEY``. Any other endpoint may
-    be a local server without a key.
+
+def _check_endpoint(config: Config, what: str, *, model_flag: str, vision: bool = False) -> None:
+    """Raise ``ValueError`` if ``what`` cannot reach its model: no extra, no key, wrong service.
+
+    The key goes with the endpoint (:func:`config.endpoint_key`): NTNU's LLM service, the
+    default, needs ``QUESTXTRACT_NTNU_API_KEY``; OpenAI needs ``OPENAI_API_KEY``. Any other
+    endpoint may be a local server without a key. Every model on NTNU's service is named
+    ``organisation/model``, so a name without a ``/`` there (``gpt-4o`` from an OpenAI setup)
+    is refused here rather than by the service after transcription. ``model_flag`` names the
+    flag that sets the model ``what`` asks, for the OpenAI hint.
     """
     if importlib.util.find_spec("openai") is None:
         raise ValueError(f"{what} needs the LLM extra: pip install 'questxtract[llm]'")
     url = config.vision_url if vision else config.base_url
+    openai_hint = (
+        f"for OpenAI instead, pass --llm-url {OPENAI_URL} {model_flag} gpt-4o "
+        f"--llm-reasoning server, with {OPENAI_KEY_ENV}"
+    )
+    model = getattr(config, _MODEL_FLAGS[model_flag])
+    if is_ntnu(url) and "/" not in model:
+        raise ValueError(
+            f"{what}: {model} is not a model on NTNU's LLM service ({NTNU_LLM_URL}), the default "
+            f"endpoint; {openai_hint}"
+        )
     if (is_ntnu(url) or is_openai(url)) and not (
         config.vision_api_key if vision else config.api_key
     ):
         if is_ntnu(url):
             raise ValueError(
                 f"{what} goes to NTNU's LLM service ({NTNU_LLM_URL}, NTNU network or VPN), so "
-                f"it needs {NTNU_KEY_ENV} in the environment or .env; for OpenAI instead, pass "
-                f"--llm-url {OPENAI_URL} with {OPENAI_KEY_ENV} and --llm-reasoning server"
+                f"it needs {NTNU_KEY_ENV} in the environment or .env; {openai_hint}"
             )
         raise ValueError(
             f"{what} goes to OpenAI, so it needs {OPENAI_KEY_ENV} in the environment or .env, "
@@ -420,7 +439,7 @@ def _with_vision(config: Config, source: Path) -> Config:
     if not has_video(source):
         print(f"note: {source.name} has no video, so the board is not read", file=sys.stderr)
         return config.replace(vision_enabled=False)
-    _check_endpoint(config, "--vision / vision_enabled", vision=True)
+    _check_endpoint(config, "--vision / vision_enabled", model_flag="--vision-model", vision=True)
     return config
 
 
@@ -538,7 +557,7 @@ def _eval(args: argparse.Namespace) -> int:
     try:
         config = _with_llm(_config(args))
         if args.score_vision:
-            _check_endpoint(config, "eval --score-vision", vision=True)
+            _check_endpoint(config, "eval --score-vision", model_flag="--vision-model", vision=True)
             report = evaluate_vision(args.paths, config)
         else:
             report = evaluate(args.paths, config, board=args.board)
