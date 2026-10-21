@@ -12,12 +12,13 @@ from questxtract.pipeline import cached_transcript, stage_info
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "questxtract"
 
-# architecture.md 1.3, rows 1 to 9, plus the vision/attach_visual split noted in 11.1 rule 4.
+# architecture.md 1.3, rows 1 to 9, with vision split into layout, vision and attach_visual (11.1).
 DOC_ORDER = [
     "ingest",
     "transcribe",
     "sentences",
     "segments",
+    "layout",
     "vision",
     "attach_visual",
     "detect",
@@ -102,8 +103,8 @@ def test_run_accepts_a_custom_stage_list(context):
 
 def test_progress_fires_once_per_stage(context):
     seen: list[str] = []
-    run(context, STAGES[2:5], progress=lambda name, _: seen.append(name))
-    assert seen == ["sentences", "segments", "vision", "done"]
+    run(context, STAGES[2:6], progress=lambda name, _: seen.append(name))
+    assert seen == ["sentences", "segments", "layout", "vision", "done"]
 
 
 def test_a_stage_needing_missing_input_fails_on_the_spot(context):

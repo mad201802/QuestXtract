@@ -30,12 +30,14 @@ turns them into study material. It **extracts** questions, it never invents them
 |---|---|
 | 🎥 **Video or audio in** | `.mp4` or `.mp3` recordings, audio track extracted automatically (no system ffmpeg) |
 | 🗣️ **Transcription** | Speech-to-text with faster-whisper, or any ASR engine behind a small interface |
-| 🖼️ **Board and slides** | Optional: a vision model reads each slide or board view into text, LaTeX and a description, linked to the questions asked while it was on screen |
+| 🖼️ **Board and slides** | Optional: a vision model finds the slides or board in the frame, whatever the recording style, then reads each view into text, LaTeX and a description, linked to the questions asked while it was on screen |
 | ❓ **Question detection** | Fast offline rules, or an LLM you pick (local in Ollama, or hosted) that reads the transcript; a confidence score and the reasons for every question |
 | ⏱️ **Timestamps** | Every question carries its position in the recording |
+| 🔎 **Search** | Find the questions by words said or written on the board while they were asked, and by time |
 | ✏️ **Human in the loop** | A `review` block per question for teacher edits, never overwritten by the pipeline |
 | 📦 **JSON export** | `questions.json` with a fixed key set and a formal JSON Schema |
 | 🧩 **Quizzes** | Multiple-choice items from the questions asked, with explanations; every generated text is marked and starts as pending review |
+| 🎓 **LMS export** | `questxtract qti` writes a `quiz.json` as a QTI 3.0 package an LMS can import |
 
 What is built today:
 [architecture.md 13.3](docs/architecture.md#133-status).
@@ -63,6 +65,7 @@ questxtract process lecture.mp4                # video -> lecture.questions.json
 questxtract transcribe lecture.mp4             # transcription only -> lecture.transcript.json
 questxtract process lecture.transcript.json    # questions from an existing transcript
 questxtract quiz lecture.questions.json        # multiple-choice quiz -> lecture.quiz.json
+questxtract filter lecture.questions.json --text eigenvalue   # the questions about a word
 ```
 
 The input decides how much runs: an `.mp4` or `.mp3` goes through every stage (an audio-only
@@ -112,7 +115,9 @@ To measure the detector against the labelled reference recordings in `tests/data
 ```bash
 questxtract eval tests/data/          # table, sweep, missed questions and false positives
 questxtract eval tests/data/ --json   # the same report, machine-readable
+questxtract eval tests/data/ --board  # with the board states committed beside the transcripts
 questxtract eval tests/data/ --detector llm --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
+questxtract eval --score-vision tests/data/vision/   # how well vision_model reads slides and boards
 ```
 
 #### Setting up the API key
@@ -183,7 +188,15 @@ If a key leaks, tell its owner at once so it can be revoked.
 A vision model can also read the slides or the board. Each stable view of the recording becomes a
 board state: its text, its formulas as LaTeX, a short description and a confidence, linked to the
 questions asked while it was on screen. It needs the `llm` extra and a model that takes images.
-There are no CLI flags for it yet (#61); switch it on in `questxtract.toml`:
+Switch it on for one run with `--vision`:
+
+```bash
+questxtract process lecture.mp4 --vision        # gpt-5.6-luna on OpenAI, key from OPENAI_API_KEY
+questxtract process lecture.mp4 --vision --llm-url http://localhost:11434/v1 \
+    --vision-model qwen3-vl:2b-instruct         # a local model in Ollama
+```
+
+or for every run in `questxtract.toml` (`--no-vision` turns it off again for one run):
 
 ```toml
 vision_enabled = true
@@ -191,18 +204,23 @@ vision_model = "gpt-5.6-luna"              # the default, on OpenAI with OPENAI_
 # base_url = "http://localhost:11434/v1"   # or any OpenAI-compatible server, such as Ollama
 ```
 
-A lecture costs at most `vision_max_states` (80) model calls. Readings and keyframe images are
-cached, so running it again sends nothing. A reading that fails leaves its view out with a
-warning, and the run goes on. Example output: [docs/demo/](docs/demo/mit_18_100b_l1.questions.json),
-four questions from MIT 18.100B Lecture 1 (MIT OpenCourseWare, CC BY-NC-SA) with the boards they
-were asked about; `stats` there still count the whole lecture. How it works:
+A lecture costs one model call to find the slides or board and at most `vision_max_states` (80)
+to read them, plus a resend when a call fails. A slide or page that comes back later in the
+lecture with nothing changed is not read again: its earlier reading is copied. Readings and
+keyframe images are cached, so running it again sends nothing. A reading that fails leaves its
+view out with a warning, and the run goes on. Example output:
+[docs/demo/](docs/demo/mit_18_100b_l1.questions.json), four questions from MIT 18.100B Lecture 1
+(MIT OpenCourseWare, CC BY-NC-SA) with the boards they were asked about; `stats` there still
+count the whole lecture. How it works:
 [architecture.md 6](docs/architecture.md#6-vision).
 
 ### Output
 
 `questions.json` lists every question with its text, `start`/`end` in seconds, `confidence`, the
 `answer` where one was found, the `reasons` (rules) that fired, and a `review` block for teacher
-edits. Segments and board states are listed once and referenced by id. Every key is always
+edits. Its `config` block records how it was made (the detector, and with `--detector llm` the
+model, prompt version and reasoning level), so two saved runs can be told apart. Segments and
+board states are listed once and referenced by id. Every key is always
 present, `null` included. Example and field reference:
 [architecture.md 12.1](docs/architecture.md#121-questionsjson); formal schema:
 [questions.schema.json](src/questxtract/questions.schema.json).
@@ -235,7 +253,7 @@ The pipeline is a list of `Context -> Context` functions. Passing your own `stag
 whole plugin system: swap the detector, drop a stage, add an enrichment step:
 
 ```python
-run(ctx, [*STAGES[2:6], my_detector, *STAGES[7:]])
+run(ctx, [my_detector if s.__name__ == "detect" else s for s in STAGES[2:]])
 ```
 
 ### Filtering questions
@@ -251,12 +269,31 @@ window = filter_questions(ctx, start=300, end=600)  # new Context, ctx untouched
 
 data = read_questions("lecture.questions.json")
 window = filter_document(data, start=300, end=600)  # new dict, same schema
+board = filter_document(data, text="eigenvalue")  # said, or on the board on screen
 ```
 
 A question is kept when `start <= question.start < end`, in seconds; leave out either bound to
 open that side. Only the question list shrinks, so `segment_id` and `visual_ids` still resolve.
-An invalid range raises `ValueError`. `topic=` is **experimental**: no stage produces topics yet,
+An invalid range raises `ValueError`. `text=` keeps a question when every word of it appears, as
+a whole word and ignoring case, in the question, its answer, its `review` text, or a board state
+in its `visual_ids`; `questxtract filter` does the same from the command line
+([docs/cli.md](docs/cli.md)). `topic=` is **experimental**: no stage produces topics yet,
 so it warns and matches nothing.
+
+### Reading a quiz.json
+
+`read_quiz` reads a `quiz.json` ([schema](src/questxtract/quiz.schema.json)) and checks the rules
+its schema cannot express; `validate_quiz` does the same for a document already in memory. Pass
+the source `questions.json` to also check that each item's question exists and that a stem
+marked `spoken` is the question as it was said:
+
+```python
+from questxtract import read_questions, read_quiz
+
+quiz = read_quiz("lecture.quiz.json", read_questions("lecture.questions.json"))
+```
+
+Every problem is listed in one `SchemaError`, one line each, with its path.
 
 ### Swapping the ASR engine
 
@@ -294,11 +331,15 @@ scripts/ci-check.sh        # what CI runs: ruff (auto-fix), ruff format, mypy --
 uv run pytest tests/test_detect.py -q   # the inner loop
 ```
 
+`ci-check.sh` first downloads, once, the QTI 3.0 XSDs the tests validate packages against
+(`scripts/fetch_qti_xsd.py`, into `.cache/qti-xsd/`). Offline, it skips those tests with a
+warning; CI always runs them.
+
 How the pipeline works and where each stage lives: [docs/architecture.md](docs/architecture.md).
 Why it looks that way: [docs/design_decisions.md](docs/design_decisions.md). Conventions for
 people and coding agents: [CLAUDE.md](CLAUDE.md).
 
-CI runs on Linux, macOS and Windows against Python 3.10 and 3.13 for every pull request; green CI
+CI runs on Linux against Python 3.10 for every pull request; green CI
 is required before merging into `main`.
 
 ## Releasing

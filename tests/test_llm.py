@@ -360,3 +360,29 @@ def test_the_form_of_a_question_ignores_case_and_punctuation():
     assert Counter(map(llm._form, ["Right?", "right.", "Right, right?"])) == Counter(
         {"right": 2, "right right": 1}
     )
+
+
+def test_stats_record_the_requests_tokens_and_time_of_the_calls(
+    context, sentences, fake_llm, tmp_path
+):
+    """#123 AC: what the calls cost lands in stats; a cached re-run reads as no calls."""
+    client = fake_llm({sentences[1].id: _judged()})
+    client.usage = SimpleNamespace(prompt_tokens=1200, completion_tokens=80)
+    ctx = _run(context, tmp_path)
+    assert ctx.stats["judge_requests"] == 1
+    assert (ctx.stats["judge_input_tokens"], ctx.stats["judge_output_tokens"]) == (1200, 80)
+    assert ctx.stats["judge_ms"] >= 0
+    validator = Draft202012Validator(json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
+    validator.validate(result_to_dict(ctx))  # stats keys are integers: no schema change
+
+    again = _run(context, tmp_path)  # served from the cache
+    cost = ("judge_requests", "judge_input_tokens", "judge_output_tokens", "judge_ms")
+    assert [again.stats[k] for k in cost] == [0, 0, 0, 0]
+
+
+def test_a_server_without_usage_still_counts_the_request(context, sentences, fake_llm, tmp_path):
+    """#123 AC: no usage field, the run goes on and the token keys stay 0."""
+    fake_llm({sentences[1].id: _judged()})  # FakeLLM sends no usage by default
+    ctx = _run(context, tmp_path)
+    assert ctx.stats["judge_requests"] == 1
+    assert ctx.stats["judge_input_tokens"] == ctx.stats["judge_output_tokens"] == 0

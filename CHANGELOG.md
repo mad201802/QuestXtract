@@ -11,9 +11,55 @@
   starts as pending review. The model sees the question, the lecture's answer, what was said
   around it (from `--transcript` or the cached transcript) and, with vision, the board text and
   LaTeX. Questions the lecture did not answer are used too, with an answer the model writes;
-  `--strictness strict` uses only the answered ones. Rejected questions, check-ins and questions the model
+  `--strictness strict` uses only the
+  answered ones. Rejected questions, check-ins and questions the model
   judges not to be quiz material are left out, a question the model fails on is skipped with a
   warning, and answers are cached. Settings: `quiz_model`, `quiz_strictness`, `quiz_options`. (#79)
+- `eval --score-vision`: scores `vision_model` (or `--vision-model`) on 30 labelled keyframes in
+  `tests/data/vision/`, from six lectures over four lecture types (slides, blackboard,
+  whiteboard, handwriting), each recording one whose licence or lecturer allows sharing. It
+  reports the character error rate of the text, blank boards read as blank, and the share of
+  formulas read, per lecture type and per frame. Answers are cached, so a second run makes no
+  calls. (#58)
+- `questxtract filter lecture.questions.json --text WORDS --from TIME --to TIME` keeps the
+  questions where every word appears, said or written on the board on screen while they were
+  asked, and that fall in the time range, without running the pipeline again. Times are seconds,
+  `M:SS` or `H:MM:SS`. It prints the result, or writes it with `-o`. `filter_questions` and
+  `filter_document` take the same `text=`. (#136)
+- Detection can read the board: with vision on and `board_overlap_delta` set, a question that
+  shares a word with the text of the board on screen while it was asked gets that boost, the
+  reason `board_overlap`, and `source: "combined"` in `questions.json`. Off by default (0.0): at
+  0.10 it changed nothing on the labelled recordings. `eval --board` scores them with the board
+  states committed beside their transcripts. (#60)
+- Vision reads a slide or page that comes back only once per run. On slides, handwriting and
+  screencasts, a keyframe that shows the same content as one read earlier in the run copies that
+  reading instead of asking the model again; it stays a board state of its own, with its own
+  times, and is counted in `stats.vision_reused`. A page whose changes exceed the limits of that
+  comparison, such as new ink, a new decimal point or a moved pen cursor, is read again; a very
+  faint mark can go unnoticed. Blackboards, whiteboards and frames the layout probe could not name
+  are always read. (#138)
+- Vision finds the slides or board first: three frames from across the recording go to
+  `vision_model` in one request, which answers where the content is and what kind it is
+  (`slides`, `blackboard`, `whiteboard`, `handwriting`, `screencast` or `unknown`). Frames are
+  cropped to that region, so the lecturer's camera or a screenshare frame no longer starts new
+  board states, and the kind goes into the captioning prompt. One answer holds for the whole
+  recording. When the probe fails, vision reads the full frame as before, with a warning. (#57)
+- `process --vision` / `--no-vision` and `--vision-model` switch reading the board on or off and
+  pick its model for one run, over `questxtract.toml`; `--llm-url` now also serves vision. With
+  vision on, a recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript gets a
+  note that the board is not read, and runs without vision. (#61)
+- `quiz.json` schema 1.0 (`quiz.schema.json`, shipped in the package), the format the `quiz`
+  command writes and the QTI and Exerplaza exporters read: single-choice items with at
+  least three options, every text marked `spoken` or `generated`, a solution with one explanation
+  per option, the source question's id and times, and a teacher `review` block. `read_quiz` and
+  `validate_quiz` check a file against the rules the schema cannot express and list every
+  problem with its path. (#146)
+- `questxtract qti quiz.json -o quiz.qti.zip` (and `export_qti()`) writes a `quiz.json` as a
+  QTI 3.0 package an LMS can import: one single-choice item per quiz item, worth its points and
+  scored against its correct option, with each option's explanation as feedback. The quiz's
+  instructions set shuffling, whether feedback is shown and the instructions text. Items a
+  reviewer marked `rejected` are left out. The same quiz gives the same ZIP, byte for byte, and
+  every package the tests write is validated against the official 1EdTech XSDs. (#67)
 - Vision: with `vision_enabled = true` (in `questxtract.toml`) and a recording with a video
   track, the slides or board are read. Each stable view's keyframe goes to `vision_model`,
   together with what was said while it was on screen, and comes back as a board state in
@@ -23,6 +69,11 @@
   out with a warning and is counted in `stats.vision_failed`; when the first three fail, the rest
   are not sent. Needs the `llm` extra and an API key, or `base_url` for a local server, checked
   before transcription starts. (#59)
+- `questions.json`'s `stats` records what the model calls cost, per caller: `judge_*` with
+  `--detector llm`, `layout_*` and `vision_*` with vision on. Each has `_requests`,
+  `_input_tokens`, `_output_tokens` and `_ms`, all 0 when the answers came from the cache.
+  Multiply by your provider's prices for the cost of a lecture. Not a schema change: `stats`
+  takes any integer key. (#123)
 - `process` and `transcribe` accept `.mp3` recordings as well as `.mp4`. A recording without a
   video track, an MP3 or an audio-only MP4, is transcribed as usual and has no board to read.
   (#117)
@@ -43,6 +94,11 @@
 - `--llm-reasoning` lets a thinking model think before it judges (`low`, `medium`, `high`); small
   models such as Qwen3.5 9B need it. `server` sends no setting, for a model without one such as
   gpt-4o-mini. Any level but `none` allows each request 10 minutes. (#89, #97)
+
+- `questions.json` schema 2.2: `config` records how the file was made, so two saved runs can be
+  told apart: `detector` (`rules` or `llm`), `judge_prompt_version` (e.g. `v5`) and
+  `judge_reasoning_effort` (the `--llm-reasoning` level, `""` for `server`). The last two are
+  `null` with the rules detector. Files from schema 2.0 and 2.1 still read. (#114)
 
 ### Changed
 

@@ -1,31 +1,39 @@
 import base64
+import dataclasses
 import inspect
 from pathlib import Path
+from types import SimpleNamespace
 
 import av
 import numpy as np
 import openai
 import pytest
 
-from questxtract import Config, Context, Transcript, VisualContext, Word, endpoint
+from questxtract import Config, Context, Layout, Transcript, VisualContext, Word, endpoint
 from questxtract import vision as vision_module
 from questxtract.export import result_to_dict, write_questions
 from questxtract.pipeline import run
 from questxtract.segments import segments as segments_stage
 from questxtract.sentences import sentences as sentences_stage
 from questxtract.vision import (
+    _LAYOUT_PROMPT,
     _PROMPT,
     VISION_PROMPT_VERSION,
-    _caption,
+    _changed,
+    _decoded,
     _for_comparison,
     _merge_shortest,
+    _png,
+    _Reading,
+    _same_page,
     _sample_frames,
     _speech,
     _store,
     _View,
     _views,
     attach_visual,
-    overlapping,
+    layout,
+    read_keyframe,
     vision,
 )
 
@@ -33,13 +41,6 @@ STATES = (
     VisualContext(start=0.0, end=5.0, description="first board"),
     VisualContext(start=5.0, end=20.0, description="second board"),
 )
-
-
-def test_overlapping_uses_half_open_intervals():
-    assert overlapping(STATES, 1.0, 2.0) == (STATES[0],)
-    assert overlapping(STATES, 4.0, 6.0) == STATES
-    assert overlapping(STATES, 5.0, 6.0) == (STATES[1],)  # touching at 5.0 is not overlapping
-    assert overlapping(STATES, 30.0, 40.0) == ()
 
 
 def test_attach_visual_is_a_no_op_without_board_states(context):
@@ -257,7 +258,7 @@ def test_a_keyframe_is_read_into_board_fields(fake_llm, tmp_path, latex, kept):
     prompt with the speech, and the image as a PNG data URL."""
     client = fake_llm(_board(description=" A slide. ", latex=latex, confidence=1.4))
     config = Config(cache_dir=str(tmp_path), vision_model="qwen3-vl")
-    fields = _caption(config, PNG, " so we sort ")
+    fields = read_keyframe(config, PNG, " so we sort ")
     assert fields == {
         "description": "A slide.",
         "text": "Stable sort",
@@ -298,7 +299,7 @@ def test_a_failed_reading_leaves_the_keyframe_out_with_a_warning(fake_llm, tmp_p
     """AC: vision is never required, so no failure escapes; the run goes on without it."""
     fake_llm(*replies)
     with pytest.warns(UserWarning, match="vision: keyframe left out") as caught:
-        assert _caption(Config(cache_dir=str(tmp_path)), PNG, "") is None
+        assert read_keyframe(Config(cache_dir=str(tmp_path)), PNG, "") is None
     assert len(caught) == 1
 
 
@@ -307,11 +308,11 @@ def test_a_keyframe_read_once_is_not_sent_again(fake_llm, tmp_path):
     config = Config(cache_dir=str(tmp_path))
     client = fake_llm(openai.OpenAIError("Connection error."), _board())
     with pytest.warns(UserWarning):
-        assert _caption(config, PNG, "") is None
-    assert _caption(config, PNG, "") == _caption(config, PNG, "") is not None
+        assert read_keyframe(config, PNG, "") is None
+    assert read_keyframe(config, PNG, "") == read_keyframe(config, PNG, "") is not None
     assert len(client.requests) == 2
     assert len(list((tmp_path / "vision").glob("*.json"))) == 1
-    _caption(config, PNG + b"another board", "")
+    read_keyframe(config, PNG + b"another board", "")
     assert len(client.requests) == 3
 
 
@@ -321,7 +322,7 @@ def test_without_the_llm_extra_the_install_hint_is_raised(monkeypatch, tmp_path)
 
     monkeypatch.setattr(endpoint, "client", missing)
     with pytest.raises(RuntimeError, match=r"questxtract\[llm\]"):
-        _caption(Config(cache_dir=str(tmp_path)), PNG, "")
+        read_keyframe(Config(cache_dir=str(tmp_path)), PNG, "")
 
 
 def test_a_setting_that_cannot_be_used_is_raised_not_dropped(monkeypatch, tmp_path, recwarn):
@@ -333,7 +334,7 @@ def test_a_setting_that_cannot_be_used_is_raised_not_dropped(monkeypatch, tmp_pa
 
     monkeypatch.setattr(endpoint, "client", unusable)
     with pytest.raises(ValueError, match="expansion is not supported"):
-        _caption(Config(cache_dir=str(tmp_path)), PNG, "")
+        read_keyframe(Config(cache_dir=str(tmp_path)), PNG, "")
     assert not recwarn.list
 
 
@@ -342,7 +343,7 @@ def test_a_cache_that_cannot_be_written_still_returns_the_answer(fake_llm, tmp_p
     blocker = tmp_path / "cache"
     blocker.write_text("a file where the cache folder should go", encoding="utf-8")
     client = fake_llm(_board())
-    fields = _caption(Config(cache_dir=str(blocker)), PNG, "")
+    fields = read_keyframe(Config(cache_dir=str(blocker)), PNG, "")
     assert fields is not None and fields["text"] == "Stable sort"
     assert len(client.requests) == 1
     assert not recwarn.list
@@ -351,10 +352,10 @@ def test_a_cache_that_cannot_be_written_still_returns_the_answer(fake_llm, tmp_p
 def test_a_cache_entry_that_is_not_text_is_asked_again(fake_llm, tmp_path):
     config = Config(cache_dir=str(tmp_path))
     client = fake_llm(_board())
-    assert _caption(config, PNG, "") is not None
+    assert read_keyframe(config, PNG, "") is not None
     (entry,) = (tmp_path / "vision").glob("*.json")
     entry.write_bytes(b"\xff\xfe\x00 not utf-8")
-    assert _caption(config, PNG, "") is not None
+    assert read_keyframe(config, PNG, "") is not None
     assert len(client.requests) == 2
     assert entry.read_text(encoding="utf-8").startswith("{")  # replaced by the new answer
 
@@ -457,10 +458,10 @@ def test_a_rejected_answer_is_not_cached(fake_llm, tmp_path):
     config = Config(cache_dir=str(tmp_path))
     fake_llm(_board(confidence="high"))
     with pytest.warns(UserWarning, match="keyframe left out"):
-        assert _caption(config, PNG, "") is None
+        assert read_keyframe(config, PNG, "") is None
     assert not list((tmp_path / "vision").glob("*.json"))
     client = fake_llm(_board())
-    assert _caption(config, PNG, "") is not None
+    assert read_keyframe(config, PNG, "") is not None
     assert len(client.requests) == 1
 
 
@@ -493,6 +494,10 @@ def test_the_views_are_cached_so_a_second_run_samples_nothing(
     changed = _lecture(context, video, tmp_path / "cache", vision_change_hold=2)
     with pytest.raises(AssertionError, match="sampled again"):
         run(changed, VISION_STAGES)  # other sampling settings cut again
+    cropped = _lecture(context, video, tmp_path / "cache")
+    cropped.layout = Layout(content_region=(0.0, 0.0, 0.5, 1.0), kind="slides")
+    with pytest.raises(AssertionError, match="sampled again"):
+        run(cropped, VISION_STAGES)  # another crop cuts again
 
 
 def _offset_lecture(path, offset=10.0, rate=10):
@@ -591,7 +596,166 @@ def test_a_keyframe_is_stored_once_by_its_content(tmp_path):
     assert _store(PNG, Config(cache_dir=str(tmp_path / "blocked")), "abc123") == ""
 
 
-# --- Jesper's review of PR #131 ---
+# --- the layout probe (#57) ---
+
+LAYOUT_STAGES = (sentences_stage, segments_stage, layout, vision, attach_visual)
+
+
+def _probe(**fields):
+    return {"content_region": [0.5, 0.0, 1.0, 0.5], "kind": "slides", **fields}
+
+
+def test_the_probe_sends_three_frames_from_across_the_recording(context, fake_llm, tmp_path):
+    """One request: the prompt, and frames at 20, 50 and 80 % of the recording, small."""
+    client = fake_llm(_probe())
+    video = _video(tmp_path / "v.mp4", size=(800, 600))  # brightness 20 per second
+    ctx = layout(_lecture(context, video, tmp_path / "cache", vision_model="qwen3-vl"))
+    assert ctx.layout == Layout(content_region=(0.48, 0.0, 1.0, 0.52), kind="slides")
+    (request,) = client.requests
+    assert request["model"] == "qwen3-vl"
+    assert request["response_format"]["json_schema"]["strict"] is True
+    system, user = request["messages"]
+    assert system["content"] == _LAYOUT_PROMPT
+    brightness = []
+    for part in user["content"]:
+        png = base64.b64decode(part["image_url"]["url"].removeprefix("data:image/png;base64,"))
+        (tmp_path / "f.png").write_bytes(png)
+        with av.open(str(tmp_path / "f.png")) as image:
+            picture = next(image.decode(video=0)).to_ndarray(format="rgb24")
+        assert picture.shape == (480, 640, 3)
+        brightness.append(round(float(picture.mean()) / 20))
+    assert brightness == [2, 5, 8]
+
+
+@pytest.mark.parametrize(
+    "replies",
+    [
+        (openai.OpenAIError("Connection error."),),
+        (TimeoutError("no answer within 120 s"),),  # a stall, twice
+        ("not json", "[]"),  # bad JSON, twice
+        (_probe(kind="chalk"),),
+        (_probe(kind=None),),
+        (_probe(content_region=[0.1, 0.1, 0.9]),),
+        (_probe(content_region="the left half"),),
+        (_probe(content_region=[0.6, 0.0, 0.4, 1.0]),),  # x0 > x1
+        (_probe(content_region=[0, 0, 500, 1000]),),  # pixels, not fractions
+        (_probe(content_region=[0, 0, True, 1]),),
+        (_probe(content_region=[0, 0, float("nan"), 1]),),
+    ],
+)
+def test_a_failed_probe_falls_back_to_the_full_frame(context, fake_llm, tmp_path, replies):
+    """#57 AC: when the probe fails or returns bad JSON, the full frame and unknown are used."""
+    fake_llm(*replies)
+    ctx = _lecture(context, _video(tmp_path / "v.mp4", seconds=2), tmp_path / "cache")
+    with pytest.warns(UserWarning, match="layout probe failed, using the full frame") as caught:
+        ctx = layout(ctx)
+    assert ctx.layout == Layout(content_region=(0.0, 0.0, 1.0, 1.0), kind="unknown")
+    assert len(caught) == 1
+
+
+def test_after_a_failed_probe_the_run_continues_on_the_full_frame(context, fake_llm, tmp_path):
+    """#57 AC: the run goes on: board states are still read, uncropped and of kind unknown."""
+    client = fake_llm("not json", "not json", _board())
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    with pytest.warns(UserWarning, match="layout probe failed"):
+        ctx = run(_lecture(context, video, tmp_path / "cache"), LAYOUT_STAGES)
+    assert len(ctx.visual) == 3
+    assert all("Frame kind: unknown" in r["messages"][0]["content"] for r in client.requests[2:])
+    assert _png_size(tmp_path / "cache" / ctx.visual[0].keyframe_path) == (320, 240)
+
+
+def test_the_probe_crops_the_frames_and_names_the_kind(context, fake_llm, tmp_path):
+    """#57: the crop box goes to the sampler, the kind to the captioning prompt."""
+    client = fake_llm(_probe(content_region=[0.0, 0.0, 0.48, 0.48], kind="blackboard"), _board())
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    ctx = run(_lecture(context, video, tmp_path / "cache"), LAYOUT_STAGES)
+    assert ctx.layout == Layout(content_region=(0.0, 0.0, 0.5, 0.5), kind="blackboard")
+    assert ctx.visual and all(
+        "Frame kind: blackboard" in r["messages"][0]["content"] for r in client.requests[1:]
+    )
+    assert _png_size(tmp_path / "cache" / ctx.visual[0].keyframe_path) == (160, 120)
+
+
+def test_a_cached_probe_is_not_asked_again(context, fake_llm, tmp_path):
+    """#57 AC: given a cached probe result, a second run makes no probe call."""
+    client = fake_llm(_probe())
+    video = _video(tmp_path / "v.mp4", seconds=2)
+    first = layout(_lecture(context, video, tmp_path / "cache"))
+    again = layout(_lecture(context, video, tmp_path / "cache"))
+    assert again.layout == first.layout != Layout()
+    assert len(client.requests) == 1
+    assert len(list((tmp_path / "cache" / "layout").glob("*.json"))) == 1
+
+
+def test_a_failed_probe_is_asked_again_on_the_next_run(context, fake_llm, tmp_path):
+    client = fake_llm(openai.OpenAIError("Connection error."), _probe())
+    video = _video(tmp_path / "v.mp4", seconds=2)
+    with pytest.warns(UserWarning, match="layout probe failed"):
+        assert layout(_lecture(context, video, tmp_path / "cache")).layout == Layout()
+    assert layout(_lecture(context, video, tmp_path / "cache")).layout.kind == "slides"
+    assert len(client.requests) == 2
+
+
+def test_a_box_too_small_to_trust_keeps_the_kind_but_not_the_crop(context, fake_llm, tmp_path):
+    fake_llm(_probe(content_region=[0.4, 0.4, 0.6, 0.6], kind="whiteboard"))
+    ctx = layout(_lecture(context, _video(tmp_path / "v.mp4", seconds=2), tmp_path / "cache"))
+    assert ctx.layout == Layout(kind="whiteboard")
+
+
+def test_the_padding_stays_inside_the_frame(context, fake_llm, tmp_path):
+    fake_llm(_probe(content_region=[0, 0, 1, 1], kind="screencast"))
+    ctx = layout(_lecture(context, _video(tmp_path / "v.mp4", seconds=2), tmp_path / "cache"))
+    assert ctx.layout == Layout(kind="screencast")
+
+
+def test_the_probe_no_ops_when_vision_is_off_or_there_is_no_video(
+    context, fake_llm, tmp_path, make_mp3
+):
+    """#57: the full frame and unknown when vision is off, and no call."""
+    client = fake_llm(_probe())
+    video = _video(tmp_path / "v.mp4", seconds=2)
+    off = _lecture(context, video, tmp_path / "cache", vision_enabled=False)
+    assert layout(off).layout == Layout()
+    audio = _lecture(context, make_mp3(tmp_path / "a.mp3"), tmp_path / "cache")
+    assert layout(audio).layout == Layout()
+    assert not client.requests
+
+
+def test_a_recording_that_cannot_be_decoded_falls_back(context, fake_llm, tmp_path, monkeypatch):
+    client = fake_llm(_probe())
+
+    def broken(path):
+        raise OSError("read error")
+
+    monkeypatch.setattr("questxtract.vision._probe_frames", broken)
+    ctx = _lecture(context, _video(tmp_path / "v.mp4", seconds=2), tmp_path / "cache")
+    with pytest.warns(UserWarning, match="could not be read"):
+        assert layout(ctx).layout == Layout()
+    monkeypatch.setattr("questxtract.vision._probe_frames", lambda path: [])
+    with pytest.warns(UserWarning, match="no frame"):
+        assert layout(ctx).layout == Layout()
+    assert not client.requests
+
+
+def test_a_setting_that_cannot_be_used_stops_the_probe(context, monkeypatch, tmp_path):
+    """As for captioning: an unreadable .env is a user error, raised, not a fallback."""
+
+    def unusable(config):
+        raise ValueError(".env: line 1: expansion is not supported")
+
+    monkeypatch.setattr(endpoint, "client", unusable)
+    ctx = _lecture(context, _video(tmp_path / "v.mp4", seconds=2), tmp_path / "cache")
+    with pytest.raises(ValueError, match="expansion is not supported"):
+        layout(ctx)
+
+
+def _png_size(path):
+    with av.open(str(path)) as image:
+        frame = next(image.decode(video=0))
+        return frame.width, frame.height
+
+
+# --- PR #131 ---
 
 
 def test_an_answer_without_latex_is_rejected_not_cached(fake_llm, tmp_path):
@@ -601,7 +765,7 @@ def test_an_answer_without_latex_is_rejected_not_cached(fake_llm, tmp_path):
     del answer["latex"]
     fake_llm(answer)
     with pytest.warns(UserWarning, match="keyframe left out"):
-        assert _caption(config, PNG, "") is None
+        assert read_keyframe(config, PNG, "") is None
     assert not list((tmp_path / "vision").glob("*.json"))
 
 
@@ -654,3 +818,260 @@ def test_a_damaged_keyframe_in_the_cache_is_sampled_again(context, fake_llm, tmp
     again = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
     assert again.visual == first.visual and not client.requests  # same images, so cache hits
     assert damaged.read_bytes() == good
+
+
+# --- what the vision calls cost (#123) ---
+
+
+def test_stats_record_what_the_readings_cost(context, fake_llm, tmp_path):
+    """#123: requests, tokens and time per caller; a cached re-run reads as no calls."""
+    client = fake_llm(_board())
+    client.usage = SimpleNamespace(prompt_tokens=700, completion_tokens=150)
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    ctx = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert ctx.stats["vision_requests"] == 3
+    assert (ctx.stats["vision_input_tokens"], ctx.stats["vision_output_tokens"]) == (2100, 450)
+    assert ctx.stats["vision_ms"] >= 0
+
+    again = run(_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    cost = ("vision_requests", "vision_input_tokens", "vision_output_tokens", "vision_ms")
+    assert [again.stats[k] for k in cost] == [0, 0, 0, 0]
+
+
+def test_the_layout_probe_records_its_cost_even_when_it_fails(context, fake_llm, tmp_path):
+    client = fake_llm(openai.OpenAIError("Connection error."))
+    client.usage = SimpleNamespace(prompt_tokens=2000, completion_tokens=40)
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    with pytest.warns(UserWarning, match="layout probe failed"):
+        ctx = layout(_lecture(context, video, tmp_path / "cache"))
+    assert ctx.stats["layout_requests"] == 1  # sent, though nothing came back
+    assert ctx.stats["layout_input_tokens"] == 0
+    client = fake_llm(_probe())
+    client.usage = SimpleNamespace(prompt_tokens=2000, completion_tokens=40)
+    ctx = layout(_lecture(context, video, tmp_path / "cache"))
+    assert (ctx.stats["layout_requests"], ctx.stats["layout_input_tokens"]) == (1, 2000)
+
+
+# --- reusing a reading when a slide comes back (#138) ---
+
+
+def _glyph(page, x, y, segments):
+    """Draw a seven-segment digit, 24 x 44 px, with segments named a to g."""
+    bars = {
+        "a": (y, y + 5, x, x + 24),
+        "b": (y, y + 24, x + 19, x + 24),
+        "c": (y + 20, y + 44, x + 19, x + 24),
+        "d": (y + 39, y + 44, x, x + 24),
+        "e": (y + 20, y + 44, x, x + 5),
+        "f": (y, y + 24, x, x + 5),
+        "g": (y + 20, y + 25, x, x + 24),
+    }
+    for name in segments:
+        y0, y1, x0, x1 = bars[name]
+        page[y0:y1, x0:x1] = 40
+
+
+def _page(*, digit="3", point=0, sign="<", note=0, colour=(200, 40, 40)):
+    """A 640 x 360 page of text-like lines with the small details a reuse must not miss.
+
+    The details have the sizes they have on a 720p page, since the detail check works in
+    pixels; the page is smaller only to keep the tests fast. ``point`` is the side of a decimal
+    point in px, off the 4 px grid; ``note`` draws a handwritten stroke this many grey levels
+    darker than the page; ``colour`` keeps the grey level of the default red when it is
+    (0, 130, 100).
+    """
+    page = np.full((360, 640, 3), 240, np.uint8)
+    page[20:50, 40:600] = 30  # the title
+    for row, width in enumerate((450, 520, 360, 490)):
+        page[70 + 30 * row : 77 + 30 * row, 40 : 40 + width] = 40  # a line of text
+    page[195:209, 40:350] = colour
+    _glyph(page, 40, 250, "abcdg" if digit == "3" else "abcdefg")
+    for row in range(25):  # a 25 px "<" or ">", 4 px thick
+        slant = abs(row - 12) * 20 // 12
+        column = 110 + (slant if sign == "<" else 20 - slant)
+        page[255 + row, column : column + 4] = 40
+    if point:
+        page[271 : 271 + point, 71 : 71 + point] = 40
+    for row in range(30 if note else 0):  # a handwritten stroke
+        page[310 + row, 200 + 3 * row : 208 + 3 * row] = 240 - note
+    return page
+
+
+def _other_page():
+    page = np.full((360, 640, 3), 240, np.uint8)
+    page[150:180, 100:550] = 30
+    page[210:300, 150:450] = 120
+    return page
+
+
+def _pages(path, pages, seconds=4, rate=2, quantizer=8):
+    """``pages`` in order, ``seconds`` each, at a fixed quantizer (2 to 31). The default 8 gives
+    about the codec noise of a compressed screen recording, and keeps a 2 px dot."""
+    with av.open(str(path), "w", format="mp4") as container:
+        stream = container.add_stream("mpeg4", rate=rate)
+        stream.height, stream.width = pages[0].shape[:2]
+        stream.pix_fmt = "yuv420p"
+        stream.options = {"qmin": str(quantizer), "qmax": str(quantizer)}
+        for page in pages:
+            for _ in range(seconds * rate):
+                for packet in stream.encode(av.VideoFrame.from_ndarray(page, format="rgb24")):
+                    container.mux(packet)
+        for packet in stream.encode():
+            container.mux(packet)
+    return path
+
+
+def _paged_lecture(context, video, cache, kind="slides", **config):
+    """:func:`_lecture` with the layout probe's answer already given."""
+    ctx = _lecture(context, video, cache, **config)
+    ctx.layout = Layout(kind=kind)
+    return ctx
+
+
+@pytest.mark.parametrize("kind", ["slides", "handwriting", "screencast"])
+def test_a_page_that_comes_back_is_read_once(context, fake_llm, tmp_path, kind):
+    """#138 AC: A, B, A gives three board states but two readings; the third copies the first,
+    through the codec noise of a compressed screen recording (``_pages``)."""
+    client = fake_llm(_board(text="page A"), _board(text="page B"))
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page()])
+    ctx = run(_paged_lecture(context, video, tmp_path / "cache", kind), VISION_STAGES)
+
+    first, middle, again = ctx.visual
+    assert len(client.requests) == 2
+    assert again.text == first.text == "page A" and middle.text == "page B"
+    assert (round(again.start), round(again.end)) == (8, 12)
+    assert len({s.id for s in ctx.visual}) == 3
+    # other speech on the return, so the request cache could not have caught it
+    assert _speech(ctx.sentences, first.start, first.end) != _speech(
+        ctx.sentences, again.start, again.end
+    )
+    assert ctx.stats["vision_reused"] == 1
+    assert ctx.stats["vision_requests"] == 2  # a copied reading costs no request (#123)
+
+
+def test_under_harder_compression_a_page_is_read_again(context, fake_llm, tmp_path):
+    """#138: noise above the detail limits is not told from a change, so the page is read again."""
+    client = fake_llm(_board(text="page A"), _board(text="page B"), _board(text="page A again"))
+    pages = [_page(), _other_page(), _page()]
+    video = _pages(tmp_path / "lecture.mp4", pages, quantizer=24)
+    ctx = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert len(client.requests) == 3 and ctx.stats["vision_reused"] == 0
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        pytest.param({"digit": "8"}, id="digit"),
+        pytest.param({"point": 4}, id="decimal-point-4px"),
+        pytest.param({"point": 2}, id="decimal-point-2px"),
+        pytest.param({"sign": ">"}, id="inequality-sign"),
+        pytest.param({"note": 48}, id="low-contrast-note"),
+        pytest.param({"colour": (0, 130, 100)}, id="colour-of-equal-grey"),
+    ],
+)
+def test_a_page_back_with_a_small_change_is_read_again(context, fake_llm, tmp_path, change):
+    """#138 AC: a change the views' measure barely sees still gets a new reading."""
+    small = _changed(_for_comparison(_page()), _for_comparison(_page(**change)))
+    assert small < 0.02  # under vision_change_fraction: the views alone would call it the same
+
+    client = fake_llm(_board(text="page A"), _board(text="page B"), _board(text="page A changed"))
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page(**change)])
+    ctx = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert len(client.requests) == 3
+    assert ctx.visual[2].text == "page A changed"
+    assert ctx.stats["vision_reused"] == 0
+
+
+def test_a_reading_that_failed_is_not_reused(context, fake_llm, tmp_path):
+    """#138 AC: only a reading that worked is copied; a later return is asked again."""
+    client = fake_llm(
+        openai.OpenAIError("Connection error."), _board(text="page B"), _board(text="page A")
+    )
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page()])
+    with pytest.warns(UserWarning, match="keyframe left out"):
+        ctx = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert len(client.requests) == 3
+    assert [s.text for s in ctx.visual] == ["page B", "page A"]
+    assert ctx.stats["vision_reused"] == 0 and ctx.stats["vision_failed"] == 1
+
+
+@pytest.mark.parametrize("kind", ["blackboard", "whiteboard", "unknown"])
+def test_boards_and_unknown_frames_are_read_every_time(context, fake_llm, tmp_path, kind):
+    """#138 AC: a board, or what the probe could not name, is never copied (#133 owns boards)."""
+    client = fake_llm(_board(text="page A"), _board(text="page B"), _board(text="page A again"))
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page()])
+    ctx = run(_paged_lecture(context, video, tmp_path / "cache", kind), VISION_STAGES)
+    assert len(client.requests) == 3
+    assert ctx.stats["vision_reused"] == 0
+
+
+def test_a_rerun_from_the_caches_reuses_the_same_way(context, fake_llm, tmp_path):
+    """#138 AC: views from views.json and readings from the request cache give the same states."""
+    client = fake_llm(_board(text="page A"), _board(text="page B"))
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page()])
+    first = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    again = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert again.visual == first.visual
+    assert len(client.requests) == 2  # the second run asks nothing
+    assert again.stats["vision_reused"] == 1
+
+
+def test_from_scratch_still_reuses_within_the_run(context, fake_llm, tmp_path):
+    """#138 AC: --from-scratch skips the caches, not the reuse, which is never cached."""
+    client = fake_llm(_board(text="page A"), _board(text="page B"))
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page()])
+    run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    fresh = run(
+        _paged_lecture(context, video, tmp_path / "cache", from_scratch=True), VISION_STAGES
+    )
+    assert len(client.requests) == 4  # A and B asked again, the return copied again
+    assert fresh.stats["vision_reused"] == 1
+
+
+def test_the_lookup_keeps_only_small_copies_and_readings(context, fake_llm, tmp_path, monkeypatch):
+    """#138 AC: what the run holds per reading is a small grey copy, an index and the fields.
+    Full-resolution pictures are decoded while their view is handled (the current keyframe for
+    its small copy, an earlier one again for the detail check) and never kept."""
+    assert {f.name for f in dataclasses.fields(_Reading)} == {"small", "view", "fields"}
+    kept = []
+
+    def recorded(**fields):
+        kept.append(_Reading(**fields))
+        return kept[-1]
+
+    monkeypatch.setattr(vision_module, "_Reading", recorded)
+    fake_llm(_board(text="page A"), _board(text="page B"))
+    double = np.ones((2, 2, 1), np.uint8)  # 720p, so the small copy is smaller than the keyframe
+    pages = [np.kron(page, double) for page in (_page(), _other_page(), _page())]
+    video = _pages(tmp_path / "lecture.mp4", pages)
+    run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+
+    assert [r.view for r in kept] == [0, 1]  # the reused third page added nothing
+    for reading in kept:
+        assert reading.small.ndim == 2 and reading.small.shape == (360, 640)  # 720p, halved
+        assert set(reading.fields) == {"description", "text", "latex", "confidence"}
+
+
+@pytest.mark.parametrize("size", [(720, 1280), (363, 645)])
+def test_a_mark_at_the_border_is_a_change(size):
+    """#138: the last rows and columns, past a whole square, are compared too."""
+    before = np.full((*size, 3), 240, np.uint8)
+    after = before.copy()
+    after[-2:, -2:] = 40  # a 2 px mark in the bottom right corner
+    assert _same_page(before, before.copy())
+    assert not _same_page(before, after)
+
+
+def test_a_keyframe_that_cannot_be_decoded_is_read_as_usual(
+    context, fake_llm, tmp_path, monkeypatch
+):
+    """#138: no picture, no reuse; the reading itself does not need to decode the PNG."""
+    assert _decoded(PNG) is None
+    page = _page()
+    assert np.array_equal(_decoded(_png(page)), page)
+
+    monkeypatch.setattr(vision_module, "_decoded", lambda png: None)
+    client = fake_llm(_board(text="page A"), _board(text="page B"), _board(text="page A again"))
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _other_page(), _page()])
+    ctx = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert len(client.requests) == 3 and ctx.stats["vision_reused"] == 0

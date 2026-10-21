@@ -6,17 +6,21 @@ for faster-whisper, while ingest still probes a real (tiny) MP4.
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import openai
 import pytest
+from jsonschema import Draft202012Validator
 
 from questxtract import Transcript, asr, cli
 from questxtract.cli import main
 from questxtract.config import Config
+from questxtract.export import SCHEMA_PATH
 from questxtract.pipeline import STAGES
 from questxtract.sentences import split_sentences
 
@@ -257,7 +261,9 @@ def test_help_documents_the_options_with_examples(capsys: pytest.CaptureFixture[
     with pytest.raises(SystemExit) as top:
         main(["--help"])
     assert top.value.code == 0
-    assert "questxtract transcribe lecture.mp4" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "questxtract transcribe lecture.mp4" in out
+    assert "questxtract filter lecture.questions.json" in out
 
     with pytest.raises(SystemExit):
         main(["process", "--help"])
@@ -559,7 +565,7 @@ def test_eval_receives_file_settings_and_reasoning_timeout(tmp_path, monkeypatch
     )
     seen = []
 
-    def evaluate(paths, config):
+    def evaluate(paths, config, board=False):
         seen.append(config)
         return {}
 
@@ -635,3 +641,297 @@ def test_a_file_that_is_not_a_recording_gets_one_line_and_no_output(
     errors = [line for line in err.splitlines() if line.startswith("error:")]
     assert len(errors) == 1 and "invalid or unreadable recording" in errors[0]
     assert not (tmp_path / "lecture.questions.json").exists()
+
+
+# --- vision flags (#61) -------------------------------------------------------
+
+_BOARD = {
+    "description": "A slide on sorting.",
+    "text": "Stable sort",
+    "latex": None,
+    "confidence": 0.8,
+}
+
+
+def test_vision_flag_without_a_key_or_url_fails_before_transcription(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+
+    assert main(["process", str(video), "--vision"]) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("error: ") and "OPENAI_API_KEY" in err and "--llm-url" in err
+    assert err.count("\n") == 1 and fake_asr == [] and "[1/" not in err
+
+
+def test_vision_without_the_extra_says_how_to_install_it(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli.importlib.util, "find_spec", lambda name: None)
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+
+    assert main(["process", str(video), "--vision"]) == 1
+    assert "pip install 'questxtract[llm]'" in capsys.readouterr().err and fake_asr == []
+
+
+def test_vision_reads_the_board_with_the_model_given(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    fake_llm: Callable[..., Any],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    client = fake_llm(_BOARD)
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+
+    assert main(["process", str(video), "--vision", "--vision-model", "qwen3.8-27b"]) == 0
+
+    assert "Reading the board" in capsys.readouterr().err
+    data = json.loads((tmp_path / "lecture.questions.json").read_text(encoding="utf-8"))
+    assert [v["text"] for v in data["visuals"]] == ["Stable sort"]
+    assert data["questions"] and all(q["visual_ids"] for q in data["questions"])
+    assert data["config"]["vision_model"] == "qwen3.8-27b"
+    assert {request["model"] for request in client.requests} == {"qwen3.8-27b"}
+
+
+def test_no_vision_turns_off_vision_from_the_settings_file(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    fake_llm: Callable[..., Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)  # off, so no key is needed
+    Path("questxtract.toml").write_text("vision_enabled = true", encoding="utf-8")
+    client = fake_llm(_BOARD)
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+
+    assert main(["process", str(video), "--no-vision"]) == 0
+
+    data = json.loads((tmp_path / "lecture.questions.json").read_text(encoding="utf-8"))
+    assert data["visuals"] == [] and client.requests == []
+
+
+@pytest.mark.parametrize("kind", ["mp3", "transcript"])
+def test_vision_on_an_input_without_video_says_so_and_goes_on(
+    tmp_path: Path,
+    make_mp3: Callable[..., Path],
+    fake_asr: list[Config],
+    fake_llm: Callable[..., Any],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    kind: str,
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)  # no board to read, so no key needed
+    client = fake_llm(_BOARD)
+    source = make_mp3(tmp_path / "t.mp3") if kind == "mp3" else _transcript_file(tmp_path)
+
+    assert main(["process", str(source), "--vision"]) == 0
+
+    notes = [line for line in capsys.readouterr().err.splitlines() if line.startswith("note:")]
+    assert notes == [f"note: {source.name} has no video, so the board is not read"]
+    data = json.loads((tmp_path / "t.questions.json").read_text(encoding="utf-8"))
+    assert data["config"]["vision_model"] is None and client.requests == []
+
+
+def test_a_missing_input_file_is_reported_before_the_vision_check(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    assert main(["process", str(tmp_path / "typo.mp4"), "--vision"]) == 1
+    assert "no such file" in capsys.readouterr().err
+
+
+def test_without_a_vision_flag_or_setting_vision_stays_off() -> None:
+    config = cli._config(cli.build_parser().parse_args(["process", "lecture.mp4"]))
+    assert not config.vision_enabled and config.vision_model == Config().vision_model
+
+
+# Every vision setting has a decision: a `process` flag, or the settings file only. A new
+# vision_* field in config.py fails this test until it is added to one of the two (and, for a
+# flag, to the parser, cli._config, cli._with_vision if it needs checking, docs/cli.md and
+# README.md). Each flag maps to the field it is listed with, and to a value it can set.
+_VISION_FLAGS: dict[str, tuple[list[str], Any]] = {
+    "vision_enabled": (["--vision"], True),
+    "vision_model": (["--vision-model", "some-model"], "some-model"),
+}
+_VISION_SETTINGS_FILE_ONLY = {
+    "vision_fps",
+    "vision_max_states",
+    "vision_change_fraction",
+    "vision_change_hold",
+}
+
+
+def test_every_vision_setting_has_a_flag_decision() -> None:
+    vision_fields = {f.name for f in dataclasses.fields(Config) if f.name.startswith("vision_")}
+    assert vision_fields == set(_VISION_FLAGS) | _VISION_SETTINGS_FILE_ONLY
+
+    for field, (flag, value) in _VISION_FLAGS.items():
+        config = cli._config(cli.build_parser().parse_args(["process", "lecture.mp4", *flag]))
+        assert getattr(config, field) == value, flag
+
+
+# --- filter (#136) --------------------------------------------------------------
+
+_TTK = Path(__file__).parent / "data" / "ttk4225_2026_09_14.transcript.json"
+
+
+@pytest.fixture
+def questions_file(tmp_path: Path) -> Path:
+    """The TTK4225 questions, with a board state (and its keyframe) on the first question."""
+    path = tmp_path / "lecture.questions.json"
+    assert main(["process", str(_TTK), "-o", str(path)]) == 0
+    data = json.loads(path.read_text(encoding="utf-8"))
+    first = data["questions"][0]
+    data["visuals"] = [
+        {
+            "id": "v_board",
+            "start": first["start"],
+            "end": first["end"],
+            "keyframe_path": "lecture.keyframes/v_board.png",
+            "description": "",
+            "text": "Zyzzyva",
+            "latex": None,
+            "confidence": 0.9,
+        }
+    ]
+    first["visual_ids"] = ["v_board"]
+    (tmp_path / "lecture.keyframes").mkdir()
+    (tmp_path / "lecture.keyframes" / "v_board.png").write_bytes(b"png")
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
+
+
+def _filtered(capsys: pytest.CaptureFixture[str], *args: str) -> dict[str, Any]:
+    assert main(["filter", *args]) == 0
+    data: dict[str, Any] = json.loads(capsys.readouterr().out)
+    return data
+
+
+def test_filter_prints_the_questions_matching_the_board_by_default(
+    questions_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    capsys.readouterr()
+    before = sorted(questions_file.parent.iterdir())
+    data = _filtered(capsys, str(questions_file), "--text", "ZYZZYVA")
+    first = json.loads(questions_file.read_text(encoding="utf-8"))["questions"][0]
+    assert data["questions"] == [first]
+    assert data["visuals"][0]["keyframe_path"] == "lecture.keyframes/v_board.png"
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    Draft202012Validator(schema).validate(data)
+    assert sorted(questions_file.parent.iterdir()) == before  # nothing written
+
+
+def test_filter_reads_times_as_seconds_or_minutes(
+    questions_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    capsys.readouterr()
+    by_seconds = _filtered(capsys, str(questions_file), "--from", "300", "--to", "1200.5")
+    by_clock = _filtered(capsys, str(questions_file), "--from", "5:00", "--to", "0:20:00.5")
+    starts = [q["start"] for q in by_clock["questions"]]
+    assert by_clock == by_seconds and starts
+    assert all(300 <= start < 1200.5 for start in starts)
+
+
+@pytest.mark.parametrize("bad", ["5x", "1:2:3:4", "5:60", "5:-1", ""])
+def test_filter_rejects_a_time_it_cannot_read(
+    questions_file: Path, capsys: pytest.CaptureFixture[str], bad: str
+) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        main(["filter", str(questions_file), "--from", bad])
+    assert exit_info.value.code == 2
+    assert "expected seconds, M:SS or H:MM:SS" in capsys.readouterr().err
+
+
+def test_filter_needs_text_or_a_time(
+    questions_file: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    capsys.readouterr()
+    assert main(["filter", str(questions_file)]) == 1
+    assert capsys.readouterr().err == "error: give --text, --from or --to\n"
+
+
+def test_filter_into_another_folder_keeps_the_keyframes_found(
+    questions_file: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = tmp_path / "out" / "board.json"
+    assert main(["filter", str(questions_file), "--text", "zyzzyva", "-o", str(out)]) == 0
+    total = len(json.loads(questions_file.read_text(encoding="utf-8"))["questions"])
+    assert capsys.readouterr().err.endswith(f"1 of {total} questions -> {out}\n")
+    keyframe = json.loads(out.read_text(encoding="utf-8"))["visuals"][0]["keyframe_path"]
+    assert keyframe == "../lecture.keyframes/v_board.png"
+    assert (out.parent / keyframe).is_file()
+
+    beside = tmp_path / "board.json"
+    assert main(["filter", str(questions_file), "--text", "zyzzyva", "-o", str(beside)]) == 0
+    keyframe = json.loads(beside.read_text(encoding="utf-8"))["visuals"][0]["keyframe_path"]
+    assert keyframe == "lecture.keyframes/v_board.png"
+
+
+def test_filter_onto_another_drive_points_at_the_keyframe_absolutely(
+    questions_file: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def other_drive(path: object, start: object = None) -> str:
+        raise ValueError("path is on mount 'C:', start on mount 'D:'")
+
+    monkeypatch.setattr(cli.os.path, "relpath", other_drive)
+    out = tmp_path / "out" / "board.json"
+    assert main(["filter", str(questions_file), "--text", "zyzzyva", "-o", str(out)]) == 0
+    keyframe = Path(json.loads(out.read_text(encoding="utf-8"))["visuals"][0]["keyframe_path"])
+    assert keyframe.is_absolute() and keyframe.is_file()
+
+
+# --- qti (#67) ----------------------------------------------------------------
+
+
+def test_qti_exports_a_quiz_and_leaves_rejected_items_out(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    quiz = make_quiz("q_aaa", "q_bbb")
+    quiz["questions"][1]["review"]["status"] = "rejected"
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(quiz), encoding="utf-8")
+
+    assert main(["qti", "lecture.quiz.json", "-o", "lecture.zip"]) == 0
+
+    assert capsys.readouterr().err == "QTI 3.0 package -> lecture.zip\n"
+    with zipfile.ZipFile(tmp_path / "lecture.zip") as package:
+        items = [name for name in package.namelist() if name.startswith("items/")]
+        assert items == ["items/quiz_q_aaa.xml"]
+        assert b"qti-choice-interaction" in package.read(items[0])
+
+
+@pytest.mark.parametrize("content", [None, "{", '{"schema_version": "2.0", "questions": []}'])
+def test_qti_bad_input_gets_one_line_and_no_output(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], content: str | None
+) -> None:
+    source = tmp_path / "quiz.json"
+    if content is not None:
+        source.write_text(content, encoding="utf-8")
+    output = tmp_path / "out.zip"
+
+    assert main(["qti", str(source), "-o", str(output)]) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("error: qti: ") and err.count("\n") == 1
+    assert not output.exists()
+
+
+def test_qti_has_no_version_or_filter_flags(capsys: pytest.CaptureFixture[str]) -> None:
+    for flag in ("--version", "--only-keep"):
+        with pytest.raises(SystemExit):
+            main(["qti", "quiz.json", "-o", "out.zip", flag])
+        assert f"unrecognized arguments: {flag}" in capsys.readouterr().err

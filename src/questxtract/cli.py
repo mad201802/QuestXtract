@@ -1,4 +1,4 @@
-"""Command line interface: ``process``, ``transcribe``, ``eval`` and ``quiz``.
+"""Command line interface: ``process``, ``transcribe``, ``filter``, ``eval``, ``quiz`` and ``qti``.
 
 Every command and option, with recipes: docs/cli.md.
 """
@@ -8,16 +8,20 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from . import __version__
 from .config import Config, load_config
-from .evaluate import evaluate, format_report
+from .evaluate import evaluate, evaluate_vision, format_report, format_vision_report
 from .export import read_questions, result_to_json, write_questions
+from .filtering import filter_document
 from .models import Context, Sentence, Stage, Transcript
 from .pipeline import STAGES, cached_transcript, run
+from .qti import QtiExportError
+from .qti_v3 import export_qti
 from .quiz import MAX_OPTIONS, MIN_OPTIONS, STRICTNESS, build_quiz, file_hash, quiz_to_json
 from .vision import has_video
 
@@ -58,6 +62,8 @@ examples:
   questxtract process lecture.mp3               audio only, no board -> lecture.questions.json
   questxtract transcribe lecture.mp4            transcript only -> lecture.transcript.json
   questxtract process lecture.transcript.json   questions from an existing transcript
+  questxtract filter lecture.questions.json --text eigenvalue
+                                                the questions about a word, said or on the board
 
 every command and option, with recipes: docs/cli.md
 """
@@ -72,6 +78,7 @@ examples:
   questxtract process lecture.mp4 --detector llm         an LLM picks the questions
   questxtract process lecture.mp4 --detector llm         a local model in Ollama:
       --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b --llm-reasoning low
+  questxtract process lecture.mp4 --vision               also read the slides or the board
 """
 
 _QUIZ_EXAMPLES = """\
@@ -85,6 +92,14 @@ _TRANSCRIBE_EXAMPLES = """\
 examples:
   questxtract transcribe lecture.mp4                     writes lecture.transcript.json
   questxtract transcribe lecture.mp4 -m small -o t.json  smaller model, custom path
+"""
+
+_FILTER_EXAMPLES = """\
+examples:
+  questxtract filter lecture.questions.json --text eigenvalue      print the matching questions
+  questxtract filter lecture.questions.json --text "transfer function" -o tf.json
+                                                         every word, spoken or on the board
+  questxtract filter lecture.questions.json --from 5:00 --to 20:00   asked in that window
 """
 
 
@@ -200,6 +215,8 @@ def _config(args: argparse.Namespace) -> Config:
             ("llm_model", "judge_model"),
             ("llm_url", "base_url"),
             ("llm_reasoning", "judge_reasoning_effort"),
+            ("vision", "vision_enabled"),
+            ("vision_model", "vision_model"),
             ("quiz_model", "quiz_model"),
             ("strictness", "quiz_strictness"),
             ("options", "quiz_options"),
@@ -237,30 +254,18 @@ def _with_llm(config: Config) -> Config:
             timeout_seconds=max(config.timeout_seconds, _THINKING_TIMEOUT_SECONDS)
         )
     if config.detector == "llm":
-        if importlib.util.find_spec("openai") is None:
-            raise ValueError("--detector llm needs the LLM extra: pip install 'questxtract[llm]'")
-        if config.base_url is None and not config.api_key:
-            raise ValueError(
-                "--detector llm needs OPENAI_API_KEY in the environment or .env, "
-                "or --llm-url for a local server"
-            )
+        _check_endpoint(config, "--detector llm")
     return config
 
 
-def _with_quiz(config: Config) -> None:
-    """Check that the quiz model can be asked before anything slow runs.
-
-    Raises:
-        ValueError: If the ``[llm]`` extra is missing, or there is neither an API key nor a
-            local endpoint.
-
-    """
+def _check_endpoint(config: Config, what: str) -> None:
+    """Raise ``ValueError`` if ``what`` cannot reach a model: no extra, or no key nor endpoint."""
     if importlib.util.find_spec("openai") is None:
-        raise ValueError("the quiz needs the LLM extra: pip install 'questxtract[llm]'")
+        raise ValueError(f"{what} needs the LLM extra: pip install 'questxtract[llm]'")
     if config.base_url is None and not config.api_key:
         raise ValueError(
-            "the quiz needs OPENAI_API_KEY in the environment or .env, "
-            "or --llm-url for a local server"
+            f"{what} needs OPENAI_API_KEY in the environment or .env, "
+            "or --llm-url (base_url) for a local server"
         )
 
 
@@ -316,26 +321,35 @@ def _quiz_sentences(
     return run(ctx, STAGES[_AFTER_TRANSCRIBE : _AFTER_TRANSCRIBE + 1]).sentences
 
 
-def _with_vision(config: Config, source: Path) -> None:
+# Vision flags (#61). The vision design is still moving in M3 (ink curve #133). When vision
+# gains a setting, decide whether it gets a flag here or stays TOML-only, and update together:
+# `_config`, this check, the `process` parser, the "Reading the board" section in README.md,
+# the option and error tables in docs/cli.md, and
+# test_every_vision_setting_has_a_flag_decision in tests/test_cli.py, which fails until you do.
+def _with_vision(config: Config, source: Path) -> Config:
     """Check that vision can read the board before transcription and sampling run.
 
-    Only for a recording with a video track: with ``vision_enabled`` in the TOML file, an MP3
-    or a transcript still runs without the extra or a key, since there is no board to read.
+    Applies whether vision was turned on by ``--vision`` or by ``vision_enabled`` in the
+    settings file; :func:`_with_llm` does the same for ``--detector llm``. A source without a
+    video track (an MP3, an audio-only MP4, or a transcript) has no board: a note says so and
+    the run goes on without vision, so it needs neither the extra nor a key, and
+    ``questions.json`` does not name a vision model that read nothing.
+
+    Returns:
+        The settings to run with.
 
     Raises:
         ValueError: If vision would run without the ``[llm]`` extra, or with neither an API key
             nor a local endpoint.
 
     """
-    if not config.vision_enabled or not has_video(source):
-        return
-    if importlib.util.find_spec("openai") is None:
-        raise ValueError("vision_enabled needs the LLM extra: pip install 'questxtract[llm]'")
-    if config.base_url is None and not config.api_key:
-        raise ValueError(
-            "vision_enabled needs OPENAI_API_KEY in the environment or .env, "
-            "or base_url for a local server"
-        )
+    if not config.vision_enabled:
+        return config
+    if not has_video(source):
+        print(f"note: {source.name} has no video, so the board is not read", file=sys.stderr)
+        return config.replace(vision_enabled=False)
+    _check_endpoint(config, "--vision / vision_enabled")
+    return config
 
 
 def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
@@ -359,8 +373,9 @@ def _process(args: argparse.Namespace) -> int:
     if args.quiz:
         if args.output == "-":
             raise ValueError("--quiz writes a file next to questions.json, so drop -o -")
-        _with_quiz(config)
+        _check_endpoint(config, "--quiz")
     output = _output_path(args.output, source, "questions")
+    config = _with_vision(config, source)
 
     if source.suffix.lower() == ".json":
         transcript = Transcript.from_file(source)
@@ -369,7 +384,6 @@ def _process(args: argparse.Namespace) -> int:
         # The documented `stages=` seam (architecture.md 11.1): the transcript is in hand.
         ctx = _run(ctx, STAGES[_AFTER_TRANSCRIBE:])
     else:
-        _with_vision(config, source)
         ctx = _run(Context(source=source, config=config), STAGES)
 
     if output is None:  # stdout has no folder for keyframes, so they keep their cache paths
@@ -399,14 +413,70 @@ def _transcribe(args: argparse.Namespace) -> int:
     return 0
 
 
-def _eval(args: argparse.Namespace) -> int:
-    """Score the pipeline against the labelled set."""
+def _time(value: str) -> float:
+    """Parse ``--from`` / ``--to``: seconds (``300``, ``12.5``) or ``M:SS`` / ``H:MM:SS``.
+
+    A negative, infinite or reversed range is left to :func:`filter_document`'s checks.
+    """
     try:
-        report = evaluate(args.paths, _with_llm(_config(args)))
+        parts = [float(part) for part in value.split(":")]
+    except ValueError:
+        parts = []
+    if not 1 <= len(parts) <= 3 or not all(0 <= part < 60 for part in parts[1:]):
+        raise argparse.ArgumentTypeError(f"expected seconds, M:SS or H:MM:SS, got {value!r}")
+    return sum(part * 60.0**power for power, part in enumerate(reversed(parts)))
+
+
+def _repoint_keyframes(data: dict[str, object], source: Path, output: Path) -> None:
+    """Keep each relative ``keyframe_path`` pointing at its image from ``output``'s folder.
+
+    A written ``questions.json`` names keyframes relative to itself (architecture.md 12.1), so a
+    copy in another folder would lose them. Absolute when no relative path exists (another
+    drive on Windows).
+    """
+    visuals = data.get("visuals")
+    for visual in visuals if isinstance(visuals, list) else ():
+        path = visual.get("keyframe_path") if isinstance(visual, dict) else None
+        if not isinstance(path, str) or not path or Path(path).is_absolute():
+            continue
+        image = source.parent / path
+        try:
+            visual["keyframe_path"] = Path(os.path.relpath(image, output.parent)).as_posix()
+        except ValueError:
+            visual["keyframe_path"] = str(image.resolve())
+
+
+def _filter(args: argparse.Namespace) -> int:
+    """Keep the questions of a ``questions.json`` that match the words and the time range."""
+    if args.text is None and args.start is None and args.end is None:
+        raise ValueError("give --text, --from or --to")
+    source = Path(args.questions)
+    data = read_questions(source)
+    kept = filter_document(data, start=args.start, end=args.end, text=args.text)
+    output = None if args.output is None else _output_path(args.output, source, "questions")
+    if output is not None:
+        _repoint_keyframes(kept, source, output)
+    summary = f"{len(kept['questions'])} of {len(data['questions'])} questions"
+    _write(json.dumps(kept, indent=2, ensure_ascii=False), output, summary)
+    return 0
+
+
+def _eval(args: argparse.Namespace) -> int:
+    """Score the pipeline, or with ``--score-vision`` the vision model, on the labelled set."""
+    try:
+        config = _with_llm(_config(args))
+        if args.score_vision:
+            _check_endpoint(config, "eval --score-vision")
+            report = evaluate_vision(args.paths, config)
+        else:
+            report = evaluate(args.paths, config, board=args.board)
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    print(json.dumps(report, indent=2) if args.json else format_report(report))
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(format_vision_report(report) if args.score_vision else format_report(report))
     return 0
 
 
@@ -418,13 +488,24 @@ def _quiz(args: argparse.Namespace) -> int:
         raise FileNotFoundError(f"{questions}: no such file")
     if questions.suffix.lower() != ".json":
         raise ValueError(f"{questions}: expected a questions.json written by `process`")
-    _with_quiz(config)
+    _check_endpoint(config, "quiz")
     if args.transcript is not None and not Path(args.transcript).is_file():
         raise FileNotFoundError(f"{args.transcript}: no such file")
     document = read_questions(questions)
     sentences = _quiz_sentences(document, args.transcript, config)
     output = _output_path(args.output, questions, "quiz")
     _write_quiz(questions, output, config, sentences, document)
+    return 0
+
+
+def _qti(args: argparse.Namespace) -> int:
+    """Export quiz.json as a QTI 3.0 package."""
+    try:
+        export_qti(args.quiz, args.output)
+    except QtiExportError as exc:
+        print(f"error: qti: {exc}", file=sys.stderr)
+        return 1
+    print(f"QTI 3.0 package -> {args.output}", file=sys.stderr)
     return 0
 
 
@@ -491,8 +572,8 @@ def build_parser() -> argparse.ArgumentParser:
     llm.add_argument(
         "--llm-url",
         metavar="URL",
-        help="an OpenAI-compatible endpoint for --detector llm, e.g. http://localhost:11434/v1 "
-        "for Ollama (default: OpenAI, with the key from OPENAI_API_KEY)",
+        help="an OpenAI-compatible endpoint for --detector llm and --vision, e.g. "
+        "http://localhost:11434/v1 for Ollama (default: OpenAI, with the key from OPENAI_API_KEY)",
     )
     llm.add_argument(
         "--llm-reasoning",
@@ -524,10 +605,27 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"options per quiz item, one of them correct: {MIN_OPTIONS} to {MAX_OPTIONS} "
         f"(default: {defaults.quiz_options})",
     )
+    quizzing.add_argument(
+        "--quiz-model",
+        dest="quiz_model",
+        default=None,
+        metavar="NAME",
+        help=f"the model that writes the quiz (default: {defaults.quiz_model})",
+    )
+
+    # The vision model: `process` reads the board with it, `eval --score-vision` scores it.
+    vision_model = argparse.ArgumentParser(add_help=False)
+    vision_model.add_argument(
+        "--vision-model",
+        default=None,
+        metavar="NAME",
+        help=f"the model that reads the board, as the endpoint names it (default: "
+        f"{defaults.vision_model})",
+    )
 
     process = subs.add_parser(
         "process",
-        parents=[configured, shared, llm, quizzing],
+        parents=[configured, shared, llm, vision_model, quizzing],
         help="extract questions from a recording or a transcript",
         description="Extract the questions asked in a recording, or in an existing transcript.",
         epilog=_PROCESS_EXAMPLES,
@@ -552,12 +650,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="also write a multiple-choice quiz next to the questions (lecture.quiz.json); "
         "needs the questxtract[llm] extra and a key or --llm-url",
     )
+    # See the note above _with_vision before adding a vision flag.
     process.add_argument(
-        "--quiz-model",
-        dest="quiz_model",
+        "--vision",
+        action=argparse.BooleanOptionalAction,
         default=None,
-        metavar="NAME",
-        help=f"the model that writes the quiz (default: {defaults.quiz_model})",
+        help="also read the slides or the board with a vision model (needs the questxtract[llm] "
+        "extra, and OPENAI_API_KEY or --llm-url); --no-vision turns off vision_enabled from the "
+        "settings file for one run",
     )
     process.set_defaults(handler=_process)
 
@@ -572,11 +672,66 @@ def build_parser() -> argparse.ArgumentParser:
     transcribe.add_argument("recording", help="an .mp4 or .mp3 recording")
     transcribe.set_defaults(handler=_transcribe)
 
+    filtering = subs.add_parser(
+        "filter",
+        help="keep the questions that mention words, spoken or on the board, or fall in a time "
+        "range",
+        description="Keep the questions of a questions.json that match every given word, said "
+        "or written on a board state linked to them, and fall in the time range. Prints the "
+        "result unless -o is given.",
+        epilog=_FILTER_EXAMPLES,
+        formatter_class=raw,
+    )
+    filtering.add_argument("questions", help="a questions.json written by `process`")
+    filtering.add_argument(
+        "--text",
+        metavar="WORDS",
+        help="keep questions where every word appears, as a whole word and ignoring case, in "
+        "the question, its answer, or the board on screen while it was asked",
+    )
+    filtering.add_argument(
+        "--from",
+        dest="start",
+        type=_time,
+        metavar="TIME",
+        help="keep questions asked at or after TIME: seconds, M:SS or H:MM:SS",
+    )
+    filtering.add_argument(
+        "--to",
+        dest="end",
+        type=_time,
+        metavar="TIME",
+        help="keep questions asked before TIME: seconds, M:SS or H:MM:SS",
+    )
+    filtering.add_argument(
+        "-o",
+        "--output",
+        metavar="PATH",
+        help="write the result here (default: print it to the terminal)",
+    )
+    filtering.set_defaults(handler=_filter)
+
     evaluation = subs.add_parser(
-        "eval", parents=[configured, llm], help="score against the labelled set"
+        "eval", parents=[configured, llm, vision_model], help="score against the labelled set"
     )
     evaluation.add_argument(
-        "paths", nargs="+", help="*.labels.jsonl files, or directories holding them"
+        "paths",
+        nargs="+",
+        help="*.labels.jsonl files, or directories holding them (with --score-vision: "
+        "*.frames.jsonl)",
+    )
+    evaluation.add_argument(
+        "--score-vision",
+        action="store_true",
+        dest="score_vision",  # not `vision`: that is vision_enabled, read by _config
+        help="score the vision model (--vision-model, at --llm-url) on the labelled keyframes "
+        "instead of question detection; calls the model once per frame, then caches",
+    )
+    evaluation.add_argument(
+        "--board",
+        action="store_true",
+        help="use the board states in <name>.visual.json beside each transcript, as if "
+        "--vision had read them",
     )
     evaluation.add_argument("--json", action="store_true", help="machine-readable, for CI")
     evaluation.set_defaults(handler=_eval)
@@ -607,13 +762,6 @@ def build_parser() -> argparse.ArgumentParser:
         "(default: the cached transcript of the recording, when there is one)",
     )
     quiz.add_argument(
-        "--llm-model",
-        dest="quiz_model",
-        default=None,
-        metavar="NAME",
-        help=f"the model that writes the quiz (default: {defaults.quiz_model})",
-    )
-    quiz.add_argument(
         "--llm-url",
         metavar="URL",
         help="an OpenAI-compatible endpoint, e.g. http://localhost:11434/v1 for Ollama "
@@ -628,6 +776,11 @@ def build_parser() -> argparse.ArgumentParser:
         f"or server to send no setting (default: {defaults.judge_reasoning_effort})",
     )
     quiz.set_defaults(handler=_quiz)
+
+    qti = subs.add_parser("qti", help="export quiz.json as a QTI 3.0 package")
+    qti.add_argument("quiz", help="a quiz.json")
+    qti.add_argument("-o", "--output", required=True, help="write the QTI ZIP package here")
+    qti.set_defaults(handler=_qti)
 
     return parser
 

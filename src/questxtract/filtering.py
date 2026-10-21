@@ -1,4 +1,7 @@
-"""Filtering extracted questions by time range, and experimentally by topic (FR11, #16).
+"""Filtering extracted questions by time range and text, and experimentally by topic.
+
+FR11 (#16) asks for time and topic; the text search (#136) queries what was said and what was
+on the board together (M3).
 
 Two entry points over the two shapes a finished run takes: :func:`filter_questions` on a
 ``Context``, :func:`filter_document` on a ``questions.json`` document from
@@ -9,6 +12,12 @@ A question is in range when ``start <= question.start < end``. The question's st
 FR7 timestamp, and half-open ranges tile a recording without counting a question twice.
 Only the question list shrinks: segments, board states, source, config and stats are left
 as they are, so ``segment_id`` and ``visual_ids`` still resolve.
+
+``text=`` keeps a question when every word of the query appears somewhere in it, as a whole
+word and ignoring case: in its ``text``, ``original_text``, answer or ``review`` text, or in the
+``text``, ``latex`` or ``description`` of a board state in its ``visual_ids``. The words may come
+from different places, so "eigenvalue zero" finds a spoken "what if this is zero?" asked while
+the board says "eigenvalue".
 
 Topic filtering is **experimental**. Nothing produces topic labels yet: a ``Segment`` is a
 time unit, not a topic one (architecture.md 3.2), and every exported ``segments[].topic``
@@ -21,9 +30,11 @@ from __future__ import annotations
 import copy
 import dataclasses
 import math
+import re
 import warnings
 from typing import Any
 
+from .export import result_to_dict
 from .models import Context, SchemaError
 
 
@@ -33,6 +44,7 @@ def filter_questions(
     start: float | None = None,
     end: float | None = None,
     topic: str | None = None,
+    text: str | None = None,
 ) -> Context:
     """Return a copy of a finished context holding only the questions in ``[start, end)``.
 
@@ -43,17 +55,27 @@ def filter_questions(
         topic: **Experimental.** Keep only questions whose segment carries this topic.
             No stage produces topics yet, so on a ``Context`` this always warns and
             matches nothing.
+        text: Keep only questions where every word of ``text`` appears, spoken or on a
+            linked board state (see :func:`filter_document`).
 
     Returns:
         A new ``Context`` whose ``pairs`` are the matching questions in their original
         order. Every other field is the input's.
 
     Raises:
-        ValueError: If the range is invalid (see :func:`filter_document`).
+        ValueError: If the range or ``text`` is invalid (see :func:`filter_document`).
 
     """
     low, high = _check_range(start, end)
+    words = _query_words(text)
     pairs = tuple(p for p in ctx.pairs if _in_range(p.start, low, high))
+    if words:
+        # The export links questions to board states; search what it would write.
+        doc = result_to_dict(dataclasses.replace(ctx, pairs=pairs))
+        visuals = _visuals_by_id(doc["visuals"])
+        pairs = tuple(
+            p for p, q in zip(pairs, doc["questions"], strict=True) if _matches(q, visuals, words)
+        )
     if topic is not None:
         # Segment has no topic field: a topic layer would sit over segments (3.2), not in them.
         _warn_no_topics()
@@ -67,6 +89,7 @@ def filter_document(
     start: float | None = None,
     end: float | None = None,
     topic: str | None = None,
+    text: str | None = None,
 ) -> dict[str, Any]:
     """Return a copy of a ``questions.json`` document holding only the questions in range.
 
@@ -78,6 +101,10 @@ def filter_document(
         end: Exclusive upper bound in seconds; ``None`` leaves the range open above.
         topic: **Experimental.** Keep only questions whose ``segments[segment_id].topic``
             equals this. Warns when no segment carries a topic, which today is always.
+        text: Keep only questions where every word of ``text`` appears as a whole word,
+            ignoring case, in the question's ``text``, ``original_text``, ``answer.text`` or
+            ``review.text``, or in the ``text``, ``latex`` or ``description`` of a board state
+            in its ``visual_ids``. The words may come from different places.
 
     Returns:
         A deep copy of ``data`` whose ``questions`` list keeps only the matching questions,
@@ -85,16 +112,21 @@ def filter_document(
 
     Raises:
         ValueError: If ``start`` or ``end`` is not a finite, non-negative number, or
-            ``start > end``. A range past the recording's end is not an error.
+            ``start > end``. A range past the recording's end is not an error. Also if
+            ``text`` is not a string or holds no word.
         SchemaError: If ``data`` has no ``questions`` list, or a question has no numeric
             ``start``.
 
     """
     low, high = _check_range(start, end)
+    words = _query_words(text)
     questions = data.get("questions")
     if not isinstance(questions, list):
         raise SchemaError("expected a 'questions' list")
     kept = [q for q in questions if _in_range(_question_start(q), low, high)]
+    if words:
+        visuals = _visuals_by_id(data.get("visuals"))
+        kept = [q for q in kept if _matches(q, visuals, words)]
     if topic is not None:
         topics = _segment_topics(data.get("segments"))
         if not any(t is not None for t in topics.values()):
@@ -134,6 +166,48 @@ def _question_start(question: object) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise SchemaError(f"question without a numeric 'start': {question!r}")
     return float(value)
+
+
+def _query_words(text: object) -> frozenset[str]:
+    """Return the query's words, casefolded; empty for no query, an error for a wordless one."""
+    if text is None:
+        return frozenset()
+    if not isinstance(text, str) or not (words := _words(text)):
+        raise ValueError(f"text must contain a word, got {text!r}")
+    return frozenset(words)
+
+
+def _words(*values: object) -> set[str]:
+    r"""Casefolded whole words of every string among ``values``; anything else adds none.
+
+    ``_`` separates words too: in LaTeX it starts a subscript, so ``\lambda_1`` holds
+    ``lambda``.
+    """
+    return {w for v in values if isinstance(v, str) for w in re.findall(r"[^\W_]+", v.casefold())}
+
+
+def _visuals_by_id(visuals: object) -> dict[Any, dict[str, Any]]:
+    """Map each document board state's id to it."""
+    if not isinstance(visuals, list):
+        return {}
+    return {v.get("id"): v for v in visuals if isinstance(v, dict)}
+
+
+def _matches(
+    question: dict[str, Any], visuals: dict[Any, dict[str, Any]], words: frozenset[str]
+) -> bool:
+    """Whether every query word is somewhere in the question or its linked board states."""
+    answer, review = question.get("answer"), question.get("review")
+    found = _words(
+        question.get("text"),
+        question.get("original_text"),
+        answer.get("text") if isinstance(answer, dict) else None,
+        review.get("text") if isinstance(review, dict) else None,
+    )
+    for visual_id in question.get("visual_ids") or ():
+        state = visuals.get(visual_id, {})
+        found |= _words(state.get("text"), state.get("latex"), state.get("description"))
+    return words <= found
 
 
 def _segment_topics(segments: object) -> dict[Any, Any]:

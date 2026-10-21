@@ -11,6 +11,9 @@ from questxtract import (
     QAPair,
     QuestionCandidate,
     SchemaError,
+    Segment,
+    Sentence,
+    VisualContext,
     filter_document,
     filter_questions,
     read_questions,
@@ -56,6 +59,79 @@ def document(ctx) -> dict:
         "metadata": {},
     }
     return data
+
+
+@pytest.fixture
+def searchable(document) -> dict:
+    """``document`` with a board state on screen during the first question, and texts to find."""
+    document["visuals"] = [
+        {
+            "id": "v_board",
+            "start": 0.0,
+            "end": 60.0,
+            "keyframe_path": "",
+            "description": "A 2x2 matrix",
+            "text": "Eigenvalue of A",
+            "latex": r"\lambda_1 = 0",
+            "confidence": 0.9,
+        }
+    ]
+    questions = document["questions"]
+    questions[0]["text"] = "What happens if this is zero?"
+    questions[0]["visual_ids"] = ["v_board"]
+    questions[1]["text"] = "So what is an eigenvalue?"
+    questions[4]["text"] = "Which Eigenvalues are real?"
+    questions[5]["text"] = "What is this?"
+    questions[5]["original_text"] = "What is a pole here?"
+    questions[6]["answer"] = {"text": "It is the residue.", "start": 1203.0, "end": 1205.0}
+    return document
+
+
+@pytest.fixture
+def board_ctx(tmp_path) -> Context:
+    """A finished run: one question asked under a board state, one in a later segment."""
+    board = VisualContext(start=0.0, end=60.0, text="Eigenvalue of A", latex=r"\lambda_1 = 0")
+    sentences = (
+        Sentence(
+            id="s_0",
+            text="What happens if this is zero?",
+            word_start=0,
+            word_end=6,
+            start=10.0,
+            end=12.0,
+            segment_index=0,
+        ),
+        Sentence(
+            id="s_1",
+            text="Shall we take a break?",
+            word_start=6,
+            word_end=11,
+            start=100.0,
+            end=102.0,
+            segment_index=1,
+        ),
+    )
+    segments = (
+        Segment(sentence_start=0, sentence_end=1, start=0.0, end=60.0, text="", visual=(board,)),
+        Segment(sentence_start=1, sentence_end=2, start=90.0, end=120.0, text=""),
+    )
+    pairs = tuple(
+        QAPair(
+            question=QuestionCandidate(sentence_id=s.id, text=s.text, score=0.9),
+            confidence=0.8,
+            start=s.start,
+            end=s.end,
+        )
+        for s in sentences
+    )
+    return Context(
+        source=tmp_path / "lecture.mp4",
+        config=Config(),
+        sentences=sentences,
+        segments=segments,
+        visual=(board,),
+        pairs=pairs,
+    )
 
 
 def _starts_of_ctx(ctx: Context) -> list[float]:
@@ -127,8 +203,8 @@ def test_document_from_disk(ctx, tmp_path):
 def test_inputs_are_left_untouched(ctx, document):
     ctx_before = copy.deepcopy(ctx)
     doc_before = copy.deepcopy(document)
-    filter_questions(ctx, start=300, end=600)
-    window = filter_document(document, start=300, end=600)
+    filter_questions(ctx, start=300, end=600, text="question")
+    window = filter_document(document, start=300, end=600, text="question")
     window["questions"][0]["review"]["status"] = "accepted"
     window["segments"].clear()
     with pytest.warns(UserWarning):
@@ -199,3 +275,63 @@ def test_topic_matches_the_questions_segment_topic(document):
         warnings.simplefilter("error")
         window = filter_document(document, topic="sorting", end=1000)
     assert _starts_of_doc(window) == [450.0, 599.9, 600.0]
+
+
+# --- text search (#136) -------------------------------------------------------
+
+
+def test_a_word_on_the_linked_board_keeps_a_question_that_never_says_it(searchable, board_ctx):
+    assert 10.0 in _starts_of_doc(filter_document(searchable, text="eigenvalue"))
+    assert _starts_of_ctx(filter_questions(board_ctx, text="eigenvalue")) == [10.0]
+    assert _starts_of_ctx(filter_questions(board_ctx, text="lambda")) == [10.0]
+    assert _starts_of_doc(filter_document(searchable, text="matrix")) == [10.0]
+
+
+def test_a_word_only_spoken_keeps_the_question(searchable, board_ctx):
+    assert 299.9 in _starts_of_doc(filter_document(searchable, text="eigenvalue"))
+    assert _starts_of_ctx(filter_questions(board_ctx, text="break")) == [100.0]
+
+
+def test_a_word_in_neither_leaves_the_question_out(searchable, board_ctx):
+    assert _starts_of_doc(filter_document(searchable, text="eigenvalue")) == [10.0, 299.9]
+    assert _starts_of_doc(filter_document(searchable, text="banana")) == []
+    assert _starts_of_ctx(filter_questions(board_ctx, text="banana")) == []
+
+
+def test_every_word_must_appear_but_may_come_from_speech_or_board(searchable, board_ctx):
+    assert _starts_of_doc(filter_document(searchable, text="eigenvalue zero")) == [10.0]
+    assert _starts_of_ctx(filter_questions(board_ctx, text="zero, eigenvalue")) == [10.0]
+    assert _starts_of_doc(filter_document(searchable, text="eigenvalue banana")) == []
+
+
+def test_words_match_whole_and_ignore_case(searchable):
+    assert _starts_of_doc(filter_document(searchable, text="EIGENVALUE")) == [10.0, 299.9]
+    assert _starts_of_doc(filter_document(searchable, text="eigenvalues")) == [599.9]
+    assert _starts_of_doc(filter_document(searchable, text="eigen")) == []
+
+
+def test_the_spoken_original_the_answer_and_the_review_edit_are_searched(searchable):
+    assert _starts_of_doc(filter_document(searchable, text="pole")) == [600.0]
+    assert _starts_of_doc(filter_document(searchable, text="residue")) == [1200.0]
+    assert _starts_of_doc(filter_document(searchable, text="fixed")) == [450.0]
+
+
+def test_text_and_range_must_both_match(searchable, board_ctx):
+    assert _starts_of_doc(filter_document(searchable, text="eigenvalue", start=100)) == [299.9]
+    assert _starts_of_doc(filter_document(searchable, text="eigenvalue", end=11)) == [10.0]
+    assert filter_questions(board_ctx, text="eigenvalue", start=50).pairs == ()
+
+
+def test_without_board_states_the_spoken_text_is_searched(document):
+    assert document["visuals"] == []
+    assert _starts_of_doc(filter_document(document, text="question")) == list(STARTS)
+    document["questions"][0]["visual_ids"] = ["v_gone"]
+    assert _starts_of_doc(filter_document(document, text="Question 10")) == [10.0]
+
+
+@pytest.mark.parametrize("text", ["", "  ", "?", "-- !", 5])
+def test_a_query_without_a_word_raises(ctx, document, text):
+    with pytest.raises(ValueError, match="text must contain a word"):
+        filter_questions(ctx, text=text)
+    with pytest.raises(ValueError, match="text must contain a word"):
+        filter_document(document, text=text)

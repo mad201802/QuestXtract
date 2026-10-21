@@ -22,28 +22,30 @@ def _isolated_from_the_developer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     monkeypatch.chdir(tmp_path)
 
 
-def _make_mp4(path: Path, *, audio: bool = True) -> Path:
-    """Write a tiny real MP4: a tenth of a second of silence, or a single video frame."""
+def _make_mp4(path: Path, *, audio: bool = True, video: bool = False) -> Path:
+    """Write a tiny real MP4: a tenth of a second of silence, a single video frame, or both.
+
+    ``audio=False`` gives the frame only; ``video=True`` adds the frame to the silence.
+    """
     with av.open(str(path), mode="w", format="mp4") as container:
-        if audio:
-            stream = container.add_stream("aac", rate=8000)
-            stream.layout = "mono"
-            frame = av.AudioFrame(format="s16", layout="mono", samples=800)
-            frame.sample_rate = 8000
-            frame.planes[0].update(b"\0" * frame.planes[0].buffer_size)
-            for packet in stream.encode(frame):
+        # Every stream is declared and configured before the first packet writes the header.
+        sound = container.add_stream("aac", rate=8000) if audio else None
+        picture = container.add_stream("mpeg4", rate=1) if video or not audio else None
+        if sound is not None:
+            sound.layout = "mono"
+        if picture is not None:
+            picture.width = 16
+            picture.height = 16
+            picture.pix_fmt = "yuv420p"
+        if sound is not None:
+            samples = av.AudioFrame(format="s16", layout="mono", samples=800)
+            samples.sample_rate = 8000
+            samples.planes[0].update(b"\0" * samples.planes[0].buffer_size)
+            for packet in [*sound.encode(samples), *sound.encode()]:
                 container.mux(packet)
-            for packet in stream.encode():
-                container.mux(packet)
-        else:
-            stream = container.add_stream("mpeg4", rate=1)
-            stream.width = 16
-            stream.height = 16
-            stream.pix_fmt = "yuv420p"
+        if picture is not None:
             frame = av.VideoFrame(16, 16, "yuv420p")
-            for packet in stream.encode(frame):
-                container.mux(packet)
-            for packet in stream.encode():
+            for packet in [*picture.encode(frame), *picture.encode()]:
                 container.mux(packet)
     return path
 
@@ -131,6 +133,7 @@ class FakeLLM:
     def __init__(self, replies: tuple[Any, ...]) -> None:
         self.replies = list(replies)
         self.requests: list[dict[str, Any]] = []
+        self.usage: Any = None  # set to SimpleNamespace(prompt_tokens=..., completion_tokens=...)
         self.chat = self.completions = self
 
     def create(self, **request: Any) -> Any:
@@ -139,7 +142,8 @@ class FakeLLM:
         if isinstance(reply, Exception):
             raise reply
         content = reply if isinstance(reply, str) else json.dumps(reply)
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+        message = SimpleNamespace(content=content)
+        return SimpleNamespace(choices=[SimpleNamespace(message=message)], usage=self.usage)
 
 
 @pytest.fixture
@@ -152,3 +156,65 @@ def fake_llm(monkeypatch: pytest.MonkeyPatch) -> Callable[..., FakeLLM]:
         return client
 
     return install
+
+
+def _make_quiz(*source_ids: str, **overrides: Any) -> dict[str, Any]:
+    """Build a schema-valid ``quiz.json``: one single-choice item per source question id.
+
+    Each item has options ``a`` (correct), ``b`` and ``c``. ``overrides`` replace top-level
+    keys; change nested values on the returned dict.
+    """
+
+    def text(value: str, origin: str = "generated") -> dict[str, str]:
+        return {"text": value, "origin": origin}
+
+    def item(source_id: str) -> dict[str, Any]:
+        return {
+            "id": "quiz_" + source_id,
+            "prompt": text("Which sort is stable: 2 < 3 & 4 > 1?", "spoken"),
+            "interaction_type": "choice_single",
+            "points": 2,
+            "options": [
+                {"id": "a", "text": text("Merge sort")},
+                {"id": "b", "text": text("Quicksort")},
+                {"id": "c", "text": text("Heapsort")},
+            ],
+            "correct_response": {"option_ids": ["a"]},
+            "solution": {
+                "explanation": text("A stable sort keeps equal keys in order."),
+                "option_explanations": {
+                    "a": text("Merging never swaps equal keys."),
+                    "b": text("Partitioning can reorder equal keys."),
+                    "c": text("Sifting can reorder equal keys."),
+                },
+            },
+            "provenance": {"source_question_id": source_id, "start": 1.5, "end": 4.0},
+            "review": {"status": "pending", "note": None, "metadata": {}},
+        }
+
+    quiz: dict[str, Any] = {
+        "schema_version": "1.0",
+        "id": "quiz_lecture",
+        "title": "Sorting",
+        "language": "en",
+        "status": "draft",
+        "source": {
+            "questions_path": "lecture.questions.json",
+            "questions_schema_version": "2.1",
+            "questions_hash": "9f2a",
+        },
+        "instructions": {
+            "shuffle_questions": False,
+            "shuffle_options": False,
+            "show_feedback": True,
+        },
+        "generation": {"method": "llm", "model": "gpt-5.6-terra", "prompt_version": "v0"},
+        "questions": [item(source_id) for source_id in source_ids],
+    }
+    quiz.update(overrides)
+    return quiz
+
+
+@pytest.fixture
+def make_quiz() -> Callable[..., dict[str, Any]]:
+    return _make_quiz

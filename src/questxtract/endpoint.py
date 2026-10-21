@@ -10,6 +10,8 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
+import time
+from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -62,6 +64,7 @@ def ask(
     *,
     name: str,
     valid: Callable[[dict[str, Any]], bool] | None = None,
+    usage: Counter[str] | None = None,
 ) -> dict[str, Any]:
     """Send ``request`` and return the JSON object it answers with; cached on the request.
 
@@ -71,6 +74,11 @@ def ask(
     ``valid``, when given, accepts. Anything else counts as invalid JSON, asked once more and
     never cached, so a rejected answer is not replayed on the next run. A cache that cannot be
     read or written only costs a repeat request: the answer already paid for is returned.
+
+    ``usage``, when given, adds what the calls cost: ``<name>_requests`` (every request sent,
+    a repeat or a failed one included), ``<name>_input_tokens`` and ``<name>_output_tokens``
+    (the API's ``usage``; 0 from a server that reports none) and ``<name>_ms``. A cached
+    answer adds nothing.
 
     Raises:
         RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
@@ -105,13 +113,17 @@ def ask(
     # Once more after a stall or invalid JSON; the SDK retries HTTP errors itself. A stall is
     # usually the provider: the same model answers in seconds before and after one.
     for _ in range(2):
+        started = time.perf_counter()
         try:
             response = _create(llm, request, config.timeout_seconds)
         except TimeoutError as exc:
+            _count(usage, name, None, started)
             stalled = exc
             continue
         except OpenAIError as exc:
+            _count(usage, name, None, started)  # sent, though it failed
             raise failure(str(exc)) from None
+        _count(usage, name, response, started)
         stalled = None
         content = response.choices[0].message.content
         answer = _parse(content)
@@ -125,6 +137,17 @@ def ask(
     if stalled is not None:
         raise failure(f"{stalled}, twice", Stalled) from None
     raise InvalidAnswer(f"{name}: {request['model']} did not return the expected JSON, twice")
+
+
+def _count(usage: Counter[str] | None, name: str, response: Any, started: float) -> None:
+    """Add one sent request, its tokens and its time to ``usage``."""
+    if usage is None:
+        return
+    tokens = getattr(response, "usage", None)
+    usage[f"{name}_requests"] += 1
+    usage[f"{name}_input_tokens"] += getattr(tokens, "prompt_tokens", None) or 0
+    usage[f"{name}_output_tokens"] += getattr(tokens, "completion_tokens", None) or 0
+    usage[f"{name}_ms"] += round((time.perf_counter() - started) * 1000)
 
 
 def _create(llm: Any, request: dict[str, Any], seconds: float) -> Any:

@@ -10,6 +10,7 @@ inside, [architecture.md](architecture.md).
 questxtract process lecture.mp4                # video -> lecture.questions.json
 questxtract transcribe lecture.mp4             # transcription only -> lecture.transcript.json
 questxtract process lecture.transcript.json    # questions from an existing transcript
+questxtract filter lecture.questions.json --text eigenvalue   # the questions about a word
 ```
 
 Run `questxtract --help`, or `questxtract <command> --help`, for the same information in the
@@ -37,16 +38,20 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 |---|---|---|---|
 | `-o`, `--output` | a path | next to the input | Where to write the questions. `-o -` prints them to the terminal instead. A folder in the path that doesn't exist yet is created. |
 | `-t`, `--threshold` | a number, 0 to 1 | `0.4` | Keeps only questions with at least this confidence. Lower gives more questions, including more false ones; higher gives fewer. |
-| `-m`, `--model` | a model name | `turbo` | The Whisper model used to transcribe. Only matters for `.mp4` input. See [Choosing a model](#choosing-a-model). |
+| `-m`, `--model` | a model name | `turbo` | The Whisper model used to transcribe. Only matters for `.mp4` or `.mp3` input. See [Choosing a model](#choosing-a-model). |
 | `--from-scratch` | nothing | off | Ignores cached results and recomputes everything, transcription included. |
 | `--detector` | `rules` or `llm` | `rules` | How questions are found: fast offline rules, or a language model that reads the transcript. See [Finding questions with an LLM](#finding-questions-with-an-llm). |
 | `--llm-model` | a model name | `gpt-5.6-terra` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
-| `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint for `--detector llm`, e.g. `http://localhost:11434/v1` for Ollama. Without it, OpenAI is used with the key from `OPENAI_API_KEY`. |
+| `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint for `--detector llm` and `--vision`, e.g. `http://localhost:11434/v1` for Ollama. Without it, OpenAI is used with the key from `OPENAI_API_KEY`. |
 | `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | How long a thinking model may think before it judges. Slower, and what small models such as `qwen3.5:9b` need to judge well. `server` sends no setting and leaves it to the server, for a model without one such as `gpt-4o-mini`. Any level but `none` allows each request 10 minutes instead of 2. |
+| `--vision`, `--no-vision` | nothing | off | Also reads the slides or the board with a vision model, through `--llm-url` or OpenAI. Needs the `questxtract[llm]` extra. `--no-vision` turns off `vision_enabled` from the settings file for one run. A recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript has no board, so the board is not read (a note says so). See [Reading the board](../README.md#reading-the-board). |
+| `--vision-model` | a model name | `gpt-5.6-luna` | The model that reads the board, as the endpoint names it. It must take images. |
 | `--quiz` | nothing | off | Also writes a multiple-choice quiz next to the questions file (`lecture.quiz.json`), as [`questxtract quiz`](#questxtract-quiz-questionsjson) does. Needs a file output, so not `-o -`. If the quiz fails, the questions file is kept and the exit code is 1. |
 | `--quiz-model` | a model name | `gpt-5.6-terra` | The model that writes the quiz. Only with `--quiz`. |
 | `--strictness`, `--options` | | | As for `questxtract quiz`. Only with `--quiz`. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
+
+The vision options may still change while the vision work continues in M3 (#133). The other vision settings (`vision_fps`, `vision_max_states`, `vision_change_fraction`, `vision_change_hold`) are set in the TOML file only.
 
 One thing to know about `-t` with the rules: a question with no answer scores at most `0.55`, so
 a threshold above `0.55` keeps only questions the next sentence answers. With `--detector llm`
@@ -78,7 +83,7 @@ and the same input gives the same file.
 | `--strictness` | `strict` or `lenient` | `lenient` | `lenient` also uses questions the lecture did not answer, whose correct answer the model writes from what was said around them; `strict` uses only questions the lecture answered. |
 | `--options` | a number, 3 to 5 | `3` | Options per item, one of them correct. |
 | `--transcript` | a path | the cached transcript | The lecture's transcript, for what was said around each question. |
-| `--llm-model` | a model name | `gpt-5.6-terra` | The model that writes the quiz (`quiz_model`). |
+| `--quiz-model` | a model name | `gpt-5.6-terra` | The model that writes the quiz (`quiz_model`). |
 | `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint, as for `process`. |
 | `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | As for `process`. |
 | `--config` | a path | `questxtract.toml` | The settings file. `quiz_model`, `quiz_strictness` and `quiz_options` can be set there. |
@@ -97,6 +102,34 @@ reads.
 | `--from-scratch` | nothing | off | Transcribes again even if a cached transcript exists. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
+### `questxtract filter <questions.json>`
+
+Keeps the questions of a questions file that mention some words or fall in a time range, without
+running the pipeline again. It prints the result unless `-o` is given. The result is a questions
+file like the input, with only the matching questions.
+
+| Option | Takes | Default | What it does |
+|---|---|---|---|
+| `--text` | words | | Keeps questions where every word appears, as a whole word and ignoring case, somewhere in the question, the sentence it was spoken in, its answer, its `review` text, or the text, LaTeX or description of a board state on screen while it was asked. The words may come from different places: `--text "eigenvalue zero"` finds "what if this is zero?" asked under a board that says "eigenvalue". `eigenvalue` does not find `eigenvalues`. |
+| `--from` | a time | start | Keeps questions asked at or after this time: seconds (`300`), `M:SS` (`5:00`) or `H:MM:SS` (`1:05:00`). |
+| `--to` | a time | end | Keeps questions asked before this time, in the same forms. |
+| `-o`, `--output` | a path | the terminal | Where to write the result. Keyframe paths are rewritten so the images are still found from there. |
+| `-h`, `--help` | nothing | | Shows the options and examples. |
+
+Give at least one of `--text`, `--from` and `--to`; together, a question must match all of them.
+
+### `questxtract qti <quiz.json>`
+
+Exports a quiz file as a QTI 3.0 ZIP package for an LMS. Every item becomes a single-choice
+item scored against its correct option, with each option's explanation as feedback; the quiz's
+instructions set shuffling and whether feedback is shown. Items a reviewer marked `rejected` are
+left out. The same quiz file always gives the same ZIP, byte for byte.
+
+| Option | Takes | Default | What it does |
+|---|---|---|---|
+| `-o`, `--output` | a path | required | Where to write the ZIP. Its folder must exist. |
+| `-h`, `--help` | nothing | | Shows the options. |
+
 ### Everywhere
 
 | Option | What it does |
@@ -104,11 +137,17 @@ reads.
 | `--version` | Prints the installed version. |
 | `-h`, `--help` | Without a command, lists the commands; after one, lists that command's options. |
 
-`questxtract eval <files|dirs> [--json]` scores the pipeline against the labelled set: recall,
+`questxtract eval <files|dirs> [--json] [--board]` scores the pipeline against the labelled set: recall,
 precision, false positives by kind, a threshold sweep, and every miss
-([tests/data/README.md](../tests/data/README.md)). It takes `--detector`, `--llm-model` and
+([tests/data/README.md](../tests/data/README.md)). `--board` adds the board states committed
+beside each transcript (`<name>.visual.json`), as if `--vision` had read them, and names the
+recordings that had them on the report's first line. It takes `--detector`, `--llm-model` and
 `--llm-url` too, so the rules and a model can be compared on the same recordings; the report's
-first line names the detector, the model and the prompt version.
+first line names the detector, the model and the prompt version. With `--score-vision`, it
+scores the vision model instead (`--vision-model`, at `--llm-url` if given) on the labelled
+keyframes in `tests/data/vision/`: character error rate, blank boards read as blank and formula
+recall per lecture type, then every frame, worst first ([tests/data/vision/README.md](../tests/data/vision/README.md)). It calls
+the model once per frame and caches the answers.
 
 ## Configuration files
 
@@ -173,7 +212,9 @@ Without `-o`, output lands next to the input, named after it:
 | Input | `process` writes | `transcribe` writes |
 |---|---|---|
 | `lecture.mp4` | `lecture.questions.json` | `lecture.transcript.json` |
-| `lecture.transcript.json` | `lecture.questions.json` | (needs an `.mp4`) |
+| `lecture.transcript.json` | `lecture.questions.json` | (needs an `.mp4` or `.mp3`) |
+
+`filter` prints to the terminal unless `-o` names a file.
 
 When vision has read the board, the keyframe images are copied into a folder next to the
 questions file and named after it (`lecture.keyframes/` for `lecture.questions.json`); the file
@@ -223,6 +264,12 @@ almost instantly. It works the other way round too.
 questxtract process lecture.transcript.json -o -
 ```
 
+**Export for an LMS (QTI 3.0)**
+
+```bash
+questxtract qti lecture.quiz.json -o lecture.qti.zip   # every item but the rejected ones
+```
+
 **See which questions the threshold threw away.** This is a development tool, not a CLI
 command:
 
@@ -230,6 +277,13 @@ command:
 questxtract transcribe lecture.mp4
 uv run python scripts/dropped_questions.py lecture.transcript.json -o lecture.questions.json
 # writes lecture.questions.json (kept) and lecture.questions.dropped.json (dropped)
+```
+
+**Find the questions about a word, said or on the board**
+
+```bash
+questxtract filter lecture.questions.json --text eigenvalue
+questxtract filter lecture.questions.json --text "transfer function" --from 5:00 --to 20:00 -o tf.json
 ```
 
 **Start over** after changing the code or when you suspect a stale result:
@@ -295,6 +349,12 @@ questxtract eval tests/data/ --detector llm --llm-url http://localhost:11434/v1 
 Another `-t` or a second `eval` makes no calls; a different model, endpoint, transcript or
 prompt asks again (a new questxtract version may change the prompt). `--from-scratch` ignores the cache.
 
+**What it cost.** The `stats` block of `questions.json` counts the model calls of the run:
+`judge_requests`, `judge_input_tokens`, `judge_output_tokens` and `judge_ms`, and the same with
+`layout_` and `vision_` when vision is on. Tokens are what the endpoint reports (0 from a server
+that reports none); a run answered from the cache shows 0. Multiply by your provider's prices
+for the cost of a lecture.
+
 **When the endpoint fails.** You asked for the model, so there is no quiet fallback to the rules:
 the run stops with one `error:` line (see [When something goes wrong](#when-something-goes-wrong)).
 Parts already answered stay cached, so running the same command again picks up where it stopped.
@@ -324,11 +384,16 @@ from the same folder every time to benefit from it.
 |---|---|
 | `-t`, `-o`, `--detector`, `--llm-model`, `--llm-url`, `--llm-reasoning` | no |
 | `-m` | yes: a different model gives a different transcript |
-| a `vision_*` setting or `base_url` in the TOML file | no, but the board is read again; keyframes already read with the same model are not sent twice |
+| `--vision-model`, a `vision_*` setting, or `--llm-url` / `base_url` with vision on | no, but the board is read again; keyframes already read with the same model are not sent twice |
 | `--from-scratch` | yes, and it recomputes everything else too |
 | the video file itself | yes: the cache is keyed on the file's content |
 
-A `.json` transcript input never touches the cache. There is nothing expensive left to save.
+A `.json` transcript input has no transcription to save. Only the requests to the model are
+cached, with `--detector llm` (see [Finding questions with an LLM](#finding-questions-with-an-llm)).
+
+Within one run, a slide or page that comes back with nothing changed is not read again: its
+earlier reading is copied, also with `--from-scratch`, and counted in `stats.vision_reused`. This
+is not the cache, so it works on a first run too ([architecture.md 6.5](architecture.md#65-captioning)).
 
 ## When something goes wrong
 
@@ -347,7 +412,7 @@ A `.json` transcript input never touches the cache. There is nothing expensive l
 | `...: invalid or unreadable recording` | The file is damaged, or not really an MP4 or MP3. |
 | `Invalid model size '...', expected one of: ...` | Use one of the names listed in the message. |
 | `...: not valid JSON` / `expected a list of segments...` | The `.json` file is not a transcript. |
-| `--detector llm needs OPENAI_API_KEY in the environment or .env, or --llm-url for a local server` | Make the key available in the environment or local `.env`, or pass `--llm-url` for a local server. |
+| `--detector llm needs OPENAI_API_KEY in the environment or .env, or --llm-url (base_url) for a local server` | Make the key available in the environment or local `.env`, or pass `--llm-url` for a local server. |
 | `<file>: invalid TOML at line N` | Correct the TOML syntax at the reported line. |
 | `<file>: <key>: expected float, got string` | Use the expected type; numbers must not be quoted. |
 | `<file>: unknown config field(s): ...` | Correct the name to match a field in `config.py`. |
@@ -356,6 +421,9 @@ A `.json` transcript input never touches the cache. There is nothing expensive l
 | `detector must be rules or llm` | Correct the detector name. |
 | `.env: line N: expansion is not supported; ...` | Load the key into the environment using your shell or password store before running the command. |
 | `--detector llm needs the LLM extra: ...` | Install `questxtract[llm]`. |
+| `--vision / vision_enabled needs OPENAI_API_KEY in the environment or .env, or --llm-url (base_url) for a local server` | Make the key available, pass `--llm-url` for a local server, or turn vision off with `--no-vision`. |
+| `--vision / vision_enabled needs the LLM extra: ...` | Install `questxtract[llm]`, or turn vision off with `--no-vision`. |
+| `note: <file> has no video, so the board is not read` | Not an error: a recording without video, or a transcript, has no board to read. The questions are written as usual. |
 | `judge: <endpoint>: ...` | The model endpoint failed: it is not running, the key is wrong, or the model name is unknown to it. The message after the endpoint says which. |
 | `judge: <endpoint>: ... Unrecognized request argument supplied: reasoning_effort` | The model has no reasoning setting, e.g. `gpt-4o-mini`. Pass `--llm-reasoning server`. |
 | `judge: <endpoint>: no answer within 120 s, twice` | The model did not answer one request in time, and not on a second try either. With a thinking model, pass `--llm-reasoning`, which allows 10 minutes; otherwise the provider is overloaded, try again later. |
@@ -375,5 +443,3 @@ transcription.
   Requirement 4.2 assumes English lectures, so no flag is planned. The Python API accepts
   `Config(language=...)` or `language` in the TOML file for experiments.
 - **YouTube URLs**: the CLI takes a local file. Download the video first.
-- **Vision flags** (#61): reading the board is switched on with `vision_enabled = true` in
-  `questxtract.toml`; see [Reading the board](../README.md#reading-the-board).

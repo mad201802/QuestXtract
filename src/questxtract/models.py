@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, TypeVar
@@ -296,6 +296,32 @@ class VisualContext:
         return f"v_{hashlib.sha1(key.encode()).hexdigest()[:6]}"
 
 
+def overlapping(
+    visual: Sequence[VisualContext], start: float, end: float
+) -> tuple[VisualContext, ...]:
+    """Board states whose lifetime overlaps the half-open interval ``[start, end)``."""
+    return tuple(v for v in visual if v.start < end and v.end > start)
+
+
+@dataclass(frozen=True, kw_only=True)
+class Layout:
+    """Where the lecture content sits in the frame, and what it is (architecture.md 6.2).
+
+    One answer for the whole recording, from the layout probe. The defaults, the full frame
+    and ``unknown``, are what vision uses when the probe is off or fails.
+
+    Args:
+        content_region: The content's box as fractions of the frame, ``(x0, y0, x1, y1)``
+            from the top-left corner.
+        kind: ``slides``, ``blackboard``, ``whiteboard``, ``handwriting`` (tablet or paper),
+            ``screencast`` or ``unknown``.
+
+    """
+
+    content_region: tuple[float, float, float, float] = (0.0, 0.0, 1.0, 1.0)
+    kind: str = "unknown"
+
+
 @dataclass(frozen=True, kw_only=True)
 class QuestionCandidate:
     """A sentence that detection believes is a question (architecture.md 7).
@@ -364,6 +390,7 @@ class Context:
     transcript: Transcript | None = None
     sentences: tuple[Sentence, ...] = ()
     segments: tuple[Segment, ...] = ()
+    layout: Layout = field(default_factory=Layout)  # the full frame until the probe says else
     visual: tuple[VisualContext, ...] = ()  # board states; joined to segments by attach_visual
     candidates: tuple[QuestionCandidate, ...] = ()
     pairs: tuple[QAPair, ...] = ()

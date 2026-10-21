@@ -32,7 +32,7 @@ from .score import score
 from .segments import segments
 from .sentences import sentences
 from .transcribe import transcribe
-from .vision import attach_visual, vision
+from .vision import attach_visual, layout, vision
 
 __all__ = [
     "STAGES",
@@ -138,6 +138,7 @@ STAGES: tuple[Stage, ...] = (
     transcribe,
     sentences,
     segments,
+    layout,
     vision,
     attach_visual,
     detect,

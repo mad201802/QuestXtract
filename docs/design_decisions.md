@@ -21,7 +21,7 @@ Four things shaped the design, roughly in order of weight:
    extract question *and* solution → store → review → upload to exerplaza. An architecture
    that only fits M1 would have to be reworked twice.
 2. **The roadmap's modality shift.** M1 is audio-only; M2/M3 add slide/board understanding
-   that *enriches* the audio questions; M4 renders animations. The seams between stages had
+   that *enriches* the audio questions; M3 also renders animations. The seams between stages had
    to be placed where those modalities join, not where today's code happens to split.
 3. **How the team works.** Five people, ten weeks, two-week sprints, and issues #6–#18
    assigned to different members in parallel. Module boundaries double as ownership
@@ -30,7 +30,7 @@ Four things shaped the design, roughly in order of weight:
 4. **Course quality bar.** Modular, testable, installable on three OSes × four Python
    versions, with CI gates (tests ≥ 70 % coverage, ruff, mypy strict) on every PR.
 
-Quality attributes we prioritised, in order: **modifiability** (M2–M4), **testability**
+Quality attributes we prioritised, in order: **modifiability** (M2, M3), **testability**
 (each stage in isolation), **portability** (stdlib-only core, no native deps yet),
 **interoperability** of the output (JSON as the contract with the review UI and exerplaza).
 We deliberately did *not* optimise for throughput; hour-long lectures are batch jobs.
@@ -237,7 +237,7 @@ developers. Internally we still fail fast — no silent defaults.
 ### D10 — Quality gates are part of the architecture
 
 *Chose:* uv for builds, ruff (lint + format), mypy `--strict`, pytest with a 70 % coverage
-gate and `--import-mode=importlib`, CI on Linux/macOS/Windows × Python 3.10/3.13. Planned
+gate and `--import-mode=importlib`, CI on Linux, Python 3.10. Planned
 modules are *not* scaffolded; the owning issue creates them against the documented boundary.
 
 *Why:* with five part-time contributors the type checker and the tests are the review
@@ -353,6 +353,132 @@ is no reason to stop a run of up to 80 calls.
 
 *Cost:* one more module. A vision cache key hashes the whole keyframe, up to a few MB per request.
 
+### D15: quiz.json v1 is single choice, origin-tagged, deterministic, and checked without jsonschema
+
+*Chose:* a separate `quiz.json` with its own schema (#146, architecture.md 12.3), agreed with the
+quiz command's owner (#79) and the exporters (#67, #37):
+
+- Single choice only, at least three options: one correct and at least two distractors.
+- Every text (stem, options, explanations) carries `origin`, `spoken` or `generated`. A stem is
+  `spoken` only when it is the question as it was said, which for a question the LLM judge
+  reworded is `original_text`, not `text`.
+- No run timestamps, no absolute paths and no `feedback` block, so the same input gives a
+  byte-identical file; exporters build feedback from `solution`.
+- The source question id lives only in each item's `provenance`; the item id is derived from it,
+  and two items may not share a source.
+- `review.status` is `pending`, `accepted` or `rejected`.
+- A runtime validator in plain Python for the rules JSON Schema cannot express; the schema
+  itself is enforced with `jsonschema` in the tests only.
+
+*Alternative:* `generated_at` and a `feedback` block per item, as in the first draft; a list of
+source ids in `source`; `jsonschema` as a runtime dependency that checks everything at once.
+
+*Why:* requirement 4.5 says the extraction never invents a question, so the one place that does
+write new text must say which text that is, per field. A file that changes on every run cannot
+be diffed or cached, and feedback derived from `solution` cannot drift from it. A second list of
+source ids would be one more thing to keep in sync with the items. `rejected` replaces
+`questions.json`'s `deleted` and `false_positive`, because a generated item is not a false
+detection. `jsonschema` would add a runtime dependency for checks the writer's tests already make.
+
+*Cost:* a reader that skips `read_quiz` gets no structural check at runtime. Spoken options and
+explanations cannot be checked, because `quiz.json` holds no transcript.
+
+### D16: QTI 3.0 from quiz.json, validated against the official XSDs in the tests only
+
+*Chose:* `questxtract qti` reads `quiz.json` (D15), not `questions.json`, and writes QTI 3.0
+only (#67, architecture.md 12.4). The tests validate every package they write against the
+1EdTech XSDs, from a local copy that `scripts/fetch_qti_xsd.py` downloads once: the raw bytes of
+all 17 files the two schemas import, each pinned by SHA-256, mapped from their URLs with
+`xmlschema`'s `uri_mapper`. CI caches the copy and fails when it is missing.
+
+*Alternative:* text-entry items from `questions.json`; QTI 2.x beside 3.0; the XSDs committed to
+the repository; validation at runtime, always or behind a `--validate` flag; lxml, or
+`xmlschema`'s own export of the schemas.
+
+*Why:* `quiz.json` has what a scorable item needs (options, a correct answer, points,
+explanations), and only a separate generative command may write that text (requirement 4.5).
+The item XSD alone is 18 MB, about 1.5 MB compressed in every clone. lxml cannot follow the
+schemas' `https` imports, and `xmlschema`'s export corrupts `XInclude.xsd`, which is served in
+UTF-16. Validating in the tests proves the writer, whose output depends only on the quiz's
+fields, without a runtime dependency or a network call on every export.
+
+*Cost:* the XSD tests need the network once; offline, `ci-check.sh` skips them, so only CI is
+sure to run them. A user's package is not validated when it is written, so the tests must cover
+every shape the writer can produce.
+
+### D17: CI runs on Linux and Python 3.10 only
+
+*Chose:* one test job on `ubuntu-latest` with Python 3.10, the `requires-python` floor (#159).
+The `ci` gate job keeps its name, so the required status check does not change.
+
+*Alternative:* the 3 OS x Python 3.10/3.13 matrix; Linux with 3.10 and 3.13; self-hosted runners.
+
+*Why:* the matrix started 6 jobs per push, macOS and Windows minutes bill at a higher rate than
+Linux, and the team ran out of Actions credits (#158). The package is pure Python with no
+system binaries, and mypy already checks against 3.10.
+
+*Cost:* macOS, Windows and Python 3.13 support (NFR1) is claimed, not tested. `pathlib`,
+`encoding="utf-8"` and the BOM handling stay in the code to keep it likely to work.
+
+### D18: Reuse the reading of a page that comes back, and read again when unsure
+
+*Chose:* within a run, a keyframe that shows the same page as one already read copies that
+reading (#138, architecture.md 6.5). A share of changed pixels finds the candidate; a check of
+mean brightness and colour in small squares at full resolution decides, with limits set from the
+codec noise of TTK4225 2026-09-14: between frames of one page, and between its pages coming back
+after H.264 encoding.
+
+*Alternative:* the views' measure alone, a share of changed pixels; or a perceptual hash.
+
+*Why:* both average a small change away. A new digit or decimal point is a few hundredths of a
+percent of the page, and a colour change at the same brightness is none, so the earlier reading
+would be copied over content that changed. A wrong copy puts stale text into a board state; a
+missed copy only costs one model call. So whatever the check cannot tell from noise is read again.
+
+*Cost:* the saving depends on the lecture. A tablet lecture whose pen cursor stays on the page
+rarely shows a page unchanged twice, so it saves little; a slide deck the lecturer pages back
+through saves the most. A mark fainter than the codec noise allows, about 48 grey levels of
+contrast, can go unnoticed.
+
+### D19: The board as a detection delta, built and left off
+
+*Chose:* a candidate sharing a content word with the text of the board on screen gets
+`board_overlap_delta` and the reason `board_overlap` (#60, architecture.md 7.3), measured on the
+three reference recordings with committed board states (`eval --board`), and shipped at 0.0.
+
+*Alternative:* ship it on at 0.10, as planned; or let the board lift sentences over the gate.
+
+*Why:* with the delta on, recall, precision and F1 at the default threshold were unchanged. The
+rule scores nearly every board-matching candidate 1.0 already, so a clamped additive delta has
+nothing to add, and the two it did move were noise. Letting the board make candidates would
+undo the gate's reason for being, that a question word without a `?` is a statement on these
+recordings. The code stays: it is the measured negative result, it is one setting away for a
+lecture where it helps, and the board states it reads are the input the VLM pass needs.
+
+*Cost:* `source: "combined"` is not produced by default. The board states committed for the
+eval are one model's reading and must be regenerated, not edited, when vision changes.
+
+### D20: Score board reading by character error rate and formula recall, over lecture types
+
+*Chose:* 30 labelled keyframes from six lectures whose licence or lecturer allows sharing, at
+least 5 per lecture type (slides, blackboard, whiteboard, handwriting), each with its text,
+formulas as LaTeX and a diagram line.
+`eval --score-vision` scores the character error rate of the text and the share of labelled formulas
+found in the answer's LaTeX, per lecture type (#58, architecture.md 4.4).
+
+*Alternative:* word similarity against one reader's reference text on the two reference
+recordings, as the model spike did (#52).
+
+*Why:* QuestXtract has to read any teacher's board, so a number from two recordings says little;
+the lecture types fail differently (chalk ghosts, a lecturer in front of a whiteboard, a webcam
+column over tablet notes). Character error rate is the usual measure for reading text from
+images and does not depend on how the answer splits words. Formulas are scored on their own
+because the M4 animations need them as LaTeX, and prose that reads well can still drop them.
+
+*Cost:* the labels were drafted by an LLM and wait for a human check. Recordings that allow
+redistribution are mostly university lecture halls; a document camera over paper is not covered
+yet. Diagrams are labelled but not scored.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |
@@ -368,7 +494,7 @@ is no reason to stop a run of up to 80 calls.
 | FR9 progress for long recordings | `Progress = Callable[[str, float], None]`, emitted once per stage by the runner (#14) | done for stage granularity |
 | FR10 show detection confidence | `QAPair.confidence` + `confidence_label` + `reasons` | done |
 | FR11 filter by time/topic | time: `filter_questions` / `filter_document` over `QAPair.start` / exported `start`, half-open `[start, end)` (#16). topic: experimental `topic=` on the same functions, matching `segments[].topic`; `Segment` is a *time* unit, not a topic one (architecture.md 3.2), so the label is still missing | time done, topic unbacked (experimental hook) |
-| NFR1 Python ≥ 3.10, Linux/macOS/Windows | CI matrix; no system binaries, no ffmpeg on PATH | done |
+| NFR1 Python ≥ 3.10, Linux/macOS/Windows | Linux CI on Python 3.10 (macOS, Windows untested); no system binaries, no ffmpeg on PATH | done |
 | NFR2 recall ≥ 50 % on labelled set | #11 dataset under `tests/data/`, `evaluate.py` harness (#12) | stub |
 | NFR3 docstrings, type hints, tests, ≥ 70 % coverage | ruff `D` rules, mypy strict, pytest gate | done |
 | NFR4 tested on every PR | GitHub Actions (#19) | done |
@@ -467,6 +593,9 @@ information-flow arrows — the compendium asks for an architecture sketch with 
 - **Compute once.** Persisting transcripts (D8) and keeping ASR offline means the expensive
   step runs once per lecture rather than per edit or per threshold change. Worth quantifying
   in the report (minutes of GPU/CPU per hour of lecture × number of re-runs avoided).
+- **Read a page once.** Within a run, a slide that comes back unchanged copies its earlier
+  reading instead of another vision call (D18). `stats.vision_reused` counts the readings copied;
+  each is a call saved unless the request cache would have answered it anyway.
 - **Small dependency footprint.** The core is stdlib-only; heavy models are isolated in
   `transcribe.py` and `vision.py`, and the LLM client is an optional `[llm]` extra imported
   inside the function that needs it, so a transcript-only user never installs any of them.
