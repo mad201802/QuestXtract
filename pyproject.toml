@@ -33,6 +33,9 @@ dependencies = [
 
 [project.optional-dependencies]
 llm = ["openai>=1.0"]
+# The graphical app (`questxtract gui`, issue #124): drag and drop. Optional at runtime: a
+# platform where it cannot start gets the Browse button and a line saying so.
+gui = ["tkinterdnd2>=0.6.3"]
 
 [project.urls]
 Homepage = "https://github.com/mad201802/QuestXtract"
@@ -89,4 +92,8 @@ strict = true
 
 [[tool.mypy.overrides]]
 module = ["faster_whisper"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tkinterdnd2", "tkinterdnd2.*"]
 ignore_missing_imports = true

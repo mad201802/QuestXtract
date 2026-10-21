@@ -11,7 +11,14 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from ..cli import PROCESS_INPUTS, TRANSCRIBE_INPUTS, RunResult, check_input, execute
+from ..cli import (
+    PROCESS_INPUTS,
+    TRANSCRIBE_INPUTS,
+    RunResult,
+    check_arguments,
+    check_input,
+    execute,
+)
 from ..models import Progress
 from ..quiz_schema import read_quiz
 from .options import OPTIONS, OUTPUTS, TRANSCRIBE_DESTS, Option
@@ -46,8 +53,13 @@ def source_problem(path: Path, output: str) -> str | None:
     return None
 
 
-def _applies(option: Option, output: str) -> bool:
-    """Whether a control is shown for ``output``: by its command, then by its own outputs."""
+def applies(option: Option, output: str) -> bool:
+    """Whether a control is shown for ``output``: by its command, then by its own outputs.
+
+    The QTI output takes no options: it only exports a quiz.json that already exists.
+    """
+    if OUTPUTS[output] == "qti":
+        return False
     if OUTPUTS[output] == "transcribe" and option.dest not in TRANSCRIBE_DESTS:
         return False
     return not option.outputs or output in option.outputs
@@ -86,7 +98,7 @@ def to_argv(
     if output == "quiz":
         argv.append("--quiz")
     for option in OPTIONS:
-        if option.kind == "implicit" or option.dest == "output" or not _applies(option, output):
+        if option.kind == "implicit" or option.dest == "output" or not applies(option, output):
             continue
         value = values.get(option.dest)
         if value is None or value == "":
@@ -100,6 +112,22 @@ def to_argv(
         else:
             argv += [flag, str(value)]
     return argv
+
+
+def check(
+    source: Path,
+    output: str,
+    values: Mapping[str, Any],
+    output_path: Path | None = None,
+) -> None:
+    """Raise the CLI's own error for a run that would be refused, before any work starts.
+
+    Raises:
+        ValueError: If the values are not usable (a threshold out of range, for example).
+        OSError: If the settings file named in ``config`` cannot be read.
+
+    """
+    check_arguments(to_argv(source, output, values, output_path))
 
 
 def run(

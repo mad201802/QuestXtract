@@ -219,3 +219,13 @@ def test_the_qti_output_needs_a_file_to_write(tmp_path: Path) -> None:
     """AC: no output file means no run: the window asks for one first."""
     with pytest.raises(ValueError, match="needs a file"):
         gui.to_argv(tmp_path / "quiz.json", "qti", {})
+
+
+def test_the_qti_output_offers_no_options_and_the_check_reports_a_bad_value(tmp_path: Path):
+    """The QTI output takes no options; a bad value is reported by check, before any run."""
+    options = [o for o in gui.OPTIONS if o.kind != "implicit"]
+
+    assert not any(gui.applies(option, "qti") for option in options)
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        gui.check(TRANSCRIPT, "questions", {"threshold": 2.0}, tmp_path / "q.json")
+    gui.check(TRANSCRIPT, "questions", {"threshold": 0.4}, tmp_path / "q.json")  # no raise

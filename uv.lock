@@ -1393,6 +1393,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+gui = [
+    { name = "tkinterdnd2" },
+]
 llm = [
     { name = "openai" },
 ]
@@ -1417,9 +1420,10 @@ requires-dist = [
     { name = "onnxruntime", marker = "python_full_version < '3.11'", specifier = "<1.24" },
     { name = "onnxruntime", marker = "python_full_version >= '3.11'" },
     { name = "openai", marker = "extra == 'llm'", specifier = ">=1.0" },
+    { name = "tkinterdnd2", marker = "extra == 'gui'", specifier = ">=0.6.3" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2" },
 ]
-provides-extras = ["llm"]
+provides-extras = ["llm", "gui"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1746,6 +1750,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/83/d3/803453b36afefb7c2bb238361cd4ae6125a569b4db67cd9e79846ba2d68c/sympy-1.14.0.tar.gz", hash = "sha256:d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517", size = 7793921, upload-time = "2025-04-27T18:05:01.611Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl", hash = "sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5", size = 6299353, upload-time = "2025-04-27T18:04:59.103Z" },
+]
+
+[[package]]
+name = "tkinterdnd2"
+version = "0.6.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c7/bf/4e82bd618ceaba774b6a5bba225ca26675dde04e6f2c1d50ea517d217ac5/tkinterdnd2-0.6.4.tar.gz", hash = "sha256:790d1adabec647cfe18f5c2cc7ddda98b636aac539c45aa6503d234abde3c8e3", size = 736413, upload-time = "2026-10-11T10:45:39.169Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/73/a6/72313c930c923406bd55fd7d389f6fcab2064ccd76be3590ef9d584cf2cf/tkinterdnd2-0.6.4-py3-none-any.whl", hash = "sha256:4b11e0ac6febd8609faf154851d782eca4068bfa68a88ca3d3dded8294367f80", size = 816938, upload-time = "2026-10-11T10:45:37.276Z" },
 ]
 
 [[package]]

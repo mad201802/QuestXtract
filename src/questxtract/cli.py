@@ -603,13 +603,7 @@ def execute(
         Cancelled: If ``stop`` returned true before a stage.
 
     """
-    buffer = io.StringIO()
-    try:
-        with contextlib.redirect_stderr(buffer):
-            args = build_parser().parse_args(list(argv))
-    except SystemExit:
-        lines = [line for line in buffer.getvalue().splitlines() if line.strip()]
-        raise ValueError(lines[-1] if lines else "the arguments are not valid") from None
+    args = parse_arguments(argv)
     if args.command == "process":
         return _process_run(args, progress, stop)
     if args.command == "transcribe":
@@ -621,6 +615,64 @@ def execute(
             raise ValueError(f"qti: {exc}") from None
         return RunResult(Path(args.output), "QTI 3.0 package")
     raise ValueError(f"the app runs process, transcribe or qti, not {args.command}")
+
+
+def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
+    """Parse command-line arguments without printing: a bad one raises ``ValueError``.
+
+    The graphical app (issue #124) shows that one line in its window instead of argparse's usage.
+
+    Raises:
+        ValueError: If the arguments do not parse; the message is argparse's last line.
+
+    """
+    buffer = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(buffer):
+            return build_parser().parse_args(list(argv))
+    except SystemExit:
+        lines = [line for line in buffer.getvalue().splitlines() if line.strip()]
+        raise ValueError(lines[-1] if lines else "the arguments are not valid") from None
+
+
+def check_arguments(argv: Sequence[str]) -> None:
+    """Raise the ``ValueError`` a ``process`` or ``transcribe`` run would raise, before it starts.
+
+    Checks what :func:`execute` checks first (the settings and their ranges), without reading
+    the recording or calling anything.
+
+    Raises:
+        ValueError: If the arguments do not parse or a setting is out of range.
+
+    """
+    args = parse_arguments(argv)
+    if args.command in ("process", "transcribe"):
+        _config(args)
+
+
+def _gui(args: argparse.Namespace) -> int:
+    """Open the graphical app (issue #124). tkinter and the window are imported only here."""
+    del args  # the subcommand takes no options
+    try:
+        import tkinter  # noqa: F401 - imported to see whether this Python has Tk at all
+    except ImportError:
+        print(
+            "error: this Python has no tkinter, so the graphical app cannot open; "
+            "use a Python build with Tk (the python.org installers have it)",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        import tkinterdnd2  # noqa: F401 - part of the gui extra, for drag and drop
+    except ImportError:
+        print(
+            'error: the graphical app needs its extra: pip install "questxtract[gui]"',
+            file=sys.stderr,
+        )
+        return 1
+    from .gui.window import run_app
+
+    return run_app()
 
 
 def _time(value: str) -> float:
@@ -1000,6 +1052,12 @@ def build_parser() -> argparse.ArgumentParser:
     qti.add_argument("quiz", help="a quiz.json")
     qti.add_argument("-o", "--output", required=True, help="write the QTI ZIP package here")
     qti.set_defaults(handler=_qti)
+
+    gui = subs.add_parser(
+        "gui",
+        help="open the graphical app (needs questxtract[gui])",
+    )
+    gui.set_defaults(handler=_gui)
 
     return parser
 

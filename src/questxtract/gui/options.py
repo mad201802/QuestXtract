@@ -65,7 +65,7 @@ class Option:
 
 OPTIONS: tuple[Option, ...] = (
     Option(dest="config", flag="--config", kind="file", label="Settings file"),
-    Option(dest="output", flag="-o, --output", kind="path", label="Output (folder or file)"),
+    Option(dest="output", flag="-o, --output", kind="path", label="Output file"),
     Option(
         dest="model", flag="-m, --model", kind="text", field="model_size", label="Whisper model"
     ),
