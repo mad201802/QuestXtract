@@ -107,8 +107,10 @@ def test_process_closes_the_bar_line_before_an_error_propagates(
     """A stage failing mid-run must not leave the bar's `\\r`-redrawn line dangling in
     front of the traceback."""
 
-    def _boom(ctx: Any, stages: Any, progress: Callable[[str, float], None]) -> Any:
-        del ctx, stages
+    def _boom(
+        ctx: Any, stages: Any, progress: Callable[[str, float], None], stop: Any = None
+    ) -> Any:
+        del ctx, stages, stop
         progress("sentences", 0.0)
         raise RuntimeError("boom")
 
@@ -249,8 +251,10 @@ def test_a_recording_without_audio_fails_readably(
 def test_ctrl_c_closes_the_bar_line_and_exits_130(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def _interrupt(ctx: Any, stages: Any, progress: Callable[[str, float], None]) -> Any:
-        del ctx, stages
+    def _interrupt(
+        ctx: Any, stages: Any, progress: Callable[[str, float], None], stop: Any = None
+    ) -> Any:
+        del ctx, stages, stop
         progress("sentences", 0.3)
         raise KeyboardInterrupt
 

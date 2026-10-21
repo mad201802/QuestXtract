@@ -6,12 +6,15 @@ Every command and option, with recipes: docs/cli.md.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import NamedTuple
 
 from . import __version__
 from .config import NTNU_LLM_URL, VISION_KEY_ENV, Config, load_config
@@ -19,12 +22,15 @@ from .evaluate import evaluate, evaluate_vision, format_report, format_vision_re
 from .export import read_questions, result_to_json, write_questions
 from .filtering import filter_document
 from .gui.options import FLAG_FIELDS
-from .models import Context, Sentence, Stage, Transcript
+from .models import Context, Progress, Sentence, Stage, Transcript
 from .pipeline import STAGES, cached_transcript, run
 from .qti import QtiExportError
 from .qti_v3 import export_qti
 from .quiz import MAX_OPTIONS, MIN_OPTIONS, STRICTNESS, build_quiz, file_hash, quiz_to_json
 from .vision import has_video
+
+PROCESS_INPUTS = (".mp4", ".mp3", ".json")  # what `process` takes (the graphical app too, #124)
+TRANSCRIBE_INPUTS = (".mp4", ".mp3")  # what `transcribe` takes
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
 
@@ -159,7 +165,7 @@ def _draw(index: int, total: int, name: str, fraction: float) -> None:
     print(f"\r{_render(index, total, name, fraction)}", end="", file=sys.stderr, flush=True)
 
 
-def _check_input(path: Path, allowed: Sequence[str]) -> None:
+def check_input(path: Path, allowed: Sequence[str]) -> None:
     """Reject a bad input up front, not minutes into a transcription.
 
     Raises:
@@ -405,20 +411,47 @@ def _with_vision(config: Config, source: Path) -> Config:
     return config
 
 
-def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
-    """Run ``stages`` under the progress bar, closing its line if anything interrupts it."""
+def _run(
+    ctx: Context,
+    stages: Sequence[Stage],
+    progress: Progress | None = None,
+    stop: Callable[[], bool] | None = None,
+) -> Context:
+    """Run ``stages`` under the progress bar, or under ``progress`` when the caller gives one."""
+    if progress is not None:
+        return run(ctx, stages, progress=progress, stop=stop)
     try:
-        return run(ctx, stages, progress=_progress_bar(len(stages)))
+        return run(ctx, stages, progress=_progress_bar(len(stages)), stop=stop)
     except BaseException:
         print(file=sys.stderr)  # close the redrawing bar line before the error/traceback
         raise
 
 
-def _process(args: argparse.Namespace) -> int:
-    """Extract questions from a recording (every stage) or a transcript (skips ASR)."""
+class RunResult(NamedTuple):
+    """What a finished ``process`` or ``transcribe`` run produced (issue #124).
+
+    ``path`` is the file it wrote, or ``None`` when the output goes to stdout, in which case
+    ``text`` is what would be printed. ``summary`` is the one-line account the CLI prints.
+    """
+
+    path: Path | None
+    summary: str
+    text: str | None = None
+
+
+def _process_core(
+    args: argparse.Namespace,
+    progress: Progress | None,
+    stop: Callable[[], bool] | None,
+) -> tuple[Context, Config, Path | None]:
+    """Run ``process`` up to the file it writes: the one path the CLI and the app both take.
+
+    Returns the finished context, the settings it ran with, and the questions file it wrote
+    (``None`` for stdout, which keeps its keyframes at their cache paths).
+    """
     config = _with_llm(_config(args))
     source = Path(args.input)
-    _check_input(source, (".mp4", ".mp3", ".json"))
+    check_input(source, PROCESS_INPUTS)
     if not args.quiz and any(
         getattr(args, flag) is not None for flag in ("quiz_model", "strictness", "options")
     ):
@@ -435,18 +468,56 @@ def _process(args: argparse.Namespace) -> int:
         ctx = Context(source=source, config=config, transcript=transcript)
         ctx.duration = transcript.duration
         # The documented `stages=` seam (architecture.md 11.1): the transcript is in hand.
-        ctx = _run(ctx, STAGES[_AFTER_TRANSCRIBE:])
+        ctx = _run(ctx, STAGES[_AFTER_TRANSCRIBE:], progress, stop)
     else:
-        ctx = _run(Context(source=source, config=config), STAGES)
+        ctx = _run(Context(source=source, config=config), STAGES, progress, stop)
 
+    if output is not None:
+        write_questions(ctx, output)  # questions.json is on disk before any quiz is made
+    return ctx, config, output
+
+
+def _process(args: argparse.Namespace) -> int:
+    """Extract questions from a recording (every stage) or a transcript (skips ASR)."""
+    ctx, config, output = _process_core(args, None, None)
     if output is None:  # stdout has no folder for keyframes, so they keep their cache paths
         print(result_to_json(ctx))
     else:
-        write_questions(ctx, output)
         print(f"{len(ctx.pairs)} questions -> {output}", file=sys.stderr)
-        if args.quiz:  # questions.json is on disk first: a failing quiz never loses it
+        if args.quiz:
             _write_quiz(output, _output_path(None, output, "quiz"), config, ctx.sentences)
     return 0
+
+
+def _process_run(
+    args: argparse.Namespace,
+    progress: Progress | None = None,
+    stop: Callable[[], bool] | None = None,
+) -> RunResult:
+    """Run ``process`` for the graphical app: the same run as the CLI, reported as a result."""
+    ctx, _, output = _process_core(args, progress, stop)
+    summary = f"{len(ctx.pairs)} questions"
+    if output is None:
+        return RunResult(None, summary, result_to_json(ctx))
+    return RunResult(output, summary)
+
+
+def _transcribe_core(
+    args: argparse.Namespace,
+    progress: Progress | None,
+    stop: Callable[[], bool] | None,
+) -> tuple[Context, Path | None, str]:
+    """Run ``transcribe``: the file it writes, or the text for stdout, shared by CLI and app."""
+    config = _config(args)
+    source = Path(args.recording)
+    check_input(source, TRANSCRIBE_INPUTS)
+    output = _output_path(args.output, source, "transcript")
+    ctx = _run(Context(source=source, config=config), STAGES[:_AFTER_TRANSCRIBE], progress, stop)
+    assert ctx.transcript is not None  # noqa: S101 - the transcribe stage always sets it
+    text = json.dumps(ctx.transcript.to_dict(), indent=2, ensure_ascii=False)
+    if output is not None:
+        output.write_text(text, encoding="utf-8")
+    return ctx, output, text
 
 
 def _transcribe(args: argparse.Namespace) -> int:
@@ -455,15 +526,61 @@ def _transcribe(args: argparse.Namespace) -> int:
     Runs the real ingest and transcribe stages, so it shares their cache with ``process``:
     whichever of the two runs second on the same recording skips the ASR.
     """
-    config = _config(args)
-    source = Path(args.recording)
-    _check_input(source, (".mp4", ".mp3"))
-    output = _output_path(args.output, source, "transcript")
-    ctx = _run(Context(source=source, config=config), STAGES[:_AFTER_TRANSCRIBE])
-    assert ctx.transcript is not None  # noqa: S101 - the transcribe stage always sets it
-    text = json.dumps(ctx.transcript.to_dict(), indent=2, ensure_ascii=False)
-    _write(text, output, f"{len(ctx.transcript.asr_segments)} segments")
+    ctx, output, text = _transcribe_core(args, None, None)
+    assert ctx.transcript is not None  # noqa: S101 - set by the transcribe stage
+    if output is None:
+        print(text)
+    else:
+        print(f"{len(ctx.transcript.asr_segments)} segments -> {output}", file=sys.stderr)
     return 0
+
+
+def _transcribe_run(
+    args: argparse.Namespace,
+    progress: Progress | None = None,
+    stop: Callable[[], bool] | None = None,
+) -> RunResult:
+    """Run ``transcribe`` for the graphical app, reported as a result."""
+    ctx, output, text = _transcribe_core(args, progress, stop)
+    assert ctx.transcript is not None  # noqa: S101 - set by the transcribe stage
+    summary = f"{len(ctx.transcript.asr_segments)} segments"
+    if output is None:
+        return RunResult(None, summary, text)
+    return RunResult(output, summary)
+
+
+def execute(
+    argv: Sequence[str],
+    *,
+    progress: Progress | None = None,
+    stop: Callable[[], bool] | None = None,
+) -> RunResult:
+    """Run ``process`` or ``transcribe`` from its command-line arguments, without printing.
+
+    The graphical app (issue #124) builds the same arguments a user would type and runs them
+    here, so it gets the CLI's own parsing, defaults and checks. Errors raise: ``ValueError``
+    or ``OSError`` with a readable message, :class:`questxtract.pipeline.Cancelled` when
+    ``stop`` asked for it.
+
+    Raises:
+        ValueError: If the arguments are not a ``process`` or ``transcribe`` run, or a value
+            is not usable.
+        OSError: If a file cannot be read or written.
+        Cancelled: If ``stop`` returned true before a stage.
+
+    """
+    buffer = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(buffer):
+            args = build_parser().parse_args(list(argv))
+    except SystemExit:
+        lines = [line for line in buffer.getvalue().splitlines() if line.strip()]
+        raise ValueError(lines[-1] if lines else "the arguments are not valid") from None
+    if args.command == "process":
+        return _process_run(args, progress, stop)
+    if args.command == "transcribe":
+        return _transcribe_run(args, progress, stop)
+    raise ValueError(f"the app runs process or transcribe, not {args.command}")
 
 
 def _time(value: str) -> float:
