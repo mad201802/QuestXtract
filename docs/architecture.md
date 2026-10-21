@@ -558,7 +558,13 @@ view and resemble each other. A lecturer walking past changes from one second to
 never holds; a new slide does, and is found within one sample. The last view ends at the
 recording's end. Each view's keyframe is its sharpest sample (mean gradient) among
 those that still match it, so a frame with someone in front of the board is not picked. Over
-`vision_max_states` views, the shortest is merged into its shorter neighbour until the cap holds.
+the board-state limit, the shortest view is merged into its shorter neighbour until the limit
+holds. The limit grows with the recording: `vision_states_per_minute` (3) per minute, and never
+fewer than `vision_min_states` (80), so a 45-minute lecture keeps 135 states and a 90-minute one
+270, while a fixed cap would merge more and more of a long lecture away. The number of model
+calls still has a known ceiling for the longest lecture. The rate was chosen on #153: with the
+free models on NTNU's service, a call costs time rather than money, and 3 per minute gets nearly
+the reading quality of no limit at about two thirds of its calls.
 On a tablet lecture the views are page switches and annotations added to the same slide; a
 panning chalkboard camera adds a view per pan, which the cap absorbs. A lecturer standing still in
 front of the board for the whole hold is a view of its own, with the board partly hidden in its
@@ -652,7 +658,8 @@ board.
   alone.
 
 > **Decision.** `questxtract/vision.py`. Config: `vision_enabled` (False), `vision_fps` (1.0),
-> `vision_model`, `vision_max_states` (80), `vision_change_fraction` (0.02),
+> `vision_model`, `vision_states_per_minute` (3.0), `vision_min_states` (80),
+> `vision_change_fraction` (0.02),
 > `vision_change_hold` (3 samples), `vision_base_url` (`None`: `base_url` when set, else NTNU's
 > LLM service, 10.1). Offline use points `vision_base_url` or `base_url` at a local
 > OpenAI-compatible server; worse quality there is accepted.

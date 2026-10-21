@@ -460,12 +460,13 @@ def _cut(ctx: Context) -> list[_View]:
     config, report = ctx.config, ctx.progress
     region = ctx.layout.content_region
     crop = None if region == _FULL_FRAME else region
+    limit = state_limit(config, ctx.duration)
     header = {
         "content_region": list(region),
         "vision_fps": config.vision_fps,
         "vision_change_fraction": config.vision_change_fraction,
         "vision_change_hold": config.vision_change_hold,
-        "vision_max_states": config.vision_max_states,
+        "max_views": limit,
         "duration": ctx.duration,
     }
     path = Path(config.cache_dir) / ctx.source_hash / "views.json"
@@ -483,7 +484,7 @@ def _cut(ctx: Context) -> list[_View]:
         _from_audio_start(samples, _audio_start(ctx.source)),
         change=config.vision_change_fraction,
         hold=config.vision_change_hold,
-        max_views=config.vision_max_states,
+        max_views=limit,
         end=ctx.duration or None,
     )
     if ctx.source_hash:
@@ -529,6 +530,24 @@ def _from_audio_start(
         yield shifted, frame
     if before is not None:  # the picture ends before the audio starts
         yield 0.0, before
+
+
+def state_limit(config: Config, duration: float) -> int:
+    """Return how many board states a recording of ``duration`` seconds may have.
+
+    ``vision_states_per_minute`` per minute, and never fewer than ``vision_min_states``, so the
+    number of model calls grows with the lecture instead of a fixed cap merging more and more
+    of a long lecture away, while a short one keeps the old 80 (architecture.md 6.4). An
+    unknown duration (0) gets the minimum.
+
+    Raises:
+        ValueError: If ``vision_states_per_minute`` or ``vision_min_states`` is not positive.
+
+    """
+    if config.vision_states_per_minute <= 0 or config.vision_min_states < 1:
+        raise ValueError("vision: vision_states_per_minute and vision_min_states must be positive")
+    scaled = math.ceil(duration / 60 * config.vision_states_per_minute - 1e-9)
+    return max(config.vision_min_states, scaled)
 
 
 def _load_views(path: Path, header: dict[str, Any], cache: Path) -> list[_View] | None:
@@ -730,7 +749,7 @@ def _views(
     if not 0 < change < 1 or hold < 1 or max_views < 1:
         raise ValueError(
             "vision: vision_change_fraction must be in (0, 1), and vision_change_hold and "
-            "vision_max_states positive"
+            "the board-state limit positive"
         )
     views: list[_View] = []
     reference: Frame | None = None  # the current view's first sample, small

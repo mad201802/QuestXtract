@@ -34,6 +34,7 @@ from questxtract.vision import (
     attach_visual,
     layout,
     read_keyframe,
+    state_limit,
     vision,
 )
 
@@ -1242,3 +1243,36 @@ def test_ocr_text_is_plain_words_and_prices_are_not_formulas(content, text, late
     """Review #144: formulas go to latex only, labels read plainly, prices stay prices."""
     fields = vision_module._from_ocr(_ocr_choice(content))
     assert fields is not None and (fields["text"], fields["latex"]) == (text, latex)
+
+
+# --- the board-state limit follows the lecture's length (#130) ---
+
+
+@pytest.mark.parametrize(
+    ("minutes", "limit"),
+    [(0, 80), (10, 80), (26, 80), (44.2, 133), (65.9, 198), (90, 270)],
+)
+def test_the_board_state_limit_grows_with_the_lecture(minutes, limit):
+    """#130 AC: a 90-minute lecture gets more than 80; a short one still gets 80."""
+    assert state_limit(Config(), minutes * 60) == limit
+
+
+@pytest.mark.parametrize("settings", [{"vision_states_per_minute": 0.0}, {"vision_min_states": 0}])
+def test_the_board_state_limit_rejects_bad_settings(settings):
+    with pytest.raises(ValueError, match="vision_states_per_minute and vision_min_states"):
+        state_limit(Config(**settings), 600)
+
+
+@pytest.mark.parametrize(("per_minute", "kept"), [(1.0, 2), (15.0, 3)])
+def test_the_stage_keeps_as_many_states_as_the_length_allows(
+    context, fake_llm, tmp_path, per_minute, kept
+):
+    """12 s of three slides: 1 per minute allows only the minimum of 2, 15 per minute all 3,
+    and the merged states still cover the whole recording."""
+    fake_llm(_board())
+    video = _slides_with_a_walker(tmp_path / "lecture.mp4")
+    settings = {"vision_states_per_minute": per_minute, "vision_min_states": 2}
+    ctx = run(_lecture(context, video, tmp_path / "cache", **settings), VISION_STAGES)
+    assert len(ctx.visual) == kept
+    assert ctx.visual[0].start == 0.0 and ctx.visual[-1].end == pytest.approx(12.0, abs=0.1)
+    assert [v.end for v in ctx.visual[:-1]] == [v.start for v in ctx.visual[1:]]

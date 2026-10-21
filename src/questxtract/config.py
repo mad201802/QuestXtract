@@ -62,7 +62,8 @@ class Config:
     vision_reader: str = "vlm"  # or "ocr": vision_ocr_model reads text and formulas only (6.5)
     vision_ocr_model: str = "zai-org/GLM-OCR"  # its name on NTNU's LLM service
     vision_base_url: str | None = None  # None: base_url when set, else NTNU_LLM_URL
-    vision_max_states: int = 80
+    vision_states_per_minute: float = 3.0  # board states allowed per minute of recording
+    vision_min_states: int = 80  # never fewer, however short the recording
     vision_change_fraction: float = 0.02  # share of pixels that must change
     vision_change_hold: int = 3  # samples (at vision_fps) a new view must hold
 

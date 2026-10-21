@@ -772,7 +772,8 @@ _VISION_FLAGS: dict[str, tuple[list[str], Any]] = {
 }
 _VISION_SETTINGS_FILE_ONLY = {
     "vision_fps",
-    "vision_max_states",
+    "vision_states_per_minute",
+    "vision_min_states",
     "vision_change_fraction",
     "vision_change_hold",
     "vision_base_url",  # an endpoint is set once per machine; --llm-url still moves vision too

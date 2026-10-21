@@ -234,8 +234,9 @@ vision_model = "qwen3-vl:2b-instruct"   # finds the board; leave it out to read 
 A server that does not return token probabilities still works; its readings get confidence 0.5,
 which means "not measured".
 
-A lecture costs one model call to find the slides or board and at most `vision_max_states` (80)
-to read them, plus a resend when a call fails. A slide or page that comes back later in the
+A lecture costs one model call to find the slides or board and at most 3 per minute to read
+them, at least 80 allowed, so up to 270 for a 90-minute lecture (`vision_states_per_minute`,
+`vision_min_states`), plus a resend when a call fails. A slide or page that comes back later in the
 lecture with nothing changed is not read again: its earlier reading is copied. Readings and
 keyframe images are cached, so running it again sends nothing. A reading that fails leaves its
 view out with a warning, and the run goes on. Example output:
