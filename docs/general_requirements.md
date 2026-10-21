@@ -40,7 +40,7 @@ The customer's phases, as agreed. The team plans and tracks them as [GitHub mile
 2. Deployable in own machine or in server -> github repo with a python package
 3. Get information from the images considering them as static, and enrich the audio information
 4. Get information from the images in a flow based way and enrich the audio information
-Make manim animations out of the images flow, [manim](https://github.com/manimCommunity/manim)
+Optional, not part of the core delivery: make manim animations out of the images flow, [manim](https://github.com/manimCommunity/manim)
 
 ## 6. Acceptance Criteria
 The project is accepted when a fresh install of the package processes an unseen lecture recording end-to-end and produces a JSON file of timestamped questions, all Must requirements are demonstrated in the final presentation, and the test suite passes in CI.

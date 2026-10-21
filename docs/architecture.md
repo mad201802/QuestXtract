@@ -41,7 +41,7 @@ all are what we develop and measure against.
 
 | Recording | Regime | What it stresses |
 |---|---|---|
-| [MIT 18.100B Real Analysis, L1](https://www.youtube.com/watch?v=BWvjy0a1Ffg) | chalk, sliding blackboards, dense LaTeX math, **camera pans and zooms to follow the lecturer**, few audible student questions | vision, LaTeX, manim, ASR on math jargon |
+| [MIT 18.100B Real Analysis, L1](https://www.youtube.com/watch?v=BWvjy0a1Ffg) | chalk, sliding blackboards, dense LaTeX math, **camera pans and zooms to follow the lecturer**, few audible student questions | vision, LaTeX, ASR on math jargon |
 | [TTK4225, 2026-09-14, P03·12 — impulse responses and BIBO stability](https://www.youtube.com/watch?v=ufmTACqiE78) | digital tablet notes (OneNote/PDF sheet), single instructor, control-theory derivations with heavy Socratic back-and-forth | question detection on implicit-cue and self-answered questions, ASR on control-theory notation |
 | [TTK4225, 2026-09-15, P03·14 — sinusoidal fidelity](https://www.youtube.com/watch?v=IQa2TSykWdc) | digital tablet notes (OneNote/PDF sheet), same course, frequent student Q&A | echo pairs (student question + instructor restatement), habitual confirmation-tag handling ("...right?"/"...true?") |
 
@@ -217,7 +217,7 @@ Dropping alignment also keeps the install small: `whisperx` pulls torch and the 
 Whisper mangles domain vocabulary (*supremum*, *Cauchy*, *epsilon*), and the board has those words
 written on it. The idea: collect terms from the board states (section 6) and re-transcribe with
 faster-whisper's `hotwords`. Not planned (#62): it is worth building only once the eval harness
-shows vocabulary errors costing questions. `hotwords_from_vision` is off by default and not read.
+shows vocabulary errors costing questions.
 
 ### 2.5 Words are the atomic unit
 
@@ -590,7 +590,7 @@ difference are to join it (planned, #137). Out, under a strict JSON schema and c
 code: `description`, `text`, `latex` (or null) and `confidence`. The prompt asks for what is
 visible only, with `[unreadable]` for a word it cannot read. Cached per request, the image
 included (10.4), so no keyframe is sent twice. `latex` is there because prose does not compile,
-and the M3 animations need formulas.
+and the quiz and `filter --text` use the formulas.
 
 **A page that comes back is not read again.** Lecturers return to earlier slides and pages, and
 each return is a view of its own. The request cache cannot catch it: two captures of one page
@@ -1234,8 +1234,7 @@ empty, `verdict` is `unjudged` and the judge and vision settings are `null`:
 **Shared things are listed once and referenced by id.** `segments` and `visuals` (board states,
 6.4) are top-level lists; a question points into them with `segment_id` and `visual_ids`, so a
 board state that ten questions discuss is written once. The vision milestones grow into this
-shape without a breaking change: M3's board timeline is `visuals` in time order, its animations
-one more top-level list pointing at visual ids.
+shape without a breaking change: M3's board timeline is `visuals` in time order.
 
 - `visual_ids` holds the board states on screen while the question was asked, falling back to
   every state joined to its segment when none was; empty when vision is off. A segment's own
@@ -1439,7 +1438,8 @@ checks it: `grep '@stage'` over the stage modules returns the contents of `STAGE
 `ctranslate2`, `tokenizers`, `huggingface-hub` and `tqdm` arrive transitively through
 faster-whisper.
 
-**Extras:** `[llm]` -> `openai` (the LLM detector and vision: one key, one dependency). The CLI's
+**Extras:** `[llm]` -> `openai` (the LLM detector, vision and the quiz: one dependency; vision has
+its own endpoint and key, 10.1). The CLI's
 progress bar is a few lines of `print`, not `tqdm`.
 
 **No system binaries** (no ffmpeg) and **no torch** (so no CUDA wheels, transformers or pyannote).
@@ -1469,7 +1469,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `endpoint.py` | not a stage | done: client and requests for the judge, vision and the quiz (10) | |
 | `quiz.py` | not a stage | done: quiz items from questions.json (12.3), checked by `quiz_schema.py` | |
 | `score.py` | 9 score | done: confidence and threshold | |
-| `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
+| `export.py` | 10 export | done; keeping review edits across re-runs is not planned | |
 | `quiz_schema.py` | not a stage | done: the `quiz.json` reader and validator (12.3); `quiz.py` writes it (12.3) |  |
 | `filtering.py` | not a stage | time and text filters done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --score-vision` (4.4) | |
@@ -1498,3 +1498,5 @@ Explicit boundaries, so the package does not grow into them by accident.
 - **YouTube URLs** are out of scope: the CLI takes a local file. If URL download is ever added it
   belongs in `media.py`.
 - **Speaker identification by name** and diarization (section 2.6).
+- **Manim animations** of the board are optional and outside the core delivery
+  ([design_decisions.md](design_decisions.md), D21). The package has no Manim code or dependency.
