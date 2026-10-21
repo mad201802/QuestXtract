@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from questxtract.config import Config, load_config
+from questxtract.config import DEEPSEEK, Config, load_config
 
 
 def test_missing_implicit_file_keeps_defaults(tmp_path, monkeypatch):
@@ -127,7 +127,7 @@ def test_dotenv_reads_only_api_key_with_comments_and_quotes(tmp_path, monkeypatc
         f"\ufeff# local settings\n\nUNRELATED_SETTING=ignored\nOPENAI_API_KEY={value} # note\n",
         encoding="utf-8",
     )
-    config = Config()
+    config = Config(base_url=None)  # OpenAI: OPENAI_API_KEY
     assert config.api_key == "sk-test"
     assert "sk-test" not in repr(config)
     import os
@@ -141,7 +141,7 @@ def test_environment_key_wins_even_over_invalid_dotenv(tmp_path, monkeypatch, va
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("OPENAI_API_KEY", value)
     Path(".env").write_text('OPENAI_API_KEY="unterminated', encoding="utf-8")
-    assert Config().api_key == value
+    assert Config(base_url=None).api_key == value
 
 
 def test_dotenv_never_searches_parent_directories(tmp_path, monkeypatch):
@@ -161,7 +161,7 @@ def test_bad_dotenv_values_are_reported_without_exposure(tmp_path, monkeypatch, 
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     Path(".env").write_text(f"OPENAI_API_KEY={value}", encoding="utf-8")
     with pytest.raises(ValueError) as error:
-        _ = Config().api_key
+        _ = Config(base_url=None).api_key
     assert ".env: line 1:" in str(error.value)
     assert "do-not-echo" not in str(error.value)
 
@@ -178,19 +178,42 @@ def test_tests_see_neither_the_developers_key_nor_their_checkout():
     assert load_config() == Config()
 
 
-def test_vision_defaults_to_qwen_on_ntnu_with_its_own_key(tmp_path, monkeypatch):
-    """#162: the judge stays on OpenAI; vision has NTNU's service and a key of its own."""
+def test_everything_defaults_to_deepseek_on_ntnu_with_one_key(tmp_path, monkeypatch):
+    """#173: vision, the judge and the quiz on one model at NTNU's service, with its key."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-    monkeypatch.delenv("QUESTXTRACT_VISION_API_KEY", raising=False)
-    Path(".env").write_text("QUESTXTRACT_VISION_API_KEY=ntnu-dotenv\n", encoding="utf-8")
+    Path(".env").write_text("QUESTXTRACT_NTNU_API_KEY=ntnu-dotenv\n", encoding="utf-8")
 
     config = Config()
 
-    assert config.vision_model == "Qwen/Qwen3.8-27B-FP8"
-    assert config.vision_url == "https://llm.hpc.ntnu.no/v1"
-    assert config.vision_api_key == "ntnu-dotenv" and config.api_key == "sk-openai"
+    assert config.vision_model == config.judge_model == config.quiz_model == DEEPSEEK
+    assert config.base_url == config.vision_url == "https://llm.hpc.ntnu.no/v1"
+    assert config.api_key == config.vision_api_key == "ntnu-dotenv"  # never the OpenAI key
+    assert config.reasoning_effort == "none"
     assert "ntnu-dotenv" not in repr(config)
+
+
+def test_the_ntnu_key_wins_over_its_old_name(monkeypatch):
+    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "old-name")
+    assert Config().api_key == "old-name"  # #162's name still works, for the judge too
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "new-name")
+    assert Config().api_key == Config().vision_api_key == "new-name"
+
+
+def test_openai_takes_the_openai_key_and_never_the_ntnu_one(monkeypatch):
+    """#173 AC2: the key goes with the endpoint."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+
+    openai = Config(base_url="https://api.openai.com/v1")
+
+    assert (openai.api_key, openai.vision_url, openai.vision_api_key) == (
+        "sk-openai",
+        "https://api.openai.com/v1",
+        "sk-openai",
+    )
+    split = openai.replace(vision_base_url="https://llm.hpc.ntnu.no/v1/")
+    assert (split.api_key, split.vision_api_key) == ("sk-openai", "ntnu-key")
 
 
 def test_the_vision_key_in_the_environment_wins_over_dotenv(tmp_path, monkeypatch):
@@ -205,8 +228,21 @@ def test_vision_follows_base_url_unless_it_has_its_own(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-local")
     monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "vision-key")
 
-    old_way = Config(base_url="http://localhost:11434/v1")
+    local = Config(base_url="http://localhost:11434/v1")
     own = Config(base_url="http://localhost:11434/v1", vision_base_url="http://vlm/v1")
 
-    assert (old_way.vision_url, old_way.vision_api_key) == ("http://localhost:11434/v1", "sk-local")
-    assert (own.vision_url, own.vision_api_key) == ("http://vlm/v1", "vision-key")
+    assert (local.vision_url, local.vision_api_key) == ("http://localhost:11434/v1", "sk-local")
+    assert (own.vision_url, own.vision_api_key) == ("http://vlm/v1", "sk-local")
+
+
+def test_the_old_reasoning_name_in_the_settings_file_still_applies(tmp_path, monkeypatch):
+    """#173 AC5: judge_reasoning_effort is reasoning_effort's old name."""
+    monkeypatch.chdir(tmp_path)
+    Path("questxtract.toml").write_text('judge_reasoning_effort = "low"\n', encoding="utf-8")
+    assert load_config().reasoning_effort == "low"
+
+    Path("questxtract.toml").write_text(
+        'judge_reasoning_effort = "low"\nreasoning_effort = "none"\n', encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="set reasoning_effort only"):
+        load_config()

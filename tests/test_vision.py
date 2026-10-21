@@ -11,6 +11,7 @@ import pytest
 
 from questxtract import Config, Context, Layout, Transcript, VisualContext, Word, endpoint
 from questxtract import vision as vision_module
+from questxtract.config import DEEPSEEK
 from questxtract.export import result_to_dict, write_questions
 from questxtract.pipeline import run
 from questxtract.segments import segments as segments_stage
@@ -1107,7 +1108,7 @@ def test_the_ocr_reader_fills_text_and_latex_and_leaves_the_description_empty(
     assert [part["type"] for part in message["content"]] == ["image_url", "text"]
     assert message["content"][1]["text"] == "Text Recognition:"
     config = result_to_dict(ctx)["config"]
-    assert config["vision_model"] == "Qwen/Qwen3.8-27B-FP8"  # found the board
+    assert config["vision_model"] == DEEPSEEK  # found the board
     assert config["vision_ocr_model"] == "zai-org/GLM-OCR"  # read the keyframes
 
 
@@ -1179,7 +1180,7 @@ def test_with_the_ocr_reader_the_probe_still_asks_the_vision_model(context, fake
     video = _slides_with_a_walker(tmp_path / "lecture.mp4")
     ctx = run(_lecture(context, video, tmp_path / "cache", vision_reader="ocr"), LAYOUT_STAGES)
 
-    assert client.requests[0]["model"] == "Qwen/Qwen3.8-27B-FP8"
+    assert client.requests[0]["model"] == DEEPSEEK
     assert {r["model"] for r in client.requests[1:]} == {"zai-org/GLM-OCR"}
     assert _png_size(tmp_path / "cache" / ctx.visual[0].keyframe_path) == (160, 120)
 

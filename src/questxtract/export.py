@@ -61,7 +61,7 @@ def result_to_dict(ctx: Context, keyframes: Mapping[str, str] | None = None) -> 
             # null when the stage is off, so the file never names a model that did not run
             "judge_model": ctx.config.judge_model if llm else None,
             "judge_prompt_version": JUDGE_PROMPT_VERSION if llm else None,
-            "judge_reasoning_effort": ctx.config.judge_reasoning_effort if llm else None,
+            "judge_reasoning_effort": ctx.config.reasoning_effort if llm else None,
             "vision_model": ctx.config.vision_model if ctx.config.vision_enabled else None,
             "vision_ocr_model": (
                 ctx.config.vision_ocr_model

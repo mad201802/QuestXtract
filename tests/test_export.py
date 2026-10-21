@@ -93,7 +93,7 @@ def test_the_config_block_names_the_detector_and_nothing_that_did_not_run(finish
 
 @pytest.mark.parametrize(("effort", "expected"), [("low", "low"), ("", "")])
 def test_the_config_block_names_the_llm_prompt_and_reasoning(finished, effort, expected):
-    config = finished.config.replace(detector="llm", judge_reasoning_effort=effort)
+    config = finished.config.replace(detector="llm", reasoning_effort=effort)
     exported = result_to_dict(dataclasses.replace(finished, config=config))["config"]
     assert exported["detector"] == "llm"
     assert exported["judge_prompt_version"] == JUDGE_PROMPT_VERSION
@@ -199,7 +199,7 @@ def test_every_export_shape_matches_the_published_schema(finished, validator):
     validator.validate(result_to_dict(finished))
     finished.pairs = ()
     validator.validate(result_to_dict(finished))
-    judged = finished.config.replace(detector="llm", judge_reasoning_effort="")
+    judged = finished.config.replace(detector="llm", reasoning_effort="")
     validator.validate(result_to_dict(dataclasses.replace(finished, config=judged)))
 
 

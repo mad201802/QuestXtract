@@ -15,6 +15,7 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from questxtract import Config, Context, Transcript, endpoint, llm
+from questxtract.config import DEEPSEEK
 from questxtract.export import SCHEMA_PATH, result_to_dict
 from questxtract.pipeline import STAGES, run
 from questxtract.sentences import split_sentences
@@ -95,12 +96,12 @@ def test_the_schema_requires_exactly_the_candidates_and_later_answers(
     assert schema["schema"]["required"] == [sentences[1].id]
     answers = schema["schema"]["properties"][sentences[1].id]["properties"]["answer_sentence_ids"]
     assert answers["items"]["enum"] == [sentences[2].id]
-    assert request["model"] == "gpt-4o" and "reasoning_effort" not in request  # #164
+    assert request["model"] == DEEPSEEK and request["reasoning_effort"] == "none"  # #173
     lines = request["messages"][1]["content"].splitlines()
     assert lines[0].startswith(f"   {sentences[0].id} 0s ")
     assert lines[1] == f">> {sentences[1].id} 2s What is a stable sort?"
 
-    _run(context, tmp_path, judge_reasoning_effort="low", from_scratch=True)
+    _run(context, tmp_path, reasoning_effort="low", from_scratch=True)
     assert client.requests[1]["reasoning_effort"] == "low"
 
 
@@ -273,7 +274,7 @@ def test_provider_error_hides_key_in_message_and_traceback(
     context, fake_llm, tmp_path, monkeypatch, error_type
 ):
     secret = "sk-fake-provider-error-secret"
-    monkeypatch.setenv("OPENAI_API_KEY", secret)
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", secret)  # the default endpoint's key
     message = f"Request rejected for {secret}; credential {secret} is invalid."
     fake_llm(error_type(message), error_type(message))
     with pytest.raises(ConnectionError) as caught:

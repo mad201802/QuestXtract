@@ -10,7 +10,7 @@ import openai
 import pytest
 
 from questxtract import Config, endpoint
-from questxtract.config import NTNU_LLM_URL
+from questxtract.config import NTNU_LLM_URL, OPENAI_URL
 
 
 def test_the_client_points_at_the_configured_endpoint():
@@ -25,13 +25,16 @@ class _Recorder:
 
     def __init__(self) -> None:
         self.clients: list[dict[str, Any]] = []
+        self.requests: list[dict[str, Any]] = []
 
     def __call__(self, **kwargs: Any) -> Any:
         self.clients.append(kwargs)
         message = SimpleNamespace(content="{}")
-        create = lambda **request: SimpleNamespace(  # noqa: E731
-            choices=[SimpleNamespace(message=message)], usage=None
-        )
+
+        def create(**request: Any) -> Any:
+            self.requests.append(request)
+            return SimpleNamespace(choices=[SimpleNamespace(message=message)], usage=None)
+
         return SimpleNamespace(
             api_key=kwargs["api_key"],
             chat=SimpleNamespace(completions=SimpleNamespace(create=create)),
@@ -49,19 +52,37 @@ def _ask(config: Config, *, vision: bool) -> None:
     endpoint.ask(config, {"model": "m", "messages": []}, name="t", vision=vision)
 
 
-def test_the_judge_goes_to_openai_and_vision_to_ntnu_each_with_its_own_key(
+def test_by_default_every_request_goes_to_ntnu_with_its_key_and_thinking_off(
     recorder: _Recorder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#162 AC: with both on, each request goes to its own endpoint with its own key."""
+    """#173 AC1: the judge and vision on NTNU's service, one key, reasoning "none"."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "ntnu-key")
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
 
     _ask(Config(), vision=False)
-    _ask(Config(), vision=True)
+    _ask(Config(from_scratch=True), vision=True)  # the same request, so past the cache
 
-    judge, vision = recorder.clients
-    assert (judge["base_url"], judge["api_key"]) == (None, "sk-openai")
-    assert (vision["base_url"], vision["api_key"]) == (NTNU_LLM_URL, "ntnu-key")
+    assert [(c["base_url"], c["api_key"]) for c in recorder.clients] == 2 * [
+        (NTNU_LLM_URL, "ntnu-key")
+    ]
+    assert [r["reasoning_effort"] for r in recorder.requests] == ["none", "none"]
+
+
+def test_openai_gets_the_openai_key_and_no_reasoning_setting_with_server(
+    recorder: _Recorder, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#173 AC2: the fallback; the NTNU key never leaves for another endpoint."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+    config = Config(base_url=OPENAI_URL, reasoning_effort="")
+
+    _ask(config, vision=False)
+    _ask(config.replace(from_scratch=True), vision=True)
+
+    assert [(c["base_url"], c["api_key"]) for c in recorder.clients] == 2 * [
+        (OPENAI_URL, "sk-openai")
+    ]
+    assert all("reasoning_effort" not in r for r in recorder.requests)
 
 
 def test_only_base_url_still_sends_vision_there_with_the_judges_key(
@@ -77,19 +98,19 @@ def test_only_base_url_still_sends_vision_there_with_the_judges_key(
     assert (vision["base_url"], vision["api_key"]) == ("http://localhost:11434/v1", "sk-local")
 
 
-def test_vision_base_url_takes_vision_elsewhere_with_the_vision_key(
+def test_vision_base_url_takes_vision_elsewhere_with_that_endpoints_key(
     recorder: _Recorder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "vision-key")
-    config = Config(base_url="http://localhost:11434/v1", vision_base_url="http://vlm:8000/v1")
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+    config = Config(base_url="http://localhost:11434/v1", vision_base_url=NTNU_LLM_URL)
 
     _ask(config, vision=False)
     _ask(config, vision=True)
 
     judge, vision = recorder.clients
     assert judge["base_url"] == "http://localhost:11434/v1" and judge["api_key"] == "sk-openai"
-    assert (vision["base_url"], vision["api_key"]) == ("http://vlm:8000/v1", "vision-key")
+    assert (vision["base_url"], vision["api_key"]) == (NTNU_LLM_URL, "ntnu-key")
 
 
 def test_the_vision_key_is_hidden_in_errors(monkeypatch: pytest.MonkeyPatch) -> None:
