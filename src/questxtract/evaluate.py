@@ -347,7 +347,8 @@ def evaluate_vision(paths: Sequence[str | Path], config: Config | None = None) -
     """Score the vision model against every labelled keyframe under ``paths``.
 
     ``paths`` are ``*.frames.jsonl`` files or directories holding them; each line names a PNG
-    beside the file. Every frame is read with ``config.vision_model`` through
+    beside the file. Every frame is read with ``config.reading_model`` (the vision model, or the
+    OCR model with ``vision_reader = "ocr"``) through
     :func:`~questxtract.vision.read_keyframe`, as the vision stage reads a keyframe when the
     layout probe got the frame's kind right: the label's kind in the prompt, no speech. Answers
     are cached per request, so a second run makes no calls. A frame the model could not read
@@ -397,7 +398,7 @@ def evaluate_vision(paths: Sequence[str | Path], config: Config | None = None) -
     if not frames:
         raise ValueError(f"no labelled frame in a *.frames.jsonl under {paths}")
     return {
-        "model": config.vision_model,
+        "model": config.reading_model,
         "prompt": VISION_PROMPT_VERSION,
         "kinds": {
             kind: _vision_metrics([f for f in frames if f["kind"] == kind])

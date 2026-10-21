@@ -4,6 +4,15 @@
 
 ### Added
 
+- `--vision-reader ocr` (`vision_reader = "ocr"`) reads the board with GLM-OCR
+  (`vision_ocr_model`, `zai-org/GLM-OCR` on NTNU's service) instead of the vision model: the text
+  and the formulas as LaTeX, labels such as circled numbers and units left out, no description,
+  and a confidence from the token probabilities (0.5 when the server sends none). It goes through
+  vision's endpoint and key, is cached and fails like the vision model's reading, and works with
+  `eval --score-vision`. The layout probe still uses `vision_model`. (#144)
+- `questions.json` schema 2.3: `config.vision_ocr_model` names the OCR model that read the
+  keyframes, `null` when the vision model read them or vision was off. Files from schema 2.0 to
+  2.2 still read. (#144)
 - `questxtract quiz lecture.questions.json` writes multiple-choice quiz items to
   `lecture.quiz.json`, and `process --quiz` writes them after the questions in the same run. Each
   item has a stem, `--options` options (3 by default, one correct), an explanation and why each
@@ -124,6 +133,10 @@
   set `vision_model = "gpt-5.6-luna"` and `vision_base_url = "https://api.openai.com/v1"`, and put
   the OpenAI key in `QUESTXTRACT_VISION_API_KEY`. The NTNU service needs the NTNU network or VPN.
   (#162)
+- The limit on board states, and so on vision calls, grows with the lecture: `vision_max_states`
+  is replaced by `vision_states_per_minute` (3.0) and `vision_min_states` (80). A 90-minute
+  lecture can have 270 board states instead of 80; a lecture of 26 minutes or less keeps 80. A
+  `questxtract.toml` that still sets `vision_max_states` is rejected as an unknown key. (#130)
 - `Config.judge_enabled` and `Config.judge_max_candidates` are gone. `Config(detector="llm")`
   turns the LLM on; `judge_window`, `judge_batch_size`, `judge_parallel` and
   `judge_reasoning_effort` tune it. The `judge` stage runs before `score`, so the threshold

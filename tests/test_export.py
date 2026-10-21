@@ -401,7 +401,7 @@ def test_cli_roundtrip(tmp_path):
     out = tmp_path / "q.json"
     assert main(["process", str(_transcript_file(tmp_path)), "-o", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
-    assert data["schema_version"] == "2.2"
+    assert data["schema_version"] == "2.3"
     # An aux head without a '?' scores 0.4, under the 0.45 detection gate, so it is never a
     # candidate (architecture.md 7.3).
     assert [q["text"] for q in data["questions"]] == ["What is a stable sort?"]

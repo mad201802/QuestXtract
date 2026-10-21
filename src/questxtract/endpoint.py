@@ -49,6 +49,15 @@ def route(config: Config, *, vision: bool = False) -> tuple[str | None, str | No
     return config.base_url, config.api_key
 
 
+class Refused(ConnectionError):
+    """The endpoint refused the request itself (HTTP 400), as for a parameter it does not take.
+
+    A ``ConnectionError`` so existing callers keep working. It is its own type so a caller can
+    ask again without an optional parameter (the OCR reader's ``logprobs``), where a bad key or
+    an unreachable endpoint would fail the same way however it asked.
+    """
+
+
 def client(config: Config, *, vision: bool = False) -> Any:
     """Build the OpenAI-compatible client for the judge, or for vision with ``vision=True``.
 
@@ -79,6 +88,7 @@ def ask(
     valid: Callable[[dict[str, Any]], bool] | None = None,
     usage: Counter[str] | None = None,
     vision: bool = False,
+    convert: Callable[[Any], dict[str, Any] | None] | None = None,
 ) -> dict[str, Any]:
     """Send ``request`` and return the JSON object it answers with; cached on the request.
 
@@ -96,10 +106,15 @@ def ask(
 
     ``vision=True`` sends it to vision's endpoint with vision's key (:func:`route`).
 
+    ``convert``, for a model that answers in plain text (an OCR model), turns the response's
+    first choice into the JSON object instead; ``None`` counts as invalid JSON. What it returns
+    is what is checked with ``valid`` and cached.
+
     Raises:
         RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
         ConnectionError: If the endpoint fails after the SDK's own retries.
         Stalled: If it gives no answer within the deadline, twice (a ``ConnectionError``).
+        Refused: If the endpoint refuses the request with HTTP 400 (a ``ConnectionError``).
         InvalidAnswer: If the model answers with something other than a JSON object twice.
         ValueError: If the settings cannot be used, such as an unreadable ``.env``.
 
@@ -139,11 +154,16 @@ def ask(
             continue
         except OpenAIError as exc:
             _count(usage, name, None, started)  # sent, though it failed
-            raise failure(str(exc)) from None
+            refused = getattr(exc, "status_code", None) == 400
+            raise failure(str(exc), Refused if refused else ConnectionError) from None
         _count(usage, name, response, started)
         stalled = None
-        content = response.choices[0].message.content
-        answer = _parse(content)
+        if convert is None:
+            content = response.choices[0].message.content
+            answer = _parse(content)
+        else:
+            answer = convert(response.choices[0])
+            content = json.dumps(answer, ensure_ascii=False)
         if answer is not None and (valid is None or valid(answer)):
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)

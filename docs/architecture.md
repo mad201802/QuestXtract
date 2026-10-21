@@ -494,7 +494,8 @@ as well as models that cost an order of magnitude more (`gpt-4o`, `gpt-4o-mini`)
 on Idun's hosted service and on an 8 GB laptop through Ollama): it reads most of the text and
 formulas on chalk and printed slides, less than the vision models, and answers in plain text with
 formulas inline as `$...$`, with no description and no confidence, and it also reads the room and
-the app interface (an exit sign, the tablet app's menu). Printed slides read as well at 640x360 as
+the app interface (an exit sign, the tablet app's menu). It is the second reader (6.5): faster
+and lighter, for the text and formulas alone. Printed slides read as well at 640x360 as
 at 720p, at half the image tokens; chalk was only tried at 720p. An open model reaches the same
 endpoint (10.1); a 2B model on a laptop reads worse than Qwen3.8-27B and leaves `latex` empty. Prompt v0 and its output
 schema, matching `VisualContext`, are in [`tests/data/vision/`](../tests/data/vision/README.md); the
@@ -557,7 +558,13 @@ view and resemble each other. A lecturer walking past changes from one second to
 never holds; a new slide does, and is found within one sample. The last view ends at the
 recording's end. Each view's keyframe is its sharpest sample (mean gradient) among
 those that still match it, so a frame with someone in front of the board is not picked. Over
-`vision_max_states` views, the shortest is merged into its shorter neighbour until the cap holds.
+the board-state limit, the shortest view is merged into its shorter neighbour until the limit
+holds. The limit grows with the recording: `vision_states_per_minute` (3) per minute, and never
+fewer than `vision_min_states` (80), so a 45-minute lecture keeps 135 states and a 90-minute one
+270, while a fixed cap would merge more and more of a long lecture away. The number of model
+calls still has a known ceiling for the longest lecture. The rate was chosen on #153: with the
+free models on NTNU's service, a call costs time rather than money, and 3 per minute gets nearly
+the reading quality of no limit at about two thirds of its calls.
 On a tablet lecture the views are page switches and annotations added to the same slide; a
 panning chalkboard camera adds a view per pan, which the cap absorbs. A lecturer standing still in
 front of the board for the whole hold is a view of its own, with the board partly hidden in its
@@ -621,6 +628,24 @@ questions the pipeline already found. A setting that cannot be used, such as an 
 is not a bad keyframe: it would drop every one the same way, so it stops the run as it does for the
 judge.
 
+**The OCR reader.** `vision_reader = "ocr"` (`--vision-reader ocr`) reads each keyframe with
+`vision_ocr_model` (GLM-OCR, `zai-org/GLM-OCR` on NTNU's service) instead: the image and the task
+prompt `Text Recognition:` in one user message, with the token probabilities asked for, through
+vision's endpoint and key (10.1). It answers in plain text with formulas inline as `$...$`, which
+`_from_ocr` turns into the same fields: `text` without the `$` delimiters, `latex` the formula
+segments one per line, leaving out labels (a circled number, a number with a unit, a single
+symbol), `description` empty, and `confidence` the mean probability of the answer's tokens, or 0.5
+when the server sends none, which means "not measured". The converted answer is what is cached,
+and failures follow the rules above. The speech and the kind do not go to the OCR model. The
+layout probe still asks `vision_model`, so the frame is cropped to the board before OCR reads it;
+where no vision model answers, the probe falls back to the full frame (6.2). `questions.json`
+names the OCR model in `config.vision_ocr_model` (12.1), beside `vision_model`, which found the
+board.
+
+> **Decision.** The vision model stays the default: OCR gives no description, and the 19.10
+> comparison (#153) put Qwen3.8-27B ahead on the board's words. OCR is the option for a faster
+> run, or for a local machine (an 8 GB laptop runs GLM-OCR through Ollama, #144).
+
 ### 6.6 Consumers
 
 - **Detection** (7.3): a small positive delta when a question shares a content word with the
@@ -633,7 +658,8 @@ judge.
   alone.
 
 > **Decision.** `questxtract/vision.py`. Config: `vision_enabled` (False), `vision_fps` (1.0),
-> `vision_model`, `vision_max_states` (80), `vision_change_fraction` (0.02),
+> `vision_model`, `vision_states_per_minute` (3.0), `vision_min_states` (80),
+> `vision_change_fraction` (0.02),
 > `vision_change_hold` (3 samples), `vision_base_url` (`None`: `base_url` when set, else NTNU's
 > LLM service, 10.1). Offline use points `vision_base_url` or `base_url` at a local
 > OpenAI-compatible server; worse quality there is accepted.
@@ -1133,7 +1159,7 @@ Vision reports sampling as its first half and each keyframe read as its second.
 
 ### 12.1 questions.json
 
-Schema 2.2: a fixed key set, `null` included, in one file, plus a keyframe folder beside it.
+Schema 2.3: a fixed key set, `null` included, in one file, plus a keyframe folder beside it.
 The formal description is [`questions.schema.json`](../src/questxtract/questions.schema.json),
 which ships inside the package; the tests validate every export shape against it. The example shows one entry of each
 list, with vision and the LLM detector on; with the rules and no vision, `visuals` is
@@ -1141,11 +1167,12 @@ empty, `verdict` is `unjudged` and the judge and vision settings are `null`:
 
 ```json
 {
-  "schema_version": "2.2",
+  "schema_version": "2.3",
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
   "config": {"model_size": "turbo", "language": "en", "min_confidence": 0.4,
              "detector": "llm", "judge_model": "gpt-4o", "judge_prompt_version": "v5",
-             "judge_reasoning_effort": "", "vision_model": "Qwen/Qwen3.8-27B-FP8"},
+             "judge_reasoning_effort": "", "vision_model": "Qwen/Qwen3.8-27B-FP8",
+             "vision_ocr_model": null},
   "stats": {"sentences": 1840, "sentences_unpunctuated": 12, "segments": 96,
             "segments_closed_gap": 92, "segments_closed_duration": 1, "segments_closed_chars": 3,
             "board_states": 34, "candidates": 61, "answered": 30, "emitted": 38},
@@ -1217,7 +1244,9 @@ one more top-level list pointing at visual ids.
   to the terminal (`-o -`) there is no folder, nothing is copied, and it is relative to the cache
   directory, where the vision stage keeps keyframes.
 - `config.min_confidence` is the threshold the file was cut at; `config.judge_model` and
-  `config.vision_model` are `null` when that stage was off.
+  `config.vision_model` are `null` when that stage was off. `config.vision_ocr_model` names the
+  OCR model when it read the keyframes (6.5), else `null`; `vision_model` then only found the
+  board.
 - `config.detector`, `judge_prompt_version` and `judge_reasoning_effort` tell two runs apart:
   `rules` or `llm`, the judge prompt's version, and the `--llm-reasoning` level (`""` for
   `server`). The last two are `null` with the rules. The file is not a run log; other settings
@@ -1423,19 +1452,19 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not planned | |
 | `sentences.py` | 3 sentences | done | |
 | `segments.py` | 4 segments | done | |
-| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5), reusing the reading of a page that comes back (6.5) and the interval join; the ink curve (6.4) is not built, de-occlusion (6.3) is not planned | #133 |
+| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5) or the OCR reader (6.5), reusing the reading of a page that comes back (6.5) and the interval join; the ink curve (6.4) is not built, de-occlusion (6.3) is not planned | #133 |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery wait for a labelled miss (7.1) | |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |
 | `endpoint.py` | not a stage | done: client and requests for the judge, vision and the quiz (10) | |
-| `quiz.py` | not a stage | done: quiz items from questions.json (12.3); the `quiz.json` JSON Schema and validator are not in the package yet | |
+| `quiz.py` | not a stage | done: quiz items from questions.json (12.3), checked by `quiz_schema.py` | |
 | `score.py` | 9 score | done: confidence and threshold | |
 | `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
 | `quiz_schema.py` | not a stage | done: the `quiz.json` reader and validator (12.3); `quiz.py` writes it (12.3) |  |
 | `filtering.py` | not a stage | time and text filters done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --score-vision` (4.4) | |
 | `qti.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 package of a `quiz.json` (12.4) | |
-| `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz` and `qti` work ([cli.md](cli.md)) |  |
+| `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz` and `qti` work ([cli.md](cli.md)); `process --vision --detector llm --quiz` runs every stage and the quiz in one run, tested offline | |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
 running list of what this document describes and the code does not yet do.

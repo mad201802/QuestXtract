@@ -59,8 +59,11 @@ class Config:
     vision_enabled: bool = False  # unless an endpoint is configured
     vision_fps: float = 1.0
     vision_model: str = "Qwen/Qwen3.8-27B-FP8"
+    vision_reader: str = "vlm"  # or "ocr": vision_ocr_model reads text and formulas only (6.5)
+    vision_ocr_model: str = "zai-org/GLM-OCR"  # its name on NTNU's LLM service
     vision_base_url: str | None = None  # None: base_url when set, else NTNU_LLM_URL
-    vision_max_states: int = 80
+    vision_states_per_minute: float = 3.0  # board states allowed per minute of recording
+    vision_min_states: int = 80  # never fewer, however short the recording
     vision_change_fraction: float = 0.02  # share of pixels that must change
     vision_change_hold: int = 3  # samples (at vision_fps) a new view must hold
 
@@ -100,6 +103,14 @@ class Config:
         if "OPENAI_API_KEY" in os.environ:
             return os.environ["OPENAI_API_KEY"]
         return _dotenv_api_key()
+
+    @property
+    def reading_model(self) -> str:
+        """The model that reads each keyframe: ``vision_model``, or the OCR model with ``ocr``.
+
+        The layout probe always asks ``vision_model``: an OCR model cannot answer it.
+        """
+        return self.vision_ocr_model if self.vision_reader == "ocr" else self.vision_model
 
     @property
     def vision_own_endpoint(self) -> bool:
