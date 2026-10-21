@@ -153,6 +153,41 @@ keyframes in `tests/data/vision/`: character error rate, blank boards read as bl
 recall per lecture type, then every frame, worst first ([tests/data/vision/README.md](../tests/data/vision/README.md)). It calls
 the model once per frame and caches the answers.
 
+## Graphical app
+
+`questxtract gui` opens a window over the same commands. It is a launcher: it runs the CLI's own
+code, so a run from the window writes the same file as the command with the same options. Install
+it with the extra, `pip install "questxtract[gui]"`.
+
+- **The file.** Drop an `.mp4`, `.mp3` or `.json` on the box, or click Browse. One file at a time.
+  A `.json` transcript skips transcription, so the Transcript output is not offered for it.
+- **The output.** Questions (`process`), Transcript (`transcribe`), Quiz (`process --quiz`, the
+  quiz beside the questions) or QTI package (`qti`, from a `quiz.json`). The files are named as
+  the commands name them: `<name>.questions.json`, `<name>.transcript.json`, `<name>.quiz.json`
+  and `<name>.qti.zip`, next to the input unless an output file is given.
+- **The options.** Each control is one option of `process` or `transcribe` above, with its default
+  in the label. A control left at its default is not passed, so a `questxtract.toml` (see
+  [Configuration files](#configuration-files)) still applies. The LLM and quiz controls
+  appear only for the outputs that use them. Run stays disabled, with the reason beside it, while
+  a value is refused (a threshold outside 0 to 1, an LLM detector with an empty model) or the file
+  is the wrong kind.
+- **Run, Cancel, progress.** A run can take as long as the recording, and the bar moves with the
+  pipeline's stages. Cancel stops before the next stage; a stage that has started finishes first,
+  and no partial file is written. Errors show as the CLI's one line, never a traceback.
+- **Open folder** opens the folder of the file the run wrote.
+- **Keys.** The app reads `OPENAI_API_KEY` and `.env` exactly as the CLI does
+  ([API keys](#api-keys-and-env)). It never shows, stores or logs a key.
+
+**Drag and drop** uses `tkinterdnd2`, part of the extra. Where it cannot start, the window says
+drop is not available there and Browse still works.
+
+**Needs Tk.** The app needs a Python with tkinter. The python.org installers include it; on Linux
+the system package is `python3-tk`. Without tkinter, or without the extra, `questxtract gui` prints
+one `error:` line saying what is missing.
+
+Not in the app: `quiz` and `filter` as their own commands, `eval`, and every flag not listed above.
+They stay on the command line.
+
 ## Configuration files
 
 `process`, `transcribe` and `eval` accept `--config PATH`. Without that option, they look for

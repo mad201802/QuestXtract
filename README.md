@@ -68,6 +68,13 @@ questxtract quiz lecture.questions.json        # multiple-choice quiz -> lecture
 questxtract filter lecture.questions.json --text eigenvalue   # the questions about a word
 ```
 
+### Graphical app
+
+For a lecturer who does not use a terminal: `pip install "questxtract[gui]"`, then `questxtract gui`.
+Drop a recording or a transcript on the window (or click Browse), pick the output and the options
+(the same ones as the CLI, with the same defaults), and press Run. Questions, transcript, quiz and
+QTI package are written next to the input, or where you choose. Details: [docs/cli.md](docs/cli.md#graphical-app).
+
 The input decides how much runs: an `.mp4` or `.mp3` goes through every stage (an audio-only
 recording simply has no board to read), while a `.json` transcript skips transcription. A progress bar renders on stderr, and transcripts are cached, so running
 `process` again with another threshold takes seconds. Every option, the cache, error messages and

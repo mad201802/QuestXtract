@@ -1409,7 +1409,12 @@ src/questxtract/
   schema.py        Question, a standalone shape the pipeline does not produce
   pipeline.py      STAGES, run(), process(), cache, progress
   quiz.py          quiz.json from questions.json: selection, one request per question
-  cli.py           process / transcribe / filter / eval / quiz / qti
+  cli.py           process / transcribe / filter / eval / quiz / qti / gui
+  gui/             the graphical app, a run launcher over cli.execute (14):
+    options.py     one table of the CLI options the app shows, checked against the CLI
+    run.py         form values -> the CLI's argv -> cli.execute; no pipeline of its own
+    state.py       what the form holds, what Run needs, progress fractions (no tkinter)
+    window.py      the tkinter window, classic ttk look; drag and drop via tkinterdnd2
 
 tests/            flat, one test module per source module, plus conftest.py
 ```
@@ -1429,7 +1434,8 @@ checks it: `grep '@stage'` over the stage modules returns the contents of `STAGE
 faster-whisper.
 
 **Extras:** `[llm]` -> `openai` (the LLM detector, vision and the quiz: one dependency; vision has
-its own endpoint and key, 10.1). The CLI's
+its own endpoint and key, 10.1). `[gui]` -> `tkinterdnd2` (drag and drop for the window, 13.1; the
+window itself is tkinter from the standard library and works without it). The CLI's
 progress bar is a few lines of `print`, not `tqdm`.
 
 **No system binaries** (no ffmpeg) and **no torch** (so no CUDA wheels, transformers or pyannote).
@@ -1465,6 +1471,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --score-vision` (4.4) | |
 | `qti.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 package of a `quiz.json` (12.4) | |
 | `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz` and `qti` work ([cli.md](cli.md)); `process --vision --detector llm --quiz` runs every stage and the quiz in one run, tested offline | |
+| `gui/` | not a stage | done: the window and its run launcher (`questxtract gui`, 13.1); it runs the CLI's code and does not review or edit questions (14) | |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
 running list of what this document describes and the code does not yet do.
@@ -1479,6 +1486,8 @@ Explicit boundaries, so the package does not grow into them by accident.
 
 - **The teacher review/edit UI** ([issue #15](https://github.com/mad201802/QuestXtract/issues/15))
   is a separate application. This package's part is that its JSON round-trips (section 12.2).
+  The graphical app (13.1) is a run launcher, not that UI: it starts a run and shows the file it
+  wrote, and never shows or edits a question.
 - **exerplaza.com upload** is likewise a separate consumer of the exported JSON. Nothing in
   `questxtract` talks to exerplaza directly.
 - **No LMS upload**; `qti` only writes a ZIP (section 12.4).

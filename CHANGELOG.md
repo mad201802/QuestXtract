@@ -4,6 +4,12 @@
 
 ### Added
 
+- `questxtract gui` opens a window for people who do not use a terminal: drop or browse a
+  recording (`.mp4`, `.mp3`) or a transcript (`.json`), choose questions, transcript, quiz or QTI
+  package, set the options (the CLI's own, with its defaults) and press Run. It runs the CLI's code,
+  shows progress, Cancel (between stages), the written path and an Open folder button. Install with
+  `pip install "questxtract[gui]"`; drag and drop needs `tkinterdnd2`, and where it cannot start the
+  window says so and Browse still works. Needs a Python with tkinter. (#124)
 - `--vision-reader ocr` (`vision_reader = "ocr"`) reads the board with GLM-OCR
   (`vision_ocr_model`, `zai-org/GLM-OCR` on NTNU's service) instead of the vision model: the text
   and the formulas as LaTeX, labels such as circled numbers and units left out, no description,
