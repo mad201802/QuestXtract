@@ -124,6 +124,9 @@
 
 ### Changed (breaking)
 
+- `hotwords_from_vision` is removed from the settings: nothing read it, and the second
+  transcription pass it was for is not planned (#62). A `questxtract.toml` that still sets it
+  stops with an unknown-key error; delete the line. (#169)
 - Vision reads the board with Qwen3.8-27B on NTNU's LLM service by default
   (`vision_model = "Qwen/Qwen3.8-27B-FP8"`), with an endpoint and a key of its own:
   `vision_base_url` in `questxtract.toml` and `QUESTXTRACT_VISION_API_KEY` in the environment or

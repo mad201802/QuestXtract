@@ -217,7 +217,7 @@ Dropping alignment also keeps the install small: `whisperx` pulls torch and the 
 Whisper mangles domain vocabulary (*supremum*, *Cauchy*, *epsilon*), and the board has those words
 written on it. The idea: collect terms from the board states (section 6) and re-transcribe with
 faster-whisper's `hotwords`. Not planned (#62): it is worth building only once the eval harness
-shows vocabulary errors costing questions. `hotwords_from_vision` is off by default and not read.
+shows vocabulary errors costing questions.
 
 ### 2.5 Words are the atomic unit
 
@@ -1429,7 +1429,8 @@ checks it: `grep '@stage'` over the stage modules returns the contents of `STAGE
 `ctranslate2`, `tokenizers`, `huggingface-hub` and `tqdm` arrive transitively through
 faster-whisper.
 
-**Extras:** `[llm]` -> `openai` (the LLM detector and vision: one key, one dependency). The CLI's
+**Extras:** `[llm]` -> `openai` (the LLM detector, vision and the quiz: one dependency; vision has
+its own endpoint and key, 10.1). The CLI's
 progress bar is a few lines of `print`, not `tqdm`.
 
 **No system binaries** (no ffmpeg) and **no torch** (so no CUDA wheels, transformers or pyannote).
@@ -1459,7 +1460,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `endpoint.py` | not a stage | done: client and requests for the judge, vision and the quiz (10) | |
 | `quiz.py` | not a stage | done: quiz items from questions.json (12.3), checked by `quiz_schema.py` | |
 | `score.py` | 9 score | done: confidence and threshold | |
-| `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
+| `export.py` | 10 export | done; keeping review edits across re-runs is not planned | |
 | `quiz_schema.py` | not a stage | done: the `quiz.json` reader and validator (12.3); `quiz.py` writes it (12.3) |  |
 | `filtering.py` | not a stage | time and text filters done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --score-vision` (4.4) | |
