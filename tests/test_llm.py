@@ -95,13 +95,13 @@ def test_the_schema_requires_exactly_the_candidates_and_later_answers(
     assert schema["schema"]["required"] == [sentences[1].id]
     answers = schema["schema"]["properties"][sentences[1].id]["properties"]["answer_sentence_ids"]
     assert answers["items"]["enum"] == [sentences[2].id]
-    assert request["reasoning_effort"] == "none"
+    assert request["model"] == "gpt-4o" and "reasoning_effort" not in request  # #164
     lines = request["messages"][1]["content"].splitlines()
     assert lines[0].startswith(f"   {sentences[0].id} 0s ")
     assert lines[1] == f">> {sentences[1].id} 2s What is a stable sort?"
 
-    _run(context, tmp_path, judge_reasoning_effort="", from_scratch=True)
-    assert "reasoning_effort" not in client.requests[1]
+    _run(context, tmp_path, judge_reasoning_effort="low", from_scratch=True)
+    assert client.requests[1]["reasoning_effort"] == "low"
 
 
 def test_an_id_that_was_not_a_candidate_is_dropped_and_counted_never_added(

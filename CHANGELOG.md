@@ -112,6 +112,11 @@
 
 ### Changed
 
+- The LLM detector and the quiz use `gpt-4o` on OpenAI by default (`judge_model`, `quiz_model`),
+  and send no reasoning setting by default (`judge_reasoning_effort = ""`, the same as
+  `--llm-reasoning server`), since gpt-4o takes none. Only `--llm-reasoning low`, `medium` or
+  `high` now raise the request timeout to 10 minutes; `server` keeps 2 minutes, so set
+  `timeout_seconds` for a server that thinks on its own. (#164)
 - `questions.json` schema 2.1: `keyframe_path` is relative to the JSON file. Writing the file
   copies each keyframe into a folder beside it named after the file (`lecture.keyframes/` for
   `lecture.questions.json`), so the two can be moved or shared together and lectures written to

@@ -135,7 +135,7 @@ def test_lenient_quiz_has_one_item_per_question_that_is_quiz_material(
     }
     assert quiz["generation"] == {
         "method": "llm",
-        "model": "gpt-5.6-terra",
+        "model": "gpt-4o",
         "prompt_version": QUIZ_PROMPT_VERSION,
     }
     assert data["questions"][0]["id"] in result.skipped and result.failed == ()
@@ -701,3 +701,25 @@ def test_a_bad_quiz_setting_does_not_stop_a_run_without_the_quiz(
     capsys.readouterr()
     assert main(["process", str(transcript), "--quiz"]) == 1
     assert "quiz_options" in capsys.readouterr().err
+
+
+def test_by_default_the_quiz_asks_gpt_4o_with_no_reasoning_setting(
+    questions_file: Path, fake_llm: Callable[..., Any], key: None
+) -> None:
+    """#164 AC2: gpt-4o takes no reasoning_effort, so the default sends none."""
+    client = fake_llm(_answer())
+
+    assert main(["quiz", str(questions_file)]) == 0
+
+    assert client.requests
+    assert all(r["model"] == "gpt-4o" and "reasoning_effort" not in r for r in client.requests)
+
+
+def test_a_reasoning_level_still_reaches_the_quiz_model(
+    questions_file: Path, fake_llm: Callable[..., Any], key: None
+) -> None:
+    client = fake_llm(_answer())
+
+    assert main(["quiz", str(questions_file), "--llm-reasoning", "low"]) == 0
+
+    assert client.requests and all(r["reasoning_effort"] == "low" for r in client.requests)

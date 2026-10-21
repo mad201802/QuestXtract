@@ -97,9 +97,8 @@ spoken. It needs the `llm` extra
 (`pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`) and a model:
 
 ```bash
-# hosted: OpenAI, key from OPENAI_API_KEY (set it up as below); gpt-4o-mini takes no
-# reasoning setting, hence --llm-reasoning server
-questxtract process lecture.mp4 --detector llm --llm-model gpt-4o-mini --llm-reasoning server
+# hosted: OpenAI's gpt-4o, the default; key from OPENAI_API_KEY (set it up as below)
+questxtract process lecture.mp4 --detector llm
 
 # local: any OpenAI-compatible server, here Ollama with a small Qwen that thinks first
 questxtract process lecture.mp4 --detector llm --llm-reasoning low \
@@ -176,9 +175,9 @@ Windows), from the repository folder.
 |---|---|---|
 | `--detector llm needs OPENAI_API_KEY, ...` | The key is not loaded in this terminal | `source .env` |
 | `401 ... invalid_api_key` | The stored key is incomplete, or was revoked | Compare its end with the original (step 2) and save it again (step 1); if they match, ask for a new key |
-| `400 ... Unrecognized request argument supplied: reasoning_effort` | The model has no reasoning setting, e.g. `gpt-4o-mini` | Add `--llm-reasoning server` |
+| `400 ... Unrecognized request argument supplied: reasoning_effort` | `--llm-reasoning` set a level, but the model has no reasoning setting, e.g. `gpt-4o` | Drop `--llm-reasoning`, or pass `--llm-reasoning server` |
 
-**For the project team.** We use the customer's pay-as-you-go OpenAI key with `gpt-4o-mini`. Never
+**For the project team.** We use the customer's pay-as-you-go OpenAI key with `gpt-4o`. Never
 commit the key, paste it into a chat, issue or pull request, or write it into any file; once it is
 saved, delete the message you received it in. Ask the customer before using another model with it.
 If a key leaks, tell its owner at once so it can be revoked.
