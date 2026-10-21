@@ -23,8 +23,8 @@ from typing import Any
 from . import endpoint
 from .config import Config
 from .models import Sentence
+from .quiz_schema import QUIZ_SCHEMA_VERSION, normalise_spoken
 
-QUIZ_SCHEMA_VERSION = "1.0"
 QUIZ_PROMPT_VERSION = "v0"
 
 STRICTNESS = ("strict", "lenient")
@@ -303,7 +303,7 @@ def _usable(distractors: int) -> Callable[[dict[str, Any]], bool]:
 
 
 def _normal(text: str) -> str:
-    """Text compared for sameness: case, spacing and punctuation do not count."""
+    """Options compared for sameness: case, spacing and punctuation do not count."""
     return " ".join(re.findall(r"\w+", text.casefold()))
 
 
@@ -329,7 +329,7 @@ def _item_dict(
     stem = answer["stem"].strip()
     return {
         "id": "quiz_" + source_id,
-        "prompt": _text(stem, spoken=_normal(stem) == _normal(spoken)),
+        "prompt": _text(stem, spoken=normalise_spoken(stem) == normalise_spoken(spoken)),
         "interaction_type": "choice_single",
         "points": 1,
         "options": [{"id": _IDS[i], "text": _text(text)} for i, (text, _) in enumerate(texts)],
@@ -348,7 +348,11 @@ def _item_dict(
 
 
 def _text(text: str, *, spoken: bool = False) -> dict[str, str]:
-    """Mark a text with its origin: ``spoken`` only when it is what was said, word for word."""
+    """Mark a text with its origin: ``spoken`` only when it is what was said, word for word.
+
+    Word for word as :func:`quiz_schema.normalise_spoken` compares it, so a stem that lost its
+    question mark is ``generated``.
+    """
     return {"text": text.strip(), "origin": "spoken" if spoken else "generated"}
 
 
@@ -372,7 +376,6 @@ def _quiz_dict(
             "questions_path": questions_name,
             "questions_schema_version": str(document.get("schema_version", "")),
             "questions_hash": questions_hash,
-            "question_ids": [item["provenance"]["source_question_id"] for item in items],
         },
         "instructions": {
             "shuffle_questions": False,

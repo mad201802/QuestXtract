@@ -1,17 +1,20 @@
 import dataclasses
 import json
+import zipfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import openai
 import pytest
+from jsonschema import Draft202012Validator
 
 from questxtract import endpoint
 from questxtract.cli import main
 from questxtract.config import Config
 from questxtract.models import Sentence, Transcript
 from questxtract.quiz import QUIZ_PROMPT_VERSION, build_quiz, quiz_to_json
+from questxtract.quiz_schema import QUIZ_SCHEMA_PATH, read_quiz, validate_quiz
 
 DATA = Path(__file__).parent / "data"
 
@@ -73,6 +76,14 @@ def _build(document: dict[str, Any], config: Config | None = None) -> Any:
     )
 
 
+def _assert_valid(quiz: dict[str, Any], questions: dict[str, Any]) -> None:
+    """The quiz passes the shipped JSON Schema and every cross-field rule of ``validate_quiz``."""
+    schema = json.loads(QUIZ_SCHEMA_PATH.read_text(encoding="utf-8"))
+    errors = [e.message for e in Draft202012Validator(schema).iter_errors(quiz)]
+    assert errors == []
+    validate_quiz(quiz, questions)
+
+
 @pytest.fixture
 def key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
@@ -99,7 +110,7 @@ def test_lenient_quiz_has_one_item_per_question_that_is_quiz_material(
 
     quiz = result.quiz
     assert [item["provenance"]["source_question_id"] for item in quiz["questions"]] == material
-    assert quiz["source"]["question_ids"] == material
+    _assert_valid(quiz, data)
     assert set(quiz) == {
         "schema_version",
         "id",
@@ -211,6 +222,25 @@ def test_generated_text_is_marked_and_every_item_is_pending(
         assert item["review"] == {"status": "pending", "note": None, "metadata": {}}
 
 
+def test_a_stem_that_only_lost_its_question_mark_is_generated(
+    fake_llm: Callable[..., Any], key: None
+) -> None:
+    fake_llm(
+        _answer(stem="is sin(t)  absolutely integrable"),
+        _answer(stem="IS COS(T) ABSOLUTELY INTEGRABLE?"),
+    )
+    document = _document(
+        _question("q_a"), _question("q_b", text="Is cos(t) absolutely integrable?")
+    )
+
+    quiz = _build(document).quiz
+    lost, case = quiz["questions"]
+
+    assert lost["prompt"]["origin"] == "generated"  # punctuation counts, as in validate_quiz
+    assert case["prompt"]["origin"] == "spoken"  # case and spacing do not
+    _assert_valid(quiz, document)
+
+
 def test_a_question_reworded_by_the_llm_detector_is_not_spoken(
     fake_llm: Callable[..., Any], key: None
 ) -> None:
@@ -284,7 +314,8 @@ def test_quiz_writes_next_to_the_input_and_can_print(
 
     assert main(["quiz", str(questions_file)]) == 0
     written = questions_file.with_name("lecture.quiz.json")
-    assert json.loads(written.read_text(encoding="utf-8"))["title"] == "lecture"
+    questions = json.loads(questions_file.read_text(encoding="utf-8"))
+    assert read_quiz(written, questions)["title"] == "lecture"
     capsys.readouterr()
 
     assert main(["quiz", str(questions_file), "-o", "-"]) == 0
@@ -310,8 +341,9 @@ def test_process_with_quiz_writes_both_files(
 
     assert main(["process", str(source), "--quiz", "--options", "4"]) == 0
 
-    quiz = json.loads((tmp_path / "lecture.quiz.json").read_text(encoding="utf-8"))
-    assert (tmp_path / "lecture.questions.json").is_file()
+    questions = json.loads((tmp_path / "lecture.questions.json").read_text(encoding="utf-8"))
+    quiz = read_quiz(tmp_path / "lecture.quiz.json", questions)
+    _assert_valid(quiz, questions)
     assert quiz["questions"] and all(len(i["options"]) == 4 for i in quiz["questions"])
 
 
@@ -590,3 +622,20 @@ def test_process_quiz_sends_the_speech_it_already_has(
     assert main(["process", str(transcript), "--quiz"]) == 0
 
     assert client.requests and all(">> " in r["messages"][1]["content"] for r in client.requests)
+
+
+def test_a_written_quiz_exports_to_qti(
+    tmp_path: Path, fake_llm: Callable[..., Any], key: None
+) -> None:
+    source = tmp_path / "lecture.transcript.json"
+    source.write_bytes((DATA / "ttk4225_2026_09_14.transcript.json").read_bytes())
+    fake_llm(_answer())
+    assert main(["process", str(source), "--quiz"]) == 0
+    quiz = json.loads((tmp_path / "lecture.quiz.json").read_text(encoding="utf-8"))
+
+    package = tmp_path / "lecture.qti.zip"
+    assert main(["qti", str(tmp_path / "lecture.quiz.json"), "-o", str(package)]) == 0
+
+    with zipfile.ZipFile(package) as zipped:
+        items = [n for n in zipped.namelist() if n.startswith("items/")]
+    assert len(items) == len(quiz["questions"]) > 0
