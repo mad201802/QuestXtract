@@ -197,7 +197,7 @@ def _check_source(
     if not isinstance(prompt, Mapping) or prompt.get("origin") != "spoken":
         return
     text = prompt.get("text")
-    if not isinstance(text, str) or _normalise(text) != _normalise(spoken[source_id]):
+    if not isinstance(text, str) or normalise_spoken(text) != normalise_spoken(spoken[source_id]):
         errors.append(
             f"{path}.prompt.text: origin 'spoken', but it is not question {source_id!r} as it "
             "was said; mark a reworded stem 'generated'"
@@ -224,7 +224,8 @@ def _spoken_texts(questions: Mapping[str, Any], errors: list[str]) -> dict[str, 
     return spoken
 
 
-def _normalise(text: str) -> str:
+def normalise_spoken(text: str) -> str:
+    """Text as rule 7 compares it: whitespace and case do not count, punctuation does."""
     return " ".join(text.split()).casefold()
 
 

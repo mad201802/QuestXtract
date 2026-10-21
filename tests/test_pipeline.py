@@ -1,12 +1,14 @@
 import ast
+import dataclasses
+import json
 import re
 from pathlib import Path
 
 import pytest
 
-from questxtract import STAGES, Context, Transcript, Word, run, stage
+from questxtract import STAGES, Config, Context, Transcript, Word, run, stage
 from questxtract.export import result_to_dict
-from questxtract.pipeline import stage_info
+from questxtract.pipeline import cached_transcript, stage_info
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "questxtract"
 
@@ -219,3 +221,18 @@ def test_framing_penalty_keeps_self_answered_content_questions(
     assert len(questions) == 1
     assert questions[0]["text"] == question
     assert questions[0]["answer"]["text"] == answer
+
+
+def test_cached_transcript_reads_the_transcribe_entry_whatever_made_it(
+    tmp_path: Path, transcript: Transcript
+) -> None:
+    entry = tmp_path / "cache" / "abc" / "transcribe.json"
+    entry.parent.mkdir(parents=True)
+    payload = {"config": {"model_size": "tiny"}, "data": dataclasses.asdict(transcript)}
+    entry.write_text(json.dumps(payload), encoding="utf-8")
+    config = Config(cache_dir=str(tmp_path / "cache"))
+
+    assert cached_transcript(config, "abc") == transcript
+    assert cached_transcript(config, "other") is None
+    entry.write_text("{not json", encoding="utf-8")
+    assert cached_transcript(config, "abc") is None
