@@ -218,6 +218,7 @@ def _config(args: argparse.Namespace) -> Config:
             ("llm_reasoning", "judge_reasoning_effort"),
             ("vision", "vision_enabled"),
             ("vision_model", "vision_model"),
+            ("vision_reader", "vision_reader"),
             ("quiz_model", "quiz_model"),
             ("strictness", "quiz_strictness"),
             ("options", "quiz_options"),
@@ -231,6 +232,8 @@ def _config(args: argparse.Namespace) -> Config:
         raise ValueError("min_confidence / --threshold must be between 0 and 1")
     if config.detector not in ("rules", "llm"):
         raise ValueError("detector must be rules or llm")
+    if config.vision_reader not in ("vlm", "ocr"):
+        raise ValueError("vision_reader / --vision-reader must be vlm or ocr")
     if config.judge_reasoning_effort not in ("", "none", "low", "medium", "high"):
         raise ValueError("judge_reasoning_effort must be empty, none, low, medium or high")
     return config
@@ -681,6 +684,14 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="NAME",
         help=f"the model that reads the board, as the endpoint names it (default: "
         f"{defaults.vision_model})",
+    )
+    vision_model.add_argument(
+        "--vision-reader",
+        choices=("vlm", "ocr"),
+        default=None,
+        help="how keyframes are read: vlm (the vision model: text, formulas and a description) "
+        f"or ocr ({defaults.vision_ocr_model}: text and formulas only, faster) (default: "
+        f"{defaults.vision_reader})",
     )
 
     process = subs.add_parser(

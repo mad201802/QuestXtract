@@ -62,7 +62,7 @@ def result_to_dict(ctx: Context, keyframes: Mapping[str, str] | None = None) -> 
             "judge_model": ctx.config.judge_model if llm else None,
             "judge_prompt_version": JUDGE_PROMPT_VERSION if llm else None,
             "judge_reasoning_effort": ctx.config.judge_reasoning_effort if llm else None,
-            "vision_model": ctx.config.vision_model if ctx.config.vision_enabled else None,
+            "vision_model": ctx.config.reading_model if ctx.config.vision_enabled else None,
         },
         "stats": dict(ctx.stats),
         "segments": [_segment(index, segment) for index, segment in enumerate(ctx.segments)],

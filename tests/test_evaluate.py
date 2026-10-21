@@ -432,3 +432,21 @@ def test_every_labelled_recording_has_its_source_in_the_readme() -> None:
     readme = (VISION / "README.md").read_text(encoding="utf-8")
     for path in VISION.glob("*.frames.jsonl"):
         assert f"`{path.name.removesuffix('.frames.jsonl')}`" in readme, path.name
+
+
+def test_cli_eval_score_vision_scores_the_ocr_reader(
+    tmp_path: Path,
+    fake_llm: Callable[..., Any],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#144 AC: --vision-reader ocr scores GLM-OCR; a second run makes no calls."""
+    monkeypatch.chdir(tmp_path)
+    _frames(tmp_path, "lec", [_frame("lec_1.png", "whiteboard", "MLPs", [])])
+    client = fake_llm("MLPs")
+    flags = ["--llm-url", "http://localhost:11434/v1", "--vision-reader", "ocr"]
+    assert main(["eval", "--score-vision", str(tmp_path), *flags]) == 0
+    assert "zai-org/GLM-OCR" in capsys.readouterr().out
+    assert main(["eval", "--score-vision", str(tmp_path), *flags, "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["kinds"]["whiteboard"]["cer"] == 0.0
+    assert [r["model"] for r in client.requests] == ["zai-org/GLM-OCR"]

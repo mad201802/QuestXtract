@@ -46,6 +46,7 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | How long a thinking model may think before it judges. Slower, and what small models such as `qwen3.5:9b` need to judge well. `server` sends no setting and leaves it to the server, for a model without one such as `gpt-4o-mini`. Any level but `none` allows each request 10 minutes instead of 2. |
 | `--vision`, `--no-vision` | nothing | off | Also reads the slides or the board with a vision model: by default on NTNU's LLM service with the key from `QUESTXTRACT_VISION_API_KEY` (NTNU network or VPN), or at `vision_base_url`, or at `--llm-url` when only that is set. Needs the `questxtract[llm]` extra. `--no-vision` turns off `vision_enabled` from the settings file for one run. A recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript has no board, so the board is not read (a note says so). See [Reading the board](../README.md#reading-the-board). |
 | `--vision-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The model that reads the board, as the endpoint names it. It must take images. |
+| `--vision-reader` | `vlm` or `ocr` | `vlm` | How keyframes are read: `vlm`, the vision model (text, formulas and a description), or `ocr`, `vision_ocr_model` (GLM-OCR: text and formulas only, faster). The layout probe always asks `--vision-model`. |
 | `--quiz` | nothing | off | Also writes a multiple-choice quiz next to the questions file (`lecture.quiz.json`), as [`questxtract quiz`](#questxtract-quiz-questionsjson) does. Needs a file output, so not `-o -`. If the quiz fails, the questions file is kept and the exit code is 1. |
 | `--quiz-model` | a model name | `gpt-5.6-terra` | The model that writes the quiz. Only with `--quiz`. |
 | `--strictness`, `--options` | | | As for `questxtract quiz`. Only with `--quiz`. |
@@ -146,7 +147,7 @@ beside each transcript (`<name>.visual.json`), as if `--vision` had read them, a
 recordings that had them on the report's first line. It takes `--detector`, `--llm-model` and
 `--llm-url` too, so the rules and a model can be compared on the same recordings; the report's
 first line names the detector, the model and the prompt version. With `--score-vision`, it
-scores the vision model instead (`--vision-model`, at vision's endpoint, as for `--vision`) on the labelled
+scores the vision model instead (`--vision-model`, or with `--vision-reader ocr` the OCR model, at vision's endpoint, as for `--vision`) on the labelled
 keyframes in `tests/data/vision/`: character error rate, blank boards read as blank and formula
 recall per lecture type, then every frame, worst first ([tests/data/vision/README.md](../tests/data/vision/README.md)). It calls
 the model once per frame and caches the answers.
@@ -386,7 +387,7 @@ from the same folder every time to benefit from it.
 |---|---|
 | `-t`, `-o`, `--detector`, `--llm-model`, `--llm-url`, `--llm-reasoning` | no |
 | `-m` | yes: a different model gives a different transcript |
-| `--vision-model`, a `vision_*` setting, or `--llm-url` / `base_url` with vision on | no, but the board is read again; keyframes already read with the same model are not sent twice |
+| `--vision-model`, `--vision-reader`, a `vision_*` setting, or `--llm-url` / `base_url` with vision on | no, but the board is read again; keyframes already read with the same model are not sent twice |
 | `--from-scratch` | yes, and it recomputes everything else too |
 | the video file itself | yes: the cache is keyed on the file's content |
 

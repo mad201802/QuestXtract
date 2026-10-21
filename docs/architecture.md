@@ -494,7 +494,8 @@ as well as models that cost an order of magnitude more (`gpt-4o`, `gpt-4o-mini`)
 on Idun's hosted service and on an 8 GB laptop through Ollama): it reads most of the text and
 formulas on chalk and printed slides, less than the vision models, and answers in plain text with
 formulas inline as `$...$`, with no description and no confidence, and it also reads the room and
-the app interface (an exit sign, the tablet app's menu). Printed slides read as well at 640x360 as
+the app interface (an exit sign, the tablet app's menu). It is the second reader (6.5): faster
+and lighter, for the text and formulas alone. Printed slides read as well at 640x360 as
 at 720p, at half the image tokens; chalk was only tried at 720p. An open model reaches the same
 endpoint (10.1); a 2B model on a laptop reads worse than Qwen3.8-27B and leaves `latex` empty. Prompt v0 and its output
 schema, matching `VisualContext`, are in [`tests/data/vision/`](../tests/data/vision/README.md); the
@@ -620,6 +621,23 @@ the opposite (10.3, rule 5) because the user asked for it; a board description o
 questions the pipeline already found. A setting that cannot be used, such as an unreadable `.env`,
 is not a bad keyframe: it would drop every one the same way, so it stops the run as it does for the
 judge.
+
+**The OCR reader.** `vision_reader = "ocr"` (`--vision-reader ocr`) reads each keyframe with
+`vision_ocr_model` (GLM-OCR, `zai-org/GLM-OCR` on NTNU's service) instead: the image and the task
+prompt `Text Recognition:` in one user message, with the token probabilities asked for, through
+vision's endpoint and key (10.1). It answers in plain text with formulas inline as `$...$`, which
+`_from_ocr` turns into the same fields: `text` without the `$` delimiters, `latex` the formula
+segments one per line, leaving out labels (a circled number, a number with a unit, a single
+symbol), `description` empty, and `confidence` the mean probability of the answer's tokens, or 0.5
+when the server sends none, which means "not measured". The converted answer is what is cached,
+and failures follow the rules above. The speech and the kind do not go to the OCR model. The
+layout probe still asks `vision_model`, so the frame is cropped to the board before OCR reads it;
+where no vision model answers, the probe falls back to the full frame (6.2). `questions.json`
+names the model that read the keyframes in `config.vision_model`.
+
+> **Decision.** The vision model stays the default: OCR gives no description, and the 19.10
+> comparison (#153) put Qwen3.8-27B ahead on the board's words. OCR is the option for a faster
+> run, or for a local machine (an 8 GB laptop runs GLM-OCR through Ollama, #144).
 
 ### 6.6 Consumers
 
@@ -1423,7 +1441,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not planned | |
 | `sentences.py` | 3 sentences | done | |
 | `segments.py` | 4 segments | done | |
-| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5), reusing the reading of a page that comes back (6.5) and the interval join; the ink curve (6.4) is not built, de-occlusion (6.3) is not planned | #133 |
+| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5) or the OCR reader (6.5), reusing the reading of a page that comes back (6.5) and the interval join; the ink curve (6.4) is not built, de-occlusion (6.3) is not planned | #133 |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery wait for a labelled miss (7.1) | |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |

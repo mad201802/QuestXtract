@@ -79,6 +79,7 @@ def ask(
     valid: Callable[[dict[str, Any]], bool] | None = None,
     usage: Counter[str] | None = None,
     vision: bool = False,
+    convert: Callable[[Any], dict[str, Any] | None] | None = None,
 ) -> dict[str, Any]:
     """Send ``request`` and return the JSON object it answers with; cached on the request.
 
@@ -95,6 +96,10 @@ def ask(
     answer adds nothing.
 
     ``vision=True`` sends it to vision's endpoint with vision's key (:func:`route`).
+
+    ``convert``, for a model that answers in plain text (an OCR model), turns the response's
+    first choice into the JSON object instead; ``None`` counts as invalid JSON. What it returns
+    is what is checked with ``valid`` and cached.
 
     Raises:
         RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
@@ -142,8 +147,12 @@ def ask(
             raise failure(str(exc)) from None
         _count(usage, name, response, started)
         stalled = None
-        content = response.choices[0].message.content
-        answer = _parse(content)
+        if convert is None:
+            content = response.choices[0].message.content
+            answer = _parse(content)
+        else:
+            answer = convert(response.choices[0])
+            content = json.dumps(answer, ensure_ascii=False)
         if answer is not None and (valid is None or valid(answer)):
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)

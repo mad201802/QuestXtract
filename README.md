@@ -211,6 +211,11 @@ vision_model = "Qwen/Qwen3.8-27B-FP8"          # the default, on NTNU's LLM serv
 Without `vision_base_url`, vision goes where `base_url` (`--llm-url`) points when that is set,
 with the judge's key, and to NTNU's service otherwise.
 
+`--vision-reader ocr` (or `vision_reader = "ocr"`) reads the keyframes with GLM-OCR instead,
+through the same endpoint: faster and lighter, with the text and formulas but no description. It
+also runs on an 8 GB laptop through Ollama (`ollama pull glm-ocr:q8_0`, then
+`vision_base_url = "http://localhost:11434/v1"` and `vision_ocr_model = "glm-ocr:q8_0"`).
+
 A lecture costs one model call to find the slides or board and at most `vision_max_states` (80)
 to read them, plus a resend when a call fails. A slide or page that comes back later in the
 lecture with nothing changed is not read again: its earlier reading is copied. Readings and

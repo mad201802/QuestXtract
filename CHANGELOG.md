@@ -4,6 +4,13 @@
 
 ### Added
 
+- `--vision-reader ocr` (`vision_reader = "ocr"`) reads the board with GLM-OCR
+  (`vision_ocr_model`, `zai-org/GLM-OCR` on NTNU's service) instead of the vision model: the text
+  and the formulas as LaTeX, labels such as circled numbers and units left out, no description,
+  and a confidence from the token probabilities (0.5 when the server sends none). It goes through
+  vision's endpoint and key, is cached and fails like the vision model's reading, and works with
+  `eval --score-vision`. The layout probe still uses `vision_model`. `questions.json` names the
+  model that read the keyframes. (#144)
 - `questxtract quiz lecture.questions.json` writes multiple-choice quiz items to
   `lecture.quiz.json`, and `process --quiz` writes them after the questions in the same run. Each
   item has a stem, `--options` options (3 by default, one correct), an explanation and why each
