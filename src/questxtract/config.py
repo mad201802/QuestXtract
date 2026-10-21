@@ -29,8 +29,8 @@ _PUNCTUATION_PROMPT = (
 NTNU_LLM_URL = "https://llm.hpc.ntnu.no/v1"  # NTNU's LLM service: the default endpoint
 OPENAI_URL = "https://api.openai.com/v1"  # OpenAI, the documented fallback (also base_url None)
 NTNU_KEY_ENV = "QUESTXTRACT_NTNU_API_KEY"  # the key for NTNU's LLM service
-VISION_KEY_ENV = "QUESTXTRACT_VISION_API_KEY"  # its old name, still read
-OPENAI_KEY_ENV = "OPENAI_API_KEY"  # the key for every other endpoint
+VISION_KEY_ENV = "QUESTXTRACT_VISION_API_KEY"  # for a vision_base_url of another service
+OPENAI_KEY_ENV = "OPENAI_API_KEY"  # the key for OpenAI and base_url's other endpoints
 DEEPSEEK = "deepseek-ai/DeepSeek-V4.1-Flash-1017"  # every model's default, on NTNU's service
 
 
@@ -64,6 +64,7 @@ class Config:
     vision_reader: str = "vlm"  # or "ocr": vision_ocr_model reads text and formulas only (6.5)
     vision_ocr_model: str = "zai-org/GLM-OCR"  # its name on NTNU's LLM service
     vision_base_url: str | None = None  # None: vision follows base_url
+    vision_reasoning_effort: str | None = None  # None: reasoning_effort; never sent to OCR
     vision_states_per_minute: float = 3.0  # board states allowed per minute of recording
     vision_min_states: int = 80  # never fewer, however short the recording
     vision_change_fraction: float = 0.02  # share of pixels that must change
@@ -87,8 +88,9 @@ class Config:
     judge_window: int = 10  # sentences of lecture on each side of a candidate
     judge_batch_size: int = 8  # nearby candidates judged in one request
     judge_parallel: int = 1  # requests in flight; a local server queues them past the deadline
-    # Sent with every model request (judge, quiz, vision, layout): DeepSeek thinks unless told
-    # "none". "" sends no setting, for a model that takes none (gpt-4o) or rejects "none" (Qwen).
+    # Sent with every judge and quiz request, and vision's unless vision_reasoning_effort is set:
+    # DeepSeek thinks unless told "none". "" sends no setting, for a model that takes none
+    # (gpt-4o) or rejects "none" (Qwen).
     reasoning_effort: str = "none"
     timeout_seconds: int = 120  # per LLM request, start to answer, retries included
 
@@ -123,16 +125,26 @@ class Config:
         return self.vision_base_url if self.vision_base_url is not None else self.base_url
 
     @property
+    def vision_effort(self) -> str:
+        """The ``reasoning_effort`` sent to ``vision_model``: the layout probe and its readings.
+
+        ``vision_reasoning_effort`` when set, else ``reasoning_effort``. The OCR model gets none.
+        """
+        if self.vision_reasoning_effort is None:
+            return self.reasoning_effort
+        return self.vision_reasoning_effort
+
+    @property
     def vision_api_key(self) -> str | None:
         """The key for :attr:`vision_url`, never stored in Config.
 
         A ``vision_base_url`` of its own that is neither NTNU's service nor OpenAI (another
-        hosted vision model) reads ``QUESTXTRACT_VISION_API_KEY``, so the OpenAI key is never
-        sent to a host set up for vision alone.
+        hosted vision model) reads ``QUESTXTRACT_VISION_API_KEY``, so neither the OpenAI nor
+        the NTNU key is sent to a host set up for vision alone.
         """
         url = self.vision_url
         if self.vision_base_url is not None and not is_ntnu(url) and not is_openai(url):
-            return _read_key((VISION_KEY_ENV,))
+            return _read_key(VISION_KEY_ENV)
         return endpoint_key(url)
 
     def replace(self, **changes: Any) -> Config:
@@ -221,10 +233,10 @@ def load_config(path: Path | None = None) -> Config:
     return defaults.replace(**values)
 
 
-def _endpoint(url: str) -> tuple[str, str]:
-    """Return the host (lower case, default port dropped) and path (no trailing slash) of ``url``.
+def _host(url: str) -> str:
+    """Return the host of ``url``, lower case, default port dropped.
 
-    The scheme does not count: a key belongs to the service, however its URL is written.
+    Neither scheme nor path counts: a key belongs to the service, however its URL is written.
     """
     parts = urlsplit(url.strip())
     host = (parts.hostname or "").lower()
@@ -234,39 +246,34 @@ def _endpoint(url: str) -> tuple[str, str]:
         port = -1
     if port not in (None, 80, 443):
         host = f"{host}:{port}"
-    return host, parts.path.rstrip("/")
+    return host
 
 
 def is_ntnu(url: str | None) -> bool:
     """Whether ``url`` is NTNU's LLM service."""
-    return url is not None and _endpoint(url) == _endpoint(NTNU_LLM_URL)
+    return url is not None and _host(url) == _host(NTNU_LLM_URL)
 
 
 def is_openai(url: str | None) -> bool:
     """Whether ``url`` is OpenAI: ``None`` (the SDK's own default) or :data:`OPENAI_URL`."""
-    return url is None or _endpoint(url) == _endpoint(OPENAI_URL)
+    return url is None or _host(url) == _host(OPENAI_URL)
 
 
 def endpoint_key(url: str | None) -> str | None:
     """Read the key for ``url`` from the environment or cwd's ``.env``, never storing it.
 
-    NTNU's service has a key of its own, ``QUESTXTRACT_NTNU_API_KEY`` (or its old name
-    ``QUESTXTRACT_VISION_API_KEY``), so the OpenAI key never goes there and the NTNU key never
-    goes anywhere else. Every other endpoint (OpenAI, OpenRouter, a local server) reads
-    ``OPENAI_API_KEY``, which a local server may leave unset.
+    NTNU's service has a key of its own, ``QUESTXTRACT_NTNU_API_KEY``, so the OpenAI key never
+    goes there and the NTNU key never goes anywhere else. Every other endpoint (OpenAI,
+    OpenRouter, a local server) reads ``OPENAI_API_KEY``, which a local server may leave unset.
     """
-    return _read_key((NTNU_KEY_ENV, VISION_KEY_ENV) if is_ntnu(url) else (OPENAI_KEY_ENV,))
+    return _read_key(NTNU_KEY_ENV if is_ntnu(url) else OPENAI_KEY_ENV)
 
 
-def _read_key(names: tuple[str, ...]) -> str | None:
-    """Return the first of ``names`` set in the environment, else the first set in ``.env``."""
-    for name in names:
-        if name in os.environ:
-            return os.environ[name]
-    for name in names:
-        if (value := _dotenv_api_key(name)) is not None:
-            return value
-    return None
+def _read_key(name: str) -> str | None:
+    """Return ``name`` from the environment, else from cwd's ``.env``."""
+    if name in os.environ:
+        return os.environ[name]
+    return _dotenv_api_key(name)
 
 
 def _dotenv_api_key(name: str = OPENAI_KEY_ENV) -> str | None:

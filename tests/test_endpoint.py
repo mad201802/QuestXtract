@@ -52,10 +52,10 @@ def _ask(config: Config, *, vision: bool) -> None:
     endpoint.ask(config, {"model": "m", "messages": []}, name="t", vision=vision)
 
 
-def test_by_default_every_request_goes_to_ntnu_with_its_key_and_thinking_off(
+def test_by_default_every_request_goes_to_ntnu_with_its_key(
     recorder: _Recorder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#173 AC1: the judge and vision on NTNU's service, one key, reasoning "none"."""
+    """#173 AC1: the judge and vision on NTNU's service, one key."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
     monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
 
@@ -65,7 +65,6 @@ def test_by_default_every_request_goes_to_ntnu_with_its_key_and_thinking_off(
     assert [(c["base_url"], c["api_key"]) for c in recorder.clients] == 2 * [
         (NTNU_LLM_URL, "ntnu-key")
     ]
-    assert [r["reasoning_effort"] for r in recorder.requests] == ["none", "none"]
 
 
 def test_openai_gets_the_openai_key_and_no_reasoning_setting_with_server(
@@ -90,7 +89,7 @@ def test_only_base_url_still_sends_vision_there_with_the_judges_key(
 ) -> None:
     """#162 AC: a config from before vision had its own endpoint keeps working."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-local")
-    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "ntnu-key")
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
 
     _ask(Config(base_url="http://localhost:11434/v1"), vision=True)
 
@@ -114,7 +113,7 @@ def test_vision_base_url_takes_vision_elsewhere_with_that_endpoints_key(
 
 
 def test_the_vision_key_is_hidden_in_errors(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "ntnu-secret")
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-secret")
 
     def refused(**kwargs: Any) -> Any:
         def create(**request: Any) -> Any:

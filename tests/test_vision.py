@@ -1181,7 +1181,9 @@ def test_with_the_ocr_reader_the_probe_still_asks_the_vision_model(context, fake
     ctx = run(_lecture(context, video, tmp_path / "cache", vision_reader="ocr"), LAYOUT_STAGES)
 
     assert client.requests[0]["model"] == DEEPSEEK
+    assert client.requests[0]["reasoning_effort"] == "none"  # DeepSeek thinks unless told (#173)
     assert {r["model"] for r in client.requests[1:]} == {"zai-org/GLM-OCR"}
+    assert not any("reasoning_effort" in r for r in client.requests[1:])  # #173 review
     assert _png_size(tmp_path / "cache" / ctx.visual[0].keyframe_path) == (160, 120)
 
 

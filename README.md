@@ -238,7 +238,7 @@ vision_reader = "ocr"
 vision_base_url = "http://localhost:11434/v1"
 vision_ocr_model = "glm-ocr:q8_0"
 vision_model = "qwen3-vl:2b-instruct"   # finds the board; leave it out to read the full frame
-reasoning_effort = ""                   # send no reasoning setting to the local models
+vision_reasoning_effort = ""            # send no reasoning setting to the local models
 ```
 
 A server that does not return token probabilities still works; its readings get confidence 0.5,

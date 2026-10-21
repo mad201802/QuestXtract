@@ -243,8 +243,11 @@ def _config(args: argparse.Namespace) -> Config:
         raise ValueError("detector must be rules or llm")
     if config.vision_reader not in ("vlm", "ocr"):
         raise ValueError("vision_reader / --vision-reader must be vlm or ocr")
-    if config.reasoning_effort not in ("", "none", "low", "medium", "high"):
+    efforts = ("", "none", "low", "medium", "high")
+    if config.reasoning_effort not in efforts:
         raise ValueError("reasoning_effort must be empty, none, low, medium or high")
+    if config.vision_reasoning_effort not in (None, *efforts):
+        raise ValueError("vision_reasoning_effort must be empty, none, low, medium or high")
     return config
 
 
@@ -279,7 +282,7 @@ def _with_llm(config: Config) -> Config:
             key nor a local endpoint.
 
     """
-    if config.reasoning_effort in ("low", "medium", "high"):
+    if {config.reasoning_effort, config.vision_effort} & {"low", "medium", "high"}:
         config = config.replace(
             timeout_seconds=max(config.timeout_seconds, _THINKING_TIMEOUT_SECONDS)
         )
@@ -301,22 +304,33 @@ def _check_endpoint(config: Config, what: str, *, model_flag: str, vision: bool 
     The key goes with the endpoint (:func:`config.endpoint_key`): NTNU's LLM service, the
     default, needs ``QUESTXTRACT_NTNU_API_KEY``; OpenAI needs ``OPENAI_API_KEY``. Any other
     endpoint may be a local server without a key. Every model on NTNU's service is named
-    ``organisation/model``, so a name without a ``/`` there (``gpt-4o`` from an OpenAI setup)
-    is refused here rather than by the service after transcription. ``model_flag`` names the
-    flag that sets the model ``what`` asks, for the OpenAI hint.
+    ``organisation/model`` and no OpenAI model is, so a name on the wrong service (``gpt-4o``
+    on NTNU's, the default DeepSeek on OpenAI's) is refused here rather than by the service
+    after transcription. ``model_flag`` names the flag that sets the model ``what`` asks, for
+    the hints; vision's endpoint is moved by ``vision_base_url`` when that is set.
     """
     if importlib.util.find_spec("openai") is None:
         raise ValueError(f"{what} needs the LLM extra: pip install 'questxtract[llm]'")
     url = config.vision_url if vision else config.base_url
+    if vision and config.vision_base_url is not None:
+        mover = "vision_base_url in questxtract.toml"
+        to_openai = f'set vision_base_url = "{OPENAI_URL}" in questxtract.toml and pass'
+    else:
+        mover = "--llm-url (base_url)"
+        to_openai = f"pass --llm-url {OPENAI_URL}"
     openai_hint = (
-        f"for OpenAI instead, pass --llm-url {OPENAI_URL} {model_flag} gpt-4o "
-        f"--llm-reasoning server, with {OPENAI_KEY_ENV}"
+        f"for OpenAI instead, {to_openai} {model_flag} gpt-4o --llm-reasoning server, "
+        f"with {OPENAI_KEY_ENV}"
     )
     model = getattr(config, _MODEL_FLAGS[model_flag])
     if is_ntnu(url) and "/" not in model:
         raise ValueError(
-            f"{what}: {model} is not a model on NTNU's LLM service ({NTNU_LLM_URL}), the default "
-            f"endpoint; {openai_hint}"
+            f"{what}: {model} is not a model on NTNU's LLM service ({NTNU_LLM_URL}); {openai_hint}"
+        )
+    if is_openai(url) and "/" in model:
+        raise ValueError(
+            f"{what}: {model} is not an OpenAI model; pass {model_flag} with one, such as gpt-4o, "
+            f"or {mover} for another endpoint"
         )
     if (is_ntnu(url) or is_openai(url)) and not (
         config.vision_api_key if vision else config.api_key
@@ -328,7 +342,7 @@ def _check_endpoint(config: Config, what: str, *, model_flag: str, vision: bool 
             )
         raise ValueError(
             f"{what} goes to OpenAI, so it needs {OPENAI_KEY_ENV} in the environment or .env, "
-            "or --llm-url (base_url) for another endpoint"
+            f"or {mover} for another endpoint"
         )
 
 
@@ -672,11 +686,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("none", "low", "medium", "high", "server"),
         default=None,
         metavar="LEVEL",
-        help="how long a thinking model may think before it answers, for every request: none, "
-        "low, medium or high, or server to send no setting, for a model that takes none such "
-        f"as gpt-4o or rejects none such as Qwen (default: {defaults.reasoning_effort or 'server'})"
-        ". Small models such as qwen3.5:9b judge much better with low; "
-        "low, medium and high also allow each request 10 minutes instead of 2",
+        help="how long a thinking model may think before it answers: none, low, medium or high, "
+        "or server to send no setting, for a model that takes none such as gpt-4o or rejects "
+        f"none such as Qwen (default: {defaults.reasoning_effort or 'server'}). Vision follows "
+        "it unless vision_reasoning_effort is set; the OCR model gets none. Small models such "
+        "as qwen3.5:9b judge much better with low; low, medium and high also allow each "
+        "request 10 minutes instead of 2",
     )
 
     # How the quiz is made: `process --quiz` and `quiz` share these.

@@ -43,7 +43,7 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--detector` | `rules` or `llm` | `rules` | How questions are found: fast offline rules, or a language model that reads the transcript. See [Finding questions with an LLM](#finding-questions-with-an-llm). |
 | `--llm-model` | a model name | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
 | `--llm-url` | a URL | NTNU's LLM service | An OpenAI-compatible endpoint for `--detector llm`, the quiz and vision, e.g. `https://api.openai.com/v1` for OpenAI or `http://localhost:11434/v1` for Ollama. The key goes with the endpoint: NTNU's service (`https://llm.hpc.ntnu.no/v1`, NTNU network or VPN) reads `QUESTXTRACT_NTNU_API_KEY`, every other endpoint `OPENAI_API_KEY`. Vision goes there too unless `vision_base_url` is set in `questxtract.toml`. |
-| `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | How long a thinking model may think before it answers, for every request: the judge, the quiz and vision. `none`, the default, switches DeepSeek's thinking off, which makes it far faster at reading the board for nearly the same result. `server` sends no setting, for a model that has none (`gpt-4o`) or rejects `none` (Qwen). Small models such as `qwen3.5:9b` judge much better with `low`. `low`, `medium` and `high` allow each request 10 minutes instead of 2; for a server that thinks on its own with `server`, raise `timeout_seconds` in the settings file. |
+| `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | How long a thinking model may think before it answers: the judge, the quiz and vision (unless `vision_reasoning_effort` is set; the OCR model gets no setting). `none`, the default, switches DeepSeek's thinking off, which makes it far faster at reading the board for nearly the same result. `server` sends no setting, for a model that has none (`gpt-4o`) or rejects `none` (Qwen). Small models such as `qwen3.5:9b` judge much better with `low`. `low`, `medium` and `high` allow each request 10 minutes instead of 2; for a server that thinks on its own with `server`, raise `timeout_seconds` in the settings file. |
 | `--vision`, `--no-vision` | nothing | off | Also reads the slides or the board with a vision model: by default DeepSeek on NTNU's LLM service with the key from `QUESTXTRACT_NTNU_API_KEY` (NTNU network or VPN), or at `vision_base_url`, or at `--llm-url`. Needs the `questxtract[llm]` extra. `--no-vision` turns off `vision_enabled` from the settings file for one run. A recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript has no board, so the board is not read (a note says so). See [Reading the board](../README.md#reading-the-board). |
 | `--vision-model` | a model name | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | The model that reads the board, as the endpoint names it. It must take images. |
 | `--vision-reader` | `vlm` or `ocr` | `vlm` | How keyframes are read: `vlm`, the vision model (text, formulas and a description), or `ocr`, `vision_ocr_model` (GLM-OCR: text and formulas only, faster). The layout probe always asks `--vision-model`. |
@@ -181,7 +181,9 @@ questxtract eval tests/data/ --config other.toml
 Every `Config` field can be set, including those without flags. Names must match exactly:
 `--model` corresponds to `model_size`, `--threshold` to `min_confidence`, `--llm-model` to
 `judge_model`, `--llm-url` to `base_url`, and `--llm-reasoning` to `reasoning_effort`
-(`judge_reasoning_effort` is still read as its old name). `reasoning_effort = ""` is the
+(`judge_reasoning_effort` is still read as its old name). Vision follows `reasoning_effort`
+unless `vision_reasoning_effort` is set, for a vision model other than the judge's (gpt-4o
+judging with `""`, DeepSeek reading the board with `"none"`). `reasoning_effort = ""` is the
 equivalent of `--llm-reasoning server`. A reasoning level (`"low"`, `"medium"` or `"high"`) raises the request timeout to at least 600
 seconds for `process` and `eval`, including when it comes from the file.
 
@@ -200,9 +202,10 @@ TOML files must never hold secrets. A key containing `key`, `token`, `secret` or
 `questxtract[llm]` dependency and an API key are still required.
 
 The key goes with the endpoint. NTNU's LLM service, the default, reads
-`QUESTXTRACT_NTNU_API_KEY` (or its old name `QUESTXTRACT_VISION_API_KEY`); every other endpoint
-reads `OPENAI_API_KEY`. So the OpenAI key is never sent to NTNU, and the NTNU key never leaves
-NTNU. Each name comes from the environment if set; otherwise it is read from `.env` in the
+`QUESTXTRACT_NTNU_API_KEY`; a `vision_base_url` on another host than NTNU's or OpenAI's reads
+`QUESTXTRACT_VISION_API_KEY`; every other endpoint reads `OPENAI_API_KEY`. So the OpenAI key is
+never sent to NTNU, the NTNU key never leaves NTNU, and neither goes to a host set up for vision
+alone. Each name comes from the environment if set; otherwise it is read from `.env` in the
 working directory. This file is ignored by Git. The supported format is `NAME=VALUE`, with
 optional single or double quotes, blank lines and `#` comments. Other variables are ignored; parent and user directories are not searched. The key
 is never stored in Config, logs, cache entries or `questions.json`.
@@ -448,6 +451,7 @@ is not the cache, so it works on a first run too ([architecture.md 6.5](architec
 | `.env: line N: expansion is not supported; ...` | Load the key into the environment using your shell or password store before running the command. |
 | `--detector llm needs the LLM extra: ...` | Install `questxtract[llm]`. |
 | `--vision / vision_enabled goes to NTNU's LLM service (...), so it needs QUESTXTRACT_NTNU_API_KEY ...` | Make the NTNU key available in the environment or local `.env`, set `vision_base_url` or pass `--llm-url` for another endpoint, or turn vision off with `--no-vision`. |
+| `...: <model> is not a model on NTNU's LLM service ...` / `...: <model> is not an OpenAI model ...` | The model name belongs to the other service (NTNU's are named `organisation/model`, OpenAI's have no `/`). Pass the flag the message names with a model of that endpoint, or move the endpoint as it says. |
 | `--vision / vision_enabled needs the LLM extra: ...` | Install `questxtract[llm]`, or turn vision off with `--no-vision`. |
 | `note: <file> has no video, so the board is not read` | Not an error: a recording without video, or a transcript, has no board to read. The questions are written as usual. |
 | `judge: <endpoint>: ...` | The model endpoint failed: it is not running, the key is wrong, or the model name is unknown to it. The message after the endpoint says which. |

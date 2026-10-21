@@ -212,6 +212,8 @@ def _request(
         ],
         "response_format": _schema(distractors),
     }
+    if config.reasoning_effort:
+        request["reasoning_effort"] = config.reasoning_effort
     return request
 
 

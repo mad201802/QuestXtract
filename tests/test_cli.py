@@ -715,7 +715,7 @@ def test_vision_reads_the_board_with_the_model_given(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "ntnu-test")
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")
     client = fake_llm(_BOARD)
     video = make_mp4(tmp_path / "lecture.mp4", video=True)
 
@@ -800,6 +800,7 @@ _VISION_SETTINGS_FILE_ONLY = {
     "vision_change_hold",
     "vision_base_url",  # an endpoint is set once per machine; --llm-url still moves vision too
     "vision_ocr_model",  # one OCR model is measured; --vision-reader picks the reader
+    "vision_reasoning_effort",  # only for a vision model apart from the judge; --llm-reasoning
 }
 
 
@@ -1129,7 +1130,7 @@ def test_an_openai_model_on_ntnus_service_fails_before_transcription(
 ) -> None:
     """#173 review: an OpenAI model name from an older setup is refused before anything slow,
     and the hint names the flag that sets the model."""
-    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "ntnu-test")  # the old name still found
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")
     if "--vision" in flags:
         Path("questxtract.toml").write_text('vision_model = "gpt-4o"\n', encoding="utf-8")
     video = make_mp4(tmp_path / "lecture.mp4", video=True)
@@ -1139,3 +1140,42 @@ def test_an_openai_model_on_ntnus_service_fails_before_transcription(
     err = capsys.readouterr().err
     assert "gpt-4o is not a model on NTNU's LLM service" in err and fake_asr == []
     assert f"--llm-url https://api.openai.com/v1 {model_flag} gpt-4o" in err
+
+
+def test_deepseek_on_openai_fails_before_transcription(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#173 review: following the judge's OpenAI hint with --vision leaves vision_model on
+    DeepSeek, which OpenAI does not have; that is refused before anything slow too."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+    openai = ["--llm-url", "https://api.openai.com/v1", "--llm-model", "gpt-4o"]
+
+    assert main(["process", str(video), "--detector", "llm", "--vision", *openai]) == 1
+
+    err = capsys.readouterr().err
+    assert f"{DEEPSEEK} is not an OpenAI model; pass --vision-model" in err and fake_asr == []
+
+
+def test_with_vision_base_url_the_vision_hints_name_it(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """#173 review: --llm-url cannot move vision off its own vision_base_url."""
+    Path("questxtract.toml").write_text(
+        'base_url = "http://localhost:11434/v1"\nvision_base_url = "https://llm.hpc.ntnu.no/v1"\n',
+        encoding="utf-8",
+    )
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+
+    assert main(["process", str(video), "--vision"]) == 1
+
+    err = capsys.readouterr().err
+    assert "QUESTXTRACT_NTNU_API_KEY" in err and "--llm-url" not in err
+    assert 'set vision_base_url = "https://api.openai.com/v1" in questxtract.toml' in err

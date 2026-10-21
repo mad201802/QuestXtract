@@ -119,9 +119,6 @@ def ask(
         ValueError: If the settings cannot be used, such as an unreadable ``.env``.
 
     """
-    if config.reasoning_effort and "reasoning_effort" not in request:
-        # Every request, vision's included: DeepSeek thinks unless told "none" (10.1).
-        request = {**request, "reasoning_effort": config.reasoning_effort}
     base_url, key_for_errors = route(config, vision=vision)
     key = json.dumps([base_url, request], sort_keys=True)
     path = Path(config.cache_dir) / name / f"{hashlib.sha256(key.encode()).hexdigest()}.json"

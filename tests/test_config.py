@@ -193,11 +193,15 @@ def test_everything_defaults_to_deepseek_on_ntnu_with_one_key(tmp_path, monkeypa
     assert "ntnu-dotenv" not in repr(config)
 
 
-def test_the_ntnu_key_wins_over_its_old_name(monkeypatch):
-    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "old-name")
-    assert Config().api_key == "old-name"  # #162's name still works, for the judge too
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "new-name")
-    assert Config().api_key == Config().vision_api_key == "new-name"
+def test_each_key_goes_to_one_service_only(monkeypatch):
+    """#173 review: the vision key is never NTNU's, so an OpenAI key stored there for #162's
+    setup never reaches NTNU, nor an NTNU key a third-party vision host."""
+    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "vision-key")
+    assert Config().api_key is None and Config().vision_api_key is None
+
+    third_party = Config(vision_base_url="https://openrouter.ai/api/v1")
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+    assert (third_party.api_key, third_party.vision_api_key) == ("ntnu-key", "vision-key")
 
 
 def test_openai_takes_the_openai_key_and_never_the_ntnu_one(monkeypatch):
@@ -216,12 +220,20 @@ def test_openai_takes_the_openai_key_and_never_the_ntnu_one(monkeypatch):
     assert (split.api_key, split.vision_api_key) == ("sk-openai", "ntnu-key")
 
 
-def test_the_vision_key_in_the_environment_wins_over_dotenv(tmp_path, monkeypatch):
+def test_the_ntnu_key_in_the_environment_wins_over_dotenv(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "ntnu-environment")
-    Path(".env").write_text("QUESTXTRACT_VISION_API_KEY=ntnu-dotenv\n", encoding="utf-8")
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-environment")
+    Path(".env").write_text("QUESTXTRACT_NTNU_API_KEY=ntnu-dotenv\n", encoding="utf-8")
 
     assert Config().vision_api_key == "ntnu-environment"
+
+
+def test_vision_reasoning_follows_reasoning_effort_unless_set():
+    """#173 review: vision may need another setting than the judge (gpt-4o judge, DeepSeek
+    vision; or a local vision model and DeepSeek judging)."""
+    assert Config(reasoning_effort="low").vision_effort == "low"
+    split = Config(reasoning_effort="", vision_reasoning_effort="none")
+    assert (split.reasoning_effort, split.vision_effort) == ("", "none")
 
 
 def test_vision_follows_base_url_unless_it_has_its_own(monkeypatch):
@@ -251,7 +263,13 @@ def test_the_old_reasoning_name_in_the_settings_file_still_applies(tmp_path, mon
 
 @pytest.mark.parametrize(
     "url",
-    ["https://LLM.hpc.ntnu.no/v1", "https://llm.hpc.ntnu.no:443/v1/", "http://llm.hpc.ntnu.no/v1"],
+    [
+        "https://LLM.hpc.ntnu.no/v1",
+        "https://llm.hpc.ntnu.no:443/v1/",
+        "http://llm.hpc.ntnu.no/v1",
+        "https://llm.hpc.ntnu.no",
+        "https://llm.hpc.ntnu.no/api/v1",
+    ],
 )
 def test_any_spelling_of_ntnus_url_gets_the_ntnu_key(monkeypatch, url):
     """#173 review: the key goes with the service, however its URL is written."""

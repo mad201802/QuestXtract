@@ -664,8 +664,8 @@ board.
 > **Decision.** `questxtract/vision.py`. Config: `vision_enabled` (False), `vision_fps` (1.0),
 > `vision_model`, `vision_states_per_minute` (3.0), `vision_min_states` (80),
 > `vision_change_fraction` (0.02),
-> `vision_change_hold` (3 samples), `vision_base_url` (`None`: `base_url` when set, else NTNU's
-> LLM service, 10.1). Offline use points `vision_base_url` or `base_url` at a local
+> `vision_change_hold` (3 samples), `vision_base_url` (`None`: vision follows `base_url`, 10.1),
+> `vision_reasoning_effort` (`None`: `reasoning_effort`, 10.1). Offline use points `vision_base_url` or `base_url` at a local
 > OpenAI-compatible server; worse quality there is accepted.
 
 ---
@@ -906,13 +906,16 @@ with the endpoint, not with the caller:
 
 | Endpoint | Key |
 |---|---|
-| NTNU's LLM service, `https://llm.hpc.ntnu.no/v1` (the default `base_url`) | `QUESTXTRACT_NTNU_API_KEY`, or its old name `QUESTXTRACT_VISION_API_KEY` |
+| NTNU's LLM service, host `llm.hpc.ntnu.no` (the default `base_url`) | `QUESTXTRACT_NTNU_API_KEY` |
+| a `vision_base_url` on any other host than NTNU's or OpenAI's (a hosted vision model) | `QUESTXTRACT_VISION_API_KEY` |
 | any other: OpenAI (`https://api.openai.com/v1`, or `base_url = None`), OpenRouter, a local server | `OPENAI_API_KEY` (a local server needs none) |
 
-So the OpenAI key is never sent to NTNU, and the NTNU key never leaves it. Each key is read from
+The service is told by the URL's host alone. So the OpenAI key is never sent to NTNU, the NTNU
+key never leaves it, and neither goes to a host set up for vision alone. Each key is read from
 its variable, in the environment or the working directory's `.env`, never from
 `questxtract.toml`, and hidden in error messages. The CLI checks the key of every endpoint a run
-will use before anything slow starts.
+will use before anything slow starts, and refuses a model name from the other service: every
+model on NTNU's is named `organisation/model`, and no OpenAI model has a `/`.
 
 Any local OpenAI-compatible server (Ollama, llama.cpp's server, vLLM, LM Studio) plugs in with no
 new code. Offline results may be worse, but the path must be *available* on a local device.
@@ -928,8 +931,10 @@ a local server is a `Config` change, no code. No abstraction library sits on top
 pydantic-ai, instructor): `base_url` already reaches every server we target, and the output checks
 of 10.3 are ours to write either way ([design_decisions.md](design_decisions.md), D12).
 
-`reasoning_effort` (`--llm-reasoning`) sets how long a thinking model may think first, and
-`endpoint.ask` sends it with every request, vision's and the quiz's included. The default,
+`reasoning_effort` (`--llm-reasoning`) sets how long a thinking model may think first. The judge
+and the quiz send it with every request, and vision with every request to `vision_model` (the
+layout probe and its readings) unless `vision_reasoning_effort` sets vision apart, for a vision
+model other than the judge's. The OCR model gets no setting: it does not think. The default,
 `"none"`, switches DeepSeek's thinking off: it thinks unless told so, and on NTNU's service
 `"none"` is the only value that stops it (`"low"` still thinks). `""` (`--llm-reasoning server`)
 sends no setting, for a model that has none (gpt-4o) or rejects `"none"` (Qwen3.8-27B).
@@ -1168,7 +1173,7 @@ Vision reports sampling as its first half and each keyframe read as its second.
 
 ### 12.1 questions.json
 
-Schema 2.3: a fixed key set, `null` included, in one file, plus a keyframe folder beside it.
+Schema 2.4: a fixed key set, `null` included, in one file, plus a keyframe folder beside it.
 The formal description is [`questions.schema.json`](../src/questxtract/questions.schema.json),
 which ships inside the package; the tests validate every export shape against it. The example shows one entry of each
 list, with vision and the LLM detector on; with the rules and no vision, `visuals` is
@@ -1176,13 +1181,13 @@ empty, `verdict` is `unjudged` and the judge and vision settings are `null`:
 
 ```json
 {
-  "schema_version": "2.3",
+  "schema_version": "2.4",
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
   "config": {"model_size": "turbo", "language": "en", "min_confidence": 0.4,
              "detector": "llm", "judge_model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
              "judge_prompt_version": "v5", "judge_reasoning_effort": "none",
              "vision_model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
-             "vision_ocr_model": null},
+             "vision_reasoning_effort": "none", "vision_ocr_model": null},
   "stats": {"sentences": 1840, "sentences_unpunctuated": 12, "segments": 96,
             "segments_closed_gap": 92, "segments_closed_duration": 1, "segments_closed_chars": 3,
             "board_states": 34, "candidates": 61, "answered": 30, "emitted": 38},
@@ -1258,8 +1263,9 @@ shape without a breaking change: M3's board timeline is `visuals` in time order.
   board.
 - `config.detector`, `judge_prompt_version` and `judge_reasoning_effort` tell two runs apart:
   `rules` or `llm`, the judge prompt's version, and the `--llm-reasoning` level
-  (`reasoning_effort`, `""` for `server`). The last two are `null` with the rules. The file is not a run log; other settings
-  are not recorded.
+  (`reasoning_effort`, `""` for `server`). The last two are `null` with the rules.
+  `vision_reasoning_effort` is the setting vision's model requests carried, `null` with vision
+  off. The file is not a run log; other settings are not recorded.
 
 **Versioning.** `schema_version` is `MAJOR.MINOR`. A minor version adds keys, or changes what a
 value means without changing its type (as `keyframe_path` being relative to the file), so a
