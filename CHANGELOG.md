@@ -119,6 +119,10 @@
   set `vision_model = "gpt-5.6-luna"` and `vision_base_url = "https://api.openai.com/v1"`, and put
   the OpenAI key in `QUESTXTRACT_VISION_API_KEY`. The NTNU service needs the NTNU network or VPN.
   (#162)
+- The limit on board states, and so on vision calls, grows with the lecture: `vision_max_states`
+  is replaced by `vision_states_per_minute` (3.0) and `vision_min_states` (80). A 90-minute
+  lecture can have 270 board states instead of 80; a lecture of 26 minutes or less keeps 80. A
+  `questxtract.toml` that still sets `vision_max_states` is rejected as an unknown key. (#130)
 - `Config.judge_enabled` and `Config.judge_max_candidates` are gone. `Config(detector="llm")`
   turns the LLM on; `judge_window`, `judge_batch_size`, `judge_parallel` and
   `judge_reasoning_effort` tune it. The `judge` stage runs before `score`, so the threshold
