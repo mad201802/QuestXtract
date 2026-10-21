@@ -424,17 +424,19 @@ def test_llm_reasoning_reaches_the_request_and_allows_a_longer_wait(
         args = cli.build_parser().parse_args(["process", source, "--detector", "llm", *flags])
         return cli._with_llm(cli._config(args))
 
-    assert config().judge_reasoning_effort == "none"
-    assert config().timeout_seconds == Config().timeout_seconds
+    assert config().judge_reasoning_effort == ""  # gpt-4o takes no setting (#164)
+    assert config().timeout_seconds == Config().timeout_seconds == 120
+    assert config("--llm-reasoning", "none").timeout_seconds == 120
     thinking = config("--llm-reasoning", "low")
     assert thinking.judge_reasoning_effort == "low"
     with pytest.raises(SystemExit):  # a typo fails at once, not at the provider after ASR
         config("--llm-reasoning", "hgih")
     assert thinking.timeout_seconds == 600
-    # gpt-4o-mini rejects any reasoning_effort; "" sends none (tests/test_llm.py)
+    # gpt-4o rejects any reasoning_effort; "" sends none (tests/test_llm.py). Only a level
+    # asked for gets the long timeout, so a stalled request is noticed after 2 minutes.
     server = config("--llm-reasoning", "server")
     assert server.judge_reasoning_effort == ""
-    assert server.timeout_seconds == 600
+    assert server.timeout_seconds == 120
 
 
 # --- config files (#99) -------------------------------------------------------
@@ -573,7 +575,7 @@ def test_eval_receives_file_settings_and_reasoning_timeout(tmp_path, monkeypatch
     monkeypatch.setattr(cli, "evaluate", evaluate)
     assert main(["eval", "unused", "--json"]) == 0
     assert seen[0].judge_window == 7
-    assert seen[0].timeout_seconds == (120 if reasoning == "none" else 600)
+    assert seen[0].timeout_seconds == (600 if reasoning == "low" else 120)
 
 
 @pytest.mark.parametrize("environment_key", [None, "sk-environment"])

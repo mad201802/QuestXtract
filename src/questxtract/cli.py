@@ -259,12 +259,15 @@ def _with_quiz(config: Config, what: str) -> None:
 def _with_llm(config: Config) -> Config:
     """Check an LLM run can start before anything slow runs, and allow thinking time.
 
+    Only a thinking level asked for (low, medium or high) gets the long timeout; with no setting
+    sent, a stalled request is noticed after ``timeout_seconds``.
+
     Raises:
         ValueError: If ``--detector llm`` lacks the ``[llm]`` extra, or has neither an API
             key nor a local endpoint.
 
     """
-    if config.judge_reasoning_effort != "none":
+    if config.judge_reasoning_effort in ("low", "medium", "high"):
         config = config.replace(
             timeout_seconds=max(config.timeout_seconds, _THINKING_TIMEOUT_SECONDS)
         )
@@ -641,10 +644,10 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="LEVEL",
         help="how long a thinking model may think before it answers: none, low, medium or high, "
-        "or server to send no setting, for a model without one such as gpt-4o-mini "
-        f"(default: {defaults.judge_reasoning_effort}). "
+        "or server to send no setting, for a model without one such as gpt-4o (default: "
+        f"{defaults.judge_reasoning_effort or 'server'}). "
         "Small models such as qwen3.5:9b judge much better with low; "
-        "anything but none also allows each request 10 minutes instead of 2",
+        "low, medium and high also allow each request 10 minutes instead of 2",
     )
 
     # How the quiz is made: `process --quiz` and `quiz` share these.
@@ -834,7 +837,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="LEVEL",
         help="how long a thinking model may think before it answers: none, low, medium or high, "
-        f"or server to send no setting (default: {defaults.judge_reasoning_effort})",
+        f"or server to send no setting (default: {defaults.judge_reasoning_effort or 'server'})",
     )
     quiz.set_defaults(handler=_quiz)
 

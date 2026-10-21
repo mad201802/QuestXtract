@@ -888,7 +888,7 @@ new code. Offline results may be worse, but the path must be *available* on a lo
 
 | Config key | Default | Role |
 |---|---|---|
-| `judge_model` | `gpt-5.6-terra` | the LLM detector; one request per group of nearby candidates |
+| `judge_model` | `gpt-4o` | the LLM detector, on OpenAI; one request per group of nearby candidates |
 | `vision_model` | `Qwen/Qwen3.8-27B-FP8` | on NTNU's LLM service; tens of board-state calls per lecture |
 
 A local server takes its own model names (`qwen3.5:9b` in Ollama). Swapping a model or pointing at
@@ -896,11 +896,11 @@ a local server is a `Config` change, no code. No abstraction library sits on top
 pydantic-ai, instructor): `base_url` already reaches every server we target, and the output checks
 of 10.3 are ours to write either way ([design_decisions.md](design_decisions.md), D12).
 
-`judge_reasoning_effort` (`--llm-reasoning`, default `none`) sets how long a thinking model may
-think first; `""` (`--llm-reasoning server`) sends no setting and leaves the choice to the
-server, for a model without one such as gpt-4o-mini. Thinking costs minutes per request instead of
+`judge_reasoning_effort` (`--llm-reasoning`) sets how long a thinking model may think first.
+The default, `""` (`--llm-reasoning server`), sends no setting and leaves the choice to the
+server, as gpt-4o, which has none, requires. Thinking costs minutes per request instead of
 seconds, and it is what lets a small model such as Qwen3.5 9B judge well, so the CLI raises the
-per-request deadline to 10 minutes whenever it is on. Ollama's context length cannot be set per
+per-request deadline to 10 minutes when a level (`low`, `medium`, `high`) is asked for. Ollama's context length cannot be set per
 request and is 4k tokens below 24 GB of VRAM, cutting a longer prompt silently; a request (10.4)
 stays within 8k, and [cli.md](cli.md) starts Ollama with `OLLAMA_CONTEXT_LENGTH=8192`.
 
@@ -1010,7 +1010,7 @@ it made no calls. Prices are not applied: they depend on the provider and the da
 > **Decision.** `questxtract/llm.py` (the judge), `questxtract/endpoint.py` (client and requests,
 > shared with vision). Config: `detector` (`rules`), `base_url`, `api_key` (from
 > `OPENAI_API_KEY`), `judge_model`, `judge_window` (10), `judge_batch_size` (8),
-> `judge_parallel` (1), `judge_reasoning_effort` (`none`), `timeout_seconds` (120). Prompt and
+> `judge_parallel` (1), `judge_reasoning_effort` (`""`), `timeout_seconds` (120). Prompt and
 > schema are module-level, so a prompt change is a reviewable diff. Dependency: `openai`, in the
 > optional extra `questxtract[llm]`, imported inside the functions.
 
@@ -1144,8 +1144,8 @@ empty, `verdict` is `unjudged` and the judge and vision settings are `null`:
   "schema_version": "2.2",
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
   "config": {"model_size": "turbo", "language": "en", "min_confidence": 0.4,
-             "detector": "llm", "judge_model": "gpt-5.6-terra", "judge_prompt_version": "v5",
-             "judge_reasoning_effort": "none", "vision_model": "Qwen/Qwen3.8-27B-FP8"},
+             "detector": "llm", "judge_model": "gpt-4o", "judge_prompt_version": "v5",
+             "judge_reasoning_effort": "", "vision_model": "Qwen/Qwen3.8-27B-FP8"},
   "stats": {"sentences": 1840, "sentences_unpunctuated": 12, "segments": 96,
             "segments_closed_gap": 92, "segments_closed_duration": 1, "segments_closed_chars": 3,
             "board_states": 34, "candidates": 61, "answered": 30, "emitted": 38},
@@ -1279,7 +1279,7 @@ unreachable endpoint or a bad key ends the run, as the same error would hit ever
 **Deterministic.** Items follow `questions.json`, item ids derive from the question ids, the
 correct option's place from a hash of the question id, and nothing records the time of the run.
 
-> **Decision.** `questxtract/quiz.py`, not a stage. Config: `quiz_model` (`gpt-5.6-terra`),
+> **Decision.** `questxtract/quiz.py`, not a stage. Config: `quiz_model` (`gpt-4o`),
 > `quiz_strictness` (`lenient`), `quiz_options` (3, from 3 to 5); `base_url` and
 > `judge_reasoning_effort` are shared with the judge. Every written file passes `validate_quiz`.
 

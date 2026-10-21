@@ -78,15 +78,15 @@ class Config:
     # --- 10 the LLM layer ---
     detector: str = "rules"  # or "llm": the judge reads the transcript and picks the questions
     base_url: str | None = None  # None is OpenAI; "http://localhost:11434/v1" is a local Ollama
-    judge_model: str = "gpt-5.6-terra"
+    judge_model: str = "gpt-4o"
     judge_window: int = 10  # sentences of lecture on each side of a candidate
     judge_batch_size: int = 8  # nearby candidates judged in one request
     judge_parallel: int = 1  # requests in flight; a local server queues them past the deadline
-    judge_reasoning_effort: str = "none"  # "" leaves it to the server
+    judge_reasoning_effort: str = ""  # "" sends no setting (gpt-4o takes none); or none..high
     timeout_seconds: int = 120  # per LLM request, start to answer, retries included
 
     # --- 12.3 quiz (a separate command; shares base_url and judge_reasoning_effort) ---
-    quiz_model: str = "gpt-5.6-terra"
+    quiz_model: str = "gpt-4o"
     quiz_strictness: str = "lenient"  # or "strict": only questions the lecture answered
     quiz_options: int = 3  # options per item, one correct; 3 to 5
 
