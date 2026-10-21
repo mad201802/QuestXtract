@@ -10,6 +10,8 @@
   and a confidence from the token probabilities (0.5 when the server sends none). It goes through
   vision's endpoint and key, is cached and fails like the vision model's reading, and works with
   `eval --score-vision`. The layout probe still uses `vision_model`. (#144)
+- `questions.json` schema 2.4: `config.vision_reasoning_effort` records the reasoning setting
+  sent to the vision model, `null` with vision off. Files from schema 2.0 to 2.3 still read. (#173)
 - `questions.json` schema 2.3: `config.vision_ocr_model` names the OCR model that read the
   keyframes, `null` when the vision model read them or vision was off. Files from schema 2.0 to
   2.2 still read. (#144)
@@ -124,6 +126,19 @@
 
 ### Changed (breaking)
 
+- Vision, the LLM detector and the quiz run on one model by default:
+  `deepseek-ai/DeepSeek-V4.1-Flash-1017` on NTNU's LLM service (`base_url`), with its thinking
+  off. The key goes with the endpoint: `QUESTXTRACT_NTNU_API_KEY` for NTNU's service,
+  `QUESTXTRACT_VISION_API_KEY` only for a `vision_base_url` on another host than NTNU's or
+  OpenAI's, `OPENAI_API_KEY` for any other; an NTNU key stored as `QUESTXTRACT_VISION_API_KEY`
+  must be renamed, and vision on OpenAI now reads `OPENAI_API_KEY`. A setup that
+  only has `OPENAI_API_KEY` now stops before anything slow with one line naming both ways; for
+  OpenAI, pass `--llm-url https://api.openai.com/v1 --llm-model gpt-4o --llm-reasoning server`.
+  `judge_reasoning_effort` is now `reasoning_effort` (the old name still works in
+  `questxtract.toml`), default `none`, and is sent with every judge and quiz request and to the
+  vision model, not to the OCR model; `vision_reasoning_effort` sets vision apart. A model
+  that rejects `none`, such as Qwen3.8-27B or gpt-4o, needs `--llm-reasoning server`. The
+  `questions.json` key `config.judge_reasoning_effort` is unchanged. (#173)
 - `hotwords_from_vision` is removed from the settings: nothing read it, and the second
   transcription pass it was for is not planned (#62). A `questxtract.toml` that still sets it
   stops with an unknown-key error; delete the line. (#169)

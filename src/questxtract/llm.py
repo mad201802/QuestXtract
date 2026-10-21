@@ -205,8 +205,8 @@ def _ask(
         ],
         "response_format": _schema(excerpt, candidates),
     }
-    if config.judge_reasoning_effort:
-        request["reasoning_effort"] = config.judge_reasoning_effort
+    if config.reasoning_effort:
+        request["reasoning_effort"] = config.reasoning_effort
     return endpoint.ask(config, request, name="judge", usage=usage)
 
 

@@ -211,6 +211,8 @@ def layout(ctx: Context) -> Context:
         ],
         "response_format": _LAYOUT_SCHEMA,
     }
+    if ctx.config.vision_effort:
+        request["reasoning_effort"] = ctx.config.vision_effort
     usage: Counter[str] = Counter()
     ctx.stats.update(dict.fromkeys(_cost_keys("layout"), 0))
     try:
@@ -874,6 +876,8 @@ def read_keyframe(
         ],
         "response_format": _SCHEMA,
     }
+    if config.vision_effort:
+        request["reasoning_effort"] = config.vision_effort
     try:
         answer = endpoint.ask(
             config, request, name="vision", valid=_readable, usage=usage, vision=True

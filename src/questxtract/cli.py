@@ -14,7 +14,16 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from . import __version__
-from .config import NTNU_LLM_URL, VISION_KEY_ENV, Config, load_config
+from .config import (
+    NTNU_KEY_ENV,
+    NTNU_LLM_URL,
+    OPENAI_KEY_ENV,
+    OPENAI_URL,
+    Config,
+    is_ntnu,
+    is_openai,
+    load_config,
+)
 from .evaluate import evaluate, evaluate_vision, format_report, format_vision_report
 from .export import read_questions, result_to_json, write_questions
 from .filtering import filter_document
@@ -215,7 +224,7 @@ def _config(args: argparse.Namespace) -> Config:
             ("detector", "detector"),
             ("llm_model", "judge_model"),
             ("llm_url", "base_url"),
-            ("llm_reasoning", "judge_reasoning_effort"),
+            ("llm_reasoning", "reasoning_effort"),
             ("vision", "vision_enabled"),
             ("vision_model", "vision_model"),
             ("vision_reader", "vision_reader"),
@@ -225,8 +234,8 @@ def _config(args: argparse.Namespace) -> Config:
         )
         if (value := getattr(args, flag, None)) is not None
     }
-    if changes.get("judge_reasoning_effort") == "server":
-        changes["judge_reasoning_effort"] = ""
+    if changes.get("reasoning_effort") == "server":
+        changes["reasoning_effort"] = ""
     config = config.replace(**changes)
     if not 0.0 <= config.min_confidence <= 1.0:
         raise ValueError("min_confidence / --threshold must be between 0 and 1")
@@ -234,8 +243,11 @@ def _config(args: argparse.Namespace) -> Config:
         raise ValueError("detector must be rules or llm")
     if config.vision_reader not in ("vlm", "ocr"):
         raise ValueError("vision_reader / --vision-reader must be vlm or ocr")
-    if config.judge_reasoning_effort not in ("", "none", "low", "medium", "high"):
-        raise ValueError("judge_reasoning_effort must be empty, none, low, medium or high")
+    efforts = ("", "none", "low", "medium", "high")
+    if config.reasoning_effort not in efforts:
+        raise ValueError("reasoning_effort must be empty, none, low, medium or high")
+    if config.vision_reasoning_effort not in (None, *efforts):
+        raise ValueError("vision_reasoning_effort must be empty, none, low, medium or high")
     return config
 
 
@@ -256,7 +268,7 @@ def _with_quiz(config: Config, what: str) -> None:
         raise ValueError(
             f"quiz_options / --options must be between {MIN_OPTIONS} and {MAX_OPTIONS}"
         )
-    _check_endpoint(config, what)
+    _check_endpoint(config, what, model_flag="--quiz-model")
 
 
 def _with_llm(config: Config) -> Config:
@@ -270,40 +282,67 @@ def _with_llm(config: Config) -> Config:
             key nor a local endpoint.
 
     """
-    if config.judge_reasoning_effort in ("low", "medium", "high"):
+    if {config.reasoning_effort, config.vision_effort} & {"low", "medium", "high"}:
         config = config.replace(
             timeout_seconds=max(config.timeout_seconds, _THINKING_TIMEOUT_SECONDS)
         )
     if config.detector == "llm":
-        _check_endpoint(config, "--detector llm")
+        _check_endpoint(config, "--detector llm", model_flag="--llm-model")
     return config
 
 
-def _check_endpoint(config: Config, what: str) -> None:
-    """Raise ``ValueError`` if ``what`` cannot reach a model: no extra, or no key nor endpoint."""
-    if importlib.util.find_spec("openai") is None:
-        raise ValueError(f"{what} needs the LLM extra: pip install 'questxtract[llm]'")
-    if config.base_url is None and not config.api_key:
-        raise ValueError(
-            f"{what} needs OPENAI_API_KEY in the environment or .env, "
-            "or --llm-url (base_url) for a local server"
-        )
+_MODEL_FLAGS = {
+    "--llm-model": "judge_model",
+    "--quiz-model": "quiz_model",
+    "--vision-model": "vision_model",
+}
 
 
-def _check_vision_endpoint(config: Config, what: str) -> None:
-    """Raise ``ValueError`` if vision cannot reach its model: no extra, or no key for NTNU.
+def _check_endpoint(config: Config, what: str, *, model_flag: str, vision: bool = False) -> None:
+    """Raise ``ValueError`` if ``what`` cannot reach its model: no extra, no key, wrong service.
 
-    Vision's endpoint is NTNU's LLM service unless ``vision_base_url`` or ``base_url`` names
-    another; only that default needs ``QUESTXTRACT_VISION_API_KEY``. A named endpoint may be a
-    local server without a key, as for the judge.
+    The key goes with the endpoint (:func:`config.endpoint_key`): NTNU's LLM service, the
+    default, needs ``QUESTXTRACT_NTNU_API_KEY``; OpenAI needs ``OPENAI_API_KEY``. Any other
+    endpoint may be a local server without a key. Every model on NTNU's service is named
+    ``organisation/model`` and no OpenAI model is, so a name on the wrong service (``gpt-4o``
+    on NTNU's, the default DeepSeek on OpenAI's) is refused here rather than by the service
+    after transcription. ``model_flag`` names the flag that sets the model ``what`` asks, for
+    the hints; vision's endpoint is moved by ``vision_base_url`` when that is set.
     """
     if importlib.util.find_spec("openai") is None:
         raise ValueError(f"{what} needs the LLM extra: pip install 'questxtract[llm]'")
-    if config.vision_base_url is None and config.base_url is None and not config.vision_api_key:
+    url = config.vision_url if vision else config.base_url
+    if vision and config.vision_base_url is not None:
+        mover = "vision_base_url in questxtract.toml"
+        to_openai = f'set vision_base_url = "{OPENAI_URL}" in questxtract.toml and pass'
+    else:
+        mover = "--llm-url (base_url)"
+        to_openai = f"pass --llm-url {OPENAI_URL}"
+    openai_hint = (
+        f"for OpenAI instead, {to_openai} {model_flag} gpt-4o --llm-reasoning server, "
+        f"with {OPENAI_KEY_ENV}"
+    )
+    model = getattr(config, _MODEL_FLAGS[model_flag])
+    if is_ntnu(url) and "/" not in model:
         raise ValueError(
-            f"{what} reads the board through NTNU's LLM service ({NTNU_LLM_URL}), so it needs "
-            f"{VISION_KEY_ENV} in the environment or .env; or set vision_base_url in "
-            "questxtract.toml, or --llm-url, for another endpoint"
+            f"{what}: {model} is not a model on NTNU's LLM service ({NTNU_LLM_URL}); {openai_hint}"
+        )
+    if is_openai(url) and "/" in model:
+        raise ValueError(
+            f"{what}: {model} is not an OpenAI model; pass {model_flag} with one, such as gpt-4o, "
+            f"or {mover} for another endpoint"
+        )
+    if (is_ntnu(url) or is_openai(url)) and not (
+        config.vision_api_key if vision else config.api_key
+    ):
+        if is_ntnu(url):
+            raise ValueError(
+                f"{what} goes to NTNU's LLM service ({NTNU_LLM_URL}, NTNU network or VPN), so "
+                f"it needs {NTNU_KEY_ENV} in the environment or .env; {openai_hint}"
+            )
+        raise ValueError(
+            f"{what} goes to OpenAI, so it needs {OPENAI_KEY_ENV} in the environment or .env, "
+            f"or {mover} for another endpoint"
         )
 
 
@@ -406,7 +445,7 @@ def _with_vision(config: Config, source: Path) -> Config:
 
     Raises:
         ValueError: If vision would run without the ``[llm]`` extra, or on NTNU's service
-            without its key (:func:`_check_vision_endpoint`).
+            without its key (:func:`_check_endpoint`).
 
     """
     if not config.vision_enabled:
@@ -414,7 +453,7 @@ def _with_vision(config: Config, source: Path) -> Config:
     if not has_video(source):
         print(f"note: {source.name} has no video, so the board is not read", file=sys.stderr)
         return config.replace(vision_enabled=False)
-    _check_vision_endpoint(config, "--vision / vision_enabled")
+    _check_endpoint(config, "--vision / vision_enabled", model_flag="--vision-model", vision=True)
     return config
 
 
@@ -532,7 +571,7 @@ def _eval(args: argparse.Namespace) -> int:
     try:
         config = _with_llm(_config(args))
         if args.score_vision:
-            _check_vision_endpoint(config, "eval --score-vision")
+            _check_endpoint(config, "eval --score-vision", model_flag="--vision-model", vision=True)
             report = evaluate_vision(args.paths, config)
         else:
             report = evaluate(args.paths, config, board=args.board)
@@ -638,8 +677,9 @@ def build_parser() -> argparse.ArgumentParser:
     llm.add_argument(
         "--llm-url",
         metavar="URL",
-        help="an OpenAI-compatible endpoint for --detector llm and --vision, e.g. "
-        "http://localhost:11434/v1 for Ollama (default: OpenAI, with the key from OPENAI_API_KEY)",
+        help="an OpenAI-compatible endpoint for --detector llm, --vision and the quiz, e.g. "
+        f"{OPENAI_URL} (key from {OPENAI_KEY_ENV}) or http://localhost:11434/v1 for Ollama "
+        f"(default: NTNU's LLM service, key from {NTNU_KEY_ENV})",
     )
     llm.add_argument(
         "--llm-reasoning",
@@ -647,10 +687,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="LEVEL",
         help="how long a thinking model may think before it answers: none, low, medium or high, "
-        "or server to send no setting, for a model without one such as gpt-4o (default: "
-        f"{defaults.judge_reasoning_effort or 'server'}). "
-        "Small models such as qwen3.5:9b judge much better with low; "
-        "low, medium and high also allow each request 10 minutes instead of 2",
+        "or server to send no setting, for a model that takes none such as gpt-4o or rejects "
+        f"none such as Qwen (default: {defaults.reasoning_effort or 'server'}). Vision follows "
+        "it unless vision_reasoning_effort is set; the OCR model gets none. Small models such "
+        "as qwen3.5:9b judge much better with low; low, medium and high also allow each "
+        "request 10 minutes instead of 2",
     )
 
     # How the quiz is made: `process --quiz` and `quiz` share these.
@@ -729,8 +770,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--vision",
         action=argparse.BooleanOptionalAction,
         default=None,
-        help="also read the slides or the board with a vision model, by default Qwen on NTNU's "
-        "LLM service (needs the questxtract[llm] extra and QUESTXTRACT_VISION_API_KEY, or "
+        help="also read the slides or the board with a vision model, by default DeepSeek on "
+        f"NTNU's LLM service (needs the questxtract[llm] extra and {NTNU_KEY_ENV}, or "
         "vision_base_url / --llm-url for another endpoint); --no-vision turns off "
         "vision_enabled from the settings file for one run",
     )
@@ -839,8 +880,9 @@ def build_parser() -> argparse.ArgumentParser:
     quiz.add_argument(
         "--llm-url",
         metavar="URL",
-        help="an OpenAI-compatible endpoint, e.g. http://localhost:11434/v1 for Ollama "
-        "(default: OpenAI, with the key from OPENAI_API_KEY)",
+        help=f"an OpenAI-compatible endpoint, e.g. {OPENAI_URL} (key from {OPENAI_KEY_ENV}) "
+        f"or http://localhost:11434/v1 for Ollama (default: NTNU's LLM service, key from "
+        f"{NTNU_KEY_ENV})",
     )
     quiz.add_argument(
         "--llm-reasoning",
@@ -848,7 +890,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="LEVEL",
         help="how long a thinking model may think before it answers: none, low, medium or high, "
-        f"or server to send no setting (default: {defaults.judge_reasoning_effort or 'server'})",
+        f"or server to send no setting (default: {defaults.reasoning_effort or 'server'})",
     )
     quiz.set_defaults(handler=_quiz)
 
