@@ -1090,3 +1090,58 @@ def test_one_run_reads_the_board_finds_the_questions_and_writes_the_quiz(
     assert models.names(vision=True) == ["layout", "board", "board", "board"]
     assert models.names(vision=False) == ["judgements", "quiz_item", "quiz_item"]
     assert "2 quiz items" in capsys.readouterr().err
+
+
+# --- qti --qti-version (#163) ------------------------------------------------------
+
+
+def test_qti_version_2_1_writes_a_qti_2_1_package(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(make_quiz("q_aaa")), encoding="utf-8")
+
+    assert main(["qti", "lecture.quiz.json", "-o", "lecture.zip", "--qti-version", "2.1"]) == 0
+
+    assert capsys.readouterr().err == "QTI 2.1 package -> lecture.zip\n"
+    with zipfile.ZipFile(tmp_path / "lecture.zip") as package:
+        item = package.read("items/quiz_q_aaa.xml")
+        metadata = json.loads(package.read("metadata/questxtract.json"))
+    assert b'xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1"' in item
+    assert b"<choiceInteraction " in item
+    assert metadata["format"] == "questxtract-qti-2.1"
+
+
+@pytest.mark.parametrize("value", ["2.2", "3", "1.2"])
+def test_qti_version_outside_the_choices_names_them_and_writes_nothing(
+    tmp_path: Path,
+    make_quiz: Callable[..., dict[str, Any]],
+    capsys: pytest.CaptureFixture[str],
+    value: str,
+) -> None:
+    (tmp_path / "quiz.json").write_text(json.dumps(make_quiz("q_aaa")), encoding="utf-8")
+
+    with pytest.raises(SystemExit) as raised:
+        main(["qti", "quiz.json", "-o", "out.zip", "--qti-version", value])
+
+    assert raised.value.code == 2
+    error = capsys.readouterr().err.strip().splitlines()[-1]
+    assert f"argument --qti-version: invalid choice: '{value}'" in error
+    assert "2.1" in error and "3.0" in error
+    assert not (tmp_path / "out.zip").exists()
+
+
+def test_qti_without_the_flag_still_writes_qti_3_0(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "quiz.json").write_text(json.dumps(make_quiz("q_aaa")), encoding="utf-8")
+
+    assert main(["qti", "quiz.json", "-o", "default.zip"]) == 0
+    assert main(["qti", "quiz.json", "-o", "explicit.zip", "--qti-version", "3.0"]) == 0
+
+    assert capsys.readouterr().err == (
+        "QTI 3.0 package -> default.zip\nQTI 3.0 package -> explicit.zip\n"
+    )
+    assert (tmp_path / "default.zip").read_bytes() == (tmp_path / "explicit.zip").read_bytes()
+    with zipfile.ZipFile(tmp_path / "default.zip") as package:
+        metadata = json.loads(package.read("metadata/questxtract.json"))
+    assert metadata["format"] == "questxtract-qti-3.0"

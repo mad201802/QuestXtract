@@ -124,14 +124,16 @@ Give at least one of `--text`, `--from` and `--to`; together, a question must ma
 
 ### `questxtract qti <quiz.json>`
 
-Exports a quiz file as a QTI 3.0 ZIP package for an LMS. Every item becomes a single-choice
-item scored against its correct option, with each option's explanation as feedback; the quiz's
+Exports a quiz file as a QTI ZIP package for an LMS: QTI 3.0 by default, or QTI 2.1 for an LMS
+that does not import 3.0, such as Blackboard or Canvas. Every item becomes a single-choice item
+scored against its correct option, with each option's explanation as feedback; the quiz's
 instructions set shuffling and whether feedback is shown. Items a reviewer marked `rejected` are
-left out. The same quiz file always gives the same ZIP, byte for byte.
+left out. The same quiz file and version always give the same ZIP, byte for byte.
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|
 | `-o`, `--output` | a path | required | Where to write the ZIP. Its folder must exist. |
+| `--qti-version` | `2.1` or `3.0` | `3.0` | The QTI version of the package. Blackboard imports 2.1 only; Canvas imports 2.1 but not 3.0. |
 | `-h`, `--help` | nothing | | Shows the options. |
 
 ### Everywhere
@@ -278,10 +280,11 @@ questxtract process lecture.mp4 --vision --detector llm --quiz
 questxtract qti lecture.quiz.json -o lecture.qti.zip
 ```
 
-**Export for an LMS (QTI 3.0)**
+**Export for an LMS (QTI 3.0 or 2.1)**
 
 ```bash
-questxtract qti lecture.quiz.json -o lecture.qti.zip   # every item but the rejected ones
+questxtract qti lecture.quiz.json -o lecture.qti.zip   # QTI 3.0, every item but the rejected ones
+questxtract qti lecture.quiz.json -o lecture.qti21.zip --qti-version 2.1   # for Blackboard, Canvas
 ```
 
 **See which questions the threshold threw away.** This is a development tool, not a CLI

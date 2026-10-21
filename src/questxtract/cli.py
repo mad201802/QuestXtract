@@ -21,8 +21,7 @@ from .filtering import filter_document
 from .models import Context, Sentence, Stage, Transcript
 from .pipeline import STAGES, cached_transcript, run
 from .qti import QtiExportError
-from .qti_v3 import export_qti
-from .quiz import MAX_OPTIONS, MIN_OPTIONS, STRICTNESS, build_quiz, file_hash, quiz_to_json
+from .qti_package import QTI_VERSIONS, export_qti
 from .vision import has_video
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
@@ -565,13 +564,13 @@ def _quiz(args: argparse.Namespace) -> int:
 
 
 def _qti(args: argparse.Namespace) -> int:
-    """Export quiz.json as a QTI 3.0 package."""
+    """Export quiz.json as a QTI 2.1 or 3.0 package."""
     try:
-        export_qti(args.quiz, args.output)
+        export_qti(args.quiz, args.output, version=args.qti_version)
     except QtiExportError as exc:
         print(f"error: qti: {exc}", file=sys.stderr)
         return 1
-    print(f"QTI 3.0 package -> {args.output}", file=sys.stderr)
+    print(f"QTI {args.qti_version} package -> {args.output}", file=sys.stderr)
     return 0
 
 
@@ -852,9 +851,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     quiz.set_defaults(handler=_quiz)
 
-    qti = subs.add_parser("qti", help="export quiz.json as a QTI 3.0 package")
+    qti = subs.add_parser("qti", help="export quiz.json as a QTI 2.1 or 3.0 package")
     qti.add_argument("quiz", help="a quiz.json")
     qti.add_argument("-o", "--output", required=True, help="write the QTI ZIP package here")
+    qti.add_argument(
+        "--qti-version",
+        choices=QTI_VERSIONS,
+        default="3.0",
+        help="QTI version of the package: 2.1 (Blackboard, Canvas) or 3.0 (default: 3.0)",
+    )
     qti.set_defaults(handler=_qti)
 
     return parser
