@@ -11,17 +11,21 @@ import json
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
+import av
+import numpy as np
 import openai
 import pytest
 from jsonschema import Draft202012Validator
 
-from questxtract import Transcript, asr, cli
+from questxtract import Transcript, asr, cli, endpoint
 from questxtract.cli import main
 from questxtract.config import Config
 from questxtract.export import SCHEMA_PATH
 from questxtract.pipeline import STAGES
+from questxtract.quiz_schema import QUIZ_SCHEMA_PATH, read_quiz
 from questxtract.sentences import split_sentences
 
 _SEGMENTS = [{"text": "Today we cover sorting. What is a stable sort?", "start": 0.0, "end": 3.0}]
@@ -938,3 +942,147 @@ def test_qti_has_no_version_or_filter_flags(capsys: pytest.CaptureFixture[str]) 
         with pytest.raises(SystemExit):
             main(["qti", "quiz.json", "-o", "out.zip", flag])
         assert f"unrecognized arguments: {flag}" in capsys.readouterr().err
+
+
+# --- the whole chain: speech, vision, the LLM judge and the quiz in one run (#160) ---
+
+_LECTURE = [
+    {"text": "Today we cover sorting. What is a stable sort?", "start": 0.0, "end": 3.0},
+    {"text": "A stable sort keeps equal keys in their order.", "start": 3.5, "end": 6.0},
+    {"text": "Is merge sort stable?", "start": 6.5, "end": 8.0},
+    {"text": "Yes, merge sort is stable.", "start": 8.5, "end": 10.0},
+]
+
+
+def _slide_lecture(path: Path, seconds: int = 12, rate: int = 10) -> Path:
+    """Write a lecture MP4: three slides, 4 s each, with a silent audio track."""
+    with av.open(str(path), "w", format="mp4") as container:
+        picture = container.add_stream("mpeg4", rate=rate)
+        picture.width, picture.height, picture.pix_fmt = 320, 240, "yuv420p"
+        sound = container.add_stream("aac", rate=8000)
+        sound.layout = "mono"
+        for i in range(seconds * rate):
+            slide = np.full((240, 320, 3), 200, dtype=np.uint8)
+            top = 20 + 60 * (i // (4 * rate))  # the dark block's place says which slide it is
+            slide[top : top + 40, 40:280] = 30
+            for packet in picture.encode(av.VideoFrame.from_ndarray(slide, format="rgb24")):
+                container.mux(packet)
+        for _ in range(seconds * 10):
+            samples = av.AudioFrame(format="s16", layout="mono", samples=800)
+            samples.sample_rate = 8000
+            samples.planes[0].update(b"\0" * samples.planes[0].buffer_size)
+            for packet in sound.encode(samples):
+                container.mux(packet)
+        for packet in [*picture.encode(), *sound.encode()]:
+            container.mux(packet)
+    return path
+
+
+class _Models:
+    """Stands in for every model the chain asks: answers each request by its response type.
+
+    Records each request with the endpoint it went to: vision's own (``vision=True``) or the
+    judge's, which the quiz shares.
+    """
+
+    def __init__(self) -> None:
+        self.requests: list[tuple[bool, dict[str, Any]]] = []
+
+    def client(self, config: Config, *, vision: bool = False) -> Any:
+        del config
+        models = self
+
+        class _Completions:
+            def create(self, **request: Any) -> Any:
+                models.requests.append((vision, request))
+                answer = models.answer(request["response_format"]["json_schema"])
+                message = SimpleNamespace(content=json.dumps(answer))
+                return SimpleNamespace(choices=[SimpleNamespace(message=message)], usage=None)
+
+        return SimpleNamespace(chat=SimpleNamespace(completions=_Completions()))
+
+    @staticmethod
+    def answer(response: dict[str, Any]) -> dict[str, Any]:
+        if response["name"] == "layout":
+            return {"content_region": [0.0, 0.0, 1.0, 1.0], "kind": "slides"}
+        if response["name"] == "board":
+            return {
+                "description": "A slide on sorting.",
+                "text": "Stable sort",
+                "latex": r"O(n \log n)",
+                "confidence": 0.8,
+            }
+        if response["name"] == "judgements":
+            judged = {"reason": "", "kind": "content", "question": "", "confidence": 0.9}
+            return {
+                i: {**judged, "answer_sentence_ids": []} for i in response["schema"]["required"]
+            }
+        assert response["name"] == "quiz_item"
+        return {
+            "quiz_material": True,
+            "stem": "Which property makes a sort stable?",
+            "correct_answer": "Equal keys keep their order",
+            "correct_explanation": "That is the definition of stability.",
+            "explanation": "Stability is about the order of equal keys.",
+            "distractor_1": "It sorts in place",
+            "why_wrong_1": "In place is about memory, not order.",
+            "distractor_2": "It runs in linear time",
+            "why_wrong_2": "Speed says nothing about stability.",
+        }
+
+    def names(self, *, vision: bool) -> list[str]:
+        return [
+            r["response_format"]["json_schema"]["name"] for v, r in self.requests if v is vision
+        ]
+
+
+def test_one_run_reads_the_board_finds_the_questions_and_writes_the_quiz(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#160 AC1-3: a lecture video in; questions with their board states and a quiz out."""
+
+    class _Backend:
+        def transcribe(self, source: Path, config: Config, on_progress: Any = None) -> Any:
+            del source, config, on_progress
+            return _LECTURE
+
+    monkeypatch.setitem(asr._REGISTRY, "faster_whisper", _Backend)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "ntnu-test")
+    models = _Models()
+    monkeypatch.setattr(endpoint, "client", models.client)
+    video = _slide_lecture(tmp_path / "lecture.mp4")
+
+    assert main(["process", str(video), "--vision", "--detector", "llm", "--quiz"]) == 0
+
+    questions = json.loads((tmp_path / "lecture.questions.json").read_text(encoding="utf-8"))
+    quiz = read_quiz(tmp_path / "lecture.quiz.json", questions)
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    assert list(Draft202012Validator(schema).iter_errors(questions)) == []
+    quiz_schema = json.loads(QUIZ_SCHEMA_PATH.read_text(encoding="utf-8"))
+    assert list(Draft202012Validator(quiz_schema).iter_errors(quiz)) == []
+
+    # Three slides give three board states, each with a keyframe next to the questions.
+    boards = {v["id"]: v for v in questions["visuals"]}
+    assert len(boards) == 3
+    assert all((tmp_path / v["keyframe_path"]).is_file() for v in boards.values())
+    # Every question links the slide on screen while it was asked.
+    asked = {q["text"]: q["visual_ids"] for q in questions["questions"]}
+    assert set(asked) == {"What is a stable sort?", "Is merge sort stable?"}
+    for text, visual_ids in asked.items():
+        start = next(q["start"] for q in questions["questions"] if q["text"] == text)
+        assert visual_ids
+        assert all(boards[i]["start"] <= start < boards[i]["end"] for i in visual_ids)
+    # The quiz has one item per question, and each request carried the board and the speech.
+    assert len(quiz["questions"]) == len(asked)
+    quiz_requests = [
+        r for _, r in models.requests if r["response_format"]["json_schema"]["name"] == "quiz_item"
+    ]
+    for request in quiz_requests:
+        content = request["messages"][1]["content"]
+        assert "text: Stable sort" in content and r"latex: O(n \log n)" in content
+        assert ">> " in content
+    # Vision went to its own endpoint; the judge and the quiz to the judge's.
+    assert models.names(vision=True) == ["layout", "board", "board", "board"]
+    assert models.names(vision=False) == ["judgements", "quiz_item", "quiz_item"]
+    assert "2 quiz items" in capsys.readouterr().err

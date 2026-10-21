@@ -1435,14 +1435,14 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |
 | `endpoint.py` | not a stage | done: client and requests for the judge, vision and the quiz (10) | |
-| `quiz.py` | not a stage | done: quiz items from questions.json (12.3); the `quiz.json` JSON Schema and validator are not in the package yet | |
+| `quiz.py` | not a stage | done: quiz items from questions.json (12.3), checked by `quiz_schema.py` | |
 | `score.py` | 9 score | done: confidence and threshold | |
 | `export.py` | 10 export | done; keeping review edits across re-runs is not built | #15 |
 | `quiz_schema.py` | not a stage | done: the `quiz.json` reader and validator (12.3); `quiz.py` writes it (12.3) |  |
 | `filtering.py` | not a stage | time and text filters done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --score-vision` (4.4) | |
 | `qti.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 package of a `quiz.json` (12.4) | |
-| `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz` and `qti` work ([cli.md](cli.md)) |  |
+| `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz` and `qti` work ([cli.md](cli.md)); `process --vision --detector llm --quiz` runs every stage and the quiz in one run, tested offline | |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
 running list of what this document describes and the code does not yet do.
