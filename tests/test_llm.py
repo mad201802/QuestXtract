@@ -55,7 +55,7 @@ def _lecture(text: str, seconds_apart: float = 1.0) -> Context:
 def test_the_rules_detector_makes_no_calls(context, monkeypatch):
     """AC: the default config makes zero outbound calls and leaves the rules' result alone."""
 
-    def _no_client(config: Config) -> Any:
+    def _no_client(config: Config, **_: Any) -> Any:
         raise AssertionError("the default config must not build a client")
 
     monkeypatch.setattr(endpoint, "client", _no_client)
@@ -294,7 +294,7 @@ def test_a_request_that_never_answers_times_out(context, monkeypatch, tmp_path):
         release.wait(5)  # stands in for a request that keeps the connection open
 
     stalled = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
-    monkeypatch.setattr(endpoint, "client", lambda config: stalled)
+    monkeypatch.setattr(endpoint, "client", lambda config, **_: stalled)
     try:
         with pytest.raises(ConnectionError, match="no answer within 0 s"):
             _run(context, tmp_path, timeout_seconds=0)
@@ -321,7 +321,7 @@ def test_a_stalled_request_is_sent_once_more(context, sentences, monkeypatch, tm
         return answer
 
     flaky = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
-    monkeypatch.setattr(endpoint, "client", lambda config: flaky)
+    monkeypatch.setattr(endpoint, "client", lambda config, **_: flaky)
     try:
         assert len(_run(context, tmp_path, timeout_seconds=1).pairs) == 1
     finally:

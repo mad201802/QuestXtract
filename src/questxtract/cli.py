@@ -14,7 +14,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from . import __version__
-from .config import Config, load_config
+from .config import NTNU_LLM_URL, VISION_KEY_ENV, Config, load_config
 from .evaluate import evaluate, evaluate_vision, format_report, format_vision_report
 from .export import read_questions, result_to_json, write_questions
 from .filtering import filter_document
@@ -77,6 +77,7 @@ examples:
   questxtract process lecture.mp4 --detector llm         a local model in Ollama:
       --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b --llm-reasoning low
   questxtract process lecture.mp4 --vision               also read the slides or the board
+                                                         (Qwen on NTNU's LLM service)
 """
 
 _TRANSCRIBE_EXAMPLES = """\
@@ -249,6 +250,23 @@ def _check_endpoint(config: Config, what: str) -> None:
         )
 
 
+def _check_vision_endpoint(config: Config, what: str) -> None:
+    """Raise ``ValueError`` if vision cannot reach its model: no extra, or no key for NTNU.
+
+    Vision's endpoint is NTNU's LLM service unless ``vision_base_url`` or ``base_url`` names
+    another; only that default needs ``QUESTXTRACT_VISION_API_KEY``. A named endpoint may be a
+    local server without a key, as for the judge.
+    """
+    if importlib.util.find_spec("openai") is None:
+        raise ValueError(f"{what} needs the LLM extra: pip install 'questxtract[llm]'")
+    if config.vision_base_url is None and config.base_url is None and not config.vision_api_key:
+        raise ValueError(
+            f"{what} reads the board through NTNU's LLM service ({NTNU_LLM_URL}), so it needs "
+            f"{VISION_KEY_ENV} in the environment or .env; or set vision_base_url in "
+            "questxtract.toml, or --llm-url, for another endpoint"
+        )
+
+
 # Vision flags (#61). The vision design is still moving in M3 (ink curve #133). When vision
 # gains a setting, decide whether it gets a flag here or stays TOML-only, and update together:
 # `_config`, this check, the `process` parser, the "Reading the board" section in README.md,
@@ -267,8 +285,8 @@ def _with_vision(config: Config, source: Path) -> Config:
         The settings to run with.
 
     Raises:
-        ValueError: If vision would run without the ``[llm]`` extra, or with neither an API key
-            nor a local endpoint.
+        ValueError: If vision would run without the ``[llm]`` extra, or on NTNU's service
+            without its key (:func:`_check_vision_endpoint`).
 
     """
     if not config.vision_enabled:
@@ -276,7 +294,7 @@ def _with_vision(config: Config, source: Path) -> Config:
     if not has_video(source):
         print(f"note: {source.name} has no video, so the board is not read", file=sys.stderr)
         return config.replace(vision_enabled=False)
-    _check_endpoint(config, "--vision / vision_enabled")
+    _check_vision_endpoint(config, "--vision / vision_enabled")
     return config
 
 
@@ -384,7 +402,7 @@ def _eval(args: argparse.Namespace) -> int:
     try:
         config = _with_llm(_config(args))
         if args.score_vision:
-            _check_endpoint(config, "eval --score-vision")
+            _check_vision_endpoint(config, "eval --score-vision")
             report = evaluate_vision(args.paths, config)
         else:
             report = evaluate(args.paths, config, board=args.board)
@@ -530,9 +548,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--vision",
         action=argparse.BooleanOptionalAction,
         default=None,
-        help="also read the slides or the board with a vision model (needs the questxtract[llm] "
-        "extra, and OPENAI_API_KEY or --llm-url); --no-vision turns off vision_enabled from the "
-        "settings file for one run",
+        help="also read the slides or the board with a vision model, by default Qwen on NTNU's "
+        "LLM service (needs the questxtract[llm] extra and QUESTXTRACT_VISION_API_KEY, or "
+        "vision_base_url / --llm-url for another endpoint); --no-vision turns off "
+        "vision_enabled from the settings file for one run",
     )
     process.set_defaults(handler=_process)
 
@@ -599,8 +618,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--score-vision",
         action="store_true",
         dest="score_vision",  # not `vision`: that is vision_enabled, read by _config
-        help="score the vision model (--vision-model, at --llm-url) on the labelled keyframes "
-        "instead of question detection; calls the model once per frame, then caches",
+        help="score the vision model (--vision-model, at vision's endpoint) on the labelled "
+        "keyframes instead of question detection; calls the model once per frame, then caches",
     )
     evaluation.add_argument(
         "--board",

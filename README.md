@@ -186,21 +186,28 @@ If a key leaks, tell its owner at once so it can be revoked.
 A vision model can also read the slides or the board. Each stable view of the recording becomes a
 board state: its text, its formulas as LaTeX, a short description and a confidence, linked to the
 questions asked while it was on screen. It needs the `llm` extra and a model that takes images.
-Switch it on for one run with `--vision`:
+By default it is Qwen3.8-27B on NTNU's LLM service (`https://llm.hpc.ntnu.no/v1`), with a key of
+its own in `QUESTXTRACT_VISION_API_KEY`, kept the same way as `OPENAI_API_KEY` (environment or
+`.env`, never `questxtract.toml`). The service needs the NTNU network or VPN, and NTNU asks that
+heavy use wait until after 18:00 or the weekend. The LLM detector keeps its own endpoint and key,
+so the two can run together. Switch vision on for one run with `--vision`:
 
 ```bash
-questxtract process lecture.mp4 --vision        # gpt-5.6-luna on OpenAI, key from OPENAI_API_KEY
+questxtract process lecture.mp4 --vision        # Qwen on NTNU, key from QUESTXTRACT_VISION_API_KEY
 questxtract process lecture.mp4 --vision --llm-url http://localhost:11434/v1 \
-    --vision-model qwen3-vl:2b-instruct         # a local model in Ollama
+    --vision-model qwen3-vl:2b-instruct         # a local model in Ollama, for vision and the judge
 ```
 
 or for every run in `questxtract.toml` (`--no-vision` turns it off again for one run):
 
 ```toml
 vision_enabled = true
-vision_model = "gpt-5.6-luna"              # the default, on OpenAI with OPENAI_API_KEY
-# base_url = "http://localhost:11434/v1"   # or any OpenAI-compatible server, such as Ollama
+vision_model = "Qwen/Qwen3.8-27B-FP8"          # the default, on NTNU's LLM service
+# vision_base_url = "http://localhost:8000/v1" # vision elsewhere; the judge stays on base_url
 ```
+
+Without `vision_base_url`, vision goes where `base_url` (`--llm-url`) points when that is set,
+with the judge's key, and to NTNU's service otherwise.
 
 A lecture costs one model call to find the slides or board and at most `vision_max_states` (80)
 to read them, plus a resend when a call fails. A slide or page that comes back later in the

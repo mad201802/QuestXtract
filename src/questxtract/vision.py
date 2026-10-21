@@ -199,7 +199,7 @@ def layout(ctx: Context) -> Context:
     usage: Counter[str] = Counter()
     ctx.stats.update(dict.fromkeys(_cost_keys("layout"), 0))
     try:
-        answer = endpoint.ask(ctx.config, request, name="layout", usage=usage)
+        answer = endpoint.ask(ctx.config, request, name="layout", usage=usage, vision=True)
     except (ConnectionError, endpoint.InvalidAnswer) as exc:
         return _fallback(ctx, str(exc))
     finally:
@@ -837,7 +837,9 @@ def read_keyframe(
         "response_format": _SCHEMA,
     }
     try:
-        answer = endpoint.ask(config, request, name="vision", valid=_readable, usage=usage)
+        answer = endpoint.ask(
+            config, request, name="vision", valid=_readable, usage=usage, vision=True
+        )
     except (ConnectionError, endpoint.InvalidAnswer) as exc:
         warnings.warn(f"vision: keyframe left out: {exc}", UserWarning, stacklevel=2)
         return None

@@ -483,18 +483,20 @@ reads handwriting, diagrams and slides and emits LaTeX in one call, through the 
 client as the LLM detector (section 10), so it adds no dependency. `vision` is one `STAGES` entry,
 so a local OCR pass or a stub that loads pre-captioned frames in tests replaces that one entry.
 
-**Model and prompt (spike #52).** The default `vision_model` is `gpt-5.6-luna` at the API's default
-image detail. Of the hosted models compared on chalkboard and tablet frames, it is the cheapest that
-stays under the customer's cost per lecture, it fills `latex` on every formula frame, and it reads
-about as well as models that cost an order of magnitude more (`gpt-4o`, `gpt-4o-mini`).
+**Model and prompt (spike #52, #153).** The default `vision_model` is Qwen3.8-27B
+(`Qwen/Qwen3.8-27B-FP8`) on NTNU's LLM service, chosen by the team with the customer on 19.10
+(#153): it reads the board about as well as the best paid model measured, `gpt-5.6-luna`, at no
+cost per lecture. The service needs the NTNU network or VPN; the customer may move hosting later,
+which is a `Config` change (10.1). Of the hosted OpenAI models, `gpt-5.6-luna` is the cheapest that
+stays under the customer's cost per lecture, fills `latex` on every formula frame, and reads about
+as well as models that cost an order of magnitude more (`gpt-4o`, `gpt-4o-mini`).
 `detail: low` is not used: it garbles handwriting. The OCR baseline is GLM-OCR (0.9B, open weights,
 on Idun's hosted service and on an 8 GB laptop through Ollama): it reads most of the text and
 formulas on chalk and printed slides, less than the vision models, and answers in plain text with
 formulas inline as `$...$`, with no description and no confidence, and it also reads the room and
 the app interface (an exit sign, the tablet app's menu). Printed slides read as well at 640x360 as
 at 720p, at half the image tokens; chalk was only tried at 720p. An open model reaches the same
-endpoint through `base_url` (10.1): the strongest one measured is Qwen3.8-27B on Idun's hosted
-service, while a 2B model on a laptop reads worse and leaves `latex` empty. Prompt v0 and its output
+endpoint (10.1); a 2B model on a laptop reads worse than Qwen3.8-27B and leaves `latex` empty. Prompt v0 and its output
 schema, matching `VisualContext`, are in [`tests/data/vision/`](../tests/data/vision/README.md); the
 comparison, its caveats (a few frames, one run per model) and the raw answers are on #52 and in
 `tests/data/vision/results/`.
@@ -632,8 +634,9 @@ judge.
 
 > **Decision.** `questxtract/vision.py`. Config: `vision_enabled` (False), `vision_fps` (1.0),
 > `vision_model`, `vision_max_states` (80), `vision_change_fraction` (0.02),
-> `vision_change_hold` (3 samples). Offline use points `base_url` at a local
-> OpenAI-compatible server (10.1); worse quality there is accepted.
+> `vision_change_hold` (3 samples), `vision_base_url` (`None`: `base_url` when set, else NTNU's
+> LLM service, 10.1). Offline use points `vision_base_url` or `base_url` at a local
+> OpenAI-compatible server; worse quality there is accepted.
 
 ---
 
@@ -858,7 +861,7 @@ is not built.
 
 ### 10.1 One client, two endpoints
 
-The `openai` SDK with a configurable `base_url`, which is what makes the offline story work
+The `openai` SDK with a configurable endpoint, which is what makes the offline story work
 without a second code path:
 
 ```python
@@ -866,13 +869,27 @@ OpenAI(api_key=os.environ["OPENAI_API_KEY"])  # hosted
 OpenAI(api_key="local", base_url="http://localhost:11434/v1")  # local device
 ```
 
+The judge and vision each have an endpoint and a key, so the judge can stay on OpenAI while
+vision reads the board on NTNU's LLM service (`endpoint.route`):
+
+| | Endpoint | Key |
+|---|---|---|
+| judge | `base_url` (`None` is OpenAI) | `OPENAI_API_KEY` |
+| vision, `vision_base_url` set | `vision_base_url` | `QUESTXTRACT_VISION_API_KEY` |
+| vision, only `base_url` set | `base_url` | `OPENAI_API_KEY` |
+| vision, neither set | NTNU's LLM service, `https://llm.hpc.ntnu.no/v1` | `QUESTXTRACT_VISION_API_KEY` |
+
+The third row keeps a setup that points everything at one local server working. A key is never
+sent to the other service: each one is read from its own variable, in the environment or the
+working directory's `.env`, never from `questxtract.toml`, and hidden in error messages.
+
 Any local OpenAI-compatible server (Ollama, llama.cpp's server, vLLM, LM Studio) plugs in with no
 new code. Offline results may be worse, but the path must be *available* on a local device.
 
 | Config key | Default | Role |
 |---|---|---|
 | `judge_model` | `gpt-5.6-terra` | the LLM detector; one request per group of nearby candidates |
-| `vision_model` | `gpt-5.6-luna` | cost-optimised; tens of board-state calls per lecture |
+| `vision_model` | `Qwen/Qwen3.8-27B-FP8` | on NTNU's LLM service; tens of board-state calls per lecture |
 
 A local server takes its own model names (`qwen3.5:9b` in Ollama). Swapping a model or pointing at
 a local server is a `Config` change, no code. No abstraction library sits on top (litellm,
@@ -1128,7 +1145,7 @@ empty, `verdict` is `unjudged` and the judge and vision settings are `null`:
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
   "config": {"model_size": "turbo", "language": "en", "min_confidence": 0.4,
              "detector": "llm", "judge_model": "gpt-5.6-terra", "judge_prompt_version": "v5",
-             "judge_reasoning_effort": "none", "vision_model": "gpt-5.6-luna"},
+             "judge_reasoning_effort": "none", "vision_model": "Qwen/Qwen3.8-27B-FP8"},
   "stats": {"sentences": 1840, "sentences_unpunctuated": 12, "segments": 96,
             "segments_closed_gap": 92, "segments_closed_duration": 1, "segments_closed_chars": 3,
             "board_states": 34, "candidates": 61, "answered": 30, "emitted": 38},

@@ -176,3 +176,37 @@ def test_tests_see_neither_the_developers_key_nor_their_checkout():
     assert list(Path.cwd().iterdir()) == []
     assert Config().api_key is None
     assert load_config() == Config()
+
+
+def test_vision_defaults_to_qwen_on_ntnu_with_its_own_key(tmp_path, monkeypatch):
+    """#162: the judge stays on OpenAI; vision has NTNU's service and a key of its own."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    monkeypatch.delenv("QUESTXTRACT_VISION_API_KEY", raising=False)
+    Path(".env").write_text("QUESTXTRACT_VISION_API_KEY=ntnu-dotenv\n", encoding="utf-8")
+
+    config = Config()
+
+    assert config.vision_model == "Qwen/Qwen3.8-27B-FP8"
+    assert config.vision_url == "https://llm.hpc.ntnu.no/v1"
+    assert config.vision_api_key == "ntnu-dotenv" and config.api_key == "sk-openai"
+    assert "ntnu-dotenv" not in repr(config)
+
+
+def test_the_vision_key_in_the_environment_wins_over_dotenv(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "ntnu-environment")
+    Path(".env").write_text("QUESTXTRACT_VISION_API_KEY=ntnu-dotenv\n", encoding="utf-8")
+
+    assert Config().vision_api_key == "ntnu-environment"
+
+
+def test_vision_follows_base_url_unless_it_has_its_own(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-local")
+    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "vision-key")
+
+    old_way = Config(base_url="http://localhost:11434/v1")
+    own = Config(base_url="http://localhost:11434/v1", vision_base_url="http://vlm/v1")
+
+    assert (old_way.vision_url, old_way.vision_api_key) == ("http://localhost:11434/v1", "sk-local")
+    assert (own.vision_url, own.vision_api_key) == ("http://vlm/v1", "vision-key")

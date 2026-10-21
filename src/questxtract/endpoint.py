@@ -1,4 +1,4 @@
-"""The OpenAI-compatible endpoint the judge and vision share (architecture.md 10.1).
+"""The OpenAI-compatible endpoints of the judge and vision (architecture.md 10.1).
 
 Not a stage: it holds the request code both model calls need, so neither stage imports the
 other (architecture.md 11.1 rule 1). Each stage keeps its own prompt and schema, and decides
@@ -28,10 +28,22 @@ class InvalidAnswer(ValueError):
     """
 
 
-def client(config: Config) -> Any:
-    """Build the OpenAI-compatible client.
+def route(config: Config, *, vision: bool = False) -> tuple[str | None, str | None]:
+    """Return the endpoint and key a request goes to: the judge's, or vision's own.
 
-    ``base_url`` is what makes the offline story work without a second code path: any local
+    The judge (and anything else) uses ``base_url`` and ``OPENAI_API_KEY``; vision uses
+    :attr:`Config.vision_url` and :attr:`Config.vision_api_key`. ``None`` as the endpoint is
+    OpenAI.
+    """
+    if vision:
+        return config.vision_url, config.vision_api_key
+    return config.base_url, config.api_key
+
+
+def client(config: Config, *, vision: bool = False) -> Any:
+    """Build the OpenAI-compatible client for the judge, or for vision with ``vision=True``.
+
+    The endpoint is what makes the offline story work without a second code path: any local
     OpenAI-compatible server (Ollama, llama.cpp, vLLM, LM Studio) plugs in with zero new code.
 
     Raises:
@@ -42,9 +54,10 @@ def client(config: Config) -> Any:
         from openai import OpenAI  # noqa: PLC0415 - imported lazily so the base install is light
     except ImportError as exc:  # pragma: no cover - depends on the optional extra
         raise RuntimeError("the LLM layer needs `pip install questxtract[llm]`") from exc
+    base_url, api_key = route(config, vision=vision)
     return OpenAI(
-        api_key=config.api_key or "local",
-        base_url=config.base_url,
+        api_key=api_key or "local",
+        base_url=base_url,
         timeout=config.timeout_seconds,
     )
 
@@ -56,6 +69,7 @@ def ask(
     name: str,
     valid: Callable[[dict[str, Any]], bool] | None = None,
     usage: Counter[str] | None = None,
+    vision: bool = False,
 ) -> dict[str, Any]:
     """Send ``request`` and return the JSON object it answers with; cached on the request.
 
@@ -71,6 +85,8 @@ def ask(
     (the API's ``usage``; 0 from a server that reports none) and ``<name>_ms``. A cached
     answer adds nothing.
 
+    ``vision=True`` sends it to vision's endpoint with vision's key (:func:`route`).
+
     Raises:
         RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
         ConnectionError: If the endpoint fails after the SDK's own retries, or times out twice.
@@ -78,7 +94,8 @@ def ask(
         ValueError: If the settings cannot be used, such as an unreadable ``.env``.
 
     """
-    key = json.dumps([config.base_url, request], sort_keys=True)
+    base_url, key_for_errors = route(config, vision=vision)
+    key = json.dumps([base_url, request], sort_keys=True)
     path = Path(config.cache_dir) / name / f"{hashlib.sha256(key.encode()).hexdigest()}.json"
     if not config.from_scratch and path.is_file():
         try:
@@ -88,11 +105,11 @@ def ask(
         if cached is not None and (valid is None or valid(cached)):
             return cached  # a damaged or rejected entry is asked again
 
-    llm = client(config)  # first: without the extra, it raises the install hint
+    llm = client(config, vision=vision)  # first: without the extra, it raises the install hint
     from openai import OpenAIError  # noqa: PLC0415 - the optional extra, as in client()
 
-    endpoint = config.base_url or "OpenAI"
-    api_key = getattr(llm, "api_key", None) or config.api_key
+    endpoint = base_url or "OpenAI"
+    api_key = getattr(llm, "api_key", None) or key_for_errors
 
     def failure(detail: str) -> ConnectionError:
         # Providers may echo credentials in errors; keep diagnostics but hide the key.

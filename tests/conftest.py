@@ -12,13 +12,14 @@ from questxtract import Config, Context, Sentence, Transcript, Word, endpoint
 
 @pytest.fixture(autouse=True)
 def _isolated_from_the_developer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Keep the developer's OPENAI_API_KEY, .env and questxtract.toml out of every test.
+    """Keep the developer's API keys, .env and questxtract.toml out of every test.
 
     Each test runs in its own empty ``tmp_path`` with no key in the environment, so the
     cwd-relative reads (``.env``, ``questxtract.toml``, the ``.questxtract`` cache) see
     nothing of the checkout. Build paths to test files from ``__file__``, never the cwd.
     """
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("QUESTXTRACT_VISION_API_KEY", raising=False)
     monkeypatch.chdir(tmp_path)
 
 
@@ -152,7 +153,7 @@ def fake_llm(monkeypatch: pytest.MonkeyPatch) -> Callable[..., FakeLLM]:
 
     def install(*replies: Any) -> FakeLLM:
         client = FakeLLM(replies)
-        monkeypatch.setattr(endpoint, "client", lambda config: client)
+        monkeypatch.setattr(endpoint, "client", lambda config, **_: client)
         return client
 
     return install
