@@ -5,8 +5,17 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, ValidationError
 
-from questxtract import SchemaError, Transcript, VisualContext, read_questions, write_questions
+from questxtract import (
+    Config,
+    Context,
+    SchemaError,
+    Transcript,
+    VisualContext,
+    read_questions,
+    write_questions,
+)
 from questxtract.cli import main
+from questxtract.evaluate import _read_labels, _read_visual, match
 from questxtract.export import SCHEMA_PATH, _format_hms, result_to_dict, result_to_json
 from questxtract.llm import JUDGE_PROMPT_VERSION
 from questxtract.pipeline import STAGES, run
@@ -32,6 +41,8 @@ QUESTION_KEYS = {
     "reasons",
     "review",
 }
+
+DATA = Path(__file__).parent / "data"
 
 BOARDS = (
     VisualContext(start=0.0, end=5.0, keyframe_path="frames/1.jpg", description="stable sort"),
@@ -159,6 +170,40 @@ def test_a_question_with_no_board_on_screen_falls_back_to_its_segments(context):
     context.visual = (later,)
     data = result_to_dict(run(context, STAGES[2:]))
     assert data["questions"][0]["visual_ids"] == [later.id]
+
+
+def test_questions_link_to_the_hand_labelled_board_state():
+    # #135: questions of a real lecture, each labelled by hand with the board state on screen
+    # (tests/data/vision/README.md), against the committed board states: no video, no network.
+    name = "ttk4225_2026_09_14"
+    states = _read_visual(DATA / f"{name}.visual.json")
+    by_start = {state.start: state for state in states}
+    links = _read_labels(DATA / "vision" / f"{name}.links.jsonl")
+    labels = _read_labels(DATA / f"{name}.labels.jsonl")
+    spoken = {(x["start"], x["end"], x["text"]) for x in labels if x["kind"] == "content"}
+    assert all(link["state_start"] in by_start for link in links)
+    assert all((x["start"], x["end"], x["text"]) in spoken for x in links)
+    transcript = Transcript.from_file(DATA / f"{name}.transcript.json")
+    ctx = Context(
+        source=Path(name), config=Config(min_confidence=0.0), transcript=transcript, visual=states
+    )
+    ctx.duration = transcript.duration
+    questions = result_to_dict(run(ctx, STAGES[2:]))["questions"]
+    spans = [(q["start"], q["end"]) for q in questions]
+    pairs = match(spans, [(x["start"], x["end"]) for x in links])
+    right = only = later = none = 0
+    for i, j in pairs.items():
+        ids, end = questions[i]["visual_ids"], questions[i]["end"]
+        wanted = by_start[links[j]["state_start"]].id
+        right += wanted in ids
+        only += ids == [wanted]
+        later += any(state.id in ids and state.start >= end for state in states)
+        none += not ids
+    print(
+        f"{name}: {len(pairs)} of {len(links)} labelled questions detected; of those, "
+        f"right state {right} (only that one {only}), also a later state {later}, none {none}"
+    )
+    assert right == len(pairs)
 
 
 def _answered_by_last_sentence(ctx):
