@@ -4,6 +4,18 @@
 
 ### Added
 
+- `questxtract quiz lecture.questions.json` writes multiple-choice quiz items to
+  `lecture.quiz.json`, and `process --quiz` writes them after the questions in the same run. Each
+  item has a stem, `--options` options (3 by default, one correct), an explanation and why each
+  option is right or wrong; every text says whether it was spoken or generated, and every item
+  starts as pending review. The model sees the question, the lecture's answer, what was said
+  around it (from `--transcript` or the cached transcript) and, with vision, the board text and
+  LaTeX. Questions the lecture did not answer are used too, with an answer the model writes;
+  `--strictness strict` uses only the answered ones. Rejected questions, check-ins and questions
+  the model judges not to be quiz material are left out, a question the model fails on is skipped
+  with a warning, and answers are cached. The run ends with the quiz's model requests, tokens and
+  time. `--quiz-model` picks the model for one run. Settings: `quiz_model`, `quiz_strictness`,
+  `quiz_options`. (#79)
 - `eval --score-vision`: scores `vision_model` (or `--vision-model`) on 30 labelled keyframes in
   `tests/data/vision/`, from six lectures over four lecture types (slides, blackboard,
   whiteboard, handwriting), each recording one whose licence or lecturer allows sharing. It
@@ -37,8 +49,8 @@
   pick its model for one run, over `questxtract.toml`; `--llm-url` now also serves vision. With
   vision on, a recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript gets a
   note that the board is not read, and runs without vision. (#61)
-- `quiz.json` schema 1.0 (`quiz.schema.json`, shipped in the package), the format the coming
-  `quiz` command writes and the QTI and Exerplaza exporters read: single-choice items with at
+- `quiz.json` schema 1.0 (`quiz.schema.json`, shipped in the package), the format the `quiz`
+  command writes and the QTI and Exerplaza exporters read: single-choice items with at
   least three options, every text marked `spoken` or `generated`, a solution with one explanation
   per option, the source question's id and times, and a teacher `review` block. `read_quiz` and
   `validate_quiz` check a file against the rules the schema cannot express and list every

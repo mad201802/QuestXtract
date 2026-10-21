@@ -46,6 +46,9 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | How long a thinking model may think before it judges. Slower, and what small models such as `qwen3.5:9b` need to judge well. `server` sends no setting and leaves it to the server, for a model without one such as `gpt-4o-mini`. Any level but `none` allows each request 10 minutes instead of 2. |
 | `--vision`, `--no-vision` | nothing | off | Also reads the slides or the board with a vision model, through `--llm-url` or OpenAI. Needs the `questxtract[llm]` extra. `--no-vision` turns off `vision_enabled` from the settings file for one run. A recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript has no board, so the board is not read (a note says so). See [Reading the board](../README.md#reading-the-board). |
 | `--vision-model` | a model name | `gpt-5.6-luna` | The model that reads the board, as the endpoint names it. It must take images. |
+| `--quiz` | nothing | off | Also writes a multiple-choice quiz next to the questions file (`lecture.quiz.json`), as [`questxtract quiz`](#questxtract-quiz-questionsjson) does. Needs a file output, so not `-o -`. If the quiz fails, the questions file is kept and the exit code is 1. |
+| `--quiz-model` | a model name | `gpt-5.6-terra` | The model that writes the quiz. Only with `--quiz`. |
+| `--strictness`, `--options` | | | As for `questxtract quiz`. Only with `--quiz`. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
 The vision options may still change while the vision work continues in M3 (#133). The other vision settings (`vision_fps`, `vision_max_states`, `vision_change_fraction`, `vision_change_hold`) are set in the TOML file only.
@@ -53,6 +56,40 @@ The vision options may still change while the vision work continues in M3 (#133)
 One thing to know about `-t` with the rules: a question with no answer scores at most `0.55`, so
 a threshold above `0.55` keeps only questions the next sentence answers. With `--detector llm`
 the confidence is the model's own, answered or not.
+
+### `questxtract quiz <questions.json>`
+
+Writes multiple-choice quiz items for the questions in a questions file: per question a stem,
+options with one correct, an explanation, and why each option is right or wrong. It is the only
+command that writes text that was not spoken: every text carries `origin` (`spoken` only when it
+is the question as it was asked), and every item starts as pending review.
+
+The model sees the question, the lecture's answer when there is one, what was said in the few
+sentences around it, and the text, LaTeX and description of the board states on screen when the
+lecture was processed with vision. The speech comes from `--transcript`, else from the cached
+transcript of the recording (when `process` ran on this machine); without either, a `note:`
+says so and the quiz is written from the question, answer and board alone, which gives fewer and
+weaker items. `process --quiz` always has the speech. Rejected
+questions (`review.status` `deleted` or `false_positive`) and classroom check-ins are left out,
+and so is a question the model judges not to be quiz material: addressed to the room,
+rhetorical, or too vague to answer on its own.
+A question the model fails on is left out with a `warning:` line, and the rest are written; an
+unreachable endpoint or a bad key ends the run. Answers are cached, so a re-run sends nothing,
+and the same input gives the same file. The last line gives the model requests, tokens and time
+the quiz cost; a transcript that does not contain the questions' sentences gets a `note:` and is
+not used.
+
+| Option | Takes | Default | What it does |
+|---|---|---|---|
+| `-o`, `--output` | a path | next to the input | Where to write the quiz: `lecture.questions.json` gives `lecture.quiz.json`. `-o -` prints it instead. |
+| `--strictness` | `strict` or `lenient` | `lenient` | `lenient` also uses questions the lecture did not answer, whose correct answer the model writes from what was said around them; `strict` uses only questions the lecture answered. |
+| `--options` | a number, 3 to 5 | `3` | Options per item, one of them correct. |
+| `--transcript` | a path | the cached transcript | The lecture's transcript, for what was said around each question. |
+| `--quiz-model` | a model name | `gpt-5.6-terra` | The model that writes the quiz (`quiz_model`). |
+| `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint, as for `process`. |
+| `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | As for `process`. |
+| `--config` | a path | `questxtract.toml` | The settings file. `quiz_model`, `quiz_strictness` and `quiz_options` can be set there. |
+| `-h`, `--help` | nothing | | Shows the options and examples. |
 
 ### `questxtract transcribe <recording>`
 
@@ -112,8 +149,7 @@ first line names the detector, the model and the prompt version. With `--score-v
 scores the vision model instead (`--vision-model`, at `--llm-url` if given) on the labelled
 keyframes in `tests/data/vision/`: character error rate, blank boards read as blank and formula
 recall per lecture type, then every frame, worst first ([tests/data/vision/README.md](../tests/data/vision/README.md)). It calls
-the model once per frame and caches the answers. `questxtract quiz <questions.json>` is
-reserved for quiz generation; it is not implemented yet (#79) and exits with a one-line error.
+the model once per frame and caches the answers.
 
 ## Configuration files
 

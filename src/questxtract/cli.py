@@ -18,10 +18,11 @@ from .config import Config, load_config
 from .evaluate import evaluate, evaluate_vision, format_report, format_vision_report
 from .export import read_questions, result_to_json, write_questions
 from .filtering import filter_document
-from .models import Context, Stage, Transcript
-from .pipeline import STAGES, run
+from .models import Context, Sentence, Stage, Transcript
+from .pipeline import STAGES, cached_transcript, run
 from .qti import QtiExportError
 from .qti_v3 import export_qti
+from .quiz import MAX_OPTIONS, MIN_OPTIONS, STRICTNESS, build_quiz, file_hash, quiz_to_json
 from .vision import has_video
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
@@ -46,6 +47,7 @@ _STAGE_LABELS = {
     "answer": "Finding answers",
     "score": "Scoring",
     "judge": "LLM detection",
+    "quiz": "Writing the quiz",
 }
 
 _INPUT_KINDS = {
@@ -77,6 +79,13 @@ examples:
   questxtract process lecture.mp4 --detector llm         a local model in Ollama:
       --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b --llm-reasoning low
   questxtract process lecture.mp4 --vision               also read the slides or the board
+"""
+
+_QUIZ_EXAMPLES = """\
+examples:
+  questxtract quiz lecture.questions.json                writes lecture.quiz.json
+  questxtract quiz lecture.questions.json --strictness strict --options 4
+  questxtract process lecture.mp4 --quiz                 questions and quiz in one run
 """
 
 _TRANSCRIBE_EXAMPLES = """\
@@ -174,7 +183,9 @@ def _output_path(output: str | None, source: Path, kind: str) -> Path | None:
     if output:
         path = Path(output)
     else:
-        base = source.name.removesuffix(".transcript.json")
+        base = source.name
+        for suffix in (".transcript.json", ".questions.json"):
+            base = base.removesuffix(suffix)
         if base == source.name:
             base = source.stem
         path = source.with_name(f"{base}.{kind}.json")
@@ -206,6 +217,9 @@ def _config(args: argparse.Namespace) -> Config:
             ("llm_reasoning", "judge_reasoning_effort"),
             ("vision", "vision_enabled"),
             ("vision_model", "vision_model"),
+            ("quiz_model", "quiz_model"),
+            ("strictness", "quiz_strictness"),
+            ("options", "quiz_options"),
         )
         if (value := getattr(args, flag, None)) is not None
     }
@@ -219,6 +233,26 @@ def _config(args: argparse.Namespace) -> Config:
     if config.judge_reasoning_effort not in ("", "none", "low", "medium", "high"):
         raise ValueError("judge_reasoning_effort must be empty, none, low, medium or high")
     return config
+
+
+def _with_quiz(config: Config, what: str) -> None:
+    """Check the quiz settings and its endpoint before anything slow runs.
+
+    Only for a run that writes a quiz, so a bad quiz setting in the settings file does not stop
+    ``transcribe``, ``eval`` or ``process`` without ``--quiz``.
+
+    Raises:
+        ValueError: If ``quiz_strictness`` or ``quiz_options`` is out of range, or the endpoint
+            cannot be asked (see :func:`_check_endpoint`).
+
+    """
+    if config.quiz_strictness not in STRICTNESS:
+        raise ValueError("quiz_strictness / --strictness must be strict or lenient")
+    if not MIN_OPTIONS <= config.quiz_options <= MAX_OPTIONS:
+        raise ValueError(
+            f"quiz_options / --options must be between {MIN_OPTIONS} and {MAX_OPTIONS}"
+        )
+    _check_endpoint(config, what)
 
 
 def _with_llm(config: Config) -> Config:
@@ -247,6 +281,86 @@ def _check_endpoint(config: Config, what: str) -> None:
             f"{what} needs OPENAI_API_KEY in the environment or .env, "
             "or --llm-url (base_url) for a local server"
         )
+
+
+def _write_quiz(
+    questions: Path,
+    output: Path | None,
+    config: Config,
+    sentences: Sequence[Sentence] = (),
+    document: dict[str, object] | None = None,
+) -> None:
+    """Generate the quiz for a questions file and write it (``None`` prints it).
+
+    A question the model fails on is left out with a warning line; the others are written.
+    """
+    result = build_quiz(
+        document if document is not None else read_questions(questions),
+        config,
+        questions_name=questions.name,
+        questions_hash=file_hash(questions),
+        sentences=sentences,
+        progress=(bar := _progress_bar(1)),
+    )
+    bar("done", 1.0)
+    for question_id, reason in result.failed:
+        print(f"warning: quiz: {question_id} left out: {reason}", file=sys.stderr)
+    items = len(result.quiz["questions"])
+    left_out = f" ({len(result.skipped)} left out, {len(result.failed)} failed)"
+    _write(quiz_to_json(result.quiz).rstrip("\n"), output, f"{items} quiz items{left_out}")
+    usage = result.usage
+    if usage.get("quiz_requests"):
+        print(
+            f"quiz: {usage['quiz_requests']} model requests, "
+            f"{usage.get('quiz_input_tokens', 0)} input and "
+            f"{usage.get('quiz_output_tokens', 0)} output tokens, "
+            f"{usage.get('quiz_ms', 0) / 1000:.1f} s",
+            file=sys.stderr,
+        )
+
+
+def _quiz_sentences(
+    document: dict[str, object], transcript: Path | None, config: Config
+) -> tuple[Sentence, ...]:
+    """Find the lecture's sentences for the quiz's spoken context.
+
+    From ``--transcript``, else from the cache of the recording ``questions.json`` names, else
+    none, with a note.
+    """
+    if transcript is not None:
+        found: Transcript | None = Transcript.from_file(transcript)
+    else:
+        source = document.get("source")
+        digest = source.get("hash") if isinstance(source, dict) else None
+        found = cached_transcript(config, digest) if isinstance(digest, str) and digest else None
+    if found is None:
+        print(
+            "note: no transcript for this lecture in the cache, so the quiz sees only the "
+            "question, the answer and the board; pass --transcript for what was said around it",
+            file=sys.stderr,
+        )
+        return ()
+    ctx = Context(source=Path(""), config=config, transcript=found)
+    sentences = run(ctx, STAGES[_AFTER_TRANSCRIBE : _AFTER_TRANSCRIBE + 1]).sentences
+    # Sentence ids hash each sentence's start and text, so a transcript of another run or
+    # recording finds none of the questions: say so instead of sending no context silently.
+    ids = {s.id for s in sentences}
+    asked = [q.get("sentence_id") for q in _questions(document)]
+    if asked and not any(sentence_id in ids for sentence_id in asked):
+        print(
+            "note: the transcript does not contain the sentences of these questions (another "
+            "recording, or transcribed with other settings), so the quiz sees only the question, "
+            "the answer and the board",
+            file=sys.stderr,
+        )
+        return ()
+    return sentences
+
+
+def _questions(document: dict[str, object]) -> list[dict[str, object]]:
+    """Return the question objects of a ``questions.json`` document."""
+    questions = document.get("questions")
+    return [q for q in questions if isinstance(q, dict)] if isinstance(questions, list) else []
 
 
 # Vision flags (#61). The vision design is still moving in M3 (ink curve #133). When vision
@@ -294,6 +408,14 @@ def _process(args: argparse.Namespace) -> int:
     config = _with_llm(_config(args))
     source = Path(args.input)
     _check_input(source, (".mp4", ".mp3", ".json"))
+    if not args.quiz and any(
+        getattr(args, flag) is not None for flag in ("quiz_model", "strictness", "options")
+    ):
+        raise ValueError("--quiz-model, --strictness and --options need --quiz")
+    if args.quiz:
+        if args.output == "-":
+            raise ValueError("--quiz writes a file next to questions.json, so drop -o -")
+        _with_quiz(config, "--quiz")
     output = _output_path(args.output, source, "questions")
     config = _with_vision(config, source)
 
@@ -311,6 +433,8 @@ def _process(args: argparse.Namespace) -> int:
     else:
         write_questions(ctx, output)
         print(f"{len(ctx.pairs)} questions -> {output}", file=sys.stderr)
+        if args.quiz:  # questions.json is on disk first: a failing quiz never loses it
+            _write_quiz(output, _output_path(None, output, "quiz"), config, ctx.sentences)
     return 0
 
 
@@ -400,9 +524,20 @@ def _eval(args: argparse.Namespace) -> int:
 
 def _quiz(args: argparse.Namespace) -> int:
     """Turn questions.json into quiz.json. Generative, and deliberately separate."""
-    del args
-    print("error: quiz is not implemented yet (#79)", file=sys.stderr)
-    return 1
+    config = _with_llm(_config(args))
+    questions = Path(args.questions)
+    if not questions.is_file():
+        raise FileNotFoundError(f"{questions}: no such file")
+    if questions.suffix.lower() != ".json":
+        raise ValueError(f"{questions}: expected a questions.json written by `process`")
+    _with_quiz(config, "quiz")
+    if args.transcript is not None and not Path(args.transcript).is_file():
+        raise FileNotFoundError(f"{args.transcript}: no such file")
+    document = read_questions(questions)
+    sentences = _quiz_sentences(document, args.transcript, config)
+    output = _output_path(args.output, questions, "quiz")
+    _write_quiz(questions, output, config, sentences, document)
+    return 0
 
 
 def _qti(args: argparse.Namespace) -> int:
@@ -494,6 +629,32 @@ def build_parser() -> argparse.ArgumentParser:
         "anything but none also allows each request 10 minutes instead of 2",
     )
 
+    # How the quiz is made: `process --quiz` and `quiz` share these.
+    quizzing = argparse.ArgumentParser(add_help=False)
+    quizzing.add_argument(
+        "--strictness",
+        choices=STRICTNESS,
+        default=None,
+        help="which questions become quiz items: strict (only questions the lecture answered) "
+        f"or lenient (also the others; the model writes their answer) "
+        f"(default: {defaults.quiz_strictness})",
+    )
+    quizzing.add_argument(
+        "--options",
+        type=int,
+        default=None,
+        metavar="N",
+        help=f"options per quiz item, one of them correct: {MIN_OPTIONS} to {MAX_OPTIONS} "
+        f"(default: {defaults.quiz_options})",
+    )
+    quizzing.add_argument(
+        "--quiz-model",
+        dest="quiz_model",
+        default=None,
+        metavar="NAME",
+        help=f"the model that writes the quiz (default: {defaults.quiz_model})",
+    )
+
     # The vision model: `process` reads the board with it, `eval --score-vision` scores it.
     vision_model = argparse.ArgumentParser(add_help=False)
     vision_model.add_argument(
@@ -506,7 +667,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     process = subs.add_parser(
         "process",
-        parents=[configured, shared, llm, vision_model],
+        parents=[configured, shared, llm, vision_model, quizzing],
         help="extract questions from a recording or a transcript",
         description="Extract the questions asked in a recording, or in an existing transcript.",
         epilog=_PROCESS_EXAMPLES,
@@ -524,6 +685,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="0-1",
         help=f"keep questions with at least this confidence (default: {defaults.min_confidence})",
+    )
+    process.add_argument(
+        "--quiz",
+        action="store_true",
+        help="also write a multiple-choice quiz next to the questions (lecture.quiz.json); "
+        "needs the questxtract[llm] extra and a key or --llm-url",
     )
     # See the note above _with_vision before adding a vision flag.
     process.add_argument(
@@ -612,10 +779,44 @@ def build_parser() -> argparse.ArgumentParser:
     evaluation.set_defaults(handler=_eval)
 
     quiz = subs.add_parser(
-        "quiz", help="generate quiz.json from questions.json (not implemented yet)"
+        "quiz",
+        parents=[configured, quizzing],
+        help="write a multiple-choice quiz from a questions.json",
+        description="Write multiple-choice quiz items from the questions of a lecture. The only "
+        "command that writes text that was not spoken: every generated text is marked, and every "
+        "item starts as pending review.",
+        epilog=_QUIZ_EXAMPLES,
+        formatter_class=raw,
     )
     quiz.add_argument("questions", help="a questions.json written by `process`")
-    quiz.add_argument("-o", "--output", help="write the quiz here")
+    quiz.add_argument(
+        "-o",
+        "--output",
+        metavar="PATH",
+        help="where to write (default: next to the input, lecture.quiz.json; '-' prints to the "
+        "terminal)",
+    )
+    quiz.add_argument(
+        "--transcript",
+        type=Path,
+        metavar="PATH",
+        help="the lecture's transcript, so the quiz sees what was said around each question "
+        "(default: the cached transcript of the recording, when there is one)",
+    )
+    quiz.add_argument(
+        "--llm-url",
+        metavar="URL",
+        help="an OpenAI-compatible endpoint, e.g. http://localhost:11434/v1 for Ollama "
+        "(default: OpenAI, with the key from OPENAI_API_KEY)",
+    )
+    quiz.add_argument(
+        "--llm-reasoning",
+        choices=("none", "low", "medium", "high", "server"),
+        default=None,
+        metavar="LEVEL",
+        help="how long a thinking model may think before it answers: none, low, medium or high, "
+        f"or server to send no setting (default: {defaults.judge_reasoning_effort})",
+    )
     quiz.set_defaults(handler=_quiz)
 
     qti = subs.add_parser("qti", help="export quiz.json as a QTI 3.0 package")

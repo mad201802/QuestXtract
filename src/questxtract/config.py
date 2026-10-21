@@ -81,6 +81,11 @@ class Config:
     judge_reasoning_effort: str = "none"  # "" leaves it to the server
     timeout_seconds: int = 120  # per LLM request, start to answer, retries included
 
+    # --- 12.3 quiz (a separate command; shares base_url and judge_reasoning_effort) ---
+    quiz_model: str = "gpt-5.6-terra"
+    quiz_strictness: str = "lenient"  # or "strict": only questions the lecture answered
+    quiz_options: int = 3  # options per item, one correct; 3 to 5
+
     # --- 11.2 cache ---
     cache_dir: str = ".questxtract"
     from_scratch: bool = False
