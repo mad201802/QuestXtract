@@ -1165,6 +1165,8 @@ def test_qti_without_the_flag_still_writes_qti_3_0(
     with zipfile.ZipFile(tmp_path / "default.zip") as package:
         metadata = json.loads(package.read("metadata/questxtract.json"))
     assert metadata["format"] == "questxtract-qti-3.0"
+
+
 @pytest.mark.parametrize(
     ("flags", "model_flag"),
     [

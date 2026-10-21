@@ -495,7 +495,32 @@ quiz are complete without one.
 general_requirements.md) is not delivered unless time is left. `latex` stays in each board state,
 so a later Manim step can read it.
 
-### D22: QTI 2.1 beside 3.0, one export_qti that dispatches by version
+### D22: One model on one endpoint: DeepSeek-V4.1-Flash on NTNU's service, thinking off
+
+*Chose:* `deepseek-ai/DeepSeek-V4.1-Flash-1017` on NTNU's LLM service for reading the board, the
+LLM detector and the quiz, with `reasoning_effort = "none"` sent with every request. The key goes
+with the endpoint: `QUESTXTRACT_NTNU_API_KEY` for NTNU's service, `OPENAI_API_KEY` for any other
+(#173).
+
+*Alternative:* Qwen3.8-27B on NTNU for vision and gpt-4o on OpenAI for the judge and the quiz,
+with two endpoints and two keys (#162, #164); or DeepSeek with its own thinking on.
+
+*Why:* on the labelled keyframes and the labelled lectures (`eval`, numbers on #173's PR),
+DeepSeek with its thinking off read the board at least as well as Qwen, with more of the formulas,
+and judged questions at least as well as gpt-4o, at no cost per lecture, within the customer's
+cost limit. One model and one key make the setup simpler. OpenAI shuts the gpt-4o snapshots down
+on 14 January 2027. Thinking on was far slower for nearly the same reading, and `"none"` is the
+only value NTNU's service honours to switch it off, so the setting covers vision too, except
+the OCR model, which does not think. `vision_reasoning_effort` sets vision apart when it runs
+on another model than the judge.
+
+*Cost:* NTNU's service is project-time compute and needs the NTNU network or VPN, so what the
+customer runs after the project may differ; OpenAI stays one setting away
+(`--llm-url https://api.openai.com/v1`). The model is new on the service and its name is dated:
+NTNU may replace it. `"none"` is model-specific: Qwen rejects it and gpt-4o takes no setting, so
+another model needs `--llm-reasoning server`.
+
+### D23: QTI 2.1 beside 3.0, one export_qti that dispatches by version
 
 *Chose:* `questxtract qti --qti-version 2.1` writes a QTI 2.1 package (ASI 2.1.2, with the QTI
 2.1 profile of content packaging 1.2) beside the 3.0 one of D16, which stays the default (#163,
@@ -529,31 +554,6 @@ carries rules beside the template. Where only the template runs, an item scores 
 feedback per option; `quiz` writes 1 point per item, so only the feedback is lost there. A
 second XSD tree, 37 files, joins the CI cache, and a cold cache needs www.imsglobal.org and
 www.w3.org once.
-
-### D23: One model on one endpoint: DeepSeek-V4.1-Flash on NTNU's service, thinking off
-
-*Chose:* `deepseek-ai/DeepSeek-V4.1-Flash-1017` on NTNU's LLM service for reading the board, the
-LLM detector and the quiz, with `reasoning_effort = "none"` sent with every request. The key goes
-with the endpoint: `QUESTXTRACT_NTNU_API_KEY` for NTNU's service, `OPENAI_API_KEY` for any other
-(#173).
-
-*Alternative:* Qwen3.8-27B on NTNU for vision and gpt-4o on OpenAI for the judge and the quiz,
-with two endpoints and two keys (#162, #164); or DeepSeek with its own thinking on.
-
-*Why:* on the labelled keyframes and the labelled lectures (`eval`, numbers on #173's PR),
-DeepSeek with its thinking off read the board at least as well as Qwen, with more of the formulas,
-and judged questions at least as well as gpt-4o, at no cost per lecture, within the customer's
-cost limit. One model and one key make the setup simpler. OpenAI shuts the gpt-4o snapshots down
-on 14 January 2027. Thinking on was far slower for nearly the same reading, and `"none"` is the
-only value NTNU's service honours to switch it off, so the setting covers vision too, except
-the OCR model, which does not think. `vision_reasoning_effort` sets vision apart when it runs
-on another model than the judge.
-
-*Cost:* NTNU's service is project-time compute and needs the NTNU network or VPN, so what the
-customer runs after the project may differ; OpenAI stays one setting away
-(`--llm-url https://api.openai.com/v1`). The model is new on the service and its name is dated:
-NTNU may replace it. `"none"` is model-specific: Qwen rejects it and gpt-4o takes no setting, so
-another model needs `--llm-reasoning server`.
 
 ## 4. Requirements traceability (→ report ch. 6)
 
