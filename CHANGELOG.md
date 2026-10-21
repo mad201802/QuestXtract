@@ -9,8 +9,10 @@
   and the formulas as LaTeX, labels such as circled numbers and units left out, no description,
   and a confidence from the token probabilities (0.5 when the server sends none). It goes through
   vision's endpoint and key, is cached and fails like the vision model's reading, and works with
-  `eval --score-vision`. The layout probe still uses `vision_model`. `questions.json` names the
-  model that read the keyframes. (#144)
+  `eval --score-vision`. The layout probe still uses `vision_model`. (#144)
+- `questions.json` schema 2.3: `config.vision_ocr_model` names the OCR model that read the
+  keyframes, `null` when the vision model read them or vision was off. Files from schema 2.0 to
+  2.2 still read. (#144)
 - `questxtract quiz lecture.questions.json` writes multiple-choice quiz items to
   `lecture.quiz.json`, and `process --quiz` writes them after the questions in the same run. Each
   item has a stem, `--options` options (3 by default, one correct), an explanation and why each

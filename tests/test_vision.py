@@ -1105,7 +1105,9 @@ def test_the_ocr_reader_fills_text_and_latex_and_leaves_the_description_empty(
     (message,) = request["messages"]
     assert [part["type"] for part in message["content"]] == ["image_url", "text"]
     assert message["content"][1]["text"] == "Text Recognition:"
-    assert result_to_dict(ctx)["config"]["vision_model"] == "zai-org/GLM-OCR"
+    config = result_to_dict(ctx)["config"]
+    assert config["vision_model"] == "Qwen/Qwen3.8-27B-FP8"  # found the board
+    assert config["vision_ocr_model"] == "zai-org/GLM-OCR"  # read the keyframes
 
 
 @pytest.mark.parametrize(
@@ -1158,7 +1160,7 @@ def test_the_ocr_reading_is_cached_with_its_measured_confidence(monkeypatch, tmp
     first = read_keyframe(config, b"png")
     second = read_keyframe(config, b"png")
 
-    assert first == second == {"description": "", "text": "x^2", "latex": "x^2", "confidence": 0.5}
+    assert first == second == {"description": "", "text": "", "latex": "x^2", "confidence": 0.5}
     assert len(requests) == 1
 
 
@@ -1189,3 +1191,54 @@ def test_the_default_reader_is_unchanged(context, fake_llm, tmp_path):
     request = client.requests[0]
     assert request["model"] == Config().vision_model and "logprobs" not in request
     assert request["response_format"]["json_schema"]["strict"] is True
+
+
+def test_a_server_that_refuses_logprobs_is_asked_without_them(monkeypatch, tmp_path):
+    """Review #144: a 400 for logprobs reads the keyframe without them, and later ones too."""
+    monkeypatch.setattr(vision_module, "_NO_LOGPROBS", set())
+    requests = []
+
+    def create(**request):
+        requests.append(request)
+        if request.get("logprobs"):
+            response = SimpleNamespace(status_code=400, headers={}, request=None)
+            raise openai.BadRequestError("logprobs is not supported", response=response, body=None)
+        return SimpleNamespace(choices=[_ocr_choice("$x^2$")], usage=None)
+
+    llm = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(endpoint, "client", lambda config, **_: llm)
+    config = Config(cache_dir=str(tmp_path), vision_reader="ocr")
+
+    first = read_keyframe(config, b"one")
+    second = read_keyframe(config, b"two")
+
+    assert first is not None and first["confidence"] == 0.5 and first["latex"] == "x^2"
+    assert second is not None
+    assert [bool(r.get("logprobs")) for r in requests] == [True, False, False]
+
+
+def test_an_unreachable_ocr_endpoint_is_not_asked_again_without_logprobs(
+    monkeypatch, fake_llm, tmp_path
+):
+    """Only a refusal (400) retries; a connection error leaves the keyframe out at once."""
+    monkeypatch.setattr(vision_module, "_NO_LOGPROBS", set())
+    client = fake_llm(openai.APIConnectionError(request=None))
+    config = Config(cache_dir=str(tmp_path), vision_reader="ocr")
+    with pytest.warns(UserWarning, match="keyframe left out"):
+        assert read_keyframe(config, b"png") is None
+    assert all(r.get("logprobs") for r in client.requests)
+
+
+@pytest.mark.parametrize(
+    ("content", "text", "latex"),
+    [
+        ("costs $5 per unit and $10 shipping", "costs $5 per unit and $10 shipping", None),
+        ("a $x\nand y$ b", "a $x\nand y$ b", None),  # a single $ pair stays on one line
+        ("$\\textcircled{2}$ $1\\mathrm{Hz}$, $\\pi$ and $N$", "(2) 1 Hz, pi and N", None),
+        ("so $x^2 + 1 = 0$ holds", "so holds", "x^2 + 1 = 0"),
+    ],
+)
+def test_ocr_text_is_plain_words_and_prices_are_not_formulas(content, text, latex):
+    """Review #144: formulas go to latex only, labels read plainly, prices stay prices."""
+    fields = vision_module._from_ocr(_ocr_choice(content))
+    assert fields is not None and (fields["text"], fields["latex"]) == (text, latex)

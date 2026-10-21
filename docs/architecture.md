@@ -633,7 +633,8 @@ when the server sends none, which means "not measured". The converted answer is 
 and failures follow the rules above. The speech and the kind do not go to the OCR model. The
 layout probe still asks `vision_model`, so the frame is cropped to the board before OCR reads it;
 where no vision model answers, the probe falls back to the full frame (6.2). `questions.json`
-names the model that read the keyframes in `config.vision_model`.
+names the OCR model in `config.vision_ocr_model` (12.1), beside `vision_model`, which found the
+board.
 
 > **Decision.** The vision model stays the default: OCR gives no description, and the 19.10
 > comparison (#153) put Qwen3.8-27B ahead on the board's words. OCR is the option for a faster
@@ -1151,7 +1152,7 @@ Vision reports sampling as its first half and each keyframe read as its second.
 
 ### 12.1 questions.json
 
-Schema 2.2: a fixed key set, `null` included, in one file, plus a keyframe folder beside it.
+Schema 2.3: a fixed key set, `null` included, in one file, plus a keyframe folder beside it.
 The formal description is [`questions.schema.json`](../src/questxtract/questions.schema.json),
 which ships inside the package; the tests validate every export shape against it. The example shows one entry of each
 list, with vision and the LLM detector on; with the rules and no vision, `visuals` is
@@ -1159,11 +1160,12 @@ empty, `verdict` is `unjudged` and the judge and vision settings are `null`:
 
 ```json
 {
-  "schema_version": "2.2",
+  "schema_version": "2.3",
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
   "config": {"model_size": "turbo", "language": "en", "min_confidence": 0.4,
              "detector": "llm", "judge_model": "gpt-5.6-terra", "judge_prompt_version": "v5",
-             "judge_reasoning_effort": "none", "vision_model": "Qwen/Qwen3.8-27B-FP8"},
+             "judge_reasoning_effort": "none", "vision_model": "Qwen/Qwen3.8-27B-FP8",
+             "vision_ocr_model": null},
   "stats": {"sentences": 1840, "sentences_unpunctuated": 12, "segments": 96,
             "segments_closed_gap": 92, "segments_closed_duration": 1, "segments_closed_chars": 3,
             "board_states": 34, "candidates": 61, "answered": 30, "emitted": 38},
@@ -1235,7 +1237,9 @@ one more top-level list pointing at visual ids.
   to the terminal (`-o -`) there is no folder, nothing is copied, and it is relative to the cache
   directory, where the vision stage keeps keyframes.
 - `config.min_confidence` is the threshold the file was cut at; `config.judge_model` and
-  `config.vision_model` are `null` when that stage was off.
+  `config.vision_model` are `null` when that stage was off. `config.vision_ocr_model` names the
+  OCR model when it read the keyframes (6.5), else `null`; `vision_model` then only found the
+  board.
 - `config.detector`, `judge_prompt_version` and `judge_reasoning_effort` tell two runs apart:
   `rules` or `llm`, the judge prompt's version, and the `--llm-reasoning` level (`""` for
   `server`). The last two are `null` with the rules. The file is not a run log; other settings

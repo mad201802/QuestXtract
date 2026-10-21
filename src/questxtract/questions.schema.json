@@ -17,7 +17,7 @@
     },
     "config": {
       "type": "object",
-      "required": ["model_size", "language", "min_confidence", "detector", "judge_model", "judge_prompt_version", "judge_reasoning_effort", "vision_model"],
+      "required": ["model_size", "language", "min_confidence", "detector", "judge_model", "judge_prompt_version", "judge_reasoning_effort", "vision_model", "vision_ocr_model"],
       "properties": {
         "model_size": {"type": "string"},
         "language": {"type": "string"},
@@ -26,7 +26,8 @@
         "judge_model": {"type": ["string", "null"], "description": "null when the LLM pass was off."},
         "judge_prompt_version": {"type": ["string", "null"], "description": "The judge prompt's version, e.g. v5; null when the LLM pass was off."},
         "judge_reasoning_effort": {"type": ["string", "null"], "description": "How long the model thought before judging (none, low, medium, high); empty when the server's own setting applied (--llm-reasoning server), null when the LLM pass was off."},
-        "vision_model": {"type": ["string", "null"], "description": "null when vision was off."}
+        "vision_model": {"type": ["string", "null"], "description": "The vision model: it found the board (the layout probe) and, unless vision_ocr_model is set, read every keyframe. null when vision was off."},
+        "vision_ocr_model": {"type": ["string", "null"], "description": "The OCR model that read the keyframes (--vision-reader ocr); null when the vision model read them or vision was off."}
       }
     },
     "stats": {"type": "object", "additionalProperties": {"type": "integer"}},

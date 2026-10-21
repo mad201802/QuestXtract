@@ -49,6 +49,15 @@ def route(config: Config, *, vision: bool = False) -> tuple[str | None, str | No
     return config.base_url, config.api_key
 
 
+class Refused(ConnectionError):
+    """The endpoint refused the request itself (HTTP 400), as for a parameter it does not take.
+
+    A ``ConnectionError`` so existing callers keep working. It is its own type so a caller can
+    ask again without an optional parameter (the OCR reader's ``logprobs``), where a bad key or
+    an unreachable endpoint would fail the same way however it asked.
+    """
+
+
 def client(config: Config, *, vision: bool = False) -> Any:
     """Build the OpenAI-compatible client for the judge, or for vision with ``vision=True``.
 
@@ -105,6 +114,7 @@ def ask(
         RuntimeError: If the optional ``questxtract[llm]`` extra is not installed.
         ConnectionError: If the endpoint fails after the SDK's own retries.
         Stalled: If it gives no answer within the deadline, twice (a ``ConnectionError``).
+        Refused: If the endpoint refuses the request with HTTP 400 (a ``ConnectionError``).
         InvalidAnswer: If the model answers with something other than a JSON object twice.
         ValueError: If the settings cannot be used, such as an unreadable ``.env``.
 
@@ -144,7 +154,8 @@ def ask(
             continue
         except OpenAIError as exc:
             _count(usage, name, None, started)  # sent, though it failed
-            raise failure(str(exc)) from None
+            refused = getattr(exc, "status_code", None) == 400
+            raise failure(str(exc), Refused if refused else ConnectionError) from None
         _count(usage, name, response, started)
         stalled = None
         if convert is None:

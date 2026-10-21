@@ -31,7 +31,7 @@ from .models import (
 )
 from .score import confidence_label
 
-SCHEMA_VERSION = "2.2"
+SCHEMA_VERSION = "2.3"
 SCHEMA_PATH = Path(__file__).with_name("questions.schema.json")
 
 _CONFIG_KEYS = ("model_size", "language", "min_confidence")
@@ -62,7 +62,12 @@ def result_to_dict(ctx: Context, keyframes: Mapping[str, str] | None = None) -> 
             "judge_model": ctx.config.judge_model if llm else None,
             "judge_prompt_version": JUDGE_PROMPT_VERSION if llm else None,
             "judge_reasoning_effort": ctx.config.judge_reasoning_effort if llm else None,
-            "vision_model": ctx.config.reading_model if ctx.config.vision_enabled else None,
+            "vision_model": ctx.config.vision_model if ctx.config.vision_enabled else None,
+            "vision_ocr_model": (
+                ctx.config.vision_ocr_model
+                if ctx.config.vision_enabled and ctx.config.vision_reader == "ocr"
+                else None
+            ),
         },
         "stats": dict(ctx.stats),
         "segments": [_segment(index, segment) for index, segment in enumerate(ctx.segments)],

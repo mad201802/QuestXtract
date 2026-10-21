@@ -70,7 +70,13 @@ _FIELDS = ("description", "text", "latex", "confidence")
 # The OCR reader (architecture.md 6.5): GLM-OCR's task prompt, as measured in #52 and #143.
 _OCR_PROMPT = "Text Recognition:"
 _OCR_UNMEASURED = 0.5  # confidence when the server returns no token probabilities
-_OCR_FORMULA = re.compile(r"\$\$(.+?)\$\$|\$(.+?)\$", re.DOTALL)
+# ``$$...$$`` may span lines; a single ``$...$`` stays on one line, opens before and closes
+# after a non-space, and does not close before a digit, so a price ("$5 and $10") is no formula.
+_OCR_FORMULA = re.compile(r"\$\$(.+?)\$\$|\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\d)", re.DOTALL)
+_OCR_CIRCLED = re.compile(r"\\textcircled\{([^}]*)\}")
+_OCR_COMMAND = re.compile(r"\\(?:mathrm|text|mathbf|mathit)\{([^}]*)\}|\\([A-Za-z]+)")
+# Endpoints that refused ``logprobs`` in this process: asked without it from then on.
+_NO_LOGPROBS: set[str | None] = set()
 # Formula segments that are labels, not formulas: a circled number, a number with a unit,
 # or a single symbol (a variable named in a sentence).
 _OCR_LABEL = re.compile(r"\\textcircled\{[^}]*\}|[\d.,\s]*\\mathrm\{[^}]*\}|\\[A-Za-z]+|\S")
@@ -869,8 +875,9 @@ def _read_ocr(config: Config, image: str, usage: Counter[str] | None) -> dict[st
     """Read one keyframe with the OCR model: its text and formulas, no description.
 
     The image and the task prompt go in one user message, as GLM-OCR expects, with the token
-    probabilities asked for (:func:`_from_ocr`). Cached, retried and tolerated exactly as the
-    vision model's reading (:func:`read_keyframe`).
+    probabilities asked for (:func:`_from_ocr`). A server that refuses them (HTTP 400) is asked
+    again without, then and for the rest of the process; its confidence is "not measured".
+    Cached, retried and tolerated exactly as the vision model's reading (:func:`read_keyframe`).
     """
     request: dict[str, Any] = {
         "model": config.vision_ocr_model,
@@ -883,30 +890,46 @@ def _read_ocr(config: Config, image: str, usage: Counter[str] | None) -> dict[st
                 ],
             }
         ],
-        "logprobs": True,
     }
+    url = config.vision_url
+    if url not in _NO_LOGPROBS:
+        request["logprobs"] = True
     try:
-        answer = endpoint.ask(
-            config,
-            request,
-            name="vision",
-            valid=_readable,
-            usage=usage,
-            vision=True,
-            convert=_from_ocr,
-        )
+        try:
+            answer = _ask_ocr(config, request, usage)
+        except endpoint.Refused:
+            if "logprobs" not in request:
+                raise
+            # Some servers do not take logprobs: ask without, and confidence is "not measured".
+            _NO_LOGPROBS.add(url)
+            del request["logprobs"]
+            answer = _ask_ocr(config, request, usage)
     except (ConnectionError, endpoint.InvalidAnswer) as exc:
         warnings.warn(f"vision: keyframe left out: {exc}", UserWarning, stacklevel=3)
         return None
     return {key: answer[key] for key in _FIELDS}
 
 
-def _from_ocr(choice: Any) -> dict[str, Any] | None:
-    """Turn an OCR answer (plain text, formulas inline as ``$...$``) into the board fields.
+def _ask_ocr(config: Config, request: dict[str, Any], usage: Counter[str] | None) -> dict[str, Any]:
+    return endpoint.ask(
+        config,
+        request,
+        name="vision",
+        valid=_readable,
+        usage=usage,
+        vision=True,
+        convert=_from_ocr,
+    )
 
-    ``text`` is the answer without the ``$`` delimiters; ``latex`` the formula segments that
-    are not labels (:func:`ocr_formulas`), one per line; ``description`` stays empty, since an
-    OCR model does not describe. ``confidence`` is the mean probability of the answer's tokens
+
+def _from_ocr(choice: Any) -> dict[str, Any] | None:
+    r"""Turn an OCR answer (plain text, formulas inline as ``$...$``) into the board fields.
+
+    ``latex`` holds the formula segments that are not labels (:func:`ocr_formulas`), one per
+    line. ``text`` is the words: formulas are left out, since they are in ``latex``, and labels
+    are written plainly (``\textcircled{2}`` as ``(2)``, ``1\mathrm{Hz}`` as ``1 Hz``), so
+    it reads like the vision model's ``text``. ``description`` stays empty, since an OCR model
+    does not describe. ``confidence`` is the mean probability of the answer's tokens
     when the server returns them, else 0.5, which means "not measured". ``None`` when the
     answer is not text.
     """
@@ -914,13 +937,23 @@ def _from_ocr(choice: Any) -> dict[str, Any] | None:
     if not isinstance(content, str):
         return None
     formulas = ocr_formulas(content)
-    text = _OCR_FORMULA.sub(lambda m: (m[1] or m[2]).strip(), content)
+    text = _OCR_FORMULA.sub(lambda m: _plain_label(m[1] or m[2]), content)
+    text = "\n".join(" ".join(line.split()) for line in text.splitlines())
     return {
         "description": "",
         "text": text.strip(),
         "latex": "\n".join(formulas) or None,
         "confidence": _token_confidence(choice),
     }
+
+
+def _plain_label(segment: str) -> str:
+    """Return a label segment as plain text, or ``""`` for a formula (it is in ``latex``)."""
+    segment = segment.strip()
+    if not _OCR_LABEL.fullmatch(segment):
+        return ""
+    segment = _OCR_CIRCLED.sub(r"(\1)", segment)
+    return _OCR_COMMAND.sub(lambda m: f" {m[1]}" if m[1] is not None else m[2], segment).strip()
 
 
 def ocr_formulas(text: str) -> list[str]:
