@@ -276,7 +276,7 @@ class VisualContext:
         keyframe_path: Path to the captured keyframe.
         description: What the VLM saw: diagram, derivation, slide.
         text: Transcribed board or slide text.
-        latex: Formulas when present; manim generation reads this.
+        latex: Formulas as LaTeX, when present.
         confidence: Confidence in the reading, in ``[0, 1]``.
 
     """

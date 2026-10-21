@@ -479,6 +479,22 @@ because the M4 animations need them as LaTeX, and prose that reads well can stil
 redistribution are mostly university lecture halls; a document camera over paper is not covered
 yet. Diagrams are labelled but not scored.
 
+### D21: Manim animations are optional, outside the core delivery
+
+*Chose:* rendering board changes as Manim animations is optional and not part of the core
+delivery (team decision, 21.10.2026, #171). M3's core is the board timeline: board states in
+time order, linked to the questions asked while they were on screen.
+
+*Alternative:* keep "Manim integration is demonstrated" as an M3 requirement, as the milestone
+first stated, merged in from the former M4.
+
+*Why:* nothing in the core delivery needs an animation: the questions, the board states and the
+quiz are complete without one.
+
+*Cost:* the customer's idea of animations made from the board's flow (milestone 4 in
+general_requirements.md) is not delivered unless time is left. `latex` stays in each board state,
+so a later Manim step can read it.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |
