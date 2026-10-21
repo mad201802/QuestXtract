@@ -32,7 +32,16 @@ FLAG_FIELDS: tuple[tuple[str, str], ...] = (
     ("options", "quiz_options"),
 )
 
-Kind = Literal["text", "number", "choice", "bool", "tristate", "file", "path"]
+Kind = Literal["text", "number", "choice", "bool", "tristate", "file", "path", "implicit"]
+
+# The outputs the app offers (issue #124 and its quiz addition): which CLI command each one runs.
+OUTPUTS: dict[str, str] = {
+    "questions": "process",
+    "transcript": "transcribe",
+    "quiz": "process",
+}
+# Options `transcribe` takes; every other option belongs to `process`.
+TRANSCRIBE_DESTS: frozenset[str] = frozenset({"config", "output", "model", "from_scratch"})
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -49,6 +58,8 @@ class Option:
     field: str | None = None
     choices: tuple[str, ...] = ()
     label: str
+    # The outputs this control is shown for; empty means every output of its command.
+    outputs: tuple[str, ...] = ()
 
 
 OPTIONS: tuple[Option, ...] = (
@@ -113,15 +124,43 @@ OPTIONS: tuple[Option, ...] = (
         choices=("vlm", "ocr"),
         label="Board reader",
     ),
+    Option(
+        dest="quiz",
+        flag="--quiz",
+        kind="implicit",
+        label="Also write the quiz (set by the Quiz output)",
+        outputs=("quiz",),
+    ),
+    Option(
+        dest="strictness",
+        flag="--strictness",
+        kind="choice",
+        field="quiz_strictness",
+        choices=("strict", "lenient"),
+        label="Quiz questions",
+        outputs=("quiz",),
+    ),
+    Option(
+        dest="options",
+        flag="--options",
+        kind="number",
+        field="quiz_options",
+        label="Options per quiz item (3 to 5)",
+        outputs=("quiz",),
+    ),
+    Option(
+        dest="quiz_model",
+        flag="--quiz-model",
+        kind="text",
+        field="quiz_model",
+        label="Quiz model",
+        outputs=("quiz",),
+    ),
 )
 
 # Options the app leaves out, with the reason. The parity test requires every CLI option to be
 # either in OPTIONS or here.
 EXCLUDED: dict[str, str] = {
-    "quiz": "the quiz is an output the app does not offer yet (#79); add it with the quiz output",
-    "quiz_model": "belongs to the quiz output, see quiz",
-    "strictness": "belongs to the quiz output, see quiz",
-    "options": "belongs to the quiz output, see quiz",
     "input": "the recording or transcript is chosen with the drop box, not a flag",
     "recording": "the recording is chosen with the drop box, not a flag",
 }

@@ -23,10 +23,18 @@ from .export import read_questions, result_to_json, write_questions
 from .filtering import filter_document
 from .gui.options import FLAG_FIELDS
 from .models import Context, Progress, Sentence, Stage, Transcript
-from .pipeline import STAGES, cached_transcript, run
+from .pipeline import STAGES, Cancelled, cached_transcript, run
 from .qti import QtiExportError
 from .qti_v3 import export_qti
-from .quiz import MAX_OPTIONS, MIN_OPTIONS, STRICTNESS, build_quiz, file_hash, quiz_to_json
+from .quiz import (
+    MAX_OPTIONS,
+    MIN_OPTIONS,
+    STRICTNESS,
+    QuizResult,
+    build_quiz,
+    file_hash,
+    quiz_to_json,
+)
 from .vision import has_video
 
 PROCESS_INPUTS = (".mp4", ".mp3", ".json")  # what `process` takes (the graphical app too, #124)
@@ -311,14 +319,8 @@ def _write_quiz(
 
     A question the model fails on is left out with a warning line; the others are written.
     """
-    result = build_quiz(
-        document if document is not None else read_questions(questions),
-        config,
-        questions_name=questions.name,
-        questions_hash=file_hash(questions),
-        sentences=sentences,
-        progress=(bar := _progress_bar(1)),
-    )
+    bar = _progress_bar(1)
+    result = _quiz_result(questions, config, sentences, bar, document)
     bar("done", 1.0)
     for question_id, reason in result.failed:
         print(f"warning: quiz: {question_id} left out: {reason}", file=sys.stderr)
@@ -432,11 +434,31 @@ class RunResult(NamedTuple):
 
     ``path`` is the file it wrote, or ``None`` when the output goes to stdout, in which case
     ``text`` is what would be printed. ``summary`` is the one-line account the CLI prints.
+    ``warnings`` are the lines the CLI prints to stderr for questions the quiz left out.
     """
 
     path: Path | None
     summary: str
     text: str | None = None
+    warnings: tuple[str, ...] = ()
+
+
+def _quiz_result(
+    questions: Path,
+    config: Config,
+    sentences: Sequence[Sentence],
+    progress: Progress | None = None,
+    document: dict[str, object] | None = None,
+) -> QuizResult:
+    """Make the quiz for a questions file: the one place the CLI and the app call the model."""
+    return build_quiz(
+        document if document is not None else read_questions(questions),
+        config,
+        questions_name=questions.name,
+        questions_hash=file_hash(questions),
+        sentences=sentences,
+        progress=progress,
+    )
 
 
 def _process_core(
@@ -495,11 +517,23 @@ def _process_run(
     stop: Callable[[], bool] | None = None,
 ) -> RunResult:
     """Run ``process`` for the graphical app: the same run as the CLI, reported as a result."""
-    ctx, _, output = _process_core(args, progress, stop)
+    ctx, config, output = _process_core(args, progress, stop)
     summary = f"{len(ctx.pairs)} questions"
     if output is None:
         return RunResult(None, summary, result_to_json(ctx))
-    return RunResult(output, summary)
+    if not args.quiz:
+        return RunResult(output, summary)
+    # The quiz comes after the questions file is written, as in the CLI; Cancel stops before it.
+    if stop is not None and stop():
+        raise Cancelled("stopped before the quiz")
+    result = _quiz_result(output, config, ctx.sentences, progress)
+    quiz_path = _output_path(None, output, "quiz")
+    assert quiz_path is not None  # noqa: S101 - a file name is given, never stdout
+    quiz_path.write_text(quiz_to_json(result.quiz).rstrip("\n") + "\n", encoding="utf-8")
+    items = len(result.quiz["questions"])
+    left_out = f" ({len(result.skipped)} left out, {len(result.failed)} failed)"
+    warnings = tuple(f"quiz: {qid} left out: {reason}" for qid, reason in result.failed)
+    return RunResult(quiz_path, f"{items} quiz items{left_out}", warnings=warnings)
 
 
 def _transcribe_core(
