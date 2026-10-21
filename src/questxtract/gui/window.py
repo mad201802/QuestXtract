@@ -88,6 +88,7 @@ class QuestXtractWindow:
         self.stage_text: Callable[[], str] = lambda: ""
         self.closing = False
         self.alive = True
+        self.advanced_open = False
         root.protocol("WM_DELETE_WINDOW", self._close)
         style = ttk.Style(root)
         if "classic" in style.theme_names():
@@ -112,7 +113,7 @@ class QuestXtractWindow:
         frame.grid(sticky="nsew")
 
         bar = ttk.Frame(frame)
-        bar.grid(sticky="e")
+        bar.grid(row=0, sticky="e")
         for column, (code, name) in enumerate(i18n.LANGUAGES.items()):
             button = ttk.Radiobutton(
                 bar,
@@ -125,7 +126,7 @@ class QuestXtractWindow:
 
         source = ttk.LabelFrame(frame, padding=8)
         self._text(source, "group.source")
-        source.grid(sticky="ew")
+        source.grid(row=1, sticky="ew")
         self.drop_box = tk.Label(source, relief="sunken", bd=2, bg="white", height=2, width=54)
         self._text(self.drop_box, "drop.help")
         self.drop_box.grid(row=0, column=0, columnspan=2, sticky="ew")
@@ -139,7 +140,7 @@ class QuestXtractWindow:
 
         outputs = ttk.LabelFrame(frame, padding=8)
         self._text(outputs, "group.output")
-        outputs.grid(sticky="ew", pady=(8, 0))
+        outputs.grid(row=2, sticky="ew", pady=(8, 0))
         for column, name in enumerate(state.OUTPUT_LABELS):
             button = ttk.Radiobutton(
                 outputs, value=name, variable=self.output, command=self._refresh
@@ -147,21 +148,24 @@ class QuestXtractWindow:
             self._text(button, f"output.{name}")
             button.grid(row=0, column=column, sticky="w", padx=(0, 18))
             self.output_buttons[name] = button
-        files = ttk.Label(outputs, wraplength=680)
-        self._text(files, "output.files")
-        files.grid(row=1, column=0, columnspan=4, sticky="w", pady=(6, 0))
 
+        # Everything else is one click away: the options form starts hidden.
         options = ttk.LabelFrame(frame, padding=8)
+        self.options_frame = options
         self._text(options, "group.options")
-        options.grid(sticky="ew", pady=(8, 0))
+        options.grid(row=3, sticky="ew", pady=(8, 0))
+        files = ttk.Label(options, wraplength=620)
+        self._text(files, "output.files")
+        files.grid(row=0, column=0, sticky="w", pady=(0, 6))
         shown = [option for option in OPTIONS if option.kind != "implicit"]
-        for row, option in enumerate(shown):
+        for row, option in enumerate(shown, start=1):
             line = self._option_row(options, option)
             line.grid(row=row, column=0, sticky="ew", pady=1)
             self.option_rows[option.dest] = line
+        options.grid_remove()
 
         actions = ttk.Frame(frame)
-        actions.grid(sticky="ew", pady=(8, 0))
+        actions.grid(row=4, sticky="ew", pady=(8, 0))
         self.run_button = ttk.Button(actions, command=self._run, width=10)
         self._text(self.run_button, "button.run")
         self.run_button.grid(row=0, column=0)
@@ -171,17 +175,20 @@ class QuestXtractWindow:
         self.open_button = ttk.Button(actions, command=self._open_folder, state="disabled")
         self._text(self.open_button, "button.open_folder")
         self.open_button.grid(row=0, column=2, padx=(6, 0))
+        actions.columnconfigure(3, weight=1)
+        self.advanced_button = ttk.Button(actions, command=self._toggle_advanced)
+        self.advanced_button.grid(row=0, column=3, sticky="e")
 
         self.progress_var = tk.DoubleVar(value=0.0)
         ttk.Progressbar(frame, maximum=100, variable=self.progress_var).grid(
-            sticky="ew", pady=(8, 0)
+            row=5, sticky="ew", pady=(8, 0)
         )
         self.stage_label = ttk.Label(frame, text="")
-        self.stage_label.grid(sticky="w")
+        self.stage_label.grid(row=6, sticky="w")
         self.hint = ttk.Label(frame, text="", wraplength=460, foreground="#444444")
-        self.hint.grid(sticky="w", pady=(4, 0))
+        self.hint.grid(row=7, sticky="w", pady=(4, 0))
         self.status = ttk.Label(frame, text="", wraplength=460)
-        self.status.grid(sticky="w", pady=(4, 0))
+        self.status.grid(row=8, sticky="w", pady=(4, 0))
 
     def _option_row(self, parent: tk.Misc, option: Option) -> ttk.Frame:
         """One control with its label, built from the option table and its Config default."""
@@ -246,6 +253,20 @@ class QuestXtractWindow:
             self.output.set("questions")
         self._refresh()
 
+    def _toggle_advanced(self) -> None:
+        """Show or hide the options form; the window grows or shrinks to fit."""
+        self.advanced_open = not self.advanced_open
+        if self.advanced_open:
+            self.options_frame.grid()
+        else:
+            self.options_frame.grid_remove()
+        self._retranslate_advanced_button()
+
+    def _retranslate_advanced_button(self) -> None:
+        """Label the Advanced settings button for what it will do, in the current language."""
+        key = "button.advanced_hide" if self.advanced_open else "button.advanced_show"
+        self.advanced_button.configure(text=tr(key))
+
     def _tristate_canonical(self, dest: str) -> str:
         """Return the English name of a tri-state control's shown choice (its internal value)."""
         shown = self.fields[dest].get()
@@ -306,6 +327,7 @@ class QuestXtractWindow:
     def _retranslate(self) -> None:
         """Put every text of the window in the current language."""
         self.root.title("QuestXtract")
+        self._retranslate_advanced_button()
         for widget, key in self.static_texts:
             widget.configure(text=tr(key))
         for dest, (label, option) in self.option_labels.items():

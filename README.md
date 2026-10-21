@@ -71,8 +71,8 @@ questxtract filter lecture.questions.json --text eigenvalue   # the questions ab
 ### Graphical app
 
 For a lecturer who does not use a terminal: `pip install "questxtract[gui]"`, then `questxtract gui`.
-Drop a recording or a transcript on the window (or click Browse), pick the output and the options
-(the same ones as the CLI, with the same defaults), and press Run. Questions, transcript, quiz and
+Drop a recording or a transcript on the window (or click Browse), pick the output and press Run.
+The options (the same ones as the CLI, with the same defaults) are behind Advanced settings. Questions, transcript, quiz and
 QTI package are written next to the input, or where you choose. Details: [docs/cli.md](docs/cli.md#graphical-app).
 
 The input decides how much runs: an `.mp4` or `.mp3` goes through every stage (an audio-only

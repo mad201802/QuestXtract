@@ -165,8 +165,9 @@ it with the extra, `pip install "questxtract[gui]"`.
   quiz beside the questions) or QTI package (`qti`, from a `quiz.json`). The files are named as
   the commands name them: `<name>.questions.json`, `<name>.transcript.json`, `<name>.quiz.json`
   and `<name>.qti.zip`, next to the input unless an output file is given.
-- **The options.** Each control is one option of `process` or `transcribe` above, with its default
-  in the label. A control left at its default is not passed, so a `questxtract.toml` (see
+- **The options** are behind the Advanced settings button; the start view has only the file, the
+  output, Run and the language. Each control is one option of `process` or `transcribe` above,
+  with its default in the label. A control left at its default is not passed, so a `questxtract.toml` (see
   [Configuration files](#configuration-files)) still applies. The LLM and quiz controls
   appear only for the outputs that use them. Run stays disabled, with the reason beside it, while
   a value is refused (a threshold outside 0 to 1, an LLM detector with an empty model) or the file

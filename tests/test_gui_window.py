@@ -296,3 +296,28 @@ def test_a_run_in_norsk_finishes_in_norsk(window, root, tmp_path: Path):
 def tr_shown(window: Any, dest: str) -> str:
     """Return the text a tri-state control shows now."""
     return str(window.fields[dest].get())
+
+
+def test_the_start_view_is_simple_and_the_options_are_behind_advanced_settings(window):
+    """AC: at start only the essentials show; the options form is one click away."""
+    assert not window.options_frame.winfo_manager()  # hidden
+    assert window.advanced_button.cget("text").startswith("Advanced settings")
+
+    window._toggle_advanced()
+    assert window.options_frame.winfo_manager() == "grid"
+    shown = window.advanced_button.cget("text")
+
+    window._toggle_advanced()
+    assert not window.options_frame.winfo_manager()
+    assert shown != window.advanced_button.cget("text")
+
+
+def test_a_language_switch_keeps_the_advanced_view_open(window):
+    """The switch re-labels the Advanced settings button without closing the form."""
+    window._toggle_advanced()
+    window.language.set("it")
+
+    window._switch_language()
+
+    assert window.options_frame.winfo_manager() == "grid"
+    assert window.advanced_button.cget("text").startswith("Impostazioni avanzate")

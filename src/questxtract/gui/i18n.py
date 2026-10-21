@@ -29,15 +29,25 @@ _MESSAGES: dict[str, dict[str, str]] = {
     },
     "button.browse": {"en": "Browse...", "nb": "Bla gjennom...", "it": "Sfoglia..."},
     "group.source": {
-        "en": "1. Recording or transcript",
-        "nb": "1. Opptak eller transkripsjon",
-        "it": "1. Registrazione o trascrizione",
+        "en": "Recording or transcript",
+        "nb": "Opptak eller transkripsjon",
+        "it": "Registrazione o trascrizione",
     },
-    "group.output": {"en": "2. Output", "nb": "2. Resultat", "it": "2. Output"},
+    "group.output": {"en": "Output", "nb": "Resultat", "it": "Output"},
     "group.options": {
-        "en": "3. Options (a setting left at its default is not passed)",
-        "nb": "3. Innstillinger (en innstilling som står på standard sendes ikke)",
-        "it": "3. Opzioni (un'impostazione lasciata al valore predefinito non viene passata)",
+        "en": "Advanced settings (a setting left at its default is not passed)",
+        "nb": "Avanserte innstillinger (en innstilling som står på standard sendes ikke)",
+        "it": "Impostazioni avanzate (un'impostazione al valore predefinito non viene passata)",
+    },
+    "button.advanced_show": {
+        "en": "Advanced settings >>",
+        "nb": "Avanserte innstillinger >>",
+        "it": "Impostazioni avanzate >>",
+    },
+    "button.advanced_hide": {
+        "en": "Advanced settings <<",
+        "nb": "Avanserte innstillinger <<",
+        "it": "Impostazioni avanzate <<",
     },
     "output.files": {
         "en": "Files: <name>.questions.json, <name>.transcript.json, <name>.quiz.json "
