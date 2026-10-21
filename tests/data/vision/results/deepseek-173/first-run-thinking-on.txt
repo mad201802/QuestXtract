@@ -1,0 +1,122 @@
+===== vision, 30 keyframes: deepseek-ai/DeepSeek-V4.1-Flash-1017 (start 11:41:41)
+vision model deepseek-ai/DeepSeek-V4.1-Flash-1017 (prompt v0)
+lecture type   frames failed    CER  blank  formulas  found  recall
+slides              6      0   0.07      -        26     26    1.00
+blackboard          9      0   0.30    1/1        23     20    0.87
+whiteboard          6      0   0.34      -        10     10    1.00
+handwriting         9      0   0.18      -        18     14    0.78
+TOTAL              30      0   0.22    1/1        77     70    0.91
+
+per frame, worst text first (a blank board: read as blank or not):
+       1.00    1/2  blackboard  mit_6_042j_2010_l1_02061.0.png
+             missed: \forall n \in \mathbb{Z}, n \ge 2 \Rightarrow n^2 \ge 4
+       0.69    1/1  whiteboard  uw_machine_intelligence_l13_03811.0.png
+       0.63    2/2  whiteboard  uw_machine_intelligence_l13_03420.0.png
+       0.41    0/0  whiteboard  uw_machine_intelligence_l13_01366.0.png
+       0.38    6/6  blackboard  mit_18_100b_l1_01507.0.png
+       0.37    0/0  handwriting ttk4225_2026_09_14_01731.0.png
+       0.35    1/1  blackboard  mit_6_042j_2010_l1_01812.0.png
+       0.31    1/2  handwriting ttk4225_2026_09_14_01265.0.png
+             missed: t \ge 0
+       0.31    5/5  blackboard  mit_6_042j_2010_l1_01001.0.png
+       0.29    3/3  handwriting math231_2020_r2_00410.0.png
+       0.22    0/0  whiteboard  uw_machine_intelligence_l13_04659.0.png
+       0.21    1/2  blackboard  mit_18_100b_l1_03415.0.png
+             missed: x < y \Rightarrow x + z < y + z
+       0.20    4/4  handwriting math231_2020_r2_00306.0.png
+       0.20    1/1  handwriting math231_2020_r2_00180.0.png
+       0.14    7/7  slides      mit_18_404j_l1_01365.0.png
+       0.12    8/8  slides      mit_18_404j_l1_03284.0.png
+       0.10    2/3  blackboard  mit_18_100b_l1_02898.0.png
+             missed: 0 + X = X
+       0.10    2/2  handwriting ttk4225_2026_09_14_00758.0.png
+       0.09    1/4  handwriting ttk4225_2026_09_14_00423.0.png
+             missed: x(t) = \frac{1}{1+t^2}
+             missed: t^{\alpha}
+             missed: \frac{1}{t^{1.1}}
+       0.08    3/3  slides      mit_18_404j_l1_02009.0.png
+       0.08    7/7  whiteboard  uw_machine_intelligence_l13_02881.0.png
+       0.04    2/2  slides      mit_18_404j_l1_01009.0.png
+       0.03    6/6  slides      mit_18_404j_l1_01785.0.png
+       0.02    0/0  handwriting math231_2020_r2_00018.0.png
+       0.02    2/2  blackboard  mit_6_042j_2010_l1_01470.0.png
+       0.02    2/2  handwriting ttk4225_2026_09_14_00257.0.png
+       0.02    0/0  whiteboard  uw_machine_intelligence_l13_00571.0.png
+      blank    0/0  blackboard  mit_18_100b_l1_00072.0.png
+       0.00    2/2  blackboard  mit_18_100b_l1_00746.0.png
+       0.00    0/0  slides      mit_18_404j_l1_00264.0.png
+===== finished 11:56:37
+===== vision, 30 keyframes: Qwen/Qwen3.8-27B-FP8 (start 11:56:37)
+vision model Qwen/Qwen3.8-27B-FP8 (prompt v0)
+lecture type   frames failed    CER  blank  formulas  found  recall
+slides              6      0   0.13      -        26     17    0.65
+blackboard          9      0   0.38    1/1        23     11    0.48
+whiteboard          6      0   0.30      -        10      4    0.40
+handwriting         9      0   0.20      -        18     14    0.78
+TOTAL              30      0   0.26    1/1        77     46    0.60
+
+per frame, worst text first (a blank board: read as blank or not):
+       0.88    0/2  blackboard  mit_6_042j_2010_l1_02061.0.png
+             missed: \forall n \in \mathbb{Z}, n \ge 2 \Rightarrow n^2 \ge 4
+             missed: n = -3
+       0.83    3/3  handwriting math231_2020_r2_00410.0.png
+       0.82    1/1  blackboard  mit_6_042j_2010_l1_01812.0.png
+       0.49    2/2  whiteboard  uw_machine_intelligence_l13_03420.0.png
+       0.49    1/7  whiteboard  uw_machine_intelligence_l13_02881.0.png
+             missed: y(n) = \sum_{k \in N} x(k) h(n - k)
+             missed: h = \begin{bmatrix} -1 & 0 & 1 \\ -1 & 0 & 1 \\ -1 & 0 & 1 \end{bmatrix}
+             missed: A = \begin{bmatrix} 10 & 50 & 100 \\ 10 & 50 & 100 \\ 10 & 50 & 100 \end{bmatrix} * h
+             missed: -30 + 0 + 300 = 270
+             missed: B = \begin{bmatrix} 10 & 10 & 10 \\ 50 & 50 & 50 \\ 100 & 100 & 100 \end{bmatrix} * h
+             missed: -160 + 0 + 160 = 0
+       0.49    0/0  handwriting ttk4225_2026_09_14_01731.0.png
+       0.46    4/6  blackboard  mit_18_100b_l1_01507.0.png
+             missed: \mathbb{N} = \{1, 2, 3, 4, 5, \dots\}
+             missed: \mathbb{Z} = \{0, \pm 1, \pm 2, \pm 3, \dots\}
+       0.46    1/1  whiteboard  uw_machine_intelligence_l13_03811.0.png
+       0.44    1/2  blackboard  mit_18_100b_l1_03415.0.png
+             missed: x < y \Rightarrow x + z < y + z
+       0.32    1/5  blackboard  mit_6_042j_2010_l1_01001.0.png
+             missed: a = 95{,}800
+             missed: b = 217{,}519
+             missed: c = 414{,}560
+             missed: d = 422{,}481
+       0.32    0/0  whiteboard  uw_machine_intelligence_l13_01366.0.png
+       0.27    8/8  slides      mit_18_404j_l1_03284.0.png
+       0.26    2/7  slides      mit_18_404j_l1_01365.0.png
+             missed: \delta: Q \times \Sigma \to Q
+             missed: \delta(q, a) = r
+             missed: Q = \{q_1, q_2, q_3\}
+             missed: \Sigma = \{0, 1\}
+             missed: F = \{q_3\}
+       0.17    4/4  handwriting math231_2020_r2_00306.0.png
+       0.12    1/2  handwriting ttk4225_2026_09_14_00758.0.png
+             missed: h(t) = \begin{cases} 0 & t < 0 \\ \cos(10t) & t \ge 0 \end{cases}
+       0.10    2/3  blackboard  mit_18_100b_l1_02898.0.png
+             missed: 0 + X = X
+       0.09    1/2  handwriting ttk4225_2026_09_14_01265.0.png
+             missed: t \ge 0
+       0.09    2/2  slides      mit_18_404j_l1_01009.0.png
+       0.09    0/3  slides      mit_18_404j_l1_02009.0.png
+             missed: L(M_1) = \{w \mid w \text{ contains substring } 11\} = A
+             missed: B = \{w \mid w \text{ has an even number of 1s}\}
+             missed: C = \{w \mid w \text{ has equal numbers of 0s and 1s}\}
+       0.05    2/4  handwriting ttk4225_2026_09_14_00423.0.png
+             missed: t^{\alpha}
+             missed: \frac{1}{t^{1.1}}
+       0.04    0/0  whiteboard  uw_machine_intelligence_l13_04659.0.png
+       0.04    1/1  handwriting math231_2020_r2_00180.0.png
+       0.04    0/0  slides      mit_18_404j_l1_00264.0.png
+       0.03    0/2  blackboard  mit_6_042j_2010_l1_01470.0.png
+             missed: 313(x^3 + y^3) = z^3
+             missed: 24 = 11 + 13
+       0.03    0/0  whiteboard  uw_machine_intelligence_l13_00571.0.png
+       0.03    5/6  slides      mit_18_404j_l1_01785.0.png
+             missed: r_0, r_1, r_2, \dots, r_n \in Q
+       0.02    0/0  handwriting math231_2020_r2_00018.0.png
+       0.02    2/2  handwriting ttk4225_2026_09_14_00257.0.png
+       0.01    2/2  blackboard  mit_18_100b_l1_00746.0.png
+      blank    0/0  blackboard  mit_18_100b_l1_00072.0.png
+===== finished 11:58:17
+===== judge, 3 lectures: deepseek-ai/DeepSeek-V4.1-Flash-1017 (start 11:58:17)
+===== finished 11:59:43

@@ -175,6 +175,7 @@ for comparison. The comparisons and their caveats are on #52 and #143; the summa
 | `idun-mit-speech`, `idun-ttk-360p-speech`, `idun-ttk-720p-speech` | the same, with the words spoken within 20 s of each frame | as above |
 | `idun-large-models` | Kimi K2.6, DeepSeek-V4-Flash-Vision-Exp, GLM-5.3-Flash | MIT and TTK at 360p |
 | `idun-mistral-repeat` | Mistral Medium 3.5, three repeats | two TTK frames at 720p |
+| `deepseek-173` | DeepSeek-V4.1-Flash-1017 on Idun with thinking off (`reasoning_effort` none), three repeat runs of `eval --score-vision` and `eval --detector llm` (`repeat-runs.txt`), plus the first full runs with thinking on and off (`first-run-*.txt`), which include Qwen3.8-27B and gpt-4o for comparison | 30 keyframes; the three labelled lectures |
 | `idun-prompt-v1`, `openai-prompt-v1` | Qwen3.8-27B, Mistral Medium 3.5, Kimi K2.6 instant, GLM-5.3-Flash on Idun; gpt-5.6-luna and gpt-4.1-mini on OpenAI, all with `prompt_v1.txt` | MIT and TTK at 360p |
 | `claude-hand-graded` | Claude Sonnet 5.5 reading each frame itself and answering in the prompt v0 format. **Not independent**: the same reader wrote the reference text the other models are scored against. | MIT and TTK |
 | `claude-independent-agent` | A fresh Claude agent with no context, given only the prompt and the frames, told to open nothing else | MIT and TTK |

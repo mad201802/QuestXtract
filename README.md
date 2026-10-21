@@ -97,8 +97,12 @@ spoken. It needs the `llm` extra
 (`pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`) and a model:
 
 ```bash
-# hosted: OpenAI's gpt-4o, the default; key from OPENAI_API_KEY (set it up as below)
+# the default: DeepSeek-V4.1-Flash on NTNU's LLM service, key from QUESTXTRACT_NTNU_API_KEY
 questxtract process lecture.mp4 --detector llm
+
+# OpenAI instead, key from OPENAI_API_KEY; gpt-4o takes no reasoning setting, hence server
+questxtract process lecture.mp4 --detector llm --llm-url https://api.openai.com/v1 \
+    --llm-model gpt-4o --llm-reasoning server
 
 # local: any OpenAI-compatible server, here Ollama with a small Qwen that thinks first
 questxtract process lecture.mp4 --detector llm --llm-reasoning low \
@@ -121,38 +125,43 @@ questxtract eval --score-vision tests/data/vision/   # how well vision_model rea
 
 #### Setting up the API key
 
-A hosted model needs a key; a local server (`--llm-url`) does not. QuestXtract reads it from
-the `OPENAI_API_KEY` environment variable, or from a local `.env` (see
+A hosted model needs a key; a local server (`--llm-url`) does not. The key goes with the
+endpoint: NTNU's LLM service, the default, reads `QUESTXTRACT_NTNU_API_KEY`; OpenAI and any other
+endpoint read `OPENAI_API_KEY`, so neither key is ever sent to the other service. NTNU's service
+needs the NTNU network or VPN, and NTNU asks that heavy use wait until after 18:00 or the
+weekend. QuestXtract reads each key from the environment, or from a local `.env` (see
 [docs/cli.md](docs/cli.md#api-keys-and-env)); there is no `--api-key` flag and TOML files
-reject secrets, so the key never sits in the repository or in your shell history. The setup
+reject secrets, so a key never sits in the repository or in your shell history. The steps below
+use the NTNU key; for an OpenAI key, use `openai` and `OPENAI_API_KEY` in its place. The setup
 below keeps it in your system's password store (the Keychain on macOS, Credential Manager on
 Windows) and lets a git-ignored `.env` file *refer* to it, so no file anywhere holds the key
 itself. The environment wins over `.env`, which is why step 4 loads it into the shell. It is the same on
 macOS and Windows: run it in Terminal on macOS, in **Git Bash** on Windows (it comes with Git for
 Windows), from the repository folder.
 
-1. **Save the key.** Copy the whole key (it starts with `sk-`), then store it from the clipboard:
+1. **Save the key.** Copy the whole key, then store it from the clipboard:
 
    ```bash
-   pbpaste | tr -d '[:space:]' | uvx keyring set questxtract-llm openai             # macOS
-   cat /dev/clipboard | tr -d '[:space:]' | uvx keyring set questxtract-llm openai  # Windows
+   pbpaste | tr -d '[:space:]' | uvx keyring set questxtract-llm ntnu             # macOS
+   cat /dev/clipboard | tr -d '[:space:]' | uvx keyring set questxtract-llm ntnu  # Windows
    ```
 
    Then empty the clipboard (`pbcopy < /dev/null` on macOS, copy any other text on Windows).
    Piping the key in avoids typing it into a hidden prompt: macOS's own
-   `security add-generic-password -w` prompt silently cuts a key at 128 characters, and OpenAI
-   keys are longer.
+   `security add-generic-password -w` prompt silently cuts a key at 128 characters, and keys
+   can be longer.
 
 2. **Check it.** This prints only the last three characters; they must match your key's:
 
    ```bash
-   uvx keyring get questxtract-llm openai | tail -c 4
+   uvx keyring get questxtract-llm ntnu | tail -c 4
    ```
 
-3. **Point `.env` at it.** One line, written once; `.env` is in `.gitignore` and holds no key:
+3. **Point `.env` at it.** One line per key, written once; `.env` is in `.gitignore` and holds
+   no key:
 
    ```bash
-   echo 'export OPENAI_API_KEY="$(uvx keyring get questxtract-llm openai)"' > .env
+   echo 'export QUESTXTRACT_NTNU_API_KEY="$(uvx keyring get questxtract-llm ntnu)"' >> .env
    ```
 
 4. **Load it in every new terminal**, before running `questxtract`:
@@ -163,21 +172,23 @@ Windows), from the repository folder.
 
    On macOS the first read may ask whether Python may use the Keychain item: choose *Always
    Allow*. In PowerShell instead of Git Bash, step 4 is
-   `$env:OPENAI_API_KEY = (uvx keyring get questxtract-llm openai)`.
+   `$env:QUESTXTRACT_NTNU_API_KEY = (uvx keyring get questxtract-llm ntnu)`.
 
 5. **Test it.** Listing the models costs nothing:
 
    ```bash
-   uv run python -c "import openai; print(len(openai.OpenAI().models.list().data), 'models visible - the key works')"
+   uv run python -c "import os, openai; print(len(openai.OpenAI(base_url='https://llm.hpc.ntnu.no/v1', api_key=os.environ['QUESTXTRACT_NTNU_API_KEY']).models.list().data), 'models visible - the key works')"
    ```
 
 | Error | Cause | Fix |
 |---|---|---|
-| `--detector llm needs OPENAI_API_KEY, ...` | The key is not loaded in this terminal | `source .env` |
+| `--detector llm goes to NTNU's LLM service ..., so it needs QUESTXTRACT_NTNU_API_KEY` | The key is not loaded in this terminal | `source .env` |
+| `... Connection error` with NTNU's service | Not on the NTNU network | Connect the NTNU VPN |
 | `401 ... invalid_api_key` | The stored key is incomplete, or was revoked | Compare its end with the original (step 2) and save it again (step 1); if they match, ask for a new key |
-| `400 ... Unrecognized request argument supplied: reasoning_effort` | `--llm-reasoning` set a level, but the model has no reasoning setting, e.g. `gpt-4o` | Drop `--llm-reasoning`, or pass `--llm-reasoning server` |
+| `400 ... reasoning_effort` | The model has no reasoning setting (`gpt-4o`), or rejects `none` (Qwen); the default sends `none`, which DeepSeek needs | Pass `--llm-reasoning server` |
 
-**For the project team.** We use the customer's pay-as-you-go OpenAI key with `gpt-4o`. Never
+**For the project team.** We use NTNU's LLM service with our NTNU key, and the customer's
+pay-as-you-go OpenAI key only for the OpenAI fallback, with `gpt-4o`. Never
 commit the key, paste it into a chat, issue or pull request, or write it into any file; once it is
 saved, delete the message you received it in. Ask the customer before using another model with it.
 If a key leaks, tell its owner at once so it can be revoked.
@@ -187,28 +198,27 @@ If a key leaks, tell its owner at once so it can be revoked.
 A vision model can also read the slides or the board. Each stable view of the recording becomes a
 board state: its text, its formulas as LaTeX, a short description and a confidence, linked to the
 questions asked while it was on screen. It needs the `llm` extra and a model that takes images.
-By default it is Qwen3.8-27B on NTNU's LLM service (`https://llm.hpc.ntnu.no/v1`), with a key of
-its own in `QUESTXTRACT_VISION_API_KEY`, kept the same way as `OPENAI_API_KEY` (environment or
-`.env`, never `questxtract.toml`). The service needs the NTNU network or VPN, and NTNU asks that
-heavy use wait until after 18:00 or the weekend. The LLM detector keeps its own endpoint and key,
-so the two can run together. Switch vision on for one run with `--vision`:
+By default it is the same model as the LLM detector, DeepSeek-V4.1-Flash on NTNU's LLM service,
+with the same key (`QUESTXTRACT_NTNU_API_KEY`, set up as above) and its thinking off: with it on,
+DeepSeek reads a frame far slower for nearly the same reading. Switch vision on for
+one run with `--vision`:
 
 ```bash
-questxtract process lecture.mp4 --vision        # Qwen on NTNU, key from QUESTXTRACT_VISION_API_KEY
+questxtract process lecture.mp4 --vision        # DeepSeek on NTNU
 questxtract process lecture.mp4 --vision --llm-url http://localhost:11434/v1 \
-    --vision-model qwen3-vl:2b-instruct         # a local model in Ollama, for vision and the judge
+    --vision-model qwen3-vl:2b-instruct --llm-reasoning server   # a local model in Ollama
 ```
 
 or for every run in `questxtract.toml` (`--no-vision` turns it off again for one run):
 
 ```toml
 vision_enabled = true
-vision_model = "Qwen/Qwen3.8-27B-FP8"          # the default, on NTNU's LLM service
-# vision_base_url = "http://localhost:8000/v1" # vision elsewhere; the judge stays on base_url
+vision_model = "deepseek-ai/DeepSeek-V4.1-Flash-1017"   # the default, on NTNU's LLM service
+# vision_base_url = "http://localhost:8000/v1"         # vision elsewhere; the judge stays on base_url
 ```
 
-Without `vision_base_url`, vision goes where `base_url` (`--llm-url`) points when that is set,
-with the judge's key, and to NTNU's service otherwise.
+Without `vision_base_url`, vision goes where `base_url` (`--llm-url`) points, NTNU's service by
+default, with that endpoint's key.
 
 `--vision-reader ocr` (or `vision_reader = "ocr"`) reads the keyframes with GLM-OCR instead,
 through the same endpoint: faster and lighter, with the text and formulas but no description.
@@ -228,6 +238,7 @@ vision_reader = "ocr"
 vision_base_url = "http://localhost:11434/v1"
 vision_ocr_model = "glm-ocr:q8_0"
 vision_model = "qwen3-vl:2b-instruct"   # finds the board; leave it out to read the full frame
+vision_reasoning_effort = ""            # send no reasoning setting to the local models
 ```
 
 A server that does not return token probabilities still works; its readings get confidence 0.5,
@@ -246,9 +257,9 @@ count the whole lecture. How it works:
 
 ### Everything in one run
 
-Reading the board, the LLM detector and the quiz run together in one command. Vision goes to
-NTNU's service with `QUESTXTRACT_VISION_API_KEY`, the judge and the quiz to OpenAI with
-`OPENAI_API_KEY`, and every key is checked before anything slow starts:
+Reading the board, the LLM detector and the quiz run together in one command, all on
+DeepSeek at NTNU's service with `QUESTXTRACT_NTNU_API_KEY`; the key is checked before anything
+slow starts:
 
 ```bash
 questxtract process lecture.mp4 --vision --detector llm --quiz

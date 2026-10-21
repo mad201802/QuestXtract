@@ -38,11 +38,11 @@ class Stalled(ConnectionError):
 
 
 def route(config: Config, *, vision: bool = False) -> tuple[str | None, str | None]:
-    """Return the endpoint and key a request goes to: the judge's, or vision's own.
+    """Return the endpoint and key a request goes to: the judge's, or vision's.
 
-    The judge (and anything else) uses ``base_url`` and ``OPENAI_API_KEY``; vision uses
-    :attr:`Config.vision_url` and :attr:`Config.vision_api_key`. ``None`` as the endpoint is
-    OpenAI.
+    The judge and the quiz use ``base_url``; vision uses :attr:`Config.vision_url`, which
+    follows ``base_url`` unless ``vision_base_url`` is set. The key goes with the endpoint
+    (:func:`config.endpoint_key`). ``None`` as the endpoint is OpenAI.
     """
     if vision:
         return config.vision_url, config.vision_api_key

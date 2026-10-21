@@ -22,7 +22,7 @@ from jsonschema import Draft202012Validator
 
 from questxtract import Transcript, asr, cli, endpoint
 from questxtract.cli import main
-from questxtract.config import Config
+from questxtract.config import DEEPSEEK, NTNU_LLM_URL, Config
 from questxtract.export import SCHEMA_PATH
 from questxtract.pipeline import STAGES
 from questxtract.quiz_schema import QUIZ_SCHEMA_PATH, read_quiz
@@ -326,8 +326,26 @@ def test_vision_without_a_key_or_url_fails_before_transcription(
     assert main(["process", str(video)]) == 1
 
     err = capsys.readouterr().err
-    assert "QUESTXTRACT_VISION_API_KEY" in err and "vision_base_url" in err and fake_asr == []
-    assert "OPENAI_API_KEY" not in err  # vision does not need the judge's key
+    assert "QUESTXTRACT_NTNU_API_KEY" in err and "--llm-url" in err and fake_asr == []
+
+
+def test_only_the_openai_key_with_the_default_endpoint_fails_before_transcription(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#173 AC4: the defaults go to NTNU; an OpenAI key alone gets one line saying both ways."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    video = make_mp4(tmp_path / "lecture.mp4")
+
+    assert main(["process", str(video), "--detector", "llm"]) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("error: ") and err.count("\n") == 1 and fake_asr == []
+    assert "QUESTXTRACT_NTNU_API_KEY" in err and "--llm-url https://api.openai.com/v1" in err
+    assert "sk-openai" not in err
 
 
 def test_vision_on_an_mp3_needs_neither_the_extra_nor_a_key(
@@ -384,11 +402,10 @@ def test_detector_llm_error_does_not_reveal_api_key(
 ):
     monkeypatch.chdir(tmp_path)
     secret = "sk-fake-cli-error-secret"
-    if key_source == "environment":
-        monkeypatch.setenv("OPENAI_API_KEY", secret)
+    if key_source == "environment":  # the default endpoint's key (#173)
+        monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", secret)
     else:
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        (tmp_path / ".env").write_text(f"OPENAI_API_KEY={secret}\n", encoding="utf-8")
+        (tmp_path / ".env").write_text(f"QUESTXTRACT_NTNU_API_KEY={secret}\n", encoding="utf-8")
     fake_llm(openai.OpenAIError(f"Invalid API key: {secret}"))
     source = _transcript_file(tmp_path)
     assert main(["process", str(source), "--detector", "llm"]) == 1
@@ -420,26 +437,26 @@ def test_detector_llm_endpoint_failure_is_one_error_line(
 def test_llm_reasoning_reaches_the_request_and_allows_a_longer_wait(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A thinking model takes minutes per request: any level but none raises the deadline."""
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    """A thinking model takes minutes per request: low, medium and high raise the deadline."""
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")
     source = str(_transcript_file(tmp_path))
 
     def config(*flags: str) -> Config:
         args = cli.build_parser().parse_args(["process", source, "--detector", "llm", *flags])
         return cli._with_llm(cli._config(args))
 
-    assert config().judge_reasoning_effort == ""  # gpt-4o takes no setting (#164)
+    assert config().reasoning_effort == "none"  # DeepSeek thinks unless told none (#173)
     assert config().timeout_seconds == Config().timeout_seconds == 120
     assert config("--llm-reasoning", "none").timeout_seconds == 120
     thinking = config("--llm-reasoning", "low")
-    assert thinking.judge_reasoning_effort == "low"
+    assert thinking.reasoning_effort == "low"
     with pytest.raises(SystemExit):  # a typo fails at once, not at the provider after ASR
         config("--llm-reasoning", "hgih")
     assert thinking.timeout_seconds == 600
-    # gpt-4o rejects any reasoning_effort; "" sends none (tests/test_llm.py). Only a level
+    # gpt-4o rejects any reasoning_effort; "" sends none (tests/test_endpoint.py). Only a level
     # asked for gets the long timeout, so a stalled request is noticed after 2 minutes.
     server = config("--llm-reasoning", "server")
-    assert server.judge_reasoning_effort == ""
+    assert server.reasoning_effort == ""
     assert server.timeout_seconds == 120
 
 
@@ -461,7 +478,7 @@ def test_llm_reasoning_reaches_the_request_and_allows_a_longer_wait(
             "http://file/v1",
             "http://flag/v1",
         ),
-        ("judge_reasoning_effort", '"low"', "--llm-reasoning", "server", "low", ""),
+        ("reasoning_effort", '"low"', "--llm-reasoning", "server", "low", ""),
         ("from_scratch", "false", "--from-scratch", None, False, True),
     ],
 )
@@ -497,7 +514,7 @@ def test_all_three_commands_accept_an_explicit_config_path(tmp_path, monkeypatch
         ("min_confidence = 1.5", "between 0 and 1"),
         ("min_confidence = nan", "between 0 and 1"),
         ('detector = "typo"', "detector must be rules or llm"),
-        ('judge_reasoning_effort = "typo"', "judge_reasoning_effort must be"),
+        ('judge_reasoning_effort = "typo"', "reasoning_effort must be"),
         ('api_key = "sk-do-not-echo"', "OPENAI_API_KEY"),
         ("model_size = @", "invalid TOML at line 1"),
     ],
@@ -589,10 +606,9 @@ def test_dotenv_key_reaches_client_but_not_output_or_cache(
     from questxtract import endpoint
 
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    if environment_key is not None:
-        monkeypatch.setenv("OPENAI_API_KEY", environment_key)
-    Path(".env").write_text('OPENAI_API_KEY="sk-dotenv"', encoding="utf-8")
+    if environment_key is not None:  # the default endpoint's key (#173)
+        monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", environment_key)
+    Path(".env").write_text('QUESTXTRACT_NTNU_API_KEY="sk-dotenv"', encoding="utf-8")
     source = _transcript_file(tmp_path)
     (sentence,) = split_sentences(Transcript.from_file(source))
     real_client = endpoint.client
@@ -673,7 +689,7 @@ def test_vision_flag_without_a_key_or_url_fails_before_transcription(
     assert main(["process", str(video), "--vision"]) == 1
 
     err = capsys.readouterr().err
-    assert err.startswith("error: ") and "QUESTXTRACT_VISION_API_KEY" in err and "--llm-url" in err
+    assert err.startswith("error: ") and "QUESTXTRACT_NTNU_API_KEY" in err and "--llm-url" in err
     assert err.count("\n") == 1 and fake_asr == [] and "[1/" not in err
 
 
@@ -699,18 +715,18 @@ def test_vision_reads_the_board_with_the_model_given(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "ntnu-test")
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")
     client = fake_llm(_BOARD)
     video = make_mp4(tmp_path / "lecture.mp4", video=True)
 
-    assert main(["process", str(video), "--vision", "--vision-model", "qwen3.8-27b"]) == 0
+    assert main(["process", str(video), "--vision", "--vision-model", "Qwen/Qwen3.8-27B"]) == 0
 
     assert "Reading the board" in capsys.readouterr().err
     data = json.loads((tmp_path / "lecture.questions.json").read_text(encoding="utf-8"))
     assert [v["text"] for v in data["visuals"]] == ["Stable sort"]
     assert data["questions"] and all(q["visual_ids"] for q in data["questions"])
-    assert data["config"]["vision_model"] == "qwen3.8-27b"
-    assert {request["model"] for request in client.requests} == {"qwen3.8-27b"}
+    assert data["config"]["vision_model"] == "Qwen/Qwen3.8-27B"
+    assert {request["model"] for request in client.requests} == {"Qwen/Qwen3.8-27B"}
 
 
 def test_no_vision_turns_off_vision_from_the_settings_file(
@@ -784,6 +800,7 @@ _VISION_SETTINGS_FILE_ONLY = {
     "vision_change_hold",
     "vision_base_url",  # an endpoint is set once per machine; --llm-url still moves vision too
     "vision_ocr_model",  # one OCR model is measured; --vision-reader picks the reader
+    "vision_reasoning_effort",  # only for a vision model apart from the judge; --llm-reasoning
 }
 
 
@@ -991,9 +1008,10 @@ class _Models:
 
     def __init__(self) -> None:
         self.requests: list[tuple[bool, dict[str, Any]]] = []
+        self.routes: set[tuple[str | None, str | None]] = set()
 
     def client(self, config: Config, *, vision: bool = False) -> Any:
-        del config
+        self.routes.add(endpoint.route(config, vision=vision))
         models = self
 
         class _Completions:
@@ -1051,8 +1069,7 @@ def test_one_run_reads_the_board_finds_the_questions_and_writes_the_quiz(
             return _LECTURE
 
     monkeypatch.setitem(asr._REGISTRY, "faster_whisper", _Backend)
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "ntnu-test")
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")  # only NTNU's key (#173)
     models = _Models()
     monkeypatch.setattr(endpoint, "client", models.client)
     video = _slide_lecture(tmp_path / "lecture.mp4")
@@ -1086,9 +1103,12 @@ def test_one_run_reads_the_board_finds_the_questions_and_writes_the_quiz(
         content = request["messages"][1]["content"]
         assert "text: Stable sort" in content and r"latex: O(n \log n)" in content
         assert ">> " in content
-    # Vision went to its own endpoint; the judge and the quiz to the judge's.
+    # Vision asked as vision, the judge and the quiz as the judge (#160) ...
     assert models.names(vision=True) == ["layout", "board", "board", "board"]
     assert models.names(vision=False) == ["judgements", "quiz_item", "quiz_item"]
+    # ... and by default all of it went to DeepSeek on NTNU's service, thinking off (#173 AC1).
+    assert models.routes == {(NTNU_LLM_URL, "ntnu-test")}
+    assert {(r["model"], r["reasoning_effort"]) for _, r in models.requests} == {(DEEPSEEK, "none")}
     assert "2 quiz items" in capsys.readouterr().err
 
 
@@ -1145,3 +1165,70 @@ def test_qti_without_the_flag_still_writes_qti_3_0(
     with zipfile.ZipFile(tmp_path / "default.zip") as package:
         metadata = json.loads(package.read("metadata/questxtract.json"))
     assert metadata["format"] == "questxtract-qti-3.0"
+@pytest.mark.parametrize(
+    ("flags", "model_flag"),
+    [
+        (["--detector", "llm", "--llm-model", "gpt-4o"], "--llm-model"),
+        (["--vision"], "--vision-model"),
+    ],
+)
+def test_an_openai_model_on_ntnus_service_fails_before_transcription(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    flags: list[str],
+    model_flag: str,
+) -> None:
+    """#173 review: an OpenAI model name from an older setup is refused before anything slow,
+    and the hint names the flag that sets the model."""
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")
+    if "--vision" in flags:
+        Path("questxtract.toml").write_text('vision_model = "gpt-4o"\n', encoding="utf-8")
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+
+    assert main(["process", str(video), *flags]) == 1
+
+    err = capsys.readouterr().err
+    assert "gpt-4o is not a model on NTNU's LLM service" in err and fake_asr == []
+    assert f"--llm-url https://api.openai.com/v1 {model_flag} gpt-4o" in err
+
+
+def test_deepseek_on_openai_fails_before_transcription(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#173 review: following the judge's OpenAI hint with --vision leaves vision_model on
+    DeepSeek, which OpenAI does not have; that is refused before anything slow too."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+    openai = ["--llm-url", "https://api.openai.com/v1", "--llm-model", "gpt-4o"]
+
+    assert main(["process", str(video), "--detector", "llm", "--vision", *openai]) == 1
+
+    err = capsys.readouterr().err
+    assert f"{DEEPSEEK} is not an OpenAI model; pass --vision-model" in err and fake_asr == []
+
+
+def test_with_vision_base_url_the_vision_hints_name_it(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """#173 review: --llm-url cannot move vision off its own vision_base_url."""
+    Path("questxtract.toml").write_text(
+        'base_url = "http://localhost:11434/v1"\nvision_base_url = "https://llm.hpc.ntnu.no/v1"\n',
+        encoding="utf-8",
+    )
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+
+    assert main(["process", str(video), "--vision"]) == 1
+
+    err = capsys.readouterr().err
+    assert "QUESTXTRACT_NTNU_API_KEY" in err and "--llm-url" not in err
+    assert 'set vision_base_url = "https://api.openai.com/v1" in questxtract.toml' in err
