@@ -20,6 +20,7 @@ def _isolated_from_the_developer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     """
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("QUESTXTRACT_VISION_API_KEY", raising=False)
+    monkeypatch.delenv("QUESTXTRACT_NTNU_API_KEY", raising=False)
     monkeypatch.chdir(tmp_path)
 
 

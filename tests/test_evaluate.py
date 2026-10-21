@@ -401,7 +401,7 @@ def test_cli_eval_score_vision_needs_a_model_to_ask(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert main(["eval", "--score-vision", str(tmp_path)]) == 1
-    assert "eval --score-vision reads the board through NTNU" in capsys.readouterr().err
+    assert "eval --score-vision goes to NTNU's LLM service" in capsys.readouterr().err
 
 
 def test_eval_keeps_vision_enabled_from_the_settings_file(tmp_path: Path) -> None:

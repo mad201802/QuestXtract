@@ -181,7 +181,7 @@ def test_the_hint_names_the_default_the_form_starts_from():
     assert state.hint(_option("threshold")) == "0.4"
     assert state.hint(_option("from_scratch")) == "off"
     assert state.hint(_option("output")) == "next to the input"
-    assert state.hint(_option("llm_reasoning")) == "unset"
+    assert state.hint(_option("llm_reasoning")) == "none"
 
 
 def test_every_output_has_a_label_and_a_command():

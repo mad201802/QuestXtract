@@ -89,11 +89,22 @@ def test_the_config_block_names_the_detector_and_nothing_that_did_not_run(finish
     config = result_to_dict(finished)["config"]
     assert config["detector"] == "rules"
     assert config["judge_prompt_version"] is None and config["judge_reasoning_effort"] is None
+    assert config["vision_reasoning_effort"] is None
+
+
+def test_the_config_block_names_visions_reasoning_without_the_judge(finished):
+    """#173 review: vision's requests carry a reasoning setting of their own."""
+    config = finished.config.replace(vision_enabled=True, vision_reasoning_effort="low")
+    exported = result_to_dict(dataclasses.replace(finished, config=config))["config"]
+    assert (exported["judge_reasoning_effort"], exported["vision_reasoning_effort"]) == (
+        None,
+        "low",
+    )
 
 
 @pytest.mark.parametrize(("effort", "expected"), [("low", "low"), ("", "")])
 def test_the_config_block_names_the_llm_prompt_and_reasoning(finished, effort, expected):
-    config = finished.config.replace(detector="llm", judge_reasoning_effort=effort)
+    config = finished.config.replace(detector="llm", reasoning_effort=effort)
     exported = result_to_dict(dataclasses.replace(finished, config=config))["config"]
     assert exported["detector"] == "llm"
     assert exported["judge_prompt_version"] == JUDGE_PROMPT_VERSION
@@ -199,7 +210,7 @@ def test_every_export_shape_matches_the_published_schema(finished, validator):
     validator.validate(result_to_dict(finished))
     finished.pairs = ()
     validator.validate(result_to_dict(finished))
-    judged = finished.config.replace(detector="llm", judge_reasoning_effort="")
+    judged = finished.config.replace(detector="llm", reasoning_effort="")
     validator.validate(result_to_dict(dataclasses.replace(finished, config=judged)))
 
 
@@ -401,7 +412,7 @@ def test_cli_roundtrip(tmp_path):
     out = tmp_path / "q.json"
     assert main(["process", str(_transcript_file(tmp_path)), "-o", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
-    assert data["schema_version"] == "2.3"
+    assert data["schema_version"] == "2.4"
     # An aux head without a '?' scores 0.4, under the 0.45 detection gate, so it is never a
     # candidate (architecture.md 7.3).
     assert [q["text"] for q in data["questions"]] == ["What is a stable sort?"]

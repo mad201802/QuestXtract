@@ -11,7 +11,7 @@ from jsonschema import Draft202012Validator
 
 from questxtract import endpoint
 from questxtract.cli import main
-from questxtract.config import Config
+from questxtract.config import DEEPSEEK, Config
 from questxtract.models import Sentence, Transcript
 from questxtract.quiz import QUIZ_PROMPT_VERSION, build_quiz, quiz_to_json
 from questxtract.quiz_schema import QUIZ_SCHEMA_PATH, read_quiz, validate_quiz
@@ -86,7 +86,7 @@ def _assert_valid(quiz: dict[str, Any], questions: dict[str, Any]) -> None:
 
 @pytest.fixture
 def key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")  # the default endpoint's key
 
 
 @pytest.fixture
@@ -135,7 +135,7 @@ def test_lenient_quiz_has_one_item_per_question_that_is_quiz_material(
     }
     assert quiz["generation"] == {
         "method": "llm",
-        "model": "gpt-4o",
+        "model": DEEPSEEK,
         "prompt_version": QUIZ_PROMPT_VERSION,
     }
     assert data["questions"][0]["id"] in result.skipped and result.failed == ()
@@ -329,7 +329,7 @@ def test_quiz_without_a_key_or_url_fails_before_any_request(
 
     assert main(["quiz", str(questions_file)]) == 1
 
-    assert "OPENAI_API_KEY" in capsys.readouterr().err and client.requests == []
+    assert "QUESTXTRACT_NTNU_API_KEY" in capsys.readouterr().err and client.requests == []
 
 
 def test_process_with_quiz_writes_both_files(
@@ -703,16 +703,16 @@ def test_a_bad_quiz_setting_does_not_stop_a_run_without_the_quiz(
     assert "quiz_options" in capsys.readouterr().err
 
 
-def test_by_default_the_quiz_asks_gpt_4o_with_no_reasoning_setting(
+def test_by_default_the_quiz_asks_deepseek_with_its_thinking_off(
     questions_file: Path, fake_llm: Callable[..., Any], key: None
 ) -> None:
-    """#164 AC2: gpt-4o takes no reasoning_effort, so the default sends none."""
+    """#173 AC1: DeepSeek on NTNU thinks unless told "none"."""
     client = fake_llm(_answer())
 
     assert main(["quiz", str(questions_file)]) == 0
 
     assert client.requests
-    assert all(r["model"] == "gpt-4o" and "reasoning_effort" not in r for r in client.requests)
+    assert all(r["model"] == DEEPSEEK and r["reasoning_effort"] == "none" for r in client.requests)
 
 
 def test_a_reasoning_level_still_reaches_the_quiz_model(

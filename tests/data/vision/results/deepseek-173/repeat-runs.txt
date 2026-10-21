@@ -1,0 +1,369 @@
+===== run 1: vision, 30 keyframes (start 12:21:46)
+vision model deepseek-ai/DeepSeek-V4.1-Flash-1017 (prompt v0)
+lecture type   frames failed    CER  blank  formulas  found  recall
+slides              6      0   0.08      -        26     26    1.00
+blackboard          9      0   0.39    1/1        23     14    0.61
+whiteboard          6      0   0.20      -        10     10    1.00
+handwriting         9      0   0.18      -        18     15    0.83
+TOTAL              30      0   0.22    1/1        77     65    0.84
+
+per frame, worst text first (a blank board: read as blank or not):
+       1.00    1/2  blackboard  mit_6_042j_2010_l1_02061.0.png
+             missed: \forall n \in \mathbb{Z}, n \ge 2 \Rightarrow n^2 \ge 4
+       0.80    5/6  blackboard  mit_18_100b_l1_01507.0.png
+             missed: \mathbb{Z} = \{0, \pm 1, \pm 2, \pm 3, \dots\}
+       0.64    1/5  blackboard  mit_6_042j_2010_l1_01001.0.png
+             missed: a = 95{,}800
+             missed: b = 217{,}519
+             missed: c = 414{,}560
+             missed: d = 422{,}481
+       0.54    1/1  whiteboard  uw_machine_intelligence_l13_03811.0.png
+       0.47    1/2  handwriting ttk4225_2026_09_14_01265.0.png
+             missed: t \ge 0
+       0.46    0/0  handwriting ttk4225_2026_09_14_01731.0.png
+       0.40    2/3  blackboard  mit_18_100b_l1_02898.0.png
+             missed: 0 + X = X
+       0.33    3/3  handwriting math231_2020_r2_00410.0.png
+       0.24    2/2  whiteboard  uw_machine_intelligence_l13_03420.0.png
+       0.20    7/7  whiteboard  uw_machine_intelligence_l13_02881.0.png
+       0.17    7/7  slides      mit_18_404j_l1_01365.0.png
+       0.14    4/4  handwriting math231_2020_r2_00306.0.png
+       0.12    0/1  blackboard  mit_6_042j_2010_l1_01812.0.png
+             missed: p \Rightarrow q
+       0.10    0/0  whiteboard  uw_machine_intelligence_l13_01366.0.png
+       0.08    3/3  slides      mit_18_404j_l1_02009.0.png
+       0.08    2/2  slides      mit_18_404j_l1_01009.0.png
+       0.07    1/1  handwriting math231_2020_r2_00180.0.png
+       0.07    1/2  blackboard  mit_18_100b_l1_03415.0.png
+             missed: x < y \Rightarrow x + z < y + z
+       0.06    0/0  whiteboard  uw_machine_intelligence_l13_00571.0.png
+       0.06    2/4  handwriting ttk4225_2026_09_14_00423.0.png
+             missed: t^{\alpha}
+             missed: \frac{1}{t^{1.1}}
+       0.06    0/0  whiteboard  uw_machine_intelligence_l13_04659.0.png
+       0.06    6/6  slides      mit_18_404j_l1_01785.0.png
+       0.05    8/8  slides      mit_18_404j_l1_03284.0.png
+       0.04    0/0  slides      mit_18_404j_l1_00264.0.png
+       0.04    2/2  blackboard  mit_6_042j_2010_l1_01470.0.png
+       0.02    0/0  handwriting math231_2020_r2_00018.0.png
+       0.02    2/2  handwriting ttk4225_2026_09_14_00758.0.png
+       0.01    2/2  blackboard  mit_18_100b_l1_00746.0.png
+       0.00    2/2  handwriting ttk4225_2026_09_14_00257.0.png
+      blank    0/0  blackboard  mit_18_100b_l1_00072.0.png
+===== finished 12:22:26
+===== run 1: judge, 3 lectures (start 12:22:26)
+detector llm deepseek-ai/DeepSeek-V4.1-Flash-1017 (prompt v5), threshold 0.40
+recording              content   tp   fp   fn  recall   prec     f1  ?-rate
+mit_18_100b_l1              28   24    2    4    0.86   0.92   0.89    1.00
+ttk4225_2026_09_14          41   41    9    0    1.00   0.82   0.90    1.00
+ttk4225_2026_09_15          60   59   12    1    0.98   0.83   0.90    0.98
+TOTAL                      129  124   23    5    0.96   0.84   0.90    0.99
+
+false positives by label kind: rhetorical 18, check_in 5
+
+sweep:
+  0.00  recall 0.96  precision 0.84  f1 0.90
+  0.05  recall 0.96  precision 0.84  f1 0.90
+  0.10  recall 0.96  precision 0.84  f1 0.90
+  0.15  recall 0.96  precision 0.84  f1 0.90
+  0.20  recall 0.96  precision 0.84  f1 0.90
+  0.25  recall 0.96  precision 0.84  f1 0.90
+  0.30  recall 0.96  precision 0.84  f1 0.90
+  0.35  recall 0.96  precision 0.84  f1 0.90
+  0.40  recall 0.96  precision 0.84  f1 0.90
+  0.45  recall 0.96  precision 0.84  f1 0.90
+  0.50  recall 0.96  precision 0.84  f1 0.90
+  0.55  recall 0.96  precision 0.84  f1 0.90
+  0.60  recall 0.96  precision 0.84  f1 0.90
+  0.65  recall 0.96  precision 0.84  f1 0.90
+  0.70  recall 0.96  precision 0.85  f1 0.90
+  0.75  recall 0.91  precision 0.85  f1 0.88
+  0.80  recall 0.90  precision 0.86  f1 0.88
+  0.85  recall 0.88  precision 0.89  f1 0.88
+  0.90  recall 0.81  precision 0.90  f1 0.85
+  0.95  recall 0.35  precision 0.96  f1 0.51
+  1.00  recall 0.01  precision 1.00  f1 0.01
+
+mit_18_100b_l1: missed content questions
+     468.6  But now the question is then, how do we make this into survival?
+     533.1  But how do we make this into a rigorous proof?
+     538.5  So how do we make this into a proof?
+     543.9  So how do we make this intuition into a proof?
+mit_18_100b_l1: false positives
+    1098.9  rhetorical 0.80  Or are they integers?
+    2935.5  rhetorical 0.90  What is an example of a field?
+
+ttk4225_2026_09_14: missed content questions
+ttk4225_2026_09_14: false positives
+     267.3  check_in   0.70  The answer here, what would you answer, people?
+     602.8  check_in   0.80  Is it that there's no linearity?
+     605.4  check_in   0.75  So if it is autonomous, we cannot do it?
+     649.2  rhetorical 0.65  How does the definition work?
+     773.5  check_in   0.90  People, what would you say?
+     837.1  rhetorical 0.85  Doesn't it go like this?
+     860.8  check_in   0.70  Do you see the part?
+    1412.3  rhetorical 0.95  Didn't we say that this area goes to infinity if I go to infinity?
+    1422.6  rhetorical 0.90  What does it mean?
+
+ttk4225_2026_09_15: missed content questions
+     336.6  Can this one be...
+ttk4225_2026_09_15: false positives
+      41.6  rhetorical 0.90  What do we mean?
+     241.7  rhetorical 0.80  Let's take an input that is a complex exponential, okay?
+     819.1  rhetorical 0.90  What am I doing by defining s*(t) = s1(t) + i s2(t)?
+     917.5  rhetorical 0.95  What am I drawing here?
+     969.2  rhetorical 0.90  Isn't this real part, imaginary part, time?
+    1034.1  rhetorical 0.90  How do I visualize it?
+    1123.2  rhetorical 0.90  What am I doing?
+    1286.2  rhetorical 0.90  Why is it important?
+    1506.0  rhetorical 0.90  What does it mean?
+    1635.8  rhetorical 0.80  Isn't it a cosine?
+    2375.5  rhetorical 0.85  Is the amplitude of the output the same as the input?
+    2524.1  rhetorical 0.80  How to compute it later on?
+
+skipped (no transcript): tests/data/_example.labels.jsonl
+===== finished 12:23:55
+===== run 2: vision, 30 keyframes (start 12:23:55)
+vision model deepseek-ai/DeepSeek-V4.1-Flash-1017 (prompt v0)
+lecture type   frames failed    CER  blank  formulas  found  recall
+slides              6      0   0.10      -        26     26    1.00
+blackboard          9      0   0.38    1/1        23     18    0.78
+whiteboard          6      0   0.25      -        10     10    1.00
+handwriting         9      0   0.24      -        18     13    0.72
+TOTAL              30      0   0.25    1/1        77     67    0.87
+
+per frame, worst text first (a blank board: read as blank or not):
+       1.00    0/1  blackboard  mit_6_042j_2010_l1_01812.0.png
+             missed: p \Rightarrow q
+       0.71    0/0  handwriting ttk4225_2026_09_14_01731.0.png
+       0.65    1/2  blackboard  mit_6_042j_2010_l1_02061.0.png
+             missed: n = -3
+       0.63    1/1  whiteboard  uw_machine_intelligence_l13_03811.0.png
+       0.52    5/6  blackboard  mit_18_100b_l1_01507.0.png
+             missed: \mathbb{Z} = \{0, \pm 1, \pm 2, \pm 3, \dots\}
+       0.48    3/3  handwriting math231_2020_r2_00410.0.png
+       0.40    5/5  blackboard  mit_6_042j_2010_l1_01001.0.png
+       0.40    2/2  handwriting ttk4225_2026_09_14_00758.0.png
+       0.36    2/3  blackboard  mit_18_100b_l1_02898.0.png
+             missed: 0 + X = X
+       0.27    7/7  slides      mit_18_404j_l1_01365.0.png
+       0.25    0/0  whiteboard  uw_machine_intelligence_l13_04659.0.png
+       0.24    7/7  whiteboard  uw_machine_intelligence_l13_02881.0.png
+       0.22    2/2  whiteboard  uw_machine_intelligence_l13_03420.0.png
+       0.17    4/4  handwriting math231_2020_r2_00306.0.png
+       0.16    1/2  handwriting ttk4225_2026_09_14_01265.0.png
+             missed: t \ge 0
+       0.12    3/3  slides      mit_18_404j_l1_02009.0.png
+       0.11    1/1  handwriting math231_2020_r2_00180.0.png
+       0.10    0/0  whiteboard  uw_machine_intelligence_l13_01366.0.png
+       0.09    2/2  slides      mit_18_404j_l1_01009.0.png
+       0.07    8/8  slides      mit_18_404j_l1_03284.0.png
+       0.06    0/0  whiteboard  uw_machine_intelligence_l13_00571.0.png
+       0.05    0/4  handwriting ttk4225_2026_09_14_00423.0.png
+             missed: x(t) = \frac{1}{1+t^2}
+             missed: \int_{-\infty}^{\infty} \left|\frac{1}{1+t^2}\right| dt = \pi
+             missed: t^{\alpha}
+             missed: \frac{1}{t^{1.1}}
+       0.04    2/2  blackboard  mit_6_042j_2010_l1_01470.0.png
+       0.04    1/2  blackboard  mit_18_100b_l1_03415.0.png
+             missed: x < y \Rightarrow x + z < y + z
+       0.04    0/0  slides      mit_18_404j_l1_00264.0.png
+       0.03    6/6  slides      mit_18_404j_l1_01785.0.png
+       0.03    2/2  handwriting ttk4225_2026_09_14_00257.0.png
+       0.02    0/0  handwriting math231_2020_r2_00018.0.png
+       0.01    2/2  blackboard  mit_18_100b_l1_00746.0.png
+      blank    0/0  blackboard  mit_18_100b_l1_00072.0.png
+===== finished 12:24:49
+===== run 2: judge, 3 lectures (start 12:24:49)
+detector llm deepseek-ai/DeepSeek-V4.1-Flash-1017 (prompt v5), threshold 0.40
+recording              content   tp   fp   fn  recall   prec     f1  ?-rate
+mit_18_100b_l1              28   28    2    0    1.00   0.93   0.97    1.00
+ttk4225_2026_09_14          41   40    9    1    0.98   0.82   0.89    1.00
+ttk4225_2026_09_15          60   59   10    1    0.98   0.85   0.92    0.98
+TOTAL                      129  127   21    2    0.98   0.86   0.92    0.99
+
+false positives by label kind: rhetorical 17, check_in 4
+
+sweep:
+  0.00  recall 0.98  precision 0.86  f1 0.92
+  0.05  recall 0.98  precision 0.86  f1 0.92
+  0.10  recall 0.98  precision 0.86  f1 0.92
+  0.15  recall 0.98  precision 0.86  f1 0.92
+  0.20  recall 0.98  precision 0.86  f1 0.92
+  0.25  recall 0.98  precision 0.86  f1 0.92
+  0.30  recall 0.98  precision 0.86  f1 0.92
+  0.35  recall 0.98  precision 0.86  f1 0.92
+  0.40  recall 0.98  precision 0.86  f1 0.92
+  0.45  recall 0.98  precision 0.86  f1 0.92
+  0.50  recall 0.98  precision 0.86  f1 0.92
+  0.55  recall 0.98  precision 0.86  f1 0.92
+  0.60  recall 0.98  precision 0.86  f1 0.92
+  0.65  recall 0.98  precision 0.86  f1 0.92
+  0.70  recall 0.98  precision 0.86  f1 0.92
+  0.75  recall 0.95  precision 0.91  f1 0.93
+  0.80  recall 0.95  precision 0.91  f1 0.93
+  0.85  recall 0.85  precision 0.92  f1 0.88
+  0.90  recall 0.76  precision 0.94  f1 0.84
+  0.95  recall 0.37  precision 0.98  f1 0.54
+  1.00  recall 0.01  precision 1.00  f1 0.01
+
+mit_18_100b_l1: missed content questions
+mit_18_100b_l1: false positives
+    1098.9  rhetorical 0.70  Are those two numbers integers?
+    2935.5  rhetorical 0.90  Are the rational numbers a field?
+
+ttk4225_2026_09_14: missed content questions
+    1305.0  Unbounded, bounded, unbounded, bounded, or you do not know?
+ttk4225_2026_09_14: false positives
+       0.9  rhetorical 0.90  Does H convolved with U give the fourth response?
+      12.7  rhetorical 0.90  Is bounded input bounded output stability an important property?
+     400.9  check_in   0.70  Do we remember that the integral of 1/t gives the logarithm of t?
+     602.8  check_in   0.85  Is it that there's no linearity?
+     605.4  check_in   0.85  If it is autonomous, we cannot do what?
+     649.2  rhetorical 0.85  How does the definition of convolution work?
+     773.5  check_in   0.80  Is h of t absolutely integrable?
+     837.1  rhetorical 0.70  Doesn't the convolution of h with itself diverge like this?
+    1412.3  rhetorical 0.90  Didn't we say that this area goes to infinity if I go to infinity?
+
+ttk4225_2026_09_15: missed content questions
+     336.6  Can this one be...
+ttk4225_2026_09_15: false positives
+      41.6  rhetorical 0.70  What do we mean by that?
+     467.7  rhetorical 0.85  What is happening?
+     969.2  rhetorical 0.70  Are the axes real part, imaginary part, and time?
+    1034.1  rhetorical 0.70  How do I visualize the impulse response?
+    1123.2  rhetorical 0.70  What am I doing to u?
+    1286.2  rhetorical 0.90  Why is it important?
+    1506.0  rhetorical 0.80  What does it mean?
+    1635.8  rhetorical 0.70  Isn't it a cosine?
+    2375.5  rhetorical 0.95  Is the amplitude the same?
+    2524.1  rhetorical 0.70  How do we compute the frequency response later on?
+
+skipped (no transcript): tests/data/_example.labels.jsonl
+===== finished 12:26:38
+===== run 3: vision, 30 keyframes (start 12:26:38)
+vision model deepseek-ai/DeepSeek-V4.1-Flash-1017 (prompt v0)
+lecture type   frames failed    CER  blank  formulas  found  recall
+slides              6      0   0.08      -        26     24    0.92
+blackboard          9      0   0.47    1/1        23     11    0.48
+whiteboard          6      0   0.25      -        10      8    0.80
+handwriting         9      0   0.12      -        18     15    0.83
+TOTAL              30      0   0.23    1/1        77     58    0.75
+
+per frame, worst text first (a blank board: read as blank or not):
+       1.00    2/2  blackboard  mit_6_042j_2010_l1_02061.0.png
+       0.89    3/6  blackboard  mit_18_100b_l1_01507.0.png
+             missed: \mathbb{N} = \{1, 2, 3, 4, 5, \dots\}
+             missed: \mathbb{Z} = \{0, \pm 1, \pm 2, \pm 3, \dots\}
+             missed: \frac{m}{n}, \quad m \in \mathbb{Z}, \ n \in \mathbb{N}
+       0.78    0/1  blackboard  mit_6_042j_2010_l1_01812.0.png
+             missed: p \Rightarrow q
+       0.64    0/5  blackboard  mit_6_042j_2010_l1_01001.0.png
+             missed: a^4 + b^4 + c^4 = d^4
+             missed: a = 95{,}800
+             missed: b = 217{,}519
+             missed: c = 414{,}560
+             missed: d = 422{,}481
+       0.53    1/1  whiteboard  uw_machine_intelligence_l13_03811.0.png
+       0.43    0/0  handwriting ttk4225_2026_09_14_01731.0.png
+       0.39    0/0  whiteboard  uw_machine_intelligence_l13_00571.0.png
+       0.29    2/3  blackboard  mit_18_100b_l1_02898.0.png
+             missed: 0 + X = X
+       0.21    7/7  slides      mit_18_404j_l1_01365.0.png
+       0.21    5/7  whiteboard  uw_machine_intelligence_l13_02881.0.png
+             missed: -30 + 0 + 300 = 270
+             missed: -160 + 0 + 160 = 0
+       0.20    2/2  whiteboard  uw_machine_intelligence_l13_03420.0.png
+       0.18    3/3  handwriting math231_2020_r2_00410.0.png
+       0.16    4/4  handwriting math231_2020_r2_00306.0.png
+       0.11    1/1  handwriting math231_2020_r2_00180.0.png
+       0.10    1/2  blackboard  mit_18_100b_l1_03415.0.png
+             missed: x < y \Rightarrow x + z < y + z
+       0.10    0/0  whiteboard  uw_machine_intelligence_l13_01366.0.png
+       0.09    1/2  handwriting ttk4225_2026_09_14_01265.0.png
+             missed: t \ge 0
+       0.08    3/3  slides      mit_18_404j_l1_02009.0.png
+       0.08    0/0  whiteboard  uw_machine_intelligence_l13_04659.0.png
+       0.06    8/8  slides      mit_18_404j_l1_03284.0.png
+       0.06    0/2  slides      mit_18_404j_l1_01009.0.png
+             missed: A = \{w \mid w \text{ contains substring } 11\}
+             missed: A = L(M_1)
+       0.04    2/4  handwriting ttk4225_2026_09_14_00423.0.png
+             missed: t^{\alpha}
+             missed: \frac{1}{t^{1.1}}
+       0.04    2/2  blackboard  mit_6_042j_2010_l1_01470.0.png
+       0.04    2/2  handwriting ttk4225_2026_09_14_00758.0.png
+       0.04    0/0  slides      mit_18_404j_l1_00264.0.png
+       0.03    6/6  slides      mit_18_404j_l1_01785.0.png
+       0.03    1/2  blackboard  mit_18_100b_l1_00746.0.png
+             missed: a < c < b
+       0.02    0/0  handwriting math231_2020_r2_00018.0.png
+       0.01    2/2  handwriting ttk4225_2026_09_14_00257.0.png
+      blank    0/0  blackboard  mit_18_100b_l1_00072.0.png
+===== finished 12:27:23
+===== run 3: judge, 3 lectures (start 12:27:23)
+detector llm deepseek-ai/DeepSeek-V4.1-Flash-1017 (prompt v5), threshold 0.40
+recording              content   tp   fp   fn  recall   prec     f1  ?-rate
+mit_18_100b_l1              28   23    1    5    0.82   0.96   0.89    1.00
+ttk4225_2026_09_14          41   40    5    1    0.98   0.89   0.93    1.00
+ttk4225_2026_09_15          60   59    9    1    0.98   0.87   0.92    0.98
+TOTAL                      129  122   15    7    0.95   0.89   0.92    0.99
+
+false positives by label kind: rhetorical 12, check_in 3
+
+sweep:
+  0.00  recall 0.95  precision 0.89  f1 0.92
+  0.05  recall 0.95  precision 0.89  f1 0.92
+  0.10  recall 0.95  precision 0.89  f1 0.92
+  0.15  recall 0.95  precision 0.89  f1 0.92
+  0.20  recall 0.95  precision 0.89  f1 0.92
+  0.25  recall 0.95  precision 0.89  f1 0.92
+  0.30  recall 0.95  precision 0.89  f1 0.92
+  0.35  recall 0.95  precision 0.89  f1 0.92
+  0.40  recall 0.95  precision 0.89  f1 0.92
+  0.45  recall 0.95  precision 0.89  f1 0.92
+  0.50  recall 0.95  precision 0.89  f1 0.92
+  0.55  recall 0.95  precision 0.89  f1 0.92
+  0.60  recall 0.95  precision 0.89  f1 0.92
+  0.65  recall 0.95  precision 0.89  f1 0.92
+  0.70  recall 0.94  precision 0.89  f1 0.91
+  0.75  recall 0.92  precision 0.90  f1 0.91
+  0.80  recall 0.92  precision 0.90  f1 0.91
+  0.85  recall 0.88  precision 0.92  f1 0.90
+  0.90  recall 0.83  precision 0.94  f1 0.88
+  0.95  recall 0.41  precision 0.95  f1 0.57
+  1.00  recall 0.05  precision 1.00  f1 0.09
+
+mit_18_100b_l1: missed content questions
+     468.6  But now the question is then, how do we make this into survival?
+     533.1  But how do we make this into a rigorous proof?
+     536.6  And what is the property?
+     538.5  So how do we make this into a proof?
+     543.9  So how do we make this intuition into a proof?
+mit_18_100b_l1: false positives
+    2935.5  rhetorical 0.95  Are the rational numbers a field?
+
+ttk4225_2026_09_14: missed content questions
+    1305.0  Unbounded, bounded, unbounded, bounded, or you do not know?
+ttk4225_2026_09_14: false positives
+     602.8  check_in   0.85  Is it that there's no linearity?
+     605.4  check_in   0.85  Is it that if it is autonomous, we cannot do it?
+     649.2  rhetorical 0.90  What is the definition of convolution?
+     860.8  check_in   0.70  You see the part?
+    1412.3  rhetorical 0.90  This area, didn't we say that it goes to infinity if I go to infinity?
+
+ttk4225_2026_09_15: missed content questions
+     336.6  Can this one be...
+ttk4225_2026_09_15: false positives
+      41.6  rhetorical 0.90  What do we mean?
+     467.7  rhetorical 0.80  What is happening?
+     969.2  rhetorical 0.80  Is this real part, imaginary part, time?
+    1034.1  rhetorical 0.90  How do I visualize it?
+    1123.2  rhetorical 0.85  What am I doing?
+    1286.2  rhetorical 0.95  Why is it important?
+    1506.0  rhetorical 0.80  What does it mean?
+    2375.5  rhetorical 0.95  Is the amplitude the same?
+    2524.1  rhetorical 0.80  How do we compute the frequency response?
+
+skipped (no transcript): tests/data/_example.labels.jsonl
+===== finished 12:28:41
