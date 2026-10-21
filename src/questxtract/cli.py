@@ -18,6 +18,7 @@ from .config import NTNU_LLM_URL, VISION_KEY_ENV, Config, load_config
 from .evaluate import evaluate, evaluate_vision, format_report, format_vision_report
 from .export import read_questions, result_to_json, write_questions
 from .filtering import filter_document
+from .gui.options import FLAG_FIELDS
 from .models import Context, Sentence, Stage, Transcript
 from .pipeline import STAGES, cached_transcript, run
 from .qti import QtiExportError
@@ -208,21 +209,7 @@ def _config(args: argparse.Namespace) -> Config:
     config = load_config(args.config)
     changes = {
         field: value
-        for flag, field in (
-            ("model", "model_size"),
-            ("from_scratch", "from_scratch"),
-            ("threshold", "min_confidence"),
-            ("detector", "detector"),
-            ("llm_model", "judge_model"),
-            ("llm_url", "base_url"),
-            ("llm_reasoning", "judge_reasoning_effort"),
-            ("vision", "vision_enabled"),
-            ("vision_model", "vision_model"),
-            ("vision_reader", "vision_reader"),
-            ("quiz_model", "quiz_model"),
-            ("strictness", "quiz_strictness"),
-            ("options", "quiz_options"),
-        )
+        for flag, field in FLAG_FIELDS
         if (value := getattr(args, flag, None)) is not None
     }
     if changes.get("judge_reasoning_effort") == "server":
