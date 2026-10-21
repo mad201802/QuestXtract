@@ -317,7 +317,7 @@ def test_a_keyframe_read_once_is_not_sent_again(fake_llm, tmp_path):
 
 
 def test_without_the_llm_extra_the_install_hint_is_raised(monkeypatch, tmp_path):
-    def missing(config):
+    def missing(config, **_):
         raise RuntimeError("the LLM layer needs `pip install questxtract[llm]`")
 
     monkeypatch.setattr(endpoint, "client", missing)
@@ -329,7 +329,7 @@ def test_a_setting_that_cannot_be_used_is_raised_not_dropped(monkeypatch, tmp_pa
     """An unreadable .env is a user error that would drop every keyframe the same way, so it
     is not turned into a warning per keyframe; only what the endpoint or model did is."""
 
-    def unusable(config):
+    def unusable(config, **_):
         raise ValueError(".env: line 1: expansion is not supported")
 
     monkeypatch.setattr(endpoint, "client", unusable)
@@ -740,7 +740,7 @@ def test_a_recording_that_cannot_be_decoded_falls_back(context, fake_llm, tmp_pa
 def test_a_setting_that_cannot_be_used_stops_the_probe(context, monkeypatch, tmp_path):
     """As for captioning: an unreadable .env is a user error, raised, not a fallback."""
 
-    def unusable(config):
+    def unusable(config, **_):
         raise ValueError(".env: line 1: expansion is not supported")
 
     monkeypatch.setattr(endpoint, "client", unusable)

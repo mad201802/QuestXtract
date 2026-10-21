@@ -110,6 +110,15 @@
 
 ### Changed (breaking)
 
+- Vision reads the board with Qwen3.8-27B on NTNU's LLM service by default
+  (`vision_model = "Qwen/Qwen3.8-27B-FP8"`), with an endpoint and a key of its own:
+  `vision_base_url` in `questxtract.toml` and `QUESTXTRACT_VISION_API_KEY` in the environment or
+  `.env`. The LLM detector stays on `base_url` (OpenAI by default) with `OPENAI_API_KEY`, so the two
+  run together and neither key reaches the other service. A setup that sets only `base_url` (or
+  `--llm-url`) still sends vision there with the same key. To keep reading the board on OpenAI,
+  set `vision_model = "gpt-5.6-luna"` and `vision_base_url = "https://api.openai.com/v1"`, and put
+  the OpenAI key in `QUESTXTRACT_VISION_API_KEY`. The NTNU service needs the NTNU network or VPN.
+  (#162)
 - `Config.judge_enabled` and `Config.judge_max_candidates` are gone. `Config(detector="llm")`
   turns the LLM on; `judge_window`, `judge_batch_size`, `judge_parallel` and
   `judge_reasoning_effort` tune it. The `judge` stage runs before `score`, so the threshold

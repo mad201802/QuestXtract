@@ -42,10 +42,10 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--from-scratch` | nothing | off | Ignores cached results and recomputes everything, transcription included. |
 | `--detector` | `rules` or `llm` | `rules` | How questions are found: fast offline rules, or a language model that reads the transcript. See [Finding questions with an LLM](#finding-questions-with-an-llm). |
 | `--llm-model` | a model name | `gpt-5.6-terra` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
-| `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint for `--detector llm` and `--vision`, e.g. `http://localhost:11434/v1` for Ollama. Without it, OpenAI is used with the key from `OPENAI_API_KEY`. |
+| `--llm-url` | a URL | OpenAI | An OpenAI-compatible endpoint for `--detector llm`, e.g. `http://localhost:11434/v1` for Ollama. Without it, OpenAI is used with the key from `OPENAI_API_KEY`. Vision goes there too, with the same key, unless `vision_base_url` is set in `questxtract.toml`. |
 | `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | How long a thinking model may think before it judges. Slower, and what small models such as `qwen3.5:9b` need to judge well. `server` sends no setting and leaves it to the server, for a model without one such as `gpt-4o-mini`. Any level but `none` allows each request 10 minutes instead of 2. |
-| `--vision`, `--no-vision` | nothing | off | Also reads the slides or the board with a vision model, through `--llm-url` or OpenAI. Needs the `questxtract[llm]` extra. `--no-vision` turns off `vision_enabled` from the settings file for one run. A recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript has no board, so the board is not read (a note says so). See [Reading the board](../README.md#reading-the-board). |
-| `--vision-model` | a model name | `gpt-5.6-luna` | The model that reads the board, as the endpoint names it. It must take images. |
+| `--vision`, `--no-vision` | nothing | off | Also reads the slides or the board with a vision model: by default on NTNU's LLM service with the key from `QUESTXTRACT_VISION_API_KEY` (NTNU network or VPN), or at `vision_base_url`, or at `--llm-url` when only that is set. Needs the `questxtract[llm]` extra. `--no-vision` turns off `vision_enabled` from the settings file for one run. A recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript has no board, so the board is not read (a note says so). See [Reading the board](../README.md#reading-the-board). |
+| `--vision-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The model that reads the board, as the endpoint names it. It must take images. |
 | `--quiz` | nothing | off | Also writes a multiple-choice quiz next to the questions file (`lecture.quiz.json`), as [`questxtract quiz`](#questxtract-quiz-questionsjson) does. Needs a file output, so not `-o -`. If the quiz fails, the questions file is kept and the exit code is 1. |
 | `--quiz-model` | a model name | `gpt-5.6-terra` | The model that writes the quiz. Only with `--quiz`. |
 | `--strictness`, `--options` | | | As for `questxtract quiz`. Only with `--quiz`. |
@@ -146,7 +146,7 @@ beside each transcript (`<name>.visual.json`), as if `--vision` had read them, a
 recordings that had them on the report's first line. It takes `--detector`, `--llm-model` and
 `--llm-url` too, so the rules and a model can be compared on the same recordings; the report's
 first line names the detector, the model and the prompt version. With `--score-vision`, it
-scores the vision model instead (`--vision-model`, at `--llm-url` if given) on the labelled
+scores the vision model instead (`--vision-model`, at vision's endpoint, as for `--vision`) on the labelled
 keyframes in `tests/data/vision/`: character error rate, blank boards read as blank and formula
 recall per lecture type, then every frame, worst first ([tests/data/vision/README.md](../tests/data/vision/README.md)). It calls
 the model once per frame and caches the answers.
@@ -418,12 +418,12 @@ is not the cache, so it works on a first run too ([architecture.md 6.5](architec
 | `<file>: invalid TOML at line N` | Correct the TOML syntax at the reported line. |
 | `<file>: <key>: expected float, got string` | Use the expected type; numbers must not be quoted. |
 | `<file>: unknown config field(s): ...` | Correct the name to match a field in `config.py`. |
-| `<file>: <key>: secrets belong in OPENAI_API_KEY, not TOML` | Remove the secret from TOML and use the environment or `.env`. |
+| `<file>: <key>: secrets belong in OPENAI_API_KEY or QUESTXTRACT_VISION_API_KEY, not TOML` | Remove the secret from TOML and use the environment or `.env`. |
 | `min_confidence / --threshold must be between 0 and 1` | Correct the effective threshold in the file or command. |
 | `detector must be rules or llm` | Correct the detector name. |
 | `.env: line N: expansion is not supported; ...` | Load the key into the environment using your shell or password store before running the command. |
 | `--detector llm needs the LLM extra: ...` | Install `questxtract[llm]`. |
-| `--vision / vision_enabled needs OPENAI_API_KEY in the environment or .env, or --llm-url (base_url) for a local server` | Make the key available, pass `--llm-url` for a local server, or turn vision off with `--no-vision`. |
+| `--vision / vision_enabled reads the board through NTNU's LLM service (...), so it needs QUESTXTRACT_VISION_API_KEY ...` | Make the vision key available in the environment or local `.env`, set `vision_base_url` or pass `--llm-url` for another endpoint, or turn vision off with `--no-vision`. |
 | `--vision / vision_enabled needs the LLM extra: ...` | Install `questxtract[llm]`, or turn vision off with `--no-vision`. |
 | `note: <file> has no video, so the board is not read` | Not an error: a recording without video, or a transcript, has no board to read. The questions are written as usual. |
 | `judge: <endpoint>: ...` | The model endpoint failed: it is not running, the key is wrong, or the model name is unknown to it. The message after the endpoint says which. |

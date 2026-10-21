@@ -322,7 +322,8 @@ def test_vision_without_a_key_or_url_fails_before_transcription(
     assert main(["process", str(video)]) == 1
 
     err = capsys.readouterr().err
-    assert "OPENAI_API_KEY" in err and "base_url" in err and fake_asr == []
+    assert "QUESTXTRACT_VISION_API_KEY" in err and "vision_base_url" in err and fake_asr == []
+    assert "OPENAI_API_KEY" not in err  # vision does not need the judge's key
 
 
 def test_vision_on_an_mp3_needs_neither_the_extra_nor_a_key(
@@ -666,7 +667,7 @@ def test_vision_flag_without_a_key_or_url_fails_before_transcription(
     assert main(["process", str(video), "--vision"]) == 1
 
     err = capsys.readouterr().err
-    assert err.startswith("error: ") and "OPENAI_API_KEY" in err and "--llm-url" in err
+    assert err.startswith("error: ") and "QUESTXTRACT_VISION_API_KEY" in err and "--llm-url" in err
     assert err.count("\n") == 1 and fake_asr == [] and "[1/" not in err
 
 
@@ -692,7 +693,7 @@ def test_vision_reads_the_board_with_the_model_given(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "ntnu-test")
     client = fake_llm(_BOARD)
     video = make_mp4(tmp_path / "lecture.mp4", video=True)
 
@@ -773,6 +774,7 @@ _VISION_SETTINGS_FILE_ONLY = {
     "vision_max_states",
     "vision_change_fraction",
     "vision_change_hold",
+    "vision_base_url",  # an endpoint is set once per machine; --llm-url still moves vision too
 }
 
 

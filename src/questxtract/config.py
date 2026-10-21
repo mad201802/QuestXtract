@@ -25,6 +25,9 @@ _PUNCTUATION_PROMPT = (
     "including question marks on every question asked."
 )
 
+NTNU_LLM_URL = "https://llm.hpc.ntnu.no/v1"  # NTNU's LLM service: the default for vision
+VISION_KEY_ENV = "QUESTXTRACT_VISION_API_KEY"  # the key for vision's own endpoint
+
 
 @dataclass(frozen=True, kw_only=True)
 class Config:
@@ -55,7 +58,8 @@ class Config:
     # --- 6 vision ---
     vision_enabled: bool = False  # unless an endpoint is configured
     vision_fps: float = 1.0
-    vision_model: str = "gpt-5.6-luna"
+    vision_model: str = "Qwen/Qwen3.8-27B-FP8"
+    vision_base_url: str | None = None  # None: base_url when set, else NTNU_LLM_URL
     vision_max_states: int = 80
     vision_change_fraction: float = 0.02  # share of pixels that must change
     vision_change_hold: int = 3  # samples (at vision_fps) a new view must hold
@@ -96,6 +100,37 @@ class Config:
         if "OPENAI_API_KEY" in os.environ:
             return os.environ["OPENAI_API_KEY"]
         return _dotenv_api_key()
+
+    @property
+    def vision_own_endpoint(self) -> bool:
+        """Whether vision has an endpoint of its own, apart from the judge's ``base_url``.
+
+        True when ``vision_base_url`` is set, or when ``base_url`` is not (vision then goes to
+        NTNU's LLM service while the judge stays on OpenAI). False when only ``base_url`` is set:
+        vision follows it with the judge's key, as before vision had its own endpoint.
+        """
+        return self.vision_base_url is not None or self.base_url is None
+
+    @property
+    def vision_url(self) -> str | None:
+        """The endpoint vision reads the board through (architecture.md 10.1)."""
+        if not self.vision_own_endpoint:
+            return self.base_url
+        return self.vision_base_url or NTNU_LLM_URL
+
+    @property
+    def vision_api_key(self) -> str | None:
+        """The key for :attr:`vision_url`, never stored in Config.
+
+        ``QUESTXTRACT_VISION_API_KEY`` from the environment or cwd's ``.env`` for vision's own
+        endpoint, so the OpenAI key never goes to another service; the judge's key when vision
+        follows ``base_url``.
+        """
+        if not self.vision_own_endpoint:
+            return self.api_key
+        if VISION_KEY_ENV in os.environ:
+            return os.environ[VISION_KEY_ENV]
+        return _dotenv_api_key(VISION_KEY_ENV)
 
     def replace(self, **changes: Any) -> Config:
         """Return a copy with ``changes`` applied.
@@ -150,7 +185,9 @@ def load_config(path: Path | None = None) -> Config:
 
     for key in values:
         if any(part in key.casefold() for part in ("key", "token", "secret", "password")):
-            raise ValueError(f"{source}: {key}: secrets belong in OPENAI_API_KEY, not TOML")
+            raise ValueError(
+                f"{source}: {key}: secrets belong in OPENAI_API_KEY or {VISION_KEY_ENV}, not TOML"
+            )
 
     defaults = Config()
     try:
@@ -174,8 +211,8 @@ def load_config(path: Path | None = None) -> Config:
     return defaults.replace(**values)
 
 
-def _dotenv_api_key() -> str | None:
-    """Read only OPENAI_API_KEY; never execute or expand .env contents."""
+def _dotenv_api_key(name: str = "OPENAI_API_KEY") -> str | None:
+    """Read only the key ``name``; never execute or expand .env contents."""
     path = Path(".env")
     try:
         text = path.read_text(encoding="utf-8").removeprefix("\ufeff")
@@ -185,19 +222,19 @@ def _dotenv_api_key() -> str | None:
         raise ValueError(f"{path}: expected UTF-8 text") from None
     key_value = None
     for number, line in enumerate(text.splitlines(), 1):
-        name, separator, value = line.strip().removeprefix("export ").partition("=")
-        if not separator or name.strip() != "OPENAI_API_KEY":
+        variable, separator, value = line.strip().removeprefix("export ").partition("=")
+        if not separator or variable.strip() != name:
             continue
         try:
             parts = shlex.split(value, comments=True, posix=True)
         except ValueError:
-            raise ValueError(f"{path}: line {number}: invalid OPENAI_API_KEY quoting") from None
+            raise ValueError(f"{path}: line {number}: invalid {name} quoting") from None
         if len(parts) > 1:
-            raise ValueError(f"{path}: line {number}: quote OPENAI_API_KEY values with spaces")
+            raise ValueError(f"{path}: line {number}: quote {name} values with spaces")
         key_value = parts[0] if parts else ""
         if any(marker in key_value for marker in ("$", "`")):
             raise ValueError(
                 f"{path}: line {number}: expansion is not supported; "
-                "set OPENAI_API_KEY in the environment instead"
+                f"set {name} in the environment instead"
             )
     return key_value
