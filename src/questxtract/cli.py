@@ -22,6 +22,7 @@ from .models import Context, Sentence, Stage, Transcript
 from .pipeline import STAGES, cached_transcript, run
 from .qti import QtiExportError
 from .qti_package import QTI_VERSIONS, export_qti
+from .quiz import MAX_OPTIONS, MIN_OPTIONS, STRICTNESS, build_quiz, file_hash, quiz_to_json
 from .vision import has_video
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
