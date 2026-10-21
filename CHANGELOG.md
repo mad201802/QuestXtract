@@ -11,10 +11,11 @@
   starts as pending review. The model sees the question, the lecture's answer, what was said
   around it (from `--transcript` or the cached transcript) and, with vision, the board text and
   LaTeX. Questions the lecture did not answer are used too, with an answer the model writes;
-  `--strictness strict` uses only the
-  answered ones. Rejected questions, check-ins and questions the model
-  judges not to be quiz material are left out, a question the model fails on is skipped with a
-  warning, and answers are cached. Settings: `quiz_model`, `quiz_strictness`, `quiz_options`. (#79)
+  `--strictness strict` uses only the answered ones. Rejected questions, check-ins and questions
+  the model judges not to be quiz material are left out, a question the model fails on is skipped
+  with a warning, and answers are cached. The run ends with the quiz's model requests, tokens and
+  time. `--quiz-model` picks the model for one run. Settings: `quiz_model`, `quiz_strictness`,
+  `quiz_options`. (#79)
 - `eval --score-vision`: scores `vision_model` (or `--vision-model`) on 30 labelled keyframes in
   `tests/data/vision/`, from six lectures over four lecture types (slides, blackboard,
   whiteboard, handwriting), each recording one whose licence or lecturer allows sharing. It

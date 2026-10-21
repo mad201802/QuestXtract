@@ -639,3 +639,65 @@ def test_a_written_quiz_exports_to_qti(
     with zipfile.ZipFile(package) as zipped:
         items = [n for n in zipped.namelist() if n.startswith("items/")]
     assert len(items) == len(quiz["questions"]) > 0
+
+
+def test_a_transcript_of_another_recording_gives_a_note_and_no_context(
+    questions_file: Path,
+    fake_llm: Callable[..., Any],
+    key: None,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = fake_llm(_answer())
+    other = DATA / "ttk4225_2026_09_15.transcript.json"
+
+    assert main(["quiz", str(questions_file), "--transcript", str(other)]) == 0
+
+    assert "does not contain the sentences" in capsys.readouterr().err
+    assert "no transcript was given" in client.requests[0]["messages"][1]["content"]
+
+
+def test_the_quiz_counts_and_prints_its_model_usage(
+    questions_file: Path,
+    fake_llm: Callable[..., Any],
+    key: None,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = fake_llm(_answer())
+    data = json.loads(questions_file.read_text(encoding="utf-8"))
+
+    result = _build(data)
+    capsys.readouterr()
+    assert main(["quiz", str(questions_file)]) == 0  # every answer is cached by now
+
+    assert result.usage["quiz_requests"] == len(client.requests) > 0
+    err = capsys.readouterr().err
+    assert "left out" in err and "model requests" not in err  # cached answers cost nothing
+
+
+def test_the_quiz_run_prints_its_model_requests(
+    questions_file: Path,
+    fake_llm: Callable[..., Any],
+    key: None,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    client = fake_llm(_answer())
+
+    assert main(["quiz", str(questions_file)]) == 0
+
+    assert f"quiz: {len(client.requests)} model requests" in capsys.readouterr().err
+
+
+def test_a_bad_quiz_setting_does_not_stop_a_run_without_the_quiz(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    key: None,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / "questxtract.toml").write_text("quiz_options = 6\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    transcript = _copy(DATA / "ttk4225_2026_09_14.transcript.json", tmp_path)
+
+    assert main(["process", str(transcript)]) == 0
+    capsys.readouterr()
+    assert main(["process", str(transcript), "--quiz"]) == 1
+    assert "quiz_options" in capsys.readouterr().err

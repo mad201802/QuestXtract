@@ -75,7 +75,9 @@ and so is a question the model judges not to be quiz material: addressed to the 
 rhetorical, or too vague to answer on its own.
 A question the model fails on is left out with a `warning:` line, and the rest are written; an
 unreachable endpoint or a bad key ends the run. Answers are cached, so a re-run sends nothing,
-and the same input gives the same file.
+and the same input gives the same file. The last line gives the model requests, tokens and time
+the quiz cost; a transcript that does not contain the questions' sentences gets a `note:` and is
+not used.
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|

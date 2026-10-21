@@ -232,13 +232,27 @@ def _config(args: argparse.Namespace) -> Config:
         raise ValueError("detector must be rules or llm")
     if config.judge_reasoning_effort not in ("", "none", "low", "medium", "high"):
         raise ValueError("judge_reasoning_effort must be empty, none, low, medium or high")
+    return config
+
+
+def _with_quiz(config: Config, what: str) -> None:
+    """Check the quiz settings and its endpoint before anything slow runs.
+
+    Only for a run that writes a quiz, so a bad quiz setting in the settings file does not stop
+    ``transcribe``, ``eval`` or ``process`` without ``--quiz``.
+
+    Raises:
+        ValueError: If ``quiz_strictness`` or ``quiz_options`` is out of range, or the endpoint
+            cannot be asked (see :func:`_check_endpoint`).
+
+    """
     if config.quiz_strictness not in STRICTNESS:
         raise ValueError("quiz_strictness / --strictness must be strict or lenient")
     if not MIN_OPTIONS <= config.quiz_options <= MAX_OPTIONS:
         raise ValueError(
             f"quiz_options / --options must be between {MIN_OPTIONS} and {MAX_OPTIONS}"
         )
-    return config
+    _check_endpoint(config, what)
 
 
 def _with_llm(config: Config) -> Config:
@@ -292,8 +306,17 @@ def _write_quiz(
     for question_id, reason in result.failed:
         print(f"warning: quiz: {question_id} left out: {reason}", file=sys.stderr)
     items = len(result.quiz["questions"])
-    left_out = f" ({len(result.skipped)} not quiz material, {len(result.failed)} failed)"
+    left_out = f" ({len(result.skipped)} left out, {len(result.failed)} failed)"
     _write(quiz_to_json(result.quiz).rstrip("\n"), output, f"{items} quiz items{left_out}")
+    usage = result.usage
+    if usage.get("quiz_requests"):
+        print(
+            f"quiz: {usage['quiz_requests']} model requests, "
+            f"{usage.get('quiz_input_tokens', 0)} input and "
+            f"{usage.get('quiz_output_tokens', 0)} output tokens, "
+            f"{usage.get('quiz_ms', 0) / 1000:.1f} s",
+            file=sys.stderr,
+        )
 
 
 def _quiz_sentences(
@@ -318,7 +341,26 @@ def _quiz_sentences(
         )
         return ()
     ctx = Context(source=Path(""), config=config, transcript=found)
-    return run(ctx, STAGES[_AFTER_TRANSCRIBE : _AFTER_TRANSCRIBE + 1]).sentences
+    sentences = run(ctx, STAGES[_AFTER_TRANSCRIBE : _AFTER_TRANSCRIBE + 1]).sentences
+    # Sentence ids hash each sentence's start and text, so a transcript of another run or
+    # recording finds none of the questions: say so instead of sending no context silently.
+    ids = {s.id for s in sentences}
+    asked = [q.get("sentence_id") for q in _questions(document)]
+    if asked and not any(sentence_id in ids for sentence_id in asked):
+        print(
+            "note: the transcript does not contain the sentences of these questions (another "
+            "recording, or transcribed with other settings), so the quiz sees only the question, "
+            "the answer and the board",
+            file=sys.stderr,
+        )
+        return ()
+    return sentences
+
+
+def _questions(document: dict[str, object]) -> list[dict[str, object]]:
+    """Return the question objects of a ``questions.json`` document."""
+    questions = document.get("questions")
+    return [q for q in questions if isinstance(q, dict)] if isinstance(questions, list) else []
 
 
 # Vision flags (#61). The vision design is still moving in M3 (ink curve #133). When vision
@@ -373,7 +415,7 @@ def _process(args: argparse.Namespace) -> int:
     if args.quiz:
         if args.output == "-":
             raise ValueError("--quiz writes a file next to questions.json, so drop -o -")
-        _check_endpoint(config, "--quiz")
+        _with_quiz(config, "--quiz")
     output = _output_path(args.output, source, "questions")
     config = _with_vision(config, source)
 
@@ -488,7 +530,7 @@ def _quiz(args: argparse.Namespace) -> int:
         raise FileNotFoundError(f"{questions}: no such file")
     if questions.suffix.lower() != ".json":
         raise ValueError(f"{questions}: expected a questions.json written by `process`")
-    _check_endpoint(config, "quiz")
+    _with_quiz(config, "quiz")
     if args.transcript is not None and not Path(args.transcript).is_file():
         raise FileNotFoundError(f"{args.transcript}: no such file")
     document = read_questions(questions)

@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -80,12 +81,16 @@ class QuizResult:
             rhetorical, or too vague to answer on their own).
         failed: ``(question id, reason)`` for each question the model could not turn into a
             usable item; the rest of the quiz is unaffected.
+        usage: What the model calls cost, as :func:`endpoint.ask` counts it: ``quiz_requests``,
+            ``quiz_input_tokens``, ``quiz_output_tokens`` and ``quiz_ms``. Cached answers add
+            nothing.
 
     """
 
     quiz: dict[str, Any]
     skipped: tuple[str, ...] = ()
     failed: tuple[tuple[str, str], ...] = field(default=())
+    usage: dict[str, int] = field(default_factory=dict)
 
 
 def build_quiz(
@@ -119,6 +124,7 @@ def build_quiz(
     selected, skipped = _select(document.get("questions", []), config.quiz_strictness)
     items: list[dict[str, Any]] = []
     failed: list[tuple[str, str]] = []
+    usage: Counter[str] = Counter()
     for index, question in enumerate(selected):
         if progress:
             progress("quiz", index / len(selected))
@@ -128,6 +134,7 @@ def build_quiz(
                 _request(config, question, boards, spoken),
                 name="quiz",
                 valid=_usable(config.quiz_options - 1),
+                usage=usage,
             )
         except (endpoint.Stalled, endpoint.InvalidAnswer) as exc:
             failed.append((question["id"], str(exc)))
@@ -139,7 +146,7 @@ def build_quiz(
     if progress:
         progress("quiz", 1.0)
     quiz = _quiz_dict(document, config, items, questions_name, questions_hash)
-    return QuizResult(quiz=quiz, skipped=tuple(skipped), failed=tuple(failed))
+    return QuizResult(quiz=quiz, skipped=tuple(skipped), failed=tuple(failed), usage=dict(usage))
 
 
 def quiz_to_json(quiz: Mapping[str, Any]) -> str:
