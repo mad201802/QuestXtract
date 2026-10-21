@@ -124,6 +124,16 @@
 
 ### Changed (breaking)
 
+- Vision, the LLM detector and the quiz run on one model by default:
+  `deepseek-ai/DeepSeek-V4.1-Flash-1017` on NTNU's LLM service (`base_url`), with its thinking
+  off. The key goes with the endpoint: `QUESTXTRACT_NTNU_API_KEY` for NTNU's service
+  (`QUESTXTRACT_VISION_API_KEY` is still read), `OPENAI_API_KEY` for any other. A setup that
+  only has `OPENAI_API_KEY` now stops before anything slow with one line naming both ways; for
+  OpenAI, pass `--llm-url https://api.openai.com/v1 --llm-model gpt-4o --llm-reasoning server`.
+  `judge_reasoning_effort` is now `reasoning_effort` (the old name still works in
+  `questxtract.toml`), default `none`, and is sent with every request, vision's included. A model
+  that rejects `none`, such as Qwen3.8-27B or gpt-4o, needs `--llm-reasoning server`. The
+  `questions.json` key `config.judge_reasoning_effort` is unchanged. (#173)
 - Vision reads the board with Qwen3.8-27B on NTNU's LLM service by default
   (`vision_model = "Qwen/Qwen3.8-27B-FP8"`), with an endpoint and a key of its own:
   `vision_base_url` in `questxtract.toml` and `QUESTXTRACT_VISION_API_KEY` in the environment or

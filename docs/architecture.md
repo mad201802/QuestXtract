@@ -483,11 +483,15 @@ reads handwriting, diagrams and slides and emits LaTeX in one call, through the 
 client as the LLM detector (section 10), so it adds no dependency. `vision` is one `STAGES` entry,
 so a local OCR pass or a stub that loads pre-captioned frames in tests replaces that one entry.
 
-**Model and prompt (spike #52, #153).** The default `vision_model` is Qwen3.8-27B
-(`Qwen/Qwen3.8-27B-FP8`) on NTNU's LLM service, chosen by the team with the customer on 19.10
-(#153): it reads the board about as well as the best paid model measured, `gpt-5.6-luna`, at no
-cost per lecture. The service needs the NTNU network or VPN; the customer may move hosting later,
-which is a `Config` change (10.1). Of the hosted OpenAI models, `gpt-5.6-luna` is the cheapest that
+**Model and prompt (spike #52, #153, #173).** The default `vision_model` is DeepSeek-V4.1-Flash
+(`deepseek-ai/DeepSeek-V4.1-Flash-1017`) on NTNU's LLM service, the same model and endpoint as
+the LLM detector (10.1), with its thinking off (`reasoning_effort = "none"`). On the labelled
+keyframes (`eval --score-vision`, 4.4) it reads the text about as well as Qwen3.8-27B and fills
+`latex` on more of the formulas, at no cost per lecture; with its thinking on it is far slower
+for nearly the same reading. Qwen3.8-27B on the same service reads the board well too and is
+one setting away (it rejects `reasoning_effort = "none"`, so it needs `--llm-reasoning server`).
+The service needs the NTNU network or VPN; the customer may move hosting later, which is a
+`Config` change (10.1). Of the hosted OpenAI models, `gpt-5.6-luna` is the cheapest that
 stays under the customer's cost per lecture, fills `latex` on every formula frame, and reads about
 as well as models that cost an order of magnitude more (`gpt-4o`, `gpt-4o-mini`).
 `detail: low` is not used: it garbles handwriting. The OCR baseline is GLM-OCR (0.9B, open weights,
@@ -891,42 +895,47 @@ The `openai` SDK with a configurable endpoint, which is what makes the offline s
 without a second code path:
 
 ```python
-OpenAI(api_key=os.environ["OPENAI_API_KEY"])  # hosted
+OpenAI(api_key=ntnu_key, base_url="https://llm.hpc.ntnu.no/v1")  # NTNU's LLM service, the default
+OpenAI(api_key=openai_key, base_url="https://api.openai.com/v1")  # OpenAI
 OpenAI(api_key="local", base_url="http://localhost:11434/v1")  # local device
 ```
 
-The judge and vision each have an endpoint and a key, so the judge can stay on OpenAI while
-vision reads the board on NTNU's LLM service (`endpoint.route`):
+By default the judge, the quiz and vision all go to NTNU's LLM service with one model. Vision
+follows `base_url` unless `vision_base_url` sends it elsewhere (`endpoint.route`). The key goes
+with the endpoint, not with the caller:
 
-| | Endpoint | Key |
-|---|---|---|
-| judge | `base_url` (`None` is OpenAI) | `OPENAI_API_KEY` |
-| vision, `vision_base_url` set | `vision_base_url` | `QUESTXTRACT_VISION_API_KEY` |
-| vision, only `base_url` set | `base_url` | `OPENAI_API_KEY` |
-| vision, neither set | NTNU's LLM service, `https://llm.hpc.ntnu.no/v1` | `QUESTXTRACT_VISION_API_KEY` |
+| Endpoint | Key |
+|---|---|
+| NTNU's LLM service, `https://llm.hpc.ntnu.no/v1` (the default `base_url`) | `QUESTXTRACT_NTNU_API_KEY`, or its old name `QUESTXTRACT_VISION_API_KEY` |
+| any other: OpenAI (`https://api.openai.com/v1`, or `base_url = None`), OpenRouter, a local server | `OPENAI_API_KEY` (a local server needs none) |
 
-The third row keeps a setup that points everything at one local server working. A key is never
-sent to the other service: each one is read from its own variable, in the environment or the
-working directory's `.env`, never from `questxtract.toml`, and hidden in error messages.
+So the OpenAI key is never sent to NTNU, and the NTNU key never leaves it. Each key is read from
+its variable, in the environment or the working directory's `.env`, never from
+`questxtract.toml`, and hidden in error messages. The CLI checks the key of every endpoint a run
+will use before anything slow starts.
 
 Any local OpenAI-compatible server (Ollama, llama.cpp's server, vLLM, LM Studio) plugs in with no
 new code. Offline results may be worse, but the path must be *available* on a local device.
 
 | Config key | Default | Role |
 |---|---|---|
-| `judge_model` | `gpt-4o` | the LLM detector, on OpenAI; one request per group of nearby candidates |
-| `vision_model` | `Qwen/Qwen3.8-27B-FP8` | on NTNU's LLM service; tens of board-state calls per lecture |
+| `judge_model` | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | the LLM detector; one request per group of nearby candidates |
+| `vision_model` | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | reads the board (6.5) and finds it (6.2); tens of board-state calls per lecture |
+| `quiz_model` | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | writes the quiz (12.3); one request per question |
 
 A local server takes its own model names (`qwen3.5:9b` in Ollama). Swapping a model or pointing at
 a local server is a `Config` change, no code. No abstraction library sits on top (litellm,
 pydantic-ai, instructor): `base_url` already reaches every server we target, and the output checks
 of 10.3 are ours to write either way ([design_decisions.md](design_decisions.md), D12).
 
-`judge_reasoning_effort` (`--llm-reasoning`) sets how long a thinking model may think first.
-The default, `""` (`--llm-reasoning server`), sends no setting and leaves the choice to the
-server, as gpt-4o, which has none, requires. Thinking costs minutes per request instead of
-seconds, and it is what lets a small model such as Qwen3.5 9B judge well, so the CLI raises the
-per-request deadline to 10 minutes when a level (`low`, `medium`, `high`) is asked for. Ollama's context length cannot be set per
+`reasoning_effort` (`--llm-reasoning`) sets how long a thinking model may think first, and
+`endpoint.ask` sends it with every request, vision's and the quiz's included. The default,
+`"none"`, switches DeepSeek's thinking off: it thinks unless told so, and on NTNU's service
+`"none"` is the only value that stops it (`"low"` still thinks). `""` (`--llm-reasoning server`)
+sends no setting, for a model that has none (gpt-4o) or rejects `"none"` (Qwen3.8-27B).
+Thinking costs minutes per request instead of seconds, and it is what lets a small model such as
+Qwen3.5 9B judge well, so the CLI raises the per-request deadline to 10 minutes when a level
+(`low`, `medium`, `high`) is asked for. Ollama's context length cannot be set per
 request and is 4k tokens below 24 GB of VRAM, cutting a longer prompt silently; a request (10.4)
 stays within 8k, and [cli.md](cli.md) starts Ollama with `OLLAMA_CONTEXT_LENGTH=8192`.
 
@@ -1034,9 +1043,9 @@ reports none) and `_ms`. A run served from the cache shows 0 for all four, which
 it made no calls. Prices are not applied: they depend on the provider and the date.
 
 > **Decision.** `questxtract/llm.py` (the judge), `questxtract/endpoint.py` (client and requests,
-> shared with vision). Config: `detector` (`rules`), `base_url`, `api_key` (from
-> `OPENAI_API_KEY`), `judge_model`, `judge_window` (10), `judge_batch_size` (8),
-> `judge_parallel` (1), `judge_reasoning_effort` (`""`), `timeout_seconds` (120). Prompt and
+> shared with vision). Config: `detector` (`rules`), `base_url` (NTNU's LLM service), `api_key`
+> (the key for `base_url`, 10.1), `judge_model`, `judge_window` (10), `judge_batch_size` (8),
+> `judge_parallel` (1), `reasoning_effort` (`"none"`), `timeout_seconds` (120). Prompt and
 > schema are module-level, so a prompt change is a reviewable diff. Dependency: `openai`, in the
 > optional extra `questxtract[llm]`, imported inside the functions.
 
@@ -1170,8 +1179,9 @@ empty, `verdict` is `unjudged` and the judge and vision settings are `null`:
   "schema_version": "2.3",
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
   "config": {"model_size": "turbo", "language": "en", "min_confidence": 0.4,
-             "detector": "llm", "judge_model": "gpt-4o", "judge_prompt_version": "v5",
-             "judge_reasoning_effort": "", "vision_model": "Qwen/Qwen3.8-27B-FP8",
+             "detector": "llm", "judge_model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+             "judge_prompt_version": "v5", "judge_reasoning_effort": "none",
+             "vision_model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
              "vision_ocr_model": null},
   "stats": {"sentences": 1840, "sentences_unpunctuated": 12, "segments": 96,
             "segments_closed_gap": 92, "segments_closed_duration": 1, "segments_closed_chars": 3,
@@ -1248,8 +1258,8 @@ one more top-level list pointing at visual ids.
   OCR model when it read the keyframes (6.5), else `null`; `vision_model` then only found the
   board.
 - `config.detector`, `judge_prompt_version` and `judge_reasoning_effort` tell two runs apart:
-  `rules` or `llm`, the judge prompt's version, and the `--llm-reasoning` level (`""` for
-  `server`). The last two are `null` with the rules. The file is not a run log; other settings
+  `rules` or `llm`, the judge prompt's version, and the `--llm-reasoning` level
+  (`reasoning_effort`, `""` for `server`). The last two are `null` with the rules. The file is not a run log; other settings
   are not recorded.
 
 **Versioning.** `schema_version` is `MAJOR.MINOR`. A minor version adds keys, or changes what a
@@ -1308,9 +1318,9 @@ unreachable endpoint or a bad key ends the run, as the same error would hit ever
 **Deterministic.** Items follow `questions.json`, item ids derive from the question ids, the
 correct option's place from a hash of the question id, and nothing records the time of the run.
 
-> **Decision.** `questxtract/quiz.py`, not a stage. Config: `quiz_model` (`gpt-4o`),
-> `quiz_strictness` (`lenient`), `quiz_options` (3, from 3 to 5); `base_url` and
-> `judge_reasoning_effort` are shared with the judge. Every written file passes `validate_quiz`.
+> **Decision.** `questxtract/quiz.py`, not a stage. Config: `quiz_model`
+> (`deepseek-ai/DeepSeek-V4.1-Flash-1017`), `quiz_strictness` (`lenient`), `quiz_options` (3,
+> from 3 to 5); `base_url` and `reasoning_effort` are shared with the judge. Every written file passes `validate_quiz`.
 
 Schema 1.0, formally [`quiz.schema.json`](../src/questxtract/quiz.schema.json), which ships in
 the package. Items are single choice: at least three options, exactly one of them correct, a
