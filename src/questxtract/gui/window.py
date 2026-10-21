@@ -4,6 +4,9 @@ The window runs no pipeline itself. Run starts a worker thread that calls
 :func:`questxtract.gui.run.run`, which calls the CLI's own code. The worker only puts events on a
 queue; the main thread reads that queue with ``after()``, so Tk is used from one thread only.
 
+The words come from :mod:`.i18n`. A language switch re-labels every widget in place: texts
+that come from the window's state are kept as functions and evaluated again.
+
 The look is Tk's classic ttk theme. It approximates Windows XP; it is not the XP theme.
 """
 
@@ -13,20 +16,21 @@ import queue
 import threading
 import tkinter as tk
 import traceback
+from collections.abc import Callable
 from pathlib import Path
 from tkinter import filedialog, ttk
 from typing import Any
 
 from ..cli import RunResult
 from ..pipeline import Cancelled
+from . import i18n, state
 from . import run as gui_run
-from . import state
+from .i18n import tr
 from .options import OPTIONS, Option
 
 __all__ = ["run_app"]
 
 _POLL_MS = 100
-_DROP_HELP = "Drop an .mp4, .mp3 or .json file here"
 
 
 def run_app() -> int:
@@ -71,65 +75,84 @@ class QuestXtractWindow:
         self.cancel = threading.Event()
         self.events: queue.Queue[tuple[str, Any]] = queue.Queue()
         self.output = tk.StringVar(value="questions")
+        self.language = tk.StringVar(value=i18n.language())
         self.fields: dict[str, tk.StringVar | tk.BooleanVar] = {}
         self.option_rows: dict[str, ttk.Frame] = {}
+        self.option_labels: dict[str, tuple[ttk.Label, Option]] = {}
+        self.tristate_combos: dict[str, ttk.Combobox] = {}
         self.output_buttons: dict[str, ttk.Radiobutton] = {}
+        self.static_texts: list[tuple[Any, str]] = []
+        # Texts that depend on the window's state; evaluated again on a language switch.
+        self.drop_text: Callable[[], str] | None = None
+        self.status_text: Callable[[], str] = lambda: ""
+        self.stage_text: Callable[[], str] = lambda: ""
         self.closing = False
         self.alive = True
-        root.title("QuestXtract")
         root.protocol("WM_DELETE_WINDOW", self._close)
         style = ttk.Style(root)
         if "classic" in style.theme_names():
             style.theme_use("classic")
         self._build()
         self._enable_drop(drag_and_drop)
-        self._refresh()
+        self._retranslate()
         root.after(_POLL_MS, self._poll)
 
     # --- layout ------------------------------------------------------------------------
 
+    def _text(self, widget: Any, key: str) -> None:
+        """Give ``widget`` the message ``key`` now, and again whenever the language changes."""
+        self.static_texts.append((widget, key))
+        widget.configure(text=tr(key))
+
     def _build(self) -> None:
-        """Lay out the groups top to bottom: file, output, options, then Run and progress."""
+        """Lay out the groups top to bottom: language, file, output, options, Run and progress."""
         self.root.columnconfigure(0, weight=1)
+        self.root.title("QuestXtract")
         frame = ttk.Frame(self.root, padding=8)
         frame.grid(sticky="nsew")
 
-        source = ttk.LabelFrame(frame, text="1. Recording or transcript", padding=8)
+        bar = ttk.Frame(frame)
+        bar.grid(sticky="e")
+        for column, (code, name) in enumerate(i18n.LANGUAGES.items()):
+            button = ttk.Radiobutton(
+                bar,
+                text=name,
+                value=code,
+                variable=self.language,
+                command=self._switch_language,
+            )
+            button.grid(row=0, column=column, padx=(8, 0))
+
+        source = ttk.LabelFrame(frame, padding=8)
+        self._text(source, "group.source")
         source.grid(sticky="ew")
-        self.drop_box = tk.Label(
-            source, text=_DROP_HELP, relief="sunken", bd=2, bg="white", height=2, width=54
-        )
+        self.drop_box = tk.Label(source, relief="sunken", bd=2, bg="white", height=2, width=54)
+        self._text(self.drop_box, "drop.help")
         self.drop_box.grid(row=0, column=0, columnspan=2, sticky="ew")
-        self.source_label = ttk.Label(source, text="No file chosen.", wraplength=440)
+        self.source_label = ttk.Label(source, wraplength=440)
         self.source_label.grid(row=1, column=0, sticky="w", pady=(6, 0))
-        ttk.Button(source, text="Browse...", command=self._browse).grid(
-            row=1, column=1, pady=(6, 0)
-        )
+        browse = ttk.Button(source, command=self._browse)
+        self._text(browse, "button.browse")
+        browse.grid(row=1, column=1, pady=(6, 0))
         self.drop_note = ttk.Label(source, text="", wraplength=440)
         self.drop_note.grid(row=2, column=0, columnspan=2, sticky="w")
 
-        outputs = ttk.LabelFrame(frame, text="2. Output", padding=8)
+        outputs = ttk.LabelFrame(frame, padding=8)
+        self._text(outputs, "group.output")
         outputs.grid(sticky="ew", pady=(8, 0))
-        for column, (name, label) in enumerate(state.OUTPUT_LABELS.items()):
+        for column, name in enumerate(state.OUTPUT_LABELS):
             button = ttk.Radiobutton(
-                outputs,
-                text=label,
-                value=name,
-                variable=self.output,
-                command=self._refresh,
+                outputs, value=name, variable=self.output, command=self._refresh
             )
+            self._text(button, f"output.{name}")
             button.grid(row=0, column=column, sticky="w", padx=(0, 18))
             self.output_buttons[name] = button
-        ttk.Label(
-            outputs,
-            text="Files: <name>.questions.json, <name>.transcript.json, <name>.quiz.json "
-            "(beside the questions) and <name>.qti.zip, next to the input unless given below.",
-            wraplength=680,
-        ).grid(row=1, column=0, columnspan=4, sticky="w", pady=(6, 0))
+        files = ttk.Label(outputs, wraplength=680)
+        self._text(files, "output.files")
+        files.grid(row=1, column=0, columnspan=4, sticky="w", pady=(6, 0))
 
-        options = ttk.LabelFrame(
-            frame, text="3. Options (a setting left at its default is not passed)", padding=8
-        )
+        options = ttk.LabelFrame(frame, padding=8)
+        self._text(options, "group.options")
         options.grid(sticky="ew", pady=(8, 0))
         shown = [option for option in OPTIONS if option.kind != "implicit"]
         for row, option in enumerate(shown):
@@ -139,15 +162,14 @@ class QuestXtractWindow:
 
         actions = ttk.Frame(frame)
         actions.grid(sticky="ew", pady=(8, 0))
-        self.run_button = ttk.Button(actions, text="Run", command=self._run, width=10)
+        self.run_button = ttk.Button(actions, command=self._run, width=10)
+        self._text(self.run_button, "button.run")
         self.run_button.grid(row=0, column=0)
-        self.cancel_button = ttk.Button(
-            actions, text="Cancel", command=self._cancel, width=10, state="disabled"
-        )
+        self.cancel_button = ttk.Button(actions, command=self._cancel, width=10, state="disabled")
+        self._text(self.cancel_button, "button.cancel")
         self.cancel_button.grid(row=0, column=1, padx=(6, 0))
-        self.open_button = ttk.Button(
-            actions, text="Open folder", command=self._open_folder, state="disabled"
-        )
+        self.open_button = ttk.Button(actions, command=self._open_folder, state="disabled")
+        self._text(self.open_button, "button.open_folder")
         self.open_button.grid(row=0, column=2, padx=(6, 0))
 
         self.progress_var = tk.DoubleVar(value=0.0)
@@ -164,22 +186,23 @@ class QuestXtractWindow:
     def _option_row(self, parent: tk.Misc, option: Option) -> ttk.Frame:
         """One control with its label, built from the option table and its Config default."""
         line = ttk.Frame(parent)
-        label = f"{option.label} (default: {state.hint(option)})"
-        ttk.Label(line, text=label, width=46, anchor="w").grid(row=0, column=0, sticky="w")
+        label = ttk.Label(line, width=46, anchor="w")
+        label.grid(row=0, column=0, sticky="w")
+        self.option_labels[option.dest] = (label, option)
         var: tk.StringVar | tk.BooleanVar
         if option.kind == "bool":
             var = tk.BooleanVar(value=False)
             control: tk.Widget = ttk.Checkbutton(line, variable=var)
-        elif option.kind in ("choice", "tristate"):
-            values = option.choices or state.TRISTATE_LABELS
-            initial = (
-                state.TRISTATE_LABELS[0]
-                if option.kind == "tristate"
-                else state.default_text(option)
-            )
-            var = tk.StringVar(value=initial)
+        elif option.kind == "tristate":
+            var = tk.StringVar(value=tr("tristate.default"))
+            combo = ttk.Combobox(line, textvariable=var, state="readonly", width=26)
+            self.tristate_combos[option.dest] = combo
+            control = combo
+            self._set_tristate_values(option.dest)
+        elif option.kind == "choice":
+            var = tk.StringVar(value=state.default_text(option))
             control = ttk.Combobox(
-                line, textvariable=var, values=values, state="readonly", width=26
+                line, textvariable=var, values=option.choices, state="readonly", width=26
             )
         else:
             initial = "" if option.kind in ("file", "path") else state.default_text(option)
@@ -187,13 +210,17 @@ class QuestXtractWindow:
             control = ttk.Entry(line, textvariable=var, width=36)
         control.grid(row=0, column=1, sticky="w")
         if option.kind in ("file", "path"):
-            browse = ttk.Button(
-                line, text="Browse...", command=lambda: self._browse_into(option, var)
-            )
+            browse = ttk.Button(line, command=lambda: self._browse_into(option, var))
+            self._text(browse, "button.browse")
             browse.grid(row=0, column=2, padx=(4, 0))
         self.fields[option.dest] = var
         var.trace_add("write", lambda *_: self._refresh())
         return line
+
+    def _set_tristate_values(self, dest: str) -> None:
+        """Give a tri-state control its choices in the current language."""
+        labels = [tr(f"tristate.{name.lower()}") for name in state.TRISTATE_LABELS]
+        self.tristate_combos[dest].configure(values=labels)
 
     def _enable_drop(self, drag_and_drop: bool) -> None:
         """Register the drop box, or say on the window that drop is not available here."""
@@ -207,7 +234,7 @@ class QuestXtractWindow:
                 return
             except tk.TclError:
                 pass
-        self.drop_note.configure(text="Drag and drop is not available on this system: use Browse.")
+        self.drop_text = lambda: tr("drop.unavailable")
 
     # --- what the controls mean --------------------------------------------------------
 
@@ -219,9 +246,20 @@ class QuestXtractWindow:
             self.output.set("questions")
         self._refresh()
 
+    def _tristate_canonical(self, dest: str) -> str:
+        """Return the English name of a tri-state control's shown choice (its internal value)."""
+        shown = self.fields[dest].get()
+        for name in state.TRISTATE_LABELS:
+            if tr(f"tristate.{name.lower()}") == shown:
+                return name
+        return state.TRISTATE_LABELS[0]
+
     def _values(self) -> dict[str, Any]:
         """Return the form as the values the CLI takes."""
-        return state.form_values({dest: var.get() for dest, var in self.fields.items()})
+        raw: dict[str, Any] = {dest: var.get() for dest, var in self.fields.items()}
+        for dest in self.tristate_combos:
+            raw[dest] = self._tristate_canonical(dest)
+        return state.form_values(raw)
 
     def _output_path(self) -> Path | None:
         """Return the file to write: the output field, else the output's default (QTI only)."""
@@ -253,14 +291,45 @@ class QuestXtractWindow:
         self.run_button.state(["disabled"] if self.busy or problem else ["!disabled"])
         self.hint.configure(text=problem or "")
 
+    # --- language ----------------------------------------------------------------------
+
+    def _switch_language(self) -> None:
+        """Show the window in the language the switch picked; the form keeps its values."""
+        choices = {dest: self._tristate_canonical(dest) for dest in self.tristate_combos}
+        i18n.set_language(self.language.get())
+        for dest, name in choices.items():
+            self._set_tristate_values(dest)
+            var: tk.Variable = self.fields[dest]
+            var.set(tr(f"tristate.{name.lower()}"))
+        self._retranslate()
+
+    def _retranslate(self) -> None:
+        """Put every text of the window in the current language."""
+        self.root.title("QuestXtract")
+        for widget, key in self.static_texts:
+            widget.configure(text=tr(key))
+        for dest, (label, option) in self.option_labels.items():
+            text = tr("opt." + dest)
+            label.configure(text=tr("control.label", label=text, default=state.hint(option)))
+        self.source_label.configure(
+            text=tr("source.none") if self.source is None else str(self.source)
+        )
+        self.drop_note.configure(text=self.drop_text() if self.drop_text else "")
+        self.status.configure(text=self.status_text())
+        self.stage_label.configure(text=self.stage_text())
+        self._refresh()
+
     # --- actions -----------------------------------------------------------------------
 
     def _browse(self) -> None:
         """Ask the system dialog for a recording or transcript."""
         name = filedialog.askopenfilename(
             parent=self.root,
-            title="Choose a recording or transcript",
-            filetypes=[("Recordings and transcripts", "*.mp4 *.mp3 *.json"), ("All files", "*.*")],
+            title=tr("dialog.source"),
+            filetypes=[
+                (tr("filetype.recordings"), "*.mp4 *.mp3 *.json"),
+                (tr("filetype.all"), "*.*"),
+            ],
         )
         if name:
             self.choose_source(Path(name))
@@ -270,15 +339,15 @@ class QuestXtractWindow:
         if option.dest == "output":
             name = filedialog.asksaveasfilename(
                 parent=self.root,
-                title="Where to write the output",
+                title=tr("dialog.output"),
                 defaultextension=".json",
-                filetypes=[("JSON", "*.json"), ("All files", "*.*")],
+                filetypes=[("JSON", "*.json"), (tr("filetype.all"), "*.*")],
             )
         else:
             name = filedialog.askopenfilename(
                 parent=self.root,
-                title="Settings file",
-                filetypes=[("Settings", "*.toml"), ("All files", "*.*")],
+                title=tr("dialog.settings"),
+                filetypes=[(tr("filetype.settings"), "*.toml"), (tr("filetype.all"), "*.*")],
             )
         if name:
             var.set(name)
@@ -289,7 +358,8 @@ class QuestXtractWindow:
         if paths:
             self.choose_source(paths[0])
             if len(paths) > 1:
-                self.drop_note.configure(text="One file at a time: the first one is used.")
+                self.drop_text = lambda: tr("drop.one_file")
+                self.drop_note.configure(text=self.drop_text())
         return str(getattr(event, "action", "copy"))
 
     def _run(self) -> None:
@@ -301,8 +371,8 @@ class QuestXtractWindow:
         self.cancel.clear()
         self.result_path = None
         self.progress_var.set(0.0)
-        self.stage_label.configure(text="Starting...")
-        self.status.configure(text="A run can take as long as the recording. Cancel stops it.")
+        self._set_stage(lambda: tr("status.starting"))
+        self._set_status(lambda: tr("status.long_run"))
         args = (source, self.output.get(), self._values(), self._output_path())
         threading.Thread(target=self._work, args=args, daemon=True).start()
         self._refresh()
@@ -329,7 +399,7 @@ class QuestXtractWindow:
             self.events.put(("error", state.one_line(str(exc))))
         except Exception as exc:  # a bug, not a user error: one line here, the rest in the terminal
             traceback.print_exc()
-            self.events.put(("error", f"unexpected {type(exc).__name__}; see the terminal"))
+            self.events.put(("error", tr("status.unexpected", name=type(exc).__name__)))
         else:
             self.events.put(("done", result))
 
@@ -340,13 +410,13 @@ class QuestXtractWindow:
             return
         self.closing = True
         self._cancel()
-        self.status.configure(text="Stopping after the current step, then the window closes...")
+        self._set_status(lambda: tr("status.closing"))
 
     def _cancel(self) -> None:
         """Ask the run to stop before its next stage; a running stage finishes first."""
         self.cancel.set()
         self.cancel_button.state(["disabled"])
-        self.status.configure(text="Stopping after the current step...")
+        self._set_status(lambda: tr("status.stopping"))
 
     def _open_folder(self) -> None:
         """Show the folder of the written file in the system's file manager."""
@@ -355,7 +425,18 @@ class QuestXtractWindow:
         try:
             state.open_folder(self.result_path.parent)
         except OSError as exc:
-            self.status.configure(text=f"Could not open the folder: {exc}")
+            message = str(exc)
+            self._set_status(lambda: tr("status.open_failed", error=message))
+
+    def _set_status(self, text: Callable[[], str]) -> None:
+        """Show ``text`` on the status line now, and again on a language switch."""
+        self.status_text = text
+        self.status.configure(text=text())
+
+    def _set_stage(self, text: Callable[[], str]) -> None:
+        """Show ``text`` as the progress stage now, and again on a language switch."""
+        self.stage_text = text
+        self.stage_label.configure(text=text())
 
     # --- events from the worker --------------------------------------------------------
 
@@ -381,7 +462,7 @@ class QuestXtractWindow:
         if kind == "progress":
             stage, fraction = payload
             self.progress_var.set(100 * state.overall_fraction(stage, fraction))
-            self.stage_label.configure(text=state.stage_label(stage))
+            self._set_stage(lambda: state.stage_label(stage))
             return
         self.busy = False
         self.cancel.clear()
@@ -392,21 +473,26 @@ class QuestXtractWindow:
         if kind == "done":
             self._show_result(payload)
         elif kind == "cancelled":
-            self.status.configure(text="Cancelled. No partial file was written.")
-            self.stage_label.configure(text="Cancelled")
+            self._set_status(lambda: tr("status.cancelled"))
+            self._set_stage(lambda: tr("stage.cancelled"))
         else:
-            self.status.configure(text=payload)
-            self.stage_label.configure(text="Stopped")
+            self._set_status(lambda: payload)
+            self._set_stage(lambda: tr("stage.stopped"))
         self._refresh()
 
     def _show_result(self, result: RunResult) -> None:
         """Show the written path, the count and any warnings, and enable Open folder."""
         self.result_path = result.path
-        lines = [result.summary]
-        if result.path is not None:
-            lines.insert(0, f"Written: {result.path}")
-        lines.extend(result.warnings)
-        self.status.configure(text="\n".join(lines))
-        self.open_button.state(["!disabled"] if result.path is not None else ["disabled"])
+        path = result.path
+
+        def text() -> str:
+            lines = [result.summary]
+            if path is not None:
+                lines.insert(0, tr("status.written", path=path))
+            lines.extend(result.warnings)
+            return "\n".join(lines)
+
+        self._set_status(text)
+        self.open_button.state(["!disabled"] if path is not None else ["disabled"])
         self.progress_var.set(100.0)
-        self.stage_label.configure(text="Done")
+        self._set_stage(lambda: tr("stage.done"))

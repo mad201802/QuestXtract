@@ -19,14 +19,15 @@ from typing import Any
 
 import pytest
 
-tkinter = pytest.importorskip("tkinter")
+from questxtract.cli import main
+from questxtract.gui import i18n, state
+from questxtract.gui import run as gui_run
+from questxtract.gui.options import OPTIONS
+from questxtract.pipeline import Cancelled
 
-from questxtract.cli import main  # noqa: E402
-from questxtract.gui import run as gui_run  # noqa: E402
-from questxtract.gui import state  # noqa: E402
-from questxtract.gui import window as gui_window  # noqa: E402
-from questxtract.gui.options import OPTIONS  # noqa: E402
-from questxtract.pipeline import Cancelled  # noqa: E402
+# The window imports tkinter, so this module is skipped (with the reason) where Tk is missing.
+gui_window = pytest.importorskip("questxtract.gui.window")
+tkinter = pytest.importorskip("tkinter")
 
 DATA = Path(__file__).parent / "data"
 TRANSCRIPT = DATA / "ttk4225_2026_09_14.transcript.json"
@@ -40,6 +41,14 @@ pytestmark = pytest.mark.skipif(
     not _has_display(),
     reason="no display here (headless CI): the window is checked where a display exists",
 )
+
+
+@pytest.fixture(autouse=True)
+def english() -> Iterator[None]:
+    """Each window test starts in English, and a language switch does not leak to the next."""
+    i18n.set_language("en")
+    yield
+    i18n.set_language("en")
 
 
 @pytest.fixture
@@ -249,3 +258,41 @@ def test_closing_during_a_run_stops_it_and_then_closes_the_window(
     _pump(root, lambda: not window.alive)
 
     assert stopped == [True]
+
+
+def test_the_language_switch_relabels_the_window_and_keeps_the_form(window, root):
+    """AC: the switch shows the window in another language and keeps what the user entered."""
+    window.choose_source(TRANSCRIPT)
+    window.fields["threshold"].set("0.5")
+    window.fields["detector"].set("llm")
+    window.language.set("nb")
+
+    window._switch_language()
+
+    assert window.run_button.cget("text") == "Kjør"
+    assert window.output_buttons["qti"].cget("text") == "QTI-pakke"
+    assert window.fields["threshold"].get() == "0.5"
+    assert window.fields["detector"].get() == "llm"
+    assert tr_shown(window, "vision") == "Standard"
+    assert window._values()["vision"] is None
+    assert "(standard: av)" in window.option_labels["vision"][0].cget("text")
+
+
+def test_a_run_in_norsk_finishes_in_norsk(window, root, tmp_path: Path):
+    """The status line and the stage name change language while the run is shown."""
+    window.choose_source(TRANSCRIPT)
+    window.fields["output"].set(str(tmp_path / "q.json"))
+    window.language.set("it")
+    window._switch_language()
+
+    window._run()
+    _pump(root, lambda: not window.busy)
+
+    assert window.stage_label.cget("text") == "Fatto"
+    assert window.status.cget("text").startswith("Scritto: ")
+    assert (tmp_path / "q.json").is_file()
+
+
+def tr_shown(window: Any, dest: str) -> str:
+    """Return the text a tri-state control shows now."""
+    return str(window.fields[dest].get())

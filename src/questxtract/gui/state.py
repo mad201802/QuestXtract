@@ -16,9 +16,9 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from ..cli import _STAGE_LABELS
 from ..config import Config
 from ..pipeline import STAGES, stage_info
+from .i18n import has, tr
 from .options import OPTIONS, OUTPUTS, Option
 from .run import check, source_problem
 
@@ -63,11 +63,11 @@ def default_text(option: Option) -> str:
 def hint(option: Option) -> str:
     """Return the default as a short phrase for the label beside the control."""
     if option.dest == "output":
-        return "next to the input"
+        return tr("hint.next_input")
     text = default_text(option)
     if option.kind in ("bool", "tristate"):
-        return "on" if text == "True" else "off"
-    return text or "unset"
+        return tr("hint.on") if text == "True" else tr("hint.off")
+    return text or tr("hint.unset")
 
 
 def form_values(raw: Mapping[str, Any]) -> dict[str, Any]:
@@ -121,7 +121,7 @@ def run_problem(
     before anything runs.
     """
     if source is None:
-        return "Drop a recording or transcript here, or click Browse."
+        return tr("hint.drop_first")
     problem = source_problem(source, output)
     if problem is not None:
         return one_line(problem)
@@ -135,7 +135,7 @@ def run_problem(
 def one_line(text: str) -> str:
     """Join a message into one line, so the window never shows a multi-line error."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    return " ".join(lines) or "the run failed"
+    return " ".join(lines) or tr("status.failed")
 
 
 def overall_fraction(stage: str, fraction: float) -> float:
@@ -153,10 +153,10 @@ def overall_fraction(stage: str, fraction: float) -> float:
 
 
 def stage_label(stage: str) -> str:
-    """Return the words the window shows for a progress name, as the CLI's progress bar does."""
-    if stage == "done":
-        return "Done"
-    return _STAGE_LABELS.get(stage, stage.replace("_", " ").capitalize())
+    """Return the words the window shows for a progress name, in the current language."""
+    if has(f"stage.{stage}"):
+        return tr(f"stage.{stage}")
+    return stage.replace("_", " ").capitalize()
 
 
 def dropped_paths(data: str, splitlist: Callable[[str], Sequence[str]]) -> list[Path]:

@@ -178,6 +178,9 @@ it with the extra, `pip install "questxtract[gui]"`.
 - **Keys.** The app reads `OPENAI_API_KEY` and `.env` exactly as the CLI does
   ([API keys](#api-keys-and-env)). It never shows, stores or logs a key.
 
+**Languages.** The window opens in English; the switch at the top right shows it in Norsk or
+Italiano, and keeps what was entered. Messages from the CLI itself stay in English.
+
 **Drag and drop** uses `tkinterdnd2`, part of the extra. Where it cannot start, the window says
 drop is not available there and Browse still works.
 
