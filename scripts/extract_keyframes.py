@@ -53,7 +53,10 @@ def main(argv: list[str] | None = None) -> int:
         help="samples a new view must hold",
     )
     parser.add_argument(
-        "--max-views", type=int, default=defaults.vision_max_states, help="merge down to this many"
+        "--max-views",
+        type=int,
+        default=defaults.vision_min_states,
+        help="merge down to this many (default: vision_min_states)",
     )
     parser.add_argument("--crop", type=_crop, default=None, help="x0,y0,x1,y1 as fractions")
     args = parser.parse_args(argv)

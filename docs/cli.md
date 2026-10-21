@@ -51,7 +51,8 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--strictness`, `--options` | | | As for `questxtract quiz`. Only with `--quiz`. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
-The vision options may still change while the vision work continues in M3 (#133). The other vision settings (`vision_fps`, `vision_max_states`, `vision_change_fraction`, `vision_change_hold`) are set in the TOML file only.
+The vision options may still change while the vision work continues in M3 (#133). The other vision settings (`vision_fps`, `vision_states_per_minute`, `vision_min_states`, `vision_change_fraction`,
+`vision_change_hold`) are set in the TOML file only.
 
 One thing to know about `-t` with the rules: a question with no answer scores at most `0.55`, so
 a threshold above `0.55` keeps only questions the next sentence answers. With `--detector llm`
