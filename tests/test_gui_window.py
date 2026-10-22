@@ -347,3 +347,85 @@ def test_a_language_switch_keeps_the_advanced_view_open(window):
 
     assert window.options_frame.winfo_manager() == "grid"
     assert window.advanced_button.cget("text").startswith("Impostazioni avanzate")
+
+
+def test_cancel_can_be_clicked_while_a_run_is_busy_and_not_before_or_after(
+    window, root, monkeypatch: pytest.MonkeyPatch
+):
+    """The Cancel button is enabled during a run, disabled once asked, and again at the end."""
+
+    def stoppable(*_: Any, progress: Any = None, stop: Callable[[], bool], **__: Any) -> None:
+        progress("ingest", 0.0)
+        while not stop():
+            time.sleep(0.01)
+        raise Cancelled("stopped before transcribe")
+
+    monkeypatch.setattr(gui_run, "run", stoppable)
+    window.choose_source(TRANSCRIPT)
+    assert not _enabled(window.cancel_button)
+
+    window._run()
+    assert _enabled(window.cancel_button)
+    window.fields["threshold"].set("0.5")  # a refresh while busy must not change it
+    assert _enabled(window.cancel_button)
+
+    window.cancel_button.invoke()
+    assert not _enabled(window.cancel_button)
+    window.fields["threshold"].set("0.6")  # ...nor bring it back once Cancel was asked
+    assert not _enabled(window.cancel_button)
+    _pump(root, lambda: not window.busy)
+    assert not _enabled(window.cancel_button) and _enabled(window.run_button)
+
+
+def test_the_quiz_output_keeps_the_bar_below_the_end_until_the_quiz_is_done(window, root):
+    """The pipeline's `done` is not the end of a Quiz run: the bar and label wait for the quiz."""
+    window.run_output = "quiz"
+    window._handle("progress", ("score", 1.0))
+    window._handle("progress", ("done", 1.0))
+
+    assert window.progress_var.get() < 100
+    assert window.stage_label.cget("text") != "Done"
+    window.run_output = "questions"
+    window._handle("progress", ("done", 1.0))
+    assert window.progress_var.get() == 100
+
+
+def test_the_note_about_a_drop_of_many_files_goes_with_the_next_file(window, tmp_path: Path):
+    """The 'one file at a time' note is about one drop: the next file does not keep it."""
+    copy = tmp_path / "again.transcript.json"
+    shutil.copy(TRANSCRIPT, copy)
+
+    window._on_drop(SimpleNamespace(data=f"{{{copy}}} {{{TRANSCRIPT}}}", action="copy"))
+    assert "One file at a time" in window.drop_note.cget("text")
+    window.language.set("it")
+    window._switch_language()
+    assert "Un file alla volta" in window.drop_note.cget("text")
+
+    window.choose_source(TRANSCRIPT)
+    assert "alla volta" not in window.drop_note.cget("text")
+    assert "non disponibile" in window.drop_note.cget("text")  # unavailable stays, in Italian
+
+
+def test_a_failed_drag_and_drop_start_leaves_one_root_and_binds_the_variables_to_it(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """AC: when tkdnd will not load, the half-built root is removed and the plain one is used."""
+    import types
+
+    class Failing(tkinter.Tk):
+        def __init__(self) -> None:
+            super().__init__()
+            raise tkinter.TclError("cannot load tkdnd")
+
+    fake = types.ModuleType("tkinterdnd2")
+    fake.TkinterDnD = types.SimpleNamespace(Tk=Failing)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "tkinterdnd2", fake)
+
+    root, drag_and_drop = gui_window._new_root()
+    try:
+        assert drag_and_drop is False
+        assert tkinter._default_root is root  # the orphan is gone; this is the only root
+        var = tkinter.StringVar()
+        assert var._root is root
+    finally:
+        root.destroy()

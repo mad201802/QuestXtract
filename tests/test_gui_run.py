@@ -229,3 +229,31 @@ def test_the_qti_output_offers_no_options_and_the_check_reports_a_bad_value(tmp_
     with pytest.raises(ValueError, match="between 0 and 1"):
         gui.check(TRANSCRIPT, "questions", {"threshold": 2.0}, tmp_path / "q.json")
     gui.check(TRANSCRIPT, "questions", {"threshold": 0.4}, tmp_path / "q.json")  # no raise
+
+
+def test_a_stop_during_the_last_stage_writes_no_file(tmp_path: Path):
+    """AC: Cancel in the last stage leaves no file, not a finished one the window calls partial."""
+    output = tmp_path / "q.json"
+    calls = {"n": 0}
+
+    def stop() -> bool:
+        calls["n"] += 1
+        return calls["n"] > 9  # the nine stages of a transcript run start, then the stop comes
+
+    with pytest.raises(Cancelled):
+        gui.run(TRANSCRIPT, "questions", {}, output, stop=stop)
+
+    assert not output.exists()
+
+
+def test_a_bad_argument_is_a_one_line_error_and_prints_nothing(
+    capsys: pytest.CaptureFixture[str],
+):
+    """The form's check parses on the window's thread: it raises, and never swaps sys.stderr."""
+    with pytest.raises(ValueError, match="invalid float value") as caught:
+        gui.check(TRANSCRIPT, "questions", {"threshold": "abc"})
+
+    # argparse's own message, raised: the old route read it back from a swapped sys.stderr and
+    # kept the "questxtract: error:" prefix.
+    assert str(caught.value).startswith("argument -t/--threshold")
+    assert capsys.readouterr() == ("", "")

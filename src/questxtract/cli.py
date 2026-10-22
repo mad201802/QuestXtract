@@ -6,15 +6,13 @@ Every command and option, with recipes: docs/cli.md.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import importlib.util
-import io
 import json
 import os
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, NoReturn
 
 from . import __version__
 from .config import (
@@ -533,6 +531,8 @@ def _process_core(
     else:
         ctx = _run(Context(source=source, config=config), STAGES, progress, stop)
 
+    if stop is not None and stop():
+        raise Cancelled("stopped before writing the questions")  # a stopped run writes no file
     if output is not None:
         write_questions(ctx, output)  # questions.json is on disk before any quiz is made
     return ctx, config, output
@@ -588,6 +588,8 @@ def _transcribe_core(
     ctx = _run(Context(source=source, config=config), STAGES[:_AFTER_TRANSCRIBE], progress, stop)
     assert ctx.transcript is not None  # noqa: S101 - the transcribe stage always sets it
     text = json.dumps(ctx.transcript.to_dict(), indent=2, ensure_ascii=False)
+    if stop is not None and stop():
+        raise Cancelled("stopped before writing the transcript")  # a stopped run writes no file
     if output is not None:
         output.write_text(text, encoding="utf-8")
     return ctx, output, text
@@ -660,18 +662,14 @@ def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     """Parse command-line arguments without printing: a bad one raises ``ValueError``.
 
     The graphical app (issue #124) shows that one line in its window instead of argparse's usage.
+    It parses on the window's thread while a run may be printing, so nothing here swaps
+    ``sys.stderr``: the parser raises instead of printing.
 
     Raises:
-        ValueError: If the arguments do not parse; the message is argparse's last line.
+        ValueError: If the arguments do not parse; the message is argparse's own.
 
     """
-    buffer = io.StringIO()
-    try:
-        with contextlib.redirect_stderr(buffer):
-            return build_parser().parse_args(list(argv))
-    except SystemExit:
-        lines = [line for line in buffer.getvalue().splitlines() if line.strip()]
-        raise ValueError(lines[-1] if lines else "the arguments are not valid") from None
+    return build_parser(quiet=True).parse_args(list(argv))
 
 
 def check_arguments(argv: Sequence[str]) -> None:
@@ -810,11 +808,19 @@ def _qti(args: argparse.Namespace) -> int:
     return 0
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser."""
+class _QuietParser(argparse.ArgumentParser):
+    """A parser whose errors raise ``ValueError`` instead of printing usage and exiting."""
+
+    def error(self, message: str) -> NoReturn:
+        """Raise the error argparse would have printed."""
+        raise ValueError(message)
+
+
+def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
+    """Build the argument parser; with ``quiet`` its errors raise ``ValueError``."""
     defaults = Config()
     raw = argparse.RawDescriptionHelpFormatter
-    parser = argparse.ArgumentParser(
+    parser = (_QuietParser if quiet else argparse.ArgumentParser)(
         prog="questxtract",
         description="Find the questions asked in a lecture recording.",
         epilog=_EXAMPLES,

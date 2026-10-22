@@ -55,12 +55,21 @@ def _new_root() -> tuple[tk.Tk, bool]:
     tkinterdnd2 gives a root that accepts drops; where its binary will not load, the plain root
     is used and the window says drop is not available.
     """
+    before = getattr(tk, "_default_root", None)
     try:
         from tkinterdnd2 import TkinterDnD
 
         return TkinterDnD.Tk(), True
-    except (ImportError, tk.TclError):
-        return tk.Tk(), False
+    except ImportError:
+        pass
+    except tk.TclError:
+        # TkinterDnD.Tk() creates the Tk root before it loads tkdnd, so a failed load leaves a
+        # half-built root behind as tkinter's default root. Remove it, or it becomes a second
+        # window and the variables of the real one bind to the wrong interpreter.
+        orphan = getattr(tk, "_default_root", None)
+        if orphan is not None and orphan is not before:
+            orphan.destroy()
+    return tk.Tk(), False
 
 
 class QuestXtractWindow:
@@ -74,8 +83,8 @@ class QuestXtractWindow:
         self.result_path: Path | None = None
         self.cancel = threading.Event()
         self.events: queue.Queue[tuple[str, Any]] = queue.Queue()
-        self.output = tk.StringVar(value="questions")
-        self.language = tk.StringVar(value=i18n.language())
+        self.output = tk.StringVar(master=root, value="questions")
+        self.language = tk.StringVar(master=root, value=i18n.language())
         self.fields: dict[str, tk.StringVar | tk.BooleanVar] = {}
         self.option_rows: dict[str, ttk.Frame] = {}
         self.option_labels: dict[str, tuple[ttk.Label, Option]] = {}
@@ -83,7 +92,9 @@ class QuestXtractWindow:
         self.output_buttons: dict[str, ttk.Radiobutton] = {}
         self.static_texts: list[tuple[Any, str]] = []
         # Texts that depend on the window's state; evaluated again on a language switch.
-        self.drop_text: Callable[[], str] | None = None
+        self.drop_unavailable = False
+        self.drop_extra: Callable[[], str] | None = None  # a note about the last drop only
+        self.run_output = "questions"
         self.status_text: Callable[[], str] = lambda: ""
         self.stage_text: Callable[[], str] = lambda: ""
         self.closing = False
@@ -187,7 +198,7 @@ class QuestXtractWindow:
         self.advanced_button = ttk.Button(actions, command=self._toggle_advanced)
         self.advanced_button.grid(row=0, column=3, sticky="e")
 
-        self.progress_var = tk.DoubleVar(value=0.0)
+        self.progress_var = tk.DoubleVar(master=self.root, value=0.0)
         ttk.Progressbar(frame, maximum=100, variable=self.progress_var).grid(
             row=5, sticky="ew", pady=(8, 0)
         )
@@ -206,25 +217,25 @@ class QuestXtractWindow:
         self.option_labels[option.dest] = (label, option)
         var: tk.StringVar | tk.BooleanVar
         if option.kind == "bool":
-            var = tk.BooleanVar(value=False)
+            var = tk.BooleanVar(master=line, value=False)
             control: tk.Widget = ttk.Checkbutton(line, variable=var)
         elif option.kind == "tristate":
             start = state.START_VALUES.get(option.dest, "Default")
-            var = tk.StringVar(value=tr(f"tristate.{start.lower()}"))
+            var = tk.StringVar(master=line, value=tr(f"tristate.{start.lower()}"))
             combo = ttk.Combobox(line, textvariable=var, state="readonly", width=26)
             self.tristate_combos[option.dest] = combo
             control = combo
             self._set_tristate_values(option.dest)
         elif option.kind == "choice":
             var = tk.StringVar(
-                value=state.START_VALUES.get(option.dest, state.default_text(option))
+                master=line, value=state.START_VALUES.get(option.dest, state.default_text(option))
             )
             control = ttk.Combobox(
                 line, textvariable=var, values=option.choices, state="readonly", width=26
             )
         else:
             initial = "" if option.kind in ("file", "path") else state.default_text(option)
-            var = tk.StringVar(value=initial)
+            var = tk.StringVar(master=line, value=initial)
             control = ttk.Entry(line, textvariable=var, width=36)
         control.grid(row=0, column=1, sticky="w")
         if option.kind in ("file", "path"):
@@ -252,7 +263,7 @@ class QuestXtractWindow:
                 return
             except tk.TclError:
                 pass
-        self.drop_text = lambda: tr("drop.unavailable")
+        self.drop_unavailable = True
 
     # --- what the controls mean --------------------------------------------------------
 
@@ -260,6 +271,8 @@ class QuestXtractWindow:
         """Use ``path`` as the recording or transcript, and show it."""
         self.source = path
         self.source_label.configure(text=str(path))
+        self.drop_extra = None  # the note of an earlier drop does not belong to this file
+        self.drop_note.configure(text=self._drop_note())
         if not state.output_offered(self.output.get(), path):
             self.output.set("questions")
         self._refresh()
@@ -277,6 +290,12 @@ class QuestXtractWindow:
         """Label the Advanced settings button for what it will do, in the current language."""
         key = "button.advanced_hide" if self.advanced_open else "button.advanced_show"
         self.advanced_button.configure(text=tr(key))
+
+    def _drop_note(self) -> str:
+        """Return the line under the drop box: the last drop's note, else drop being unavailable."""
+        if self.drop_extra is not None:
+            return self.drop_extra()
+        return tr("drop.unavailable") if self.drop_unavailable else ""
 
     def _tristate_canonical(self, dest: str) -> str:
         """Return the English name of a tri-state control's shown choice (its internal value)."""
@@ -321,6 +340,8 @@ class QuestXtractWindow:
                     row.grid_remove()
         problem = None if self.busy else self._problem()
         self.run_button.state(["disabled"] if self.busy or problem else ["!disabled"])
+        cancellable = self.busy and not self.cancel.is_set()
+        self.cancel_button.state(["!disabled"] if cancellable else ["disabled"])
         self.hint.configure(text=problem or "")
 
     # --- language ----------------------------------------------------------------------
@@ -347,7 +368,7 @@ class QuestXtractWindow:
         self.source_label.configure(
             text=tr("source.none") if self.source is None else str(self.source)
         )
-        self.drop_note.configure(text=self.drop_text() if self.drop_text else "")
+        self.drop_note.configure(text=self._drop_note())
         self.status.configure(text=self.status_text())
         self.stage_label.configure(text=self.stage_text())
         self._refresh()
@@ -391,8 +412,8 @@ class QuestXtractWindow:
         if paths:
             self.choose_source(paths[0])
             if len(paths) > 1:
-                self.drop_text = lambda: tr("drop.one_file")
-                self.drop_note.configure(text=self.drop_text())
+                self.drop_extra = lambda: tr("drop.one_file")
+                self.drop_note.configure(text=self._drop_note())
         return str(getattr(event, "action", "copy"))
 
     def _run(self) -> None:
@@ -401,6 +422,7 @@ class QuestXtractWindow:
         if source is None or self.busy:
             return
         self.busy = True
+        self.run_output = self.output.get()
         self.cancel.clear()
         self.result_path = None
         self.progress_var.set(0.0)
@@ -494,8 +516,12 @@ class QuestXtractWindow:
         """Show one worker event: progress while running, the result or error when it ends."""
         if kind == "progress":
             stage, fraction = payload
-            self.progress_var.set(100 * state.overall_fraction(stage, fraction))
-            self._set_stage(lambda: state.stage_label(stage))
+            quiz_follows = self.run_output == "quiz"
+            self.progress_var.set(
+                100 * state.overall_fraction(stage, fraction, quiz_follows=quiz_follows)
+            )
+            if not (stage == "done" and quiz_follows):  # the quiz is still to come
+                self._set_stage(lambda: state.stage_label(stage))
             return
         self.busy = False
         self.cancel.clear()

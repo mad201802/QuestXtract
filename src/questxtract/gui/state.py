@@ -112,7 +112,7 @@ def default_output(source: Path | None, output: str) -> Path | None:
     """
     if source is None or OUTPUTS[output] != "qti":
         return None
-    return source.with_name(f"{source.stem}.qti.zip")
+    return source.with_name(f"{source.stem.removesuffix('.quiz')}.qti.zip")
 
 
 def run_problem(
@@ -144,14 +144,15 @@ def one_line(text: str) -> str:
     return " ".join(lines) or tr("status.failed")
 
 
-def overall_fraction(stage: str, fraction: float) -> float:
+def overall_fraction(stage: str, fraction: float, *, quiz_follows: bool = False) -> float:
     """Where the whole run is, 0 to 1, from the pipeline's stage name and its fraction.
 
     The stage names are the pipeline's own progress names (architecture.md 11.3); a name this
-    module does not know counts as the start of the run.
+    module does not know counts as the start of the run. The pipeline reports ``done`` when its
+    stages end; with the Quiz output the quiz still follows, so that is where the quiz starts.
     """
     if stage == "done":
-        return 1.0
+        return _STAGE_ORDER.index("quiz") / len(_STAGE_ORDER) if quiz_follows else 1.0
     if stage not in _STAGE_ORDER:
         return 0.0
     done = min(max(fraction, 0.0), 1.0)

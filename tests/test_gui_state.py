@@ -94,7 +94,7 @@ def test_qti_needs_a_default_file_next_to_the_quiz_and_the_others_do_not():
     """AC: QTI writes a .qti.zip beside the quiz.json; the other outputs let the CLI choose."""
     quiz = Path("out") / "lecture.quiz.json"
 
-    assert state.default_output(quiz, "qti") == Path("out") / "lecture.quiz.qti.zip"
+    assert state.default_output(quiz, "qti") == Path("out") / "lecture.qti.zip"
     assert state.default_output(quiz, "questions") is None
     assert state.default_output(None, "qti") is None
 
@@ -211,3 +211,13 @@ def test_open_folder_uses_the_platform_opener(monkeypatch: pytest.MonkeyPatch, t
     state.open_folder(tmp_path)
 
     assert calls == [["open", str(tmp_path)], ["xdg-open", str(tmp_path)]]
+
+
+def test_the_quiz_output_does_not_reach_the_end_when_the_pipeline_is_done():
+    """The pipeline's `done` comes before the quiz; with the Quiz output the bar waits there."""
+    quiz_start = state.overall_fraction("done", 1.0, quiz_follows=True)
+
+    assert 0.0 < quiz_start < 1.0
+    assert state.overall_fraction("done", 1.0) == 1.0
+    assert state.overall_fraction("quiz", 0.0) == pytest.approx(quiz_start)
+    assert state.overall_fraction("quiz", 1.0) == 1.0
