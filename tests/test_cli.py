@@ -330,7 +330,7 @@ def test_vision_without_a_key_or_url_fails_before_transcription(
     assert main(["process", str(video)]) == 1
 
     err = capsys.readouterr().err
-    assert "QUESTXTRACT_NTNU_API_KEY" in err and "--llm-url" in err and fake_asr == []
+    assert "IDUN_API_KEY" in err and "--llm-url" in err and fake_asr == []
 
 
 def test_only_the_openai_key_with_the_default_endpoint_fails_before_transcription(
@@ -348,7 +348,7 @@ def test_only_the_openai_key_with_the_default_endpoint_fails_before_transcriptio
 
     err = capsys.readouterr().err
     assert err.startswith("error: ") and err.count("\n") == 1 and fake_asr == []
-    assert "QUESTXTRACT_NTNU_API_KEY" in err and "--llm-url https://api.openai.com/v1" in err
+    assert "IDUN_API_KEY" in err and "--llm-url https://api.openai.com/v1" in err
     assert "sk-openai" not in err
 
 
@@ -407,9 +407,9 @@ def test_detector_llm_error_does_not_reveal_api_key(
     monkeypatch.chdir(tmp_path)
     secret = "sk-fake-cli-error-secret"
     if key_source == "environment":  # the default endpoint's key (#173)
-        monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", secret)
+        monkeypatch.setenv("IDUN_API_KEY", secret)
     else:
-        (tmp_path / ".env").write_text(f"QUESTXTRACT_NTNU_API_KEY={secret}\n", encoding="utf-8")
+        (tmp_path / ".env").write_text(f"IDUN_API_KEY={secret}\n", encoding="utf-8")
     fake_llm(openai.OpenAIError(f"Invalid API key: {secret}"))
     source = _transcript_file(tmp_path)
     assert main(["process", str(source), "--detector", "llm"]) == 1
@@ -442,7 +442,7 @@ def test_llm_reasoning_reaches_the_request_and_allows_a_longer_wait(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A thinking model takes minutes per request: low, medium and high raise the deadline."""
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-test")
     source = str(_transcript_file(tmp_path))
 
     def config(*flags: str) -> Config:
@@ -611,8 +611,8 @@ def test_dotenv_key_reaches_client_but_not_output_or_cache(
 
     monkeypatch.chdir(tmp_path)
     if environment_key is not None:  # the default endpoint's key (#173)
-        monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", environment_key)
-    Path(".env").write_text('QUESTXTRACT_NTNU_API_KEY="sk-dotenv"', encoding="utf-8")
+        monkeypatch.setenv("IDUN_API_KEY", environment_key)
+    Path(".env").write_text('IDUN_API_KEY="sk-dotenv"', encoding="utf-8")
     source = _transcript_file(tmp_path)
     (sentence,) = split_sentences(Transcript.from_file(source))
     real_client = endpoint.client
@@ -693,7 +693,7 @@ def test_vision_flag_without_a_key_or_url_fails_before_transcription(
     assert main(["process", str(video), "--vision"]) == 1
 
     err = capsys.readouterr().err
-    assert err.startswith("error: ") and "QUESTXTRACT_NTNU_API_KEY" in err and "--llm-url" in err
+    assert err.startswith("error: ") and "IDUN_API_KEY" in err and "--llm-url" in err
     assert err.count("\n") == 1 and fake_asr == [] and "[1/" not in err
 
 
@@ -719,7 +719,7 @@ def test_vision_reads_the_board_with_the_model_given(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-test")
     client = fake_llm(_BOARD)
     video = make_mp4(tmp_path / "lecture.mp4", video=True)
 
@@ -1073,7 +1073,7 @@ def test_one_run_reads_the_board_finds_the_questions_and_writes_the_quiz(
             return _LECTURE
 
     monkeypatch.setitem(asr._REGISTRY, "faster_whisper", _Backend)
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")  # only NTNU's key (#173)
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-test")  # only NTNU's key (#173)
     models = _Models()
     monkeypatch.setattr(endpoint, "client", models.client)
     video = _slide_lecture(tmp_path / "lecture.mp4")
@@ -1134,7 +1134,7 @@ def test_an_openai_model_on_ntnus_service_fails_before_transcription(
 ) -> None:
     """#173 review: an OpenAI model name from an older setup is refused before anything slow,
     and the hint names the flag that sets the model."""
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-test")
     if "--vision" in flags:
         Path("questxtract.toml").write_text('vision_model = "gpt-4o"\n', encoding="utf-8")
     video = make_mp4(tmp_path / "lecture.mp4", video=True)
@@ -1181,5 +1181,5 @@ def test_with_vision_base_url_the_vision_hints_name_it(
     assert main(["process", str(video), "--vision"]) == 1
 
     err = capsys.readouterr().err
-    assert "QUESTXTRACT_NTNU_API_KEY" in err and "--llm-url" not in err
+    assert "IDUN_API_KEY" in err and "--llm-url" not in err
     assert 'set vision_base_url = "https://api.openai.com/v1" in questxtract.toml' in err

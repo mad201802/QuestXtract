@@ -182,7 +182,7 @@ def test_everything_defaults_to_deepseek_on_ntnu_with_one_key(tmp_path, monkeypa
     """#173: vision, the judge and the quiz on one model at NTNU's service, with its key."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-    Path(".env").write_text("QUESTXTRACT_NTNU_API_KEY=ntnu-dotenv\n", encoding="utf-8")
+    Path(".env").write_text("IDUN_API_KEY=ntnu-dotenv\n", encoding="utf-8")
 
     config = Config()
 
@@ -200,14 +200,14 @@ def test_each_key_goes_to_one_service_only(monkeypatch):
     assert Config().api_key is None and Config().vision_api_key is None
 
     third_party = Config(vision_base_url="https://openrouter.ai/api/v1")
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
     assert (third_party.api_key, third_party.vision_api_key) == ("ntnu-key", "vision-key")
 
 
 def test_openai_takes_the_openai_key_and_never_the_ntnu_one(monkeypatch):
     """#173 AC2: the key goes with the endpoint."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
 
     openai = Config(base_url="https://api.openai.com/v1")
 
@@ -222,8 +222,8 @@ def test_openai_takes_the_openai_key_and_never_the_ntnu_one(monkeypatch):
 
 def test_the_ntnu_key_in_the_environment_wins_over_dotenv(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-environment")
-    Path(".env").write_text("QUESTXTRACT_NTNU_API_KEY=ntnu-dotenv\n", encoding="utf-8")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-environment")
+    Path(".env").write_text("IDUN_API_KEY=ntnu-dotenv\n", encoding="utf-8")
 
     assert Config().vision_api_key == "ntnu-environment"
 
@@ -274,6 +274,6 @@ def test_the_old_reasoning_name_in_the_settings_file_still_applies(tmp_path, mon
 def test_any_spelling_of_ntnus_url_gets_the_ntnu_key(monkeypatch, url):
     """#173 review: the key goes with the service, however its URL is written."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
     assert Config(base_url=url).api_key == "ntnu-key"
     assert Config(base_url="https://api.openai.com/v1").api_key == "sk-openai"

@@ -65,8 +65,14 @@ def root() -> Iterator[Any]:
 
 @pytest.fixture
 def window(root: Any) -> gui_window.QuestXtractWindow:
-    """The window with no drag and drop, as on a platform where it cannot start."""
-    return gui_window.QuestXtractWindow(root, drag_and_drop=False)
+    """The window with no drag and drop, as on a platform where it cannot start.
+
+    Set back to the CLI's offline defaults: the runs here must not call a model.
+    """
+    window = gui_window.QuestXtractWindow(root, drag_and_drop=False)
+    window.fields["detector"].set("rules")
+    window.fields["vision"].set(i18n.tr("tristate.default"))
+    return window
 
 
 def _pump(root: Any, done: Callable[[], bool], timeout: float = 120.0) -> None:
@@ -310,6 +316,26 @@ def test_the_start_view_is_simple_and_the_options_are_behind_advanced_settings(w
     window._toggle_advanced()
     assert not window.options_frame.winfo_manager()
     assert shown != window.advanced_button.cget("text")
+
+
+def test_reading_the_board_is_on_the_start_view_not_behind_advanced_settings(window):
+    """The vision choice is outside the hidden options form and follows the output choice."""
+    window.output.set("questions")
+    window._refresh()
+
+    assert not window.options_frame.winfo_manager()
+    assert window.option_rows["vision"].master is not window.options_frame
+    assert window.option_rows["vision"].grid_info()
+
+
+def test_the_window_starts_with_the_llm_judge_and_reading_the_board_on(root):
+    """The start values: the LLM detector and vision on, so Run passes both flags."""
+    window = gui_window.QuestXtractWindow(root, drag_and_drop=False)
+
+    assert window.fields["detector"].get() == "llm"
+    assert tr_shown(window, "vision") == "On"
+    values = window._values()
+    assert values["detector"] == "llm" and values["vision"] is True
 
 
 def test_a_language_switch_keeps_the_advanced_view_open(window):

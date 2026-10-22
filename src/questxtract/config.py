@@ -28,7 +28,7 @@ _PUNCTUATION_PROMPT = (
 
 NTNU_LLM_URL = "https://llm.hpc.ntnu.no/v1"  # NTNU's LLM service: the default endpoint
 OPENAI_URL = "https://api.openai.com/v1"  # OpenAI, the documented fallback (also base_url None)
-NTNU_KEY_ENV = "QUESTXTRACT_NTNU_API_KEY"  # the key for NTNU's LLM service
+NTNU_KEY_ENV = "IDUN_API_KEY"  # the key for NTNU's LLM service
 VISION_KEY_ENV = "QUESTXTRACT_VISION_API_KEY"  # for a vision_base_url of another service
 OPENAI_KEY_ENV = "OPENAI_API_KEY"  # the key for OpenAI and base_url's other endpoints
 DEEPSEEK = "deepseek-ai/DeepSeek-V4.1-Flash-1017"  # every model's default, on NTNU's service
@@ -262,7 +262,7 @@ def is_openai(url: str | None) -> bool:
 def endpoint_key(url: str | None) -> str | None:
     """Read the key for ``url`` from the environment or cwd's ``.env``, never storing it.
 
-    NTNU's service has a key of its own, ``QUESTXTRACT_NTNU_API_KEY``, so the OpenAI key never
+    NTNU's service has a key of its own, ``IDUN_API_KEY``, so the OpenAI key never
     goes there and the NTNU key never goes anywhere else. Every other endpoint (OpenAI,
     OpenRouter, a local server) reads ``OPENAI_API_KEY``, which a local server may leave unset.
     """

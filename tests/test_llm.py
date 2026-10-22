@@ -274,7 +274,7 @@ def test_provider_error_hides_key_in_message_and_traceback(
     context, fake_llm, tmp_path, monkeypatch, error_type
 ):
     secret = "sk-fake-provider-error-secret"
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", secret)  # the default endpoint's key
+    monkeypatch.setenv("IDUN_API_KEY", secret)  # the default endpoint's key
     message = f"Request rejected for {secret}; credential {secret} is invalid."
     fake_llm(error_type(message), error_type(message))
     with pytest.raises(ConnectionError) as caught:

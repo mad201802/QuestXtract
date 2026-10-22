@@ -303,7 +303,7 @@ def _check_endpoint(config: Config, what: str, *, model_flag: str, vision: bool 
     """Raise ``ValueError`` if ``what`` cannot reach its model: no extra, no key, wrong service.
 
     The key goes with the endpoint (:func:`config.endpoint_key`): NTNU's LLM service, the
-    default, needs ``QUESTXTRACT_NTNU_API_KEY``; OpenAI needs ``OPENAI_API_KEY``. Any other
+    default, needs ``IDUN_API_KEY``; OpenAI needs ``OPENAI_API_KEY``. Any other
     endpoint may be a local server without a key. Every model on NTNU's service is named
     ``organisation/model`` and no OpenAI model is, so a name on the wrong service (``gpt-4o``
     on NTNU's, the default DeepSeek on OpenAI's) is refused here rather than by the service

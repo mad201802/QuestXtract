@@ -60,6 +60,12 @@ def default_text(option: Option) -> str:
     return "" if value is None else str(value)
 
 
+#: What the window starts with where it differs from the CLI's default: the LLM judge and reading
+#: the board are on. A control left at its start value is passed as a flag, so the run is the
+#: command line it shows; the CLI's own defaults (offline, rules) do not change.
+START_VALUES: dict[str, str] = {"detector": "llm", "vision": "On"}
+
+
 def hint(option: Option) -> str:
     """Return the default as a short phrase for the label beside the control."""
     if option.dest == "output":

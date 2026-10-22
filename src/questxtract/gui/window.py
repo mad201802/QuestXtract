@@ -158,9 +158,17 @@ class QuestXtractWindow:
         self._text(files, "output.files")
         files.grid(row=0, column=0, sticky="w", pady=(0, 6))
         shown = [option for option in OPTIONS if option.kind != "implicit"]
-        for row, option in enumerate(shown, start=1):
-            line = self._option_row(options, option)
-            line.grid(row=row, column=0, sticky="ew", pady=1)
+        row = 0
+        for option in shown:
+            if option.dest == "vision":
+                # Reading the board is the choice that changes the result most: it stays on the
+                # start view, under the output, not behind Advanced settings.
+                line = self._option_row(outputs, option)
+                line.grid(row=1, column=0, columnspan=len(state.OUTPUT_LABELS), sticky="w")
+            else:
+                row += 1
+                line = self._option_row(options, option)
+                line.grid(row=row, column=0, sticky="ew", pady=1)
             self.option_rows[option.dest] = line
         options.grid_remove()
 
@@ -201,13 +209,16 @@ class QuestXtractWindow:
             var = tk.BooleanVar(value=False)
             control: tk.Widget = ttk.Checkbutton(line, variable=var)
         elif option.kind == "tristate":
-            var = tk.StringVar(value=tr("tristate.default"))
+            start = state.START_VALUES.get(option.dest, "Default")
+            var = tk.StringVar(value=tr(f"tristate.{start.lower()}"))
             combo = ttk.Combobox(line, textvariable=var, state="readonly", width=26)
             self.tristate_combos[option.dest] = combo
             control = combo
             self._set_tristate_values(option.dest)
         elif option.kind == "choice":
-            var = tk.StringVar(value=state.default_text(option))
+            var = tk.StringVar(
+                value=state.START_VALUES.get(option.dest, state.default_text(option))
+            )
             control = ttk.Combobox(
                 line, textvariable=var, values=option.choices, state="readonly", width=26
             )

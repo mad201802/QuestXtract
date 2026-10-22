@@ -153,7 +153,7 @@ def test_the_quiz_output_writes_questions_and_quiz_next_to_each_other(
     tmp_path: Path, fake_llm: Callable[..., Any], monkeypatch: pytest.MonkeyPatch
 ):
     """AC: Quiz gives the same two files `process --quiz` writes, and the window gets the quiz."""
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-test")
     fake_llm(
         {
             "quiz_material": True,
@@ -182,7 +182,7 @@ def test_the_qti_output_exports_the_quiz_the_quiz_output_made(
     """AC: QTI takes a quiz.json and writes the same package the CLI's `qti` writes."""
     import zipfile
 
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-test")
     fake_llm(
         {
             "quiz_material": True,

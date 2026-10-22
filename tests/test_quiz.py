@@ -86,7 +86,7 @@ def _assert_valid(quiz: dict[str, Any], questions: dict[str, Any]) -> None:
 
 @pytest.fixture
 def key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")  # the default endpoint's key
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-test")  # the default endpoint's key
 
 
 @pytest.fixture
@@ -329,7 +329,7 @@ def test_quiz_without_a_key_or_url_fails_before_any_request(
 
     assert main(["quiz", str(questions_file)]) == 1
 
-    assert "QUESTXTRACT_NTNU_API_KEY" in capsys.readouterr().err and client.requests == []
+    assert "IDUN_API_KEY" in capsys.readouterr().err and client.requests == []
 
 
 def test_process_with_quiz_writes_both_files(

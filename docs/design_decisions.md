@@ -499,7 +499,7 @@ so a later Manim step can read it.
 
 *Chose:* `deepseek-ai/DeepSeek-V4.1-Flash-1017` on NTNU's LLM service for reading the board, the
 LLM detector and the quiz, with `reasoning_effort = "none"` sent with every request. The key goes
-with the endpoint: `QUESTXTRACT_NTNU_API_KEY` for NTNU's service, `OPENAI_API_KEY` for any other
+with the endpoint: `IDUN_API_KEY` for NTNU's service, `OPENAI_API_KEY` for any other
 (#173).
 
 *Alternative:* Qwen3.8-27B on NTNU for vision and gpt-4o on OpenAI for the judge and the quiz,
