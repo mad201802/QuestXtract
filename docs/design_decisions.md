@@ -520,6 +520,29 @@ customer runs after the project may differ; OpenAI stays one setting away
 NTNU may replace it. `"none"` is model-specific: Qwen rejects it and gpt-4o takes no setting, so
 another model needs `--llm-reasoning server`.
 
+### D23: A checking pass for the quiz, not built until wrong keys recur
+
+*Chose:* no second model run over the quiz yet; the quiz prompt carries the rules instead (work the
+answer out, never state a false premise, name the real expression, leave check-ins out). If a
+generated quiz keeps a wrong key or a stem that lost the condition its answer depends on, add the
+pass to the pipeline: send each item's stem and options alone to the model, without the key,
+and compare its answer with the key. A disagreement, or "the stem is ambiguous", is written as a
+note for the teacher; the item stays pending.
+
+*Alternative:* trust the writer's key; or check with the same call that writes the item.
+
+*Why:* on the first lecture, two keys copied a lecturer's answer that did not fit the question the
+stem asked, and a rewritten stem twice dropped the number its key depended on. A prompt lowers that
+but cannot rule it out, and the teacher reads every item either way. A blind solver would have
+caught most of these. It costs one more request per item, and the same model has the same
+blind spots, so a different model on the service is better if there is one. It also needs a place
+for the note: the pipeline never writes into `review`, so it means a new quiz.json key and a minor
+`schema_version` bump.
+
+*Cost:* until it exists, a wrong key reaches the teacher as a pending item with nothing marking
+it. An invented answer for a question the lecture never answered is not caught by this pass; that
+needs `--strictness strict`.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |

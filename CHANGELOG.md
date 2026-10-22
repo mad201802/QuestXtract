@@ -126,6 +126,7 @@
 
 ### Fixed
 
+- The quiz no longer drops an item because two options differ only by a sign (`-2` and `2`): the sameness check keeps minus signs and operators. The quiz prompt (now `v1`) leaves out check-ins on the class, names the real expression from the board, and makes the model work the answer out instead of copying a lecturer's answer that does not fit the stem. (#124)
 - The transcription bar starts moving while the recording is decoded to audio (the first tenth of the bar) instead of sitting at 0 % until the first words arrive. (#124)
 
 ### Changed
