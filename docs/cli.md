@@ -244,7 +244,8 @@ The key goes with the endpoint. NTNU's LLM service, the default, reads
 `IDUN_API_KEY`; a `vision_base_url` on another host than NTNU's or OpenAI's reads
 `QUESTXTRACT_VISION_API_KEY`; every other endpoint reads `OPENAI_API_KEY`. So the OpenAI key is
 never sent to NTNU, the NTNU key never leaves NTNU, and neither goes to a host set up for vision
-alone. Each name comes from the environment if set; otherwise it is read from `.env` in the
+alone. `QUESTXTRACT_NTNU_API_KEY`, the NTNU key's former name, is still read when `IDUN_API_KEY`
+is not set. Each name comes from the environment if set; otherwise it is read from `.env` in the
 working directory. This file is ignored by Git. The supported format is `NAME=VALUE`, with
 optional single or double quotes, blank lines and `#` comments. Other variables are ignored; parent and user directories are not searched. The key
 is never stored in Config, logs, cache entries or `questions.json`.

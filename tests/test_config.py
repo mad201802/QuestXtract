@@ -228,6 +228,43 @@ def test_the_ntnu_key_in_the_environment_wins_over_dotenv(tmp_path, monkeypatch)
     assert Config().vision_api_key == "ntnu-environment"
 
 
+def test_the_former_ntnu_key_name_is_still_read_for_ntnu_only(tmp_path, monkeypatch):
+    """The key's old name, QUESTXTRACT_NTNU_API_KEY, still works, in the environment and .env."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("IDUN_API_KEY", raising=False)
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "old-environment")
+    assert Config().api_key == Config().vision_api_key == "old-environment"
+
+    monkeypatch.delenv("QUESTXTRACT_NTNU_API_KEY")
+    Path(".env").write_text("QUESTXTRACT_NTNU_API_KEY=old-dotenv\n", encoding="utf-8")
+    assert Config().api_key == "old-dotenv"
+
+
+def test_the_new_ntnu_key_name_wins_over_the_old_one(tmp_path, monkeypatch):
+    """IDUN_API_KEY is read first, from the environment or .env, whatever the old name holds."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "old-environment")
+    Path(".env").write_text("IDUN_API_KEY=new-dotenv\n", encoding="utf-8")
+    assert Config().api_key == "new-dotenv"
+
+    monkeypatch.setenv("IDUN_API_KEY", "new-environment")
+    assert Config().api_key == "new-environment"
+
+
+def test_the_former_ntnu_key_never_goes_to_another_service(monkeypatch):
+    """The old name is NTNU's key still: OpenAI and a third-party vision host never get it."""
+    monkeypatch.delenv("IDUN_API_KEY", raising=False)
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "old-ntnu")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    openai = Config(base_url="https://api.openai.com/v1")
+    third_party = Config(vision_base_url="https://openrouter.ai/api/v1")
+
+    assert openai.api_key is None
+    assert third_party.vision_api_key is None
+    assert third_party.api_key == "old-ntnu"  # the judge still goes to NTNU
+
+
 def test_vision_reasoning_follows_reasoning_effort_unless_set():
     """#173 review: vision may need another setting than the judge (gpt-4o judge, DeepSeek
     vision; or a local vision model and DeepSeek judging)."""

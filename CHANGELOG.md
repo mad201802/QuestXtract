@@ -122,7 +122,7 @@
 
 ### Changed
 
-- NTNU's LLM service (the default endpoint) reads its key from `IDUN_API_KEY`, in the environment or `.env`, instead of `QUESTXTRACT_NTNU_API_KEY`. Rename the variable in your `.env`. (#124)
+- NTNU's LLM service (the default endpoint) reads its key from `IDUN_API_KEY`, in the environment or `.env`. `QUESTXTRACT_NTNU_API_KEY`, its former name, is still read when `IDUN_API_KEY` is not set, so nothing has to be renamed. (#124)
 
 ### Fixed
 

@@ -906,7 +906,7 @@ with the endpoint, not with the caller:
 
 | Endpoint | Key |
 |---|---|
-| NTNU's LLM service, host `llm.hpc.ntnu.no` (the default `base_url`) | `IDUN_API_KEY` |
+| NTNU's LLM service, host `llm.hpc.ntnu.no` (the default `base_url`) | `IDUN_API_KEY` (else its former name `QUESTXTRACT_NTNU_API_KEY`) |
 | a `vision_base_url` on any other host than NTNU's or OpenAI's (a hosted vision model) | `QUESTXTRACT_VISION_API_KEY` |
 | any other: OpenAI (`https://api.openai.com/v1`, or `base_url = None`), OpenRouter, a local server | `OPENAI_API_KEY` (a local server needs none) |
 
