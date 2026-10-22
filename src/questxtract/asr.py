@@ -117,6 +117,9 @@ def _segment_to_dict(segment: Any) -> dict[str, Any]:
     }
 
 
+#: The first tenth of the stage's bar is decoding the recording to a WAV; the rest is ASR.
+_EXTRACT_SHARE = 0.1
+
 #: Loaded models, keyed on the two fields that determine which checkpoint gets loaded
 #: (``model_size``, ``compute_type``) - not the full config, since options like ``language``
 #: or ``beam_size`` are passed per call and never change which model file is read. Process
@@ -172,7 +175,11 @@ class FasterWhisperBackend:
                 "faster-whisper is not installed; reinstall questxtract to restore it"
             ) from exc
 
-        with extract_audio(source) as audio_path:
+        def extracted(fraction: float) -> None:
+            if on_progress:
+                on_progress(_EXTRACT_SHARE * min(fraction, 0.99))
+
+        with extract_audio(source, progress=extracted) as audio_path:
             segments, info = model.transcribe(
                 str(audio_path),
                 beam_size=config.beam_size,
@@ -198,5 +205,7 @@ class FasterWhisperBackend:
                     words = s.words or ()
                     ends = (w.end for w in words) if words else (s.end,)
                     for end in ends:
-                        on_progress(min(0.99, end / info.duration))
+                        on_progress(
+                            min(0.99, _EXTRACT_SHARE + (1 - _EXTRACT_SHARE) * end / info.duration)
+                        )
             return collected

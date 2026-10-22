@@ -133,6 +133,8 @@ def test_write_wav_flushes_final_encoder_packets(tmp_path, monkeypatch):
             return []
 
     class FakeInputContainer:
+        duration = 0
+
         def decode(self, audio_stream):
             return []
 
@@ -190,3 +192,15 @@ def test_extract_audio_rejects_a_video_without_audio(tmp_path, make_mp4):
     with pytest.raises(MediaError, match="no audio track"):
         with extract_audio(media):
             pass
+
+
+def test_extract_audio_reports_the_fraction_decoded(tmp_path, make_mp4):
+    """The first tenth of the transcribe bar is this decode: fractions rise and stay in [0, 1]."""
+    seen: list[float] = []
+
+    with extract_audio(make_mp4(tmp_path / "lecture.mp4"), progress=seen.append):
+        pass
+
+    assert seen
+    assert seen == sorted(seen)
+    assert all(0.0 <= fraction <= 1.0 for fraction in seen)
