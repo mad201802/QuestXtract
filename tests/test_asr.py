@@ -86,9 +86,10 @@ class _FakeSegment:
 def test_faster_whisper_backend_reports_word_end_over_duration(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Issue #14: the real progress math on the real backend, not the fake - word.end /
-    info.duration, capped at 0.99 (the caller decides when a stage is truly finished), and
-    falling back to the segment's own end when faster-whisper gave it no words."""
+    """Issue #14: the real progress math on the real backend, not the fake. The first tenth of
+    the bar is decoding the recording, then 0.1 + 0.9 * word.end / info.duration, capped at 0.99
+    (the caller decides when a stage is truly finished), and falling back to the segment's own
+    end when faster-whisper gave it no words."""
     source = tmp_path / "lecture.mp4"
     source.touch()
     hi, there = _FakeWord("Hi", 0.0, 1.0), _FakeWord("there", 1.0, 2.0)
@@ -105,7 +106,8 @@ def test_faster_whisper_backend_reports_word_end_over_duration(
     monkeypatch.setattr(asr, "_load_model", lambda *a, **k: _FakeModel())
 
     @contextmanager
-    def _fake_extract_audio(path: Path) -> Any:
+    def _fake_extract_audio(path: Path, progress: Any = None) -> Any:
+        progress(0.5)  # decoding half the recording is half of the first tenth of the bar
         yield path
 
     monkeypatch.setattr(asr, "extract_audio", _fake_extract_audio)
@@ -113,7 +115,7 @@ def test_faster_whisper_backend_reports_word_end_over_duration(
     seen: list[float] = []
     result = FasterWhisperBackend().transcribe(source, Config(), on_progress=seen.append)
 
-    assert seen == [0.1, 0.2, 0.99]
+    assert seen == pytest.approx([0.05, 0.19, 0.28, 0.99])
     assert len(result) == 2
 
 

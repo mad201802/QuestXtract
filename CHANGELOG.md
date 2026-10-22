@@ -4,6 +4,14 @@
 
 ### Added
 
+- `questxtract gui` opens a window for people who do not use a terminal: drop or browse a
+  recording (`.mp4`, `.mp3`) or a transcript (`.json`), choose questions, transcript, quiz or QTI
+  package, set the options (the CLI's own, with its defaults) and press Run. It runs the CLI's code,
+  shows progress, Cancel (between stages), the written path and an Open folder button. Install with
+  `pip install "questxtract[gui]"`; drag and drop needs `tkinterdnd2`, and where it cannot start the
+  window says so and Browse still works. The start view has only the file, the output and Run;
+  the options are behind Advanced settings, except Read the board (vision), which stays on the start view. The window starts with the LLM detector and Read the board on (the CLI's defaults are unchanged); both need the NTNU key. The window is in English, Norsk or Italiano (the
+  switch at the top right). Needs a Python with tkinter. (#124)
 - `--vision-reader ocr` (`vision_reader = "ocr"`) reads the board with GLM-OCR
   (`vision_ocr_model`, `zai-org/GLM-OCR` on NTNU's service) instead of the vision model: the text
   and the formulas as LaTeX, labels such as circled numbers and units left out, no description,
@@ -111,6 +119,15 @@
   told apart: `detector` (`rules` or `llm`), `judge_prompt_version` (e.g. `v5`) and
   `judge_reasoning_effort` (the `--llm-reasoning` level, `""` for `server`). The last two are
   `null` with the rules detector. Files from schema 2.0 and 2.1 still read. (#114)
+
+### Changed
+
+- NTNU's LLM service (the default endpoint) reads its key from `IDUN_API_KEY`, in the environment or `.env`. `QUESTXTRACT_NTNU_API_KEY`, its former name, is still read when `IDUN_API_KEY` is not set, so nothing has to be renamed. (#124)
+
+### Fixed
+
+- The quiz no longer drops an item because two options differ only by a sign (`-2` and `2`): the sameness check keeps minus signs and operators. The quiz prompt (now `v1`) leaves out check-ins on the class, names the real expression from the board, and makes the model work the answer out instead of copying a lecturer's answer that does not fit the stem. (#124)
+- The transcription bar starts moving while the recording is decoded to audio (the first tenth of the bar) instead of sitting at 0 % until the first words arrive. (#124)
 
 ### Changed
 

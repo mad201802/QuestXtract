@@ -182,7 +182,7 @@ def test_everything_defaults_to_deepseek_on_ntnu_with_one_key(tmp_path, monkeypa
     """#173: vision, the judge and the quiz on one model at NTNU's service, with its key."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-    Path(".env").write_text("QUESTXTRACT_NTNU_API_KEY=ntnu-dotenv\n", encoding="utf-8")
+    Path(".env").write_text("IDUN_API_KEY=ntnu-dotenv\n", encoding="utf-8")
 
     config = Config()
 
@@ -200,14 +200,14 @@ def test_each_key_goes_to_one_service_only(monkeypatch):
     assert Config().api_key is None and Config().vision_api_key is None
 
     third_party = Config(vision_base_url="https://openrouter.ai/api/v1")
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
     assert (third_party.api_key, third_party.vision_api_key) == ("ntnu-key", "vision-key")
 
 
 def test_openai_takes_the_openai_key_and_never_the_ntnu_one(monkeypatch):
     """#173 AC2: the key goes with the endpoint."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
 
     openai = Config(base_url="https://api.openai.com/v1")
 
@@ -222,10 +222,47 @@ def test_openai_takes_the_openai_key_and_never_the_ntnu_one(monkeypatch):
 
 def test_the_ntnu_key_in_the_environment_wins_over_dotenv(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-environment")
-    Path(".env").write_text("QUESTXTRACT_NTNU_API_KEY=ntnu-dotenv\n", encoding="utf-8")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-environment")
+    Path(".env").write_text("IDUN_API_KEY=ntnu-dotenv\n", encoding="utf-8")
 
     assert Config().vision_api_key == "ntnu-environment"
+
+
+def test_the_former_ntnu_key_name_is_still_read_for_ntnu_only(tmp_path, monkeypatch):
+    """The key's old name, QUESTXTRACT_NTNU_API_KEY, still works, in the environment and .env."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("IDUN_API_KEY", raising=False)
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "old-environment")
+    assert Config().api_key == Config().vision_api_key == "old-environment"
+
+    monkeypatch.delenv("QUESTXTRACT_NTNU_API_KEY")
+    Path(".env").write_text("QUESTXTRACT_NTNU_API_KEY=old-dotenv\n", encoding="utf-8")
+    assert Config().api_key == "old-dotenv"
+
+
+def test_the_new_ntnu_key_name_wins_over_the_old_one(tmp_path, monkeypatch):
+    """IDUN_API_KEY is read first, from the environment or .env, whatever the old name holds."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "old-environment")
+    Path(".env").write_text("IDUN_API_KEY=new-dotenv\n", encoding="utf-8")
+    assert Config().api_key == "new-dotenv"
+
+    monkeypatch.setenv("IDUN_API_KEY", "new-environment")
+    assert Config().api_key == "new-environment"
+
+
+def test_the_former_ntnu_key_never_goes_to_another_service(monkeypatch):
+    """The old name is NTNU's key still: OpenAI and a third-party vision host never get it."""
+    monkeypatch.delenv("IDUN_API_KEY", raising=False)
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "old-ntnu")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    openai = Config(base_url="https://api.openai.com/v1")
+    third_party = Config(vision_base_url="https://openrouter.ai/api/v1")
+
+    assert openai.api_key is None
+    assert third_party.vision_api_key is None
+    assert third_party.api_key == "old-ntnu"  # the judge still goes to NTNU
 
 
 def test_vision_reasoning_follows_reasoning_effort_unless_set():
@@ -274,6 +311,6 @@ def test_the_old_reasoning_name_in_the_settings_file_still_applies(tmp_path, mon
 def test_any_spelling_of_ntnus_url_gets_the_ntnu_key(monkeypatch, url):
     """#173 review: the key goes with the service, however its URL is written."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
     assert Config(base_url=url).api_key == "ntnu-key"
     assert Config(base_url="https://api.openai.com/v1").api_key == "sk-openai"

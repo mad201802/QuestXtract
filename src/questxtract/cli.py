@@ -12,6 +12,7 @@ import os
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import NamedTuple, NoReturn
 
 from . import __version__
 from .config import (
@@ -27,12 +28,24 @@ from .config import (
 from .evaluate import evaluate, evaluate_vision, format_report, format_vision_report
 from .export import read_questions, result_to_json, write_questions
 from .filtering import filter_document
-from .models import Context, Sentence, Stage, Transcript
-from .pipeline import STAGES, cached_transcript, run
+from .gui.options import FLAG_FIELDS
+from .models import Context, Progress, Sentence, Stage, Transcript
+from .pipeline import STAGES, Cancelled, cached_transcript, run
 from .qti import QtiExportError
 from .qti_v3 import export_qti
-from .quiz import MAX_OPTIONS, MIN_OPTIONS, STRICTNESS, build_quiz, file_hash, quiz_to_json
+from .quiz import (
+    MAX_OPTIONS,
+    MIN_OPTIONS,
+    STRICTNESS,
+    QuizResult,
+    build_quiz,
+    file_hash,
+    quiz_to_json,
+)
 from .vision import has_video
+
+PROCESS_INPUTS = (".mp4", ".mp3", ".json")  # what `process` takes (the graphical app too, #124)
+TRANSCRIBE_INPUTS = (".mp4", ".mp3")  # what `transcribe` takes
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
 
@@ -167,7 +180,7 @@ def _draw(index: int, total: int, name: str, fraction: float) -> None:
     print(f"\r{_render(index, total, name, fraction)}", end="", file=sys.stderr, flush=True)
 
 
-def _check_input(path: Path, allowed: Sequence[str]) -> None:
+def check_input(path: Path, allowed: Sequence[str]) -> None:
     """Reject a bad input up front, not minutes into a transcription.
 
     Raises:
@@ -217,21 +230,7 @@ def _config(args: argparse.Namespace) -> Config:
     config = load_config(args.config)
     changes = {
         field: value
-        for flag, field in (
-            ("model", "model_size"),
-            ("from_scratch", "from_scratch"),
-            ("threshold", "min_confidence"),
-            ("detector", "detector"),
-            ("llm_model", "judge_model"),
-            ("llm_url", "base_url"),
-            ("llm_reasoning", "reasoning_effort"),
-            ("vision", "vision_enabled"),
-            ("vision_model", "vision_model"),
-            ("vision_reader", "vision_reader"),
-            ("quiz_model", "quiz_model"),
-            ("strictness", "quiz_strictness"),
-            ("options", "quiz_options"),
-        )
+        for flag, field in FLAG_FIELDS
         if (value := getattr(args, flag, None)) is not None
     }
     if changes.get("reasoning_effort") == "server":
@@ -302,7 +301,7 @@ def _check_endpoint(config: Config, what: str, *, model_flag: str, vision: bool 
     """Raise ``ValueError`` if ``what`` cannot reach its model: no extra, no key, wrong service.
 
     The key goes with the endpoint (:func:`config.endpoint_key`): NTNU's LLM service, the
-    default, needs ``QUESTXTRACT_NTNU_API_KEY``; OpenAI needs ``OPENAI_API_KEY``. Any other
+    default, needs ``IDUN_API_KEY``; OpenAI needs ``OPENAI_API_KEY``. Any other
     endpoint may be a local server without a key. Every model on NTNU's service is named
     ``organisation/model`` and no OpenAI model is, so a name on the wrong service (``gpt-4o``
     on NTNU's, the default DeepSeek on OpenAI's) is refused here rather than by the service
@@ -357,14 +356,8 @@ def _write_quiz(
 
     A question the model fails on is left out with a warning line; the others are written.
     """
-    result = build_quiz(
-        document if document is not None else read_questions(questions),
-        config,
-        questions_name=questions.name,
-        questions_hash=file_hash(questions),
-        sentences=sentences,
-        progress=(bar := _progress_bar(1)),
-    )
+    bar = _progress_bar(1)
+    result = _quiz_result(questions, config, sentences, bar, document)
     bar("done", 1.0)
     for question_id, reason in result.failed:
         print(f"warning: quiz: {question_id} left out: {reason}", file=sys.stderr)
@@ -457,20 +450,67 @@ def _with_vision(config: Config, source: Path) -> Config:
     return config
 
 
-def _run(ctx: Context, stages: Sequence[Stage]) -> Context:
-    """Run ``stages`` under the progress bar, closing its line if anything interrupts it."""
+def _run(
+    ctx: Context,
+    stages: Sequence[Stage],
+    progress: Progress | None = None,
+    stop: Callable[[], bool] | None = None,
+) -> Context:
+    """Run ``stages`` under the progress bar, or under ``progress`` when the caller gives one."""
+    if progress is not None:
+        return run(ctx, stages, progress=progress, stop=stop)
     try:
-        return run(ctx, stages, progress=_progress_bar(len(stages)))
+        return run(ctx, stages, progress=_progress_bar(len(stages)), stop=stop)
     except BaseException:
         print(file=sys.stderr)  # close the redrawing bar line before the error/traceback
         raise
 
 
-def _process(args: argparse.Namespace) -> int:
-    """Extract questions from a recording (every stage) or a transcript (skips ASR)."""
+class RunResult(NamedTuple):
+    """What a finished ``process`` or ``transcribe`` run produced (issue #124).
+
+    ``path`` is the file it wrote, or ``None`` when the output goes to stdout, in which case
+    ``text`` is what would be printed. ``summary`` is the one-line account the CLI prints.
+    ``warnings`` are the lines the CLI prints to stderr for questions the quiz left out.
+    """
+
+    path: Path | None
+    summary: str
+    text: str | None = None
+    warnings: tuple[str, ...] = ()
+
+
+def _quiz_result(
+    questions: Path,
+    config: Config,
+    sentences: Sequence[Sentence],
+    progress: Progress | None = None,
+    document: dict[str, object] | None = None,
+) -> QuizResult:
+    """Make the quiz for a questions file: the one place the CLI and the app call the model."""
+    return build_quiz(
+        document if document is not None else read_questions(questions),
+        config,
+        questions_name=questions.name,
+        questions_hash=file_hash(questions),
+        sentences=sentences,
+        progress=progress,
+    )
+
+
+def _process_core(
+    args: argparse.Namespace,
+    progress: Progress | None,
+    stop: Callable[[], bool] | None,
+) -> tuple[Context, Config, Path | None]:
+    """Run ``process`` up to the file it writes: the one path the CLI and the app both take.
+
+    Returns the finished context, the settings it ran with, and the questions file it wrote
+    (``None`` for stdout, which keeps its keyframes at their cache paths).
+    """
     config = _with_llm(_config(args))
     source = Path(args.input)
-    _check_input(source, (".mp4", ".mp3", ".json"))
+    check_input(source, PROCESS_INPUTS)
     if not args.quiz and any(
         getattr(args, flag) is not None for flag in ("quiz_model", "strictness", "options")
     ):
@@ -487,18 +527,72 @@ def _process(args: argparse.Namespace) -> int:
         ctx = Context(source=source, config=config, transcript=transcript)
         ctx.duration = transcript.duration
         # The documented `stages=` seam (architecture.md 11.1): the transcript is in hand.
-        ctx = _run(ctx, STAGES[_AFTER_TRANSCRIBE:])
+        ctx = _run(ctx, STAGES[_AFTER_TRANSCRIBE:], progress, stop)
     else:
-        ctx = _run(Context(source=source, config=config), STAGES)
+        ctx = _run(Context(source=source, config=config), STAGES, progress, stop)
 
+    if stop is not None and stop():
+        raise Cancelled("stopped before writing the questions")  # a stopped run writes no file
+    if output is not None:
+        write_questions(ctx, output)  # questions.json is on disk before any quiz is made
+    return ctx, config, output
+
+
+def _process(args: argparse.Namespace) -> int:
+    """Extract questions from a recording (every stage) or a transcript (skips ASR)."""
+    ctx, config, output = _process_core(args, None, None)
     if output is None:  # stdout has no folder for keyframes, so they keep their cache paths
         print(result_to_json(ctx))
     else:
-        write_questions(ctx, output)
         print(f"{len(ctx.pairs)} questions -> {output}", file=sys.stderr)
-        if args.quiz:  # questions.json is on disk first: a failing quiz never loses it
+        if args.quiz:
             _write_quiz(output, _output_path(None, output, "quiz"), config, ctx.sentences)
     return 0
+
+
+def _process_run(
+    args: argparse.Namespace,
+    progress: Progress | None = None,
+    stop: Callable[[], bool] | None = None,
+) -> RunResult:
+    """Run ``process`` for the graphical app: the same run as the CLI, reported as a result."""
+    ctx, config, output = _process_core(args, progress, stop)
+    summary = f"{len(ctx.pairs)} questions"
+    if output is None:
+        return RunResult(None, summary, result_to_json(ctx))
+    if not args.quiz:
+        return RunResult(output, summary)
+    # The quiz comes after the questions file is written, as in the CLI; Cancel stops before it.
+    if stop is not None and stop():
+        raise Cancelled("stopped before the quiz")
+    result = _quiz_result(output, config, ctx.sentences, progress)
+    quiz_path = _output_path(None, output, "quiz")
+    assert quiz_path is not None  # noqa: S101 - a file name is given, never stdout
+    quiz_path.write_text(quiz_to_json(result.quiz).rstrip("\n") + "\n", encoding="utf-8")
+    items = len(result.quiz["questions"])
+    left_out = f" ({len(result.skipped)} left out, {len(result.failed)} failed)"
+    warnings = tuple(f"quiz: {qid} left out: {reason}" for qid, reason in result.failed)
+    return RunResult(quiz_path, f"{items} quiz items{left_out}", warnings=warnings)
+
+
+def _transcribe_core(
+    args: argparse.Namespace,
+    progress: Progress | None,
+    stop: Callable[[], bool] | None,
+) -> tuple[Context, Path | None, str]:
+    """Run ``transcribe``: the file it writes, or the text for stdout, shared by CLI and app."""
+    config = _config(args)
+    source = Path(args.recording)
+    check_input(source, TRANSCRIBE_INPUTS)
+    output = _output_path(args.output, source, "transcript")
+    ctx = _run(Context(source=source, config=config), STAGES[:_AFTER_TRANSCRIBE], progress, stop)
+    assert ctx.transcript is not None  # noqa: S101 - the transcribe stage always sets it
+    text = json.dumps(ctx.transcript.to_dict(), indent=2, ensure_ascii=False)
+    if stop is not None and stop():
+        raise Cancelled("stopped before writing the transcript")  # a stopped run writes no file
+    if output is not None:
+        output.write_text(text, encoding="utf-8")
+    return ctx, output, text
 
 
 def _transcribe(args: argparse.Namespace) -> int:
@@ -507,15 +601,115 @@ def _transcribe(args: argparse.Namespace) -> int:
     Runs the real ingest and transcribe stages, so it shares their cache with ``process``:
     whichever of the two runs second on the same recording skips the ASR.
     """
-    config = _config(args)
-    source = Path(args.recording)
-    _check_input(source, (".mp4", ".mp3"))
-    output = _output_path(args.output, source, "transcript")
-    ctx = _run(Context(source=source, config=config), STAGES[:_AFTER_TRANSCRIBE])
-    assert ctx.transcript is not None  # noqa: S101 - the transcribe stage always sets it
-    text = json.dumps(ctx.transcript.to_dict(), indent=2, ensure_ascii=False)
-    _write(text, output, f"{len(ctx.transcript.asr_segments)} segments")
+    ctx, output, text = _transcribe_core(args, None, None)
+    assert ctx.transcript is not None  # noqa: S101 - set by the transcribe stage
+    if output is None:
+        print(text)
+    else:
+        print(f"{len(ctx.transcript.asr_segments)} segments -> {output}", file=sys.stderr)
     return 0
+
+
+def _transcribe_run(
+    args: argparse.Namespace,
+    progress: Progress | None = None,
+    stop: Callable[[], bool] | None = None,
+) -> RunResult:
+    """Run ``transcribe`` for the graphical app, reported as a result."""
+    ctx, output, text = _transcribe_core(args, progress, stop)
+    assert ctx.transcript is not None  # noqa: S101 - set by the transcribe stage
+    summary = f"{len(ctx.transcript.asr_segments)} segments"
+    if output is None:
+        return RunResult(None, summary, text)
+    return RunResult(output, summary)
+
+
+def execute(
+    argv: Sequence[str],
+    *,
+    progress: Progress | None = None,
+    stop: Callable[[], bool] | None = None,
+) -> RunResult:
+    """Run ``process``, ``transcribe`` or ``qti`` from its command-line arguments, unprinted.
+
+    The graphical app (issue #124) builds the same arguments a user would type and runs them
+    here, so it gets the CLI's own parsing, defaults and checks. Errors raise: ``ValueError``
+    or ``OSError`` with a readable message, :class:`questxtract.pipeline.Cancelled` when
+    ``stop`` asked for it.
+
+    Raises:
+        ValueError: If the arguments are not a ``process`` or ``transcribe`` run, or a value
+            is not usable.
+        OSError: If a file cannot be read or written.
+        Cancelled: If ``stop`` returned true before a stage.
+
+    """
+    args = parse_arguments(argv)
+    if args.command == "process":
+        return _process_run(args, progress, stop)
+    if args.command == "transcribe":
+        return _transcribe_run(args, progress, stop)
+    if args.command == "qti":
+        try:
+            export_qti(args.quiz, args.output)
+        except QtiExportError as exc:
+            raise ValueError(f"qti: {exc}") from None
+        return RunResult(Path(args.output), "QTI 3.0 package")
+    raise ValueError(f"the app runs process, transcribe or qti, not {args.command}")
+
+
+def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
+    """Parse command-line arguments without printing: a bad one raises ``ValueError``.
+
+    The graphical app (issue #124) shows that one line in its window instead of argparse's usage.
+    It parses on the window's thread while a run may be printing, so nothing here swaps
+    ``sys.stderr``: the parser raises instead of printing.
+
+    Raises:
+        ValueError: If the arguments do not parse; the message is argparse's own.
+
+    """
+    return build_parser(quiet=True).parse_args(list(argv))
+
+
+def check_arguments(argv: Sequence[str]) -> None:
+    """Raise the ``ValueError`` a ``process`` or ``transcribe`` run would raise, before it starts.
+
+    Checks what :func:`execute` checks first (the settings and their ranges), without reading
+    the recording or calling anything.
+
+    Raises:
+        ValueError: If the arguments do not parse or a setting is out of range.
+
+    """
+    args = parse_arguments(argv)
+    if args.command in ("process", "transcribe"):
+        _config(args)
+
+
+def _gui(args: argparse.Namespace) -> int:
+    """Open the graphical app (issue #124). tkinter and the window are imported only here."""
+    del args  # the subcommand takes no options
+    try:
+        import tkinter  # noqa: F401 - imported to see whether this Python has Tk at all
+    except ImportError:
+        print(
+            "error: this Python has no tkinter, so the graphical app cannot open; "
+            "use a Python build with Tk (the python.org installers have it)",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        import tkinterdnd2  # noqa: F401 - part of the gui extra, for drag and drop
+    except ImportError:
+        print(
+            'error: the graphical app needs its extra: pip install "questxtract[gui]"',
+            file=sys.stderr,
+        )
+        return 1
+    from .gui.window import run_app
+
+    return run_app()
 
 
 def _time(value: str) -> float:
@@ -614,11 +808,19 @@ def _qti(args: argparse.Namespace) -> int:
     return 0
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser."""
+class _QuietParser(argparse.ArgumentParser):
+    """A parser whose errors raise ``ValueError`` instead of printing usage and exiting."""
+
+    def error(self, message: str) -> NoReturn:
+        """Raise the error argparse would have printed."""
+        raise ValueError(message)
+
+
+def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
+    """Build the argument parser; with ``quiet`` its errors raise ``ValueError``."""
     defaults = Config()
     raw = argparse.RawDescriptionHelpFormatter
-    parser = argparse.ArgumentParser(
+    parser = (_QuietParser if quiet else argparse.ArgumentParser)(
         prog="questxtract",
         description="Find the questions asked in a lecture recording.",
         epilog=_EXAMPLES,
@@ -898,6 +1100,12 @@ def build_parser() -> argparse.ArgumentParser:
     qti.add_argument("quiz", help="a quiz.json")
     qti.add_argument("-o", "--output", required=True, help="write the QTI ZIP package here")
     qti.set_defaults(handler=_qti)
+
+    gui = subs.add_parser(
+        "gui",
+        help="open the graphical app (needs questxtract[gui])",
+    )
+    gui.set_defaults(handler=_gui)
 
     return parser
 

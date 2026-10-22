@@ -13,7 +13,7 @@ from questxtract import endpoint
 from questxtract.cli import main
 from questxtract.config import DEEPSEEK, Config
 from questxtract.models import Sentence, Transcript
-from questxtract.quiz import QUIZ_PROMPT_VERSION, build_quiz, quiz_to_json
+from questxtract.quiz import QUIZ_PROMPT_VERSION, _usable, build_quiz, quiz_to_json
 from questxtract.quiz_schema import QUIZ_SCHEMA_PATH, read_quiz, validate_quiz
 
 DATA = Path(__file__).parent / "data"
@@ -86,7 +86,7 @@ def _assert_valid(quiz: dict[str, Any], questions: dict[str, Any]) -> None:
 
 @pytest.fixture
 def key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-test")  # the default endpoint's key
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-test")  # the default endpoint's key
 
 
 @pytest.fixture
@@ -329,7 +329,7 @@ def test_quiz_without_a_key_or_url_fails_before_any_request(
 
     assert main(["quiz", str(questions_file)]) == 1
 
-    assert "QUESTXTRACT_NTNU_API_KEY" in capsys.readouterr().err and client.requests == []
+    assert "IDUN_API_KEY" in capsys.readouterr().err and client.requests == []
 
 
 def test_process_with_quiz_writes_both_files(
@@ -723,3 +723,22 @@ def test_a_reasoning_level_still_reaches_the_quiz_model(
     assert main(["quiz", str(questions_file), "--llm-reasoning", "low"]) == 0
 
     assert client.requests and all(r["reasoning_effort"] == "low" for r in client.requests)
+
+
+def test_options_that_differ_only_by_a_sign_are_different_options() -> None:
+    """-2 and 2 are two answers: the sameness check must not drop the minus sign."""
+    usable = _usable(2)
+    base = {
+        "quiz_material": True,
+        "stem": "s",
+        "correct_explanation": "e",
+        "explanation": "x",
+        "why_wrong_1": "w",
+        "why_wrong_2": "w",
+    }
+
+    signed = {**base, "correct_answer": "$-2$", "distractor_1": "$2$", "distractor_2": "$-1$"}
+    same = {**base, "correct_answer": "$-2$", "distractor_1": "-2.", "distractor_2": "$-1$"}
+
+    assert usable(signed)
+    assert not usable(same)  # delimiters and a full stop do not make an option different
