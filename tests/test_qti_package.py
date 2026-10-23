@@ -132,3 +132,23 @@ def test_an_unreadable_or_invalid_quiz_fails_readably(tmp_path: Path, make_quiz:
     with pytest.raises(QtiExportError, match=r"quiz\.json: questions\[0\]\.correct_response"):
         _export(tmp_path, quiz)
     assert not (tmp_path / "out.zip").exists()
+
+
+def test_a_2_1_item_worth_other_than_1_point_warns(tmp_path: Path, make_quiz: MakeQuiz) -> None:
+    """Review of #175: a template-only LMS would score it 1 and drop the per-option feedback."""
+    quiz = make_quiz("q_aaa", "q_bbb")  # the fixture's items are worth 2
+    quiz["questions"][0]["points"] = 1
+    with pytest.warns(
+        UserWarning, match=r"1 item\(s\) are worth other than 1 point \(quiz_q_bbb\)"
+    ):
+        _export(tmp_path, quiz, version="2.1")
+
+
+@pytest.mark.parametrize(("version", "points"), [("3.0", 2), ("2.1", 1)])
+def test_no_points_warning_for_3_0_or_one_point_items(
+    tmp_path: Path, make_quiz: MakeQuiz, version: str, points: int, recwarn: Any
+) -> None:
+    quiz = make_quiz("q_aaa")
+    quiz["questions"][0]["points"] = points
+    _export(tmp_path, quiz, version=version)
+    assert not [w for w in recwarn if "worth other than 1 point" in str(w.message)]

@@ -1349,8 +1349,8 @@ validator is plain Python: `jsonschema` checks the schema in the tests only.
 
 `questxtract qti quiz.json -o quiz.qti.zip` turns a quiz (section 12.3) into a 1EdTech QTI
 content package an LMS can import. It writes QTI 3.0 by default, or QTI 2.1 with
-`--qti-version 2.1` (`export_qti(..., version="2.1")`) for an LMS that imports 2.1 only, such as
-Blackboard. Both versions hold the same items, scoring, feedback and instructions; only the XML
+`--qti-version 2.1` (`export_qti(..., version="2.1")`) for an LMS that does not import 3.0, such
+as Canvas New Quizzes. Both versions hold the same items, scoring, feedback and instructions; only the XML
 binding differs. The file is read through `read_quiz`, which refuses another major version and
 the errors across fields; the structure is not checked at runtime, so `qti.py` checks every field
 it uses and names its path.
@@ -1409,8 +1409,8 @@ The element names below are QTI 3.0's; the QTI 2.1 bullet says how 2.1 spells th
   `match_correct` template beside the rules: QTI 2.1 makes generalized response processing
   optional (information model 8.1), and Blackboard skips questions whose response processing it
   does not support. An engine that runs the item's own rules prefers them (8.2); one that
-  supports only templates scores 1 and shows no feedback per option. No 2.1 package has been
-  imported into a real LMS yet.
+  supports only templates scores 1 and shows no feedback per option, so a 2.1 export warns about
+  items worth other than 1 point. No 2.1 package has been imported into a real LMS yet.
 - **Validation.** The tests validate every package they write against the official XSDs of its
   version: items and test against ASI 3.0.1 or 2.1.2, the manifest against that version's
   content-package XSD. They then check what an XSD cannot: the correct response and every

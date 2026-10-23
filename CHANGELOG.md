@@ -51,9 +51,10 @@
   faint mark can go unnoticed. Blackboards, whiteboards and frames the layout probe could not name
   are always read. (#138)
 - `questxtract qti --qti-version 2.1` (and `export_qti(..., version="2.1")`) writes the quiz as a
-  QTI 2.1 package instead of 3.0, for an LMS that does not import 3.0, such as Blackboard. It
-  holds the same items, scoring, feedback and instructions as the 3.0 package; each item also
-  names the standard `match_correct` template, for an LMS that supports only templates. Every 2.1
+  QTI 2.1 package instead of 3.0, for an LMS that does not import 3.0, such as Canvas New
+  Quizzes. It holds the same items, scoring, feedback and instructions as the 3.0 package; each
+  item also names the standard `match_correct` template, for an LMS that supports only templates,
+  and `qti` warns when an item is worth other than 1 point, which that template ignores. Every 2.1
   package the tests write is validated against the official 1EdTech QTI 2.1 XSDs, but none has
   been imported into a real LMS yet. Without the flag, `qti` writes QTI 3.0, byte for byte as
   before. (#163)

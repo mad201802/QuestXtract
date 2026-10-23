@@ -130,12 +130,13 @@ option, with each option's explanation as feedback; the quiz's instructions set 
 whether feedback is shown. Items a reviewer marked `rejected` are left out. The same quiz file
 and version always give the same ZIP, byte for byte.
 
-**QTI 2.1 has not been tried in a real LMS yet.** Blackboard imports QTI 2.1 only, and Canvas New
-Quizzes imports 2.x but not 3.0, but no package has been imported into either. Blackboard skips
-questions whose response processing it does not support. Each 2.1 item scores with its own rules
+**QTI 2.1 has not been tried in a real LMS yet.** It is the version for Canvas New Quizzes, NTNU's
+LMS, which imports 2.x but not 3.0; other LMS that import 2.1 only, such as Blackboard, take it
+too. No package has been imported into a real LMS yet. Each 2.1 item scores with its own rules
 and also names the standard `match_correct` template, which an LMS that supports only templates
-can use instead: there an item scores 1 and shows no feedback per option. After an import, check
-that every question arrived.
+can use instead: there an item scores 1 and shows no feedback per option, so `qti` warns when an
+item is worth other than 1 point. Some LMS skip questions whose response processing they do not
+support. After an import, check that every question arrived.
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|

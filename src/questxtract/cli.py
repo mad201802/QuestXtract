@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 import sys
+import warnings
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -605,11 +606,15 @@ def _quiz(args: argparse.Namespace) -> int:
 
 def _qti(args: argparse.Namespace) -> int:
     """Export quiz.json as a QTI 2.1 or 3.0 package."""
-    try:
-        export_qti(args.quiz, args.output, version=args.qti_version)
-    except QtiExportError as exc:
-        print(f"error: qti: {exc}", file=sys.stderr)
-        return 1
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        try:
+            export_qti(args.quiz, args.output, version=args.qti_version)
+        except QtiExportError as exc:
+            print(f"error: qti: {exc}", file=sys.stderr)
+            return 1
+    for warning in caught:
+        print(f"warning: qti: {warning.message}", file=sys.stderr)
     print(f"QTI {args.qti_version} package -> {args.output}", file=sys.stderr)
     return 0
 

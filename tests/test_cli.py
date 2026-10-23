@@ -1118,7 +1118,9 @@ def test_one_run_reads_the_board_finds_the_questions_and_writes_the_quiz(
 def test_qti_version_2_1_writes_a_qti_2_1_package(
     tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
 ) -> None:
-    (tmp_path / "lecture.quiz.json").write_text(json.dumps(make_quiz("q_aaa")), encoding="utf-8")
+    quiz = make_quiz("q_aaa")
+    quiz["questions"][0]["points"] = 1  # 1 point: no template warning
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(quiz), encoding="utf-8")
 
     assert main(["qti", "lecture.quiz.json", "-o", "lecture.zip", "--qti-version", "2.1"]) == 0
 
@@ -1129,6 +1131,20 @@ def test_qti_version_2_1_writes_a_qti_2_1_package(
     assert b'xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1"' in item
     assert b"<choiceInteraction " in item
     assert metadata["format"] == "questxtract-qti-2.1"
+
+
+def test_qti_2_1_prints_a_warning_line_for_items_not_worth_1_point(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    quiz = make_quiz("q_aaa")
+    quiz["questions"][0]["points"] = 2
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(quiz), encoding="utf-8")
+
+    assert main(["qti", "lecture.quiz.json", "-o", "lecture.zip", "--qti-version", "2.1"]) == 0
+
+    err = capsys.readouterr().err.splitlines()
+    assert err[0].startswith("warning: qti: QTI 2.1: 1 item(s) are worth other than 1 point")
+    assert err[1] == "QTI 2.1 package -> lecture.zip" and len(err) == 2
 
 
 @pytest.mark.parametrize("value", ["2.2", "3", "1.2"])

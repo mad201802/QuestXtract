@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import json
 import stat
+import warnings
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
@@ -65,11 +66,17 @@ def write_qti_package(
 ) -> None:
     """Write an assessment test as a QTI ZIP package of the given version.
 
+    For 2.1, items worth other than 1 point get a ``UserWarning``: an LMS that scores with the
+    ``match_correct`` template instead of the item's own rules gives them 1 point and no feedback
+    per option (architecture.md 12.4).
+
     Raises:
         QtiExportError: If ``version`` is not supported, or if the file cannot be written.
 
     """
     _check_version(version)
+    if version == "2.1":
+        _warn_template_points(assessment)
     data = _package_bytes(assessment, version)
     try:
         Path(path).write_bytes(data)
@@ -77,6 +84,18 @@ def write_qti_package(
         raise QtiExportError(
             f"{path}: cannot write the QTI package ({exc.strerror or exc})"
         ) from exc
+
+
+def _warn_template_points(assessment: AssessmentTest) -> None:
+    other = [item.identifier for item in assessment.items if item.points != 1]
+    if other:
+        warnings.warn(
+            f"QTI 2.1: {len(other)} item(s) are worth other than 1 point ({', '.join(other[:3])}"
+            f"{', ...' if len(other) > 3 else ''}); an LMS that scores with the match_correct "
+            "template gives them 1 point and no feedback per option",
+            UserWarning,
+            stacklevel=3,
+        )
 
 
 def _check_version(version: str) -> None:
