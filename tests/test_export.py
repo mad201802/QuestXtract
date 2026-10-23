@@ -15,7 +15,7 @@ from questxtract import (
     write_questions,
 )
 from questxtract.cli import main
-from questxtract.evaluate import _read_labels, _read_visual, match
+from questxtract.evaluate import match
 from questxtract.export import SCHEMA_PATH, _format_hms, result_to_dict, result_to_json
 from questxtract.llm import JUDGE_PROMPT_VERSION
 from questxtract.pipeline import STAGES, run
@@ -172,14 +172,22 @@ def test_a_question_with_no_board_on_screen_falls_back_to_its_segments(context):
     assert data["questions"][0]["visual_ids"] == [later.id]
 
 
-def test_questions_link_to_the_hand_labelled_board_state():
-    # #135: questions of a real lecture, each labelled by hand with the board state on screen
+def _jsonl(path):
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return [json.loads(line) for line in lines if line.strip()]
+
+
+def test_questions_link_to_the_drafted_board_state():
+    # #135: questions of a real lecture, each with the board state on screen when it was asked
     # (tests/data/vision/README.md), against the committed board states: no video, no network.
+    # The links were drafted from the board states' times and stay provisional until checked
+    # against the video, so this pins the linking rule; it cannot catch a board state cut late.
     name = "ttk4225_2026_09_14"
-    states = _read_visual(DATA / f"{name}.visual.json")
+    visual = json.loads((DATA / f"{name}.visual.json").read_text(encoding="utf-8"))
+    states = tuple(VisualContext(**state) for state in visual["board_states"])
     by_start = {state.start: state for state in states}
-    links = _read_labels(DATA / "vision" / f"{name}.links.jsonl")
-    labels = _read_labels(DATA / f"{name}.labels.jsonl")
+    links = _jsonl(DATA / "vision" / f"{name}.links.jsonl")
+    labels = _jsonl(DATA / f"{name}.labels.jsonl")
     spoken = {(x["start"], x["end"], x["text"]) for x in labels if x["kind"] == "content"}
     assert all(link["state_start"] in by_start for link in links)
     assert all((x["start"], x["end"], x["text"]) in spoken for x in links)
@@ -203,6 +211,7 @@ def test_questions_link_to_the_hand_labelled_board_state():
         f"{name}: {len(pairs)} of {len(links)} labelled questions detected; of those, "
         f"right state {right} (only that one {only}), also a later state {later}, none {none}"
     )
+    assert len(pairs) >= 18  # of the 22 linked questions; fewer means detection or matching broke
     assert right == len(pairs)
 
 
