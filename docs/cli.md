@@ -134,6 +134,24 @@ left out. The same quiz file always gives the same ZIP, byte for byte.
 | `-o`, `--output` | a path | required | Where to write the ZIP. Its folder must exist. |
 | `-h`, `--help` | nothing | | Shows the options. |
 
+### `questxtract tex <quiz.json>`
+
+Exports a quiz file as TeX for ExerPlaza's upload page, `/questions/upload/tex`. Every item
+becomes one `IndexedQuestion` block with its options, the correct one marked, a solution holding
+the explanation and why each option is right or wrong, and notes for the teachers saying where in
+the lecture the question was asked and which model wrote the text. Pending items are visible only
+to you in ExerPlaza, accepted ones to everybody; rejected ones are left out. The quiz must be in
+English or Italian, the two languages ExerPlaza's parser accepts. Texts are written as they are,
+not LaTeX-escaped, because ExerPlaza shows them with MathJax. A text with unbalanced braces or a
+command of the format (such as `\answer`) fails, naming that text, and nothing is written. The
+same quiz file always gives the same file, byte for byte.
+
+| Option | Takes | Default | What it does |
+|---|---|---|---|
+| `-o`, `--output` | a path | required | Where to write the `.tex` file. Its folder must exist. |
+| `--content-unit` | a name | required | An ExerPlaza content unit for every question. Repeat it for more than one. Spell it exactly as in ExerPlaza: any other spelling creates a new, unlinked unit. No braces, one line. |
+| `-h`, `--help` | nothing | | Shows the options. |
+
 ### Everywhere
 
 | Option | What it does |
@@ -287,6 +305,16 @@ questxtract qti lecture.quiz.json -o lecture.qti.zip
 ```bash
 questxtract qti lecture.quiz.json -o lecture.qti.zip   # every item but the rejected ones
 ```
+
+**Export for ExerPlaza**
+
+```bash
+questxtract tex lecture.quiz.json -o lecture.tex --content-unit "Improper integrals"
+```
+
+Upload `lecture.tex` at `/questions/upload/tex` in ExerPlaza, check the preview and save. On a
+re-upload, ExerPlaza asks about every question whose text it already has: choose Cancel, because
+Overwrite deletes the existing question and the students' answers to it.
 
 **See which questions the threshold threw away.** This is a development tool, not a CLI
 command:

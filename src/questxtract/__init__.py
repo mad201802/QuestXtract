@@ -29,6 +29,7 @@ from .qti import QtiExportError
 from .qti_v3 import export_qti
 from .quiz_schema import read_quiz, validate_quiz
 from .schema import Question
+from .tex import TexExportError, export_tex
 
 try:
     __version__ = version("questxtract")  # from pyproject.toml via the installed metadata
@@ -50,12 +51,14 @@ __all__ = [
     "SchemaError",
     "Segment",
     "Sentence",
+    "TexExportError",
     "Transcript",
     "VisualContext",
     "Word",
     "__version__",
     "extract_audio",
     "export_qti",
+    "export_tex",
     "filter_document",
     "filter_questions",
     "process",
