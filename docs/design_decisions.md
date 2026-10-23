@@ -520,6 +520,41 @@ customer runs after the project may differ; OpenAI stays one setting away
 NTNU may replace it. `"none"` is model-specific: Qwen rejects it and gpt-4o takes no setting, so
 another model needs `--llm-reasoning server`.
 
+### D23: QTI 2.1 beside 3.0, one export_qti that dispatches by version
+
+*Chose:* `questxtract qti --qti-version 2.1` writes a QTI 2.1 package (ASI 2.1.2, with the QTI
+2.1 profile of content packaging 1.2) beside the 3.0 one of D16, which stays the default (#163,
+architecture.md 12.4). Both come from the same model in `qti.py`, with the same items, explicit
+response processing, feedback and instructions. Each 2.1 item also names the standard
+`match_correct` template beside its rules. One `export_qti(..., version=...)` checks the
+version before it reads the quiz and dispatches through a table in `qti_package.py` to one writer
+module per version; the ZIP and the JSON sidecar are shared. The tests validate every 2.1 package
+against the official 2.1 XSDs, from the same pinned offline mirror as 3.0.
+
+*Alternative:* QTI 1.2, which Canvas and Brightspace import; QTI 2.2, the current 2.x; scoring
+with the `match_correct` or `map_response` template alone; explicit rules alone; 2.1 as the
+default; a separate `export_qti_v2` function.
+
+*Why:* few LMS import 3.0 yet. Blackboard imports QTI 2.1 packages only and Canvas New Quizzes
+imports 1.2 and 2.x, so one 2.1 package reaches both, where 1.2 would miss Blackboard. No LMS
+checked asks for 2.2, which has its own namespace. The templates set only `SCORE`, not the
+`FEEDBACK` outcome the per-option feedback needs, and `match_correct` scores 1 whatever the item
+is worth. But QTI 2.1 makes generalized response processing an optional feature, for which an
+engine may implement the standard templates instead (information model 8.1), and Blackboard
+skips questions that use "the optional QTI response processing". Naming `match_correct` beside
+the rules gives such an engine a way to score the item, and costs nothing where the rules run,
+because an item's own rules are preferred when it gives both (8.2). With 3.0 as the default,
+`qti` without the flag writes the same bytes as before. One function with a version argument
+keeps one public name and one CLI path, and a version is one writer module plus one table entry.
+
+*Cost:* 2.1 is deprecated for 1EdTech certification: no new 2.1 certifications after 2023-12-31,
+and every 2.1 system certification expired on 2024-12-31. A valid package is not a proven import:
+no package has been imported into a real LMS yet, and Blackboard may still skip an item that
+carries rules beside the template. Where only the template runs, an item scores 1 and shows no
+feedback per option; `quiz` writes 1 point per item, so only the feedback is lost there. A
+second XSD tree, 37 files, joins the CI cache, and a cold cache needs www.imsglobal.org and
+www.w3.org once.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |
