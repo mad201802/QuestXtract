@@ -26,7 +26,7 @@ from .models import (
 )
 from .pipeline import STAGES, process, run, stage
 from .qti import QtiExportError
-from .qti_v3 import export_qti
+from .qti_package import export_qti
 from .quiz_schema import read_quiz, validate_quiz
 from .schema import Question
 

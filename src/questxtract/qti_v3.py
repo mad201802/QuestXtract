@@ -1,22 +1,15 @@
-"""QTI 3.0 package: the item, test and manifest XML, the ZIP layout and ``export_qti``.
+"""QTI 3.0 XML: the items, the test and the manifest of a package, from an assessment test.
 
-The package is deterministic: the same assessment gives the same bytes, so every entry gets a
-fixed timestamp and fixed attributes instead of the clock and the platform's.
+:func:`package_entries` is the whole interface; :mod:`questxtract.qti_package` adds the JSON
+sidecar and writes the ZIP.
 """
 
 from __future__ import annotations
 
-import io
-import json
-import stat
-import zipfile
-from pathlib import Path
 from typing import cast
 from xml.etree import ElementTree
 
-from .models import SchemaError
-from .qti import AssessmentItem, AssessmentTest, QtiExportError, quiz_to_qti
-from .quiz_schema import read_quiz
+from .qti import METADATA_PATH, AssessmentItem, AssessmentTest
 
 QTI_NS = "http://www.imsglobal.org/xsd/imsqtiasi_v3p0"
 CP_NS = "http://www.imsglobal.org/xsd/qti/qtiv3p0/imscp_v1p1"
@@ -28,64 +21,22 @@ _CP_XSD = "https://purl.imsglobal.org/spec/qti/v3p0/schema/xsd/imsqtiv3p0_imscpv
 # process-global. Every official 1EdTech example uses the default namespace.
 _QTI_ROOT = {"xmlns": QTI_NS, "xmlns:xsi": XSI_NS, "xsi:schemaLocation": f"{QTI_NS} {_QTI_XSD}"}
 _CP_ROOT = {"xmlns": CP_NS, "xmlns:xsi": XSI_NS, "xsi:schemaLocation": f"{CP_NS} {_CP_XSD}"}
-_METADATA_PATH = "metadata/questxtract.json"
-_ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)  # the earliest date a ZIP entry can carry
 
 
-def export_qti(quiz_path: str | Path, output_path: str | Path) -> None:
-    """Read a ``quiz.json`` and write it as a QTI 3.0 package.
+def package_entries(assessment: AssessmentTest) -> list[tuple[str, bytes]]:
+    """Return the package's XML entries in ZIP order: the items, the test, then the manifest.
 
-    Every item becomes a single-choice item scored against its correct option, with each
-    option's explanation and the general one as feedback. Items a reviewer marked ``rejected``
-    are left out. The same input gives a byte-identical ZIP.
-
-    Args:
-        quiz_path: A ``quiz.json``, schema version 1.x.
-        output_path: Where to write the ZIP. Its folder must exist.
-
-    Raises:
-        QtiExportError: If the quiz file cannot be read or breaks a rule of ``quiz.json``, if
-            an item cannot be represented in QTI, or if the package cannot be written.
-
+    Each entry is a path in the package and the file's bytes. The sidecar the manifest lists,
+    :data:`questxtract.qti.METADATA_PATH`, is not among them.
     """
-    try:
-        document = read_quiz(quiz_path)
-    except OSError as exc:
-        raise QtiExportError(f"{quiz_path}: {exc.strerror or exc}") from exc
-    except SchemaError as exc:
-        raise QtiExportError(str(exc)) from exc
-    write_qti_package(quiz_to_qti(document), output_path)
-
-
-def write_qti_package(assessment: AssessmentTest, path: str | Path) -> None:
-    """Write an assessment test as a QTI 3.0 ZIP package."""
-    data = _package_bytes(assessment)
-    try:
-        Path(path).write_bytes(data)
-    except OSError as exc:
-        raise QtiExportError(
-            f"{path}: cannot write the QTI package ({exc.strerror or exc})"
-        ) from exc
-
-
-def _package_bytes(assessment: AssessmentTest) -> bytes:
     item_paths = [f"items/{item.identifier}.xml" for item in assessment.items]
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w") as package:
-        for item, item_path in zip(assessment.items, item_paths, strict=True):
-            _write_entry(package, item_path, _xml_bytes(_item_xml(item)))
-        _write_entry(package, "assessmentTest.xml", _xml_bytes(_test_xml(assessment)))
-        _write_entry(package, "imsmanifest.xml", _xml_bytes(_manifest_xml(assessment, item_paths)))
-        _write_entry(package, _METADATA_PATH, _metadata_json(assessment))
-    return buffer.getvalue()
-
-
-def _write_entry(package: zipfile.ZipFile, name: str, data: bytes) -> None:
-    info = zipfile.ZipInfo(name, date_time=_ZIP_EPOCH)
-    info.compress_type = zipfile.ZIP_DEFLATED  # ZipInfo defaults to STORED
-    info.external_attr = (stat.S_IFREG | 0o644) << 16
-    info.create_system = 3  # Unix, also on Windows, where ZipInfo would say 0
-    package.writestr(info, data)
+    entries = [
+        (item_path, _xml_bytes(_item_xml(item)))
+        for item, item_path in zip(assessment.items, item_paths, strict=True)
+    ]
+    entries.append(("assessmentTest.xml", _xml_bytes(_test_xml(assessment))))
+    entries.append(("imsmanifest.xml", _xml_bytes(_manifest_xml(assessment, item_paths))))
+    return entries
 
 
 def _item_xml(item: AssessmentItem) -> ElementTree.Element:
@@ -237,24 +188,10 @@ def _manifest_xml(assessment: AssessmentTest, item_paths: list[str]) -> ElementT
     sidecar = ElementTree.SubElement(
         resources,
         "resource",
-        {"identifier": "questxtract-metadata", "type": "extension", "href": _METADATA_PATH},
+        {"identifier": "questxtract-metadata", "type": "extension", "href": METADATA_PATH},
     )
-    ElementTree.SubElement(sidecar, "file", {"href": _METADATA_PATH})
+    ElementTree.SubElement(sidecar, "file", {"href": METADATA_PATH})
     return root
-
-
-def _metadata_json(assessment: AssessmentTest) -> bytes:
-    items = {
-        item.identifier: {
-            "source_question_id": item.provenance.source_question_id,
-            "start": item.provenance.start,
-            "end": item.provenance.end,
-            **item.metadata,
-        }
-        for item in assessment.items
-    }
-    payload = {"format": "questxtract-qti-3.0", "quiz": assessment.metadata, "items": items}
-    return (json.dumps(payload, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
 
 
 def _bool(value: bool) -> str:

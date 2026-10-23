@@ -1,7 +1,8 @@
 """QTI assessment model and the ``quiz.json`` mapping.
 
-This module holds no XML and no package code: :mod:`questxtract.qti_v3` serializes the model
-and imports this module, never the other way round.
+This module holds no XML and no package code. The writers, :mod:`questxtract.qti_v2` and
+:mod:`questxtract.qti_v3`, serialize the model, and :mod:`questxtract.qti_package` writes the
+ZIP; they import this module, never the other way round.
 
 :func:`quiz_to_qti` takes a ``quiz.json`` that :func:`questxtract.quiz_schema.read_quiz` has
 read. That checks the rules across fields, not the structure (the JSON Schema is enforced in
@@ -23,6 +24,8 @@ _XML_ID = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]*$")
 _LANGUAGE = re.compile(r"^[A-Za-z]{1,8}(-[A-Za-z0-9]{1,8})*$")
 # Characters XML 1.0 does not allow, even escaped; ElementTree writes them unchecked.
 _XML_ILLEGAL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f￾￿\ud800-\udfff]")
+# The package's JSON sidecar: every writer's manifest lists it, and qti_package writes it.
+METADATA_PATH = "metadata/questxtract.json"
 
 
 class QtiExportError(SchemaError):

@@ -124,14 +124,24 @@ Give at least one of `--text`, `--from` and `--to`; together, a question must ma
 
 ### `questxtract qti <quiz.json>`
 
-Exports a quiz file as a QTI 3.0 ZIP package for an LMS. Every item becomes a single-choice
-item scored against its correct option, with each option's explanation as feedback; the quiz's
-instructions set shuffling and whether feedback is shown. Items a reviewer marked `rejected` are
-left out. The same quiz file always gives the same ZIP, byte for byte.
+Exports a quiz file as a QTI ZIP package for an LMS: QTI 3.0 by default, or QTI 2.1 for an LMS
+that does not import 3.0. Every item becomes a single-choice item scored against its correct
+option, with each option's explanation as feedback; the quiz's instructions set shuffling and
+whether feedback is shown. Items a reviewer marked `rejected` are left out. The same quiz file
+and version always give the same ZIP, byte for byte.
+
+**QTI 2.1 has not been tried in a real LMS yet.** It is the version for Canvas New Quizzes, NTNU's
+LMS, which imports 2.x but not 3.0; other LMS that import 2.1 only, such as Blackboard, take it
+too. No package has been imported into a real LMS yet. Each 2.1 item scores with its own rules
+and also names the standard `match_correct` template, which an LMS that supports only templates
+can use instead: there an item scores 1 and shows no feedback per option, so `qti` warns when an
+item is worth other than 1 point. Some LMS skip questions whose response processing they do not
+support. After an import, check that every question arrived.
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|
 | `-o`, `--output` | a path | required | Where to write the ZIP. Its folder must exist. |
+| `--qti-version` | `2.1` or `3.0` | `3.0` | The QTI version of the package: 2.1 for an LMS that does not import 3.0, with the caveat above. |
 | `-h`, `--help` | nothing | | Shows the options. |
 
 ### Everywhere
@@ -282,10 +292,11 @@ questxtract process lecture.mp4 --vision --detector llm --quiz
 questxtract qti lecture.quiz.json -o lecture.qti.zip
 ```
 
-**Export for an LMS (QTI 3.0)**
+**Export for an LMS (QTI 3.0 or 2.1)**
 
 ```bash
-questxtract qti lecture.quiz.json -o lecture.qti.zip   # every item but the rejected ones
+questxtract qti lecture.quiz.json -o lecture.qti.zip   # QTI 3.0, every item but the rejected ones
+questxtract qti lecture.quiz.json -o lecture.qti21.zip --qti-version 2.1   # QTI 2.1, see the caveat
 ```
 
 **See which questions the threshold threw away.** This is a development tool, not a CLI

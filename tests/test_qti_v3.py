@@ -25,7 +25,8 @@ from scripts.fetch_qti_xsd import ASI_XSD, CP_XSD, missing, uri_mapper, xsd_dir
 from questxtract.cli import main
 from questxtract.export import read_questions
 from questxtract.qti import QtiExportError
-from questxtract.qti_v3 import CP_NS, QTI_NS, export_qti
+from questxtract.qti_package import export_qti
+from questxtract.qti_v3 import CP_NS, QTI_NS
 from questxtract.quiz_schema import QUIZ_SCHEMA_PATH, read_quiz
 
 _Q = f"{{{QTI_NS}}}"
@@ -200,26 +201,6 @@ def test_two_exports_at_different_times_are_byte_identical(
     assert (tmp_path / "a.zip").read_bytes() == (tmp_path / "b.zip").read_bytes()
 
 
-def test_every_entry_has_the_fixed_date_and_is_deflated(
-    tmp_path: Path, make_quiz: MakeQuiz
-) -> None:
-    _export(tmp_path, make_quiz("q_aaa", "q_bbb"))
-    with zipfile.ZipFile(tmp_path / "out.zip") as package:
-        infos = package.infolist()
-    assert [info.filename for info in infos] == [
-        "items/quiz_q_aaa.xml",
-        "items/quiz_q_bbb.xml",
-        "assessmentTest.xml",
-        "imsmanifest.xml",
-        "metadata/questxtract.json",
-    ]
-    for info in infos:
-        assert info.date_time == (1980, 1, 1, 0, 0, 0)
-        assert info.compress_type == zipfile.ZIP_DEFLATED
-        assert info.create_system == 3
-        assert info.external_attr >> 16 == 0o100644
-
-
 def test_xml_uses_the_default_namespace_and_declares_its_schema(
     tmp_path: Path, make_quiz: MakeQuiz
 ) -> None:
@@ -376,27 +357,6 @@ def test_the_sidecar_keeps_provenance_review_and_origins(
     assert item["review_status"] == "pending"
     assert item["origin"]["prompt"] == "spoken"
     assert item["origin"]["options"] == {"a": "generated", "b": "generated", "c": "generated"}
-
-
-def test_an_output_in_a_missing_folder_fails_readably(tmp_path: Path, make_quiz: MakeQuiz) -> None:
-    with pytest.raises(QtiExportError, match="cannot write the QTI package"):
-        _export(tmp_path, make_quiz("q_aaa"), "missing/out.zip")
-
-
-def test_an_unreadable_or_invalid_quiz_fails_readably(tmp_path: Path, make_quiz: MakeQuiz) -> None:
-    with pytest.raises(QtiExportError, match="missing.json"):
-        export_qti(tmp_path / "missing.json", tmp_path / "out.zip")
-    bad = tmp_path / "bad.json"
-    bad.write_text("{", encoding="utf-8")
-    with pytest.raises(QtiExportError, match="not valid JSON"):
-        export_qti(bad, tmp_path / "out.zip")
-    with pytest.raises(QtiExportError, match=r"schema version 2\.0"):
-        _export(tmp_path, make_quiz("q_aaa", schema_version="2.0"))
-    quiz = make_quiz("q_aaa")
-    quiz["questions"][0]["correct_response"]["option_ids"] = ["d"]
-    with pytest.raises(QtiExportError, match=r"quiz\.json: questions\[0\]\.correct_response"):
-        _export(tmp_path, quiz)
-    assert not (tmp_path / "out.zip").exists()
 
 
 def test_a_newer_quiz_with_an_unsupported_item_fails_naming_it(

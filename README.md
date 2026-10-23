@@ -37,7 +37,7 @@ turns them into study material. It **extracts** questions, it never invents them
 | ✏️ **Human in the loop** | A `review` block per question for teacher edits, never overwritten by the pipeline |
 | 📦 **JSON export** | `questions.json` with a fixed key set and a formal JSON Schema |
 | 🧩 **Quizzes** | Multiple-choice items from the questions asked, with explanations; every generated text is marked and starts as pending review |
-| 🎓 **LMS export** | `questxtract qti` writes a `quiz.json` as a QTI 3.0 package an LMS can import |
+| 🎓 **LMS export** | `questxtract qti` writes a `quiz.json` as a QTI 3.0 or 2.1 package for an LMS to import |
 
 What is built today:
 [architecture.md 13.3](docs/architecture.md#133-status).
@@ -384,7 +384,7 @@ scripts/ci-check.sh        # what CI runs: ruff (auto-fix), ruff format, mypy --
 uv run pytest tests/test_detect.py -q   # the inner loop
 ```
 
-`ci-check.sh` first downloads, once, the QTI 3.0 XSDs the tests validate packages against
+`ci-check.sh` first downloads, once, the QTI 2.1 and 3.0 XSDs the tests validate packages against
 (`scripts/fetch_qti_xsd.py`, into `.cache/qti-xsd/`). Offline, it skips those tests with a
 warning; CI always runs them.
 
