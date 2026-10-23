@@ -1,4 +1,4 @@
-"""Command line interface: ``process``, ``transcribe``, ``filter``, ``eval``, ``quiz`` and ``qti``.
+"""CLI: ``process``, ``transcribe``, ``filter``, ``eval``, ``quiz``, ``qti`` and ``tex``.
 
 Every command and option, with recipes: docs/cli.md.
 """
@@ -33,6 +33,7 @@ from .pipeline import STAGES, cached_transcript, run
 from .qti import QtiExportError
 from .qti_package import DEFAULT_QTI_VERSION, QTI_VERSIONS, export_qti
 from .quiz import MAX_OPTIONS, MIN_OPTIONS, STRICTNESS, build_quiz, file_hash, quiz_to_json
+from .tex import TexExportError, export_tex
 from .vision import has_video
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
@@ -619,6 +620,18 @@ def _qti(args: argparse.Namespace) -> int:
     return 0
 
 
+def _tex(args: argparse.Namespace) -> int:
+    """Export quiz.json as ExerPlaza TeX."""
+    try:
+        count = export_tex(args.quiz, args.output, content_units=args.content_units)
+    except TexExportError as exc:
+        print(f"error: tex: {exc}", file=sys.stderr)
+        return 1
+    noun = "question" if count == 1 else "questions"
+    print(f"ExerPlaza TeX, {count} {noun} -> {args.output}", file=sys.stderr)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser."""
     defaults = Config()
@@ -909,6 +922,22 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"QTI version of the package: 2.1 or 3.0 (default: {DEFAULT_QTI_VERSION})",
     )
     qti.set_defaults(handler=_qti)
+
+    tex = subs.add_parser(
+        "tex", help="export quiz.json as TeX for ExerPlaza's upload at /questions/upload/tex"
+    )
+    tex.add_argument("quiz", help="a quiz.json")
+    tex.add_argument("-o", "--output", required=True, help="write the .tex file here")
+    tex.add_argument(
+        "--content-unit",
+        action="append",
+        required=True,
+        dest="content_units",
+        metavar="NAME",
+        help="an ExerPlaza content unit for every question; repeat for more. Spell it exactly as "
+        "in ExerPlaza: any other spelling creates a new, unlinked unit",
+    )
+    tex.set_defaults(handler=_tex)
 
     return parser
 

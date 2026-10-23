@@ -1425,6 +1425,59 @@ The element names below are QTI 3.0's; the QTI 2.1 bullet says how 2.1 spells th
   fixed order with the date 1980-01-01, deflate, Unix permissions `0644` and no clock or platform
   data.
 
+### 12.5 ExerPlaza TeX
+
+`questxtract tex quiz.json -o quiz.tex --content-unit NAME` turns a quiz (section 12.3) into the
+`IndexedQuestion` format that ExerPlaza imports at `/questions/upload/tex`, as read by its parser
+`exerplaza/backend/quiz/latex_parser.py` v2.1. A quiz reaches ExerPlaza with no change on
+ExerPlaza's side and no network access. The file is a transport format for that parser, not a
+document to compile: there is no preamble.
+
+**Verbatim texts.** ExerPlaza stores every text as parsed and shows it with MathJax (`$...$`,
+`processEscapes`), so texts are written without LaTeX escaping; a `\%` would show up on the page
+as `\%`.
+
+**Mapping.** UTF-8 without a BOM, LF line endings. A header of four comment lines (quiz id, schema
+version, title), then one block per item, each starting with `% questxtract: <quiz id>/<item id>`
+so an import can recognise a re-import.
+
+| TeX | From |
+|---|---|
+| `\QuestionContentUnits` | every `--content-unit`, in order, the same for every item |
+| `\QuestionType` | always `multiple choice` |
+| `\QuestionLanguage` | the language's primary subtag: `en` is `english`, `it` is `italian`; any other fails |
+| `\QuestionDisclosability`, `\SolutionDisclosability` | `review.status`: `pending` is `only me`, `accepted` is `everybody` |
+| `\QuestionBody` | the stem, verbatim, CRLF as LF |
+| `\QuestionPotentialAnswers` | one `\correctanswer text` or `\answer text` line per option, in order, whitespace collapsed |
+| `\QuestionNotesForTheTeachers` | the reference, the source question, its times (`m:ss`, `h:mm:ss` from one hour on), the stem's origin, and the model and prompt version (the method when there is no model) |
+| `\SolutionBody` | the explanation, a blank line, then `- <option>[ (correct)] — <explanation>` per option |
+
+Points, instructions, the description, the source and the review note have no place in
+ExerPlaza and are not written. ExerPlaza parses `\QuestionFeedbackForTheStudents` but does not
+save it, which is why the option explanations go into `\SolutionBody`.
+
+**Guarantees.** The parser reports none of these mistakes; it reads the item wrong instead. So
+the writer guarantees them, and fails naming the text's path (for example
+`questions[1].options[2].text: unbalanced braces`) without writing anything:
+
+- answers are `\answer text` with a space and no braces, one per line;
+- braces are balanced in every text, counting those of `\{` and `\}`: one `}` too many cuts the
+  field short, one `{` too many makes the upload preview fail;
+- no text holds a command of the format (`\begin{Indexed`, `\end{Indexed`, `\Question`,
+  `\Solution`, `\answer`, `\correctanswer`, `\penalizableanswer`); the title only gets this check,
+  as it sits in a comment;
+- exactly one `\correctanswer` per block;
+- `IndexedSolution` sits inside `IndexedQuestion`, after `\QuestionContentUnits`.
+
+A content unit must be non-empty, on one line and free of braces. ExerPlaza links it to an existing
+unit only on an exact name and language match.
+
+**Reuse of the QTI model.** `tex.py` takes its items from `quiz_to_qti` (12.4), so selection,
+order, single choice only, one correct option and the field checks are the same as for QTI, and a
+quiz exports the same items in both formats. Its errors are re-raised as `TexExportError`. The
+review status, the stem's origin and `generation` come from the model's untyped `metadata`, and
+`tex.py` checks each value it reads. The XML writers are not used.
+
 ---
 
 ## 13. Module layout and dependencies
@@ -1434,7 +1487,7 @@ The element names below are QTI 3.0's; the QTI 2.1 bullet says how 2.1 spells th
 ```
 src/questxtract/
   __init__.py      public API: process(), run(), STAGES, read/write, filters,
-                   export_qti() for QTI 2.1 and 3.0
+                   export_qti() for QTI 2.1 and 3.0, export_tex()
   models.py        Word, AsrSegment, Transcript, Sentence, Segment, VisualContext,
                    QuestionCandidate, QAPair, Context, SchemaError, the @stage decorator
   config.py        one flat frozen Config dataclass, every default
@@ -1455,12 +1508,13 @@ src/questxtract/
   qti_package.py   export_qti(): version dispatch, JSON sidecar, deterministic ZIP
   qti_v2.py        QTI 2.1 XML
   qti_v3.py        QTI 3.0 XML
+  tex.py           ExerPlaza TeX from the QTI model
   filtering.py     time and text filters, experimental topic filter
   evaluate.py      labelled-set metrics
   schema.py        Question, a standalone shape the pipeline does not produce
   pipeline.py      STAGES, run(), process(), cache, progress
   quiz.py          quiz.json from questions.json: selection, one request per question
-  cli.py           process / transcribe / filter / eval / quiz / qti
+  cli.py           process / transcribe / filter / eval / quiz / qti / tex
 
 tests/            flat, one test module per source module, plus conftest.py
 ```
@@ -1515,7 +1569,8 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `filtering.py` | not a stage | time and text filters done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --score-vision` (4.4) | |
 | `qti.py`, `qti_package.py`, `qti_v2.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 and 2.1 packages of a `quiz.json` (12.4) | |
-| `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz` and `qti` work ([cli.md](cli.md)); `process --vision --detector llm --quiz` runs every stage and the quiz in one run, tested offline | |
+| `tex.py` | not a stage | done: the ExerPlaza TeX of a `quiz.json` (12.5); the upload itself is a separate issue | |
+| `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz`, `qti` and `tex` work ([cli.md](cli.md)); `process --vision --detector llm --quiz` runs every stage and the quiz in one run, tested offline | |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
 running list of what this document describes and the code does not yet do.
@@ -1530,8 +1585,8 @@ Explicit boundaries, so the package does not grow into them by accident.
 
 - **The teacher review/edit UI** ([issue #15](https://github.com/mad201802/QuestXtract/issues/15))
   is a separate application. This package's part is that its JSON round-trips (section 12.2).
-- **exerplaza.com upload** is likewise a separate consumer of the exported JSON. Nothing in
-  `questxtract` talks to exerplaza directly.
+- **ExerPlaza upload.** `tex` writes a file for ExerPlaza's TeX upload (section 12.5); nothing in
+  `questxtract` talks to ExerPlaza.
 - **No LMS upload**; `qti` only writes a ZIP (section 12.4).
 - **The labelled dataset** is test
   material under `tests/data/`, not an importable subpackage. The *harness* that reads it is
