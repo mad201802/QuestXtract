@@ -559,8 +559,9 @@ www.w3.org once.
 
 *Chose:* `questxtract tex` writes a `quiz.json` in the `IndexedQuestion` format that ExerPlaza's
 parser (`latex_parser.py` v2.1) imports at `/questions/upload/tex` (#178, architecture.md 12.5).
-`tex.py` takes its items from `quiz_to_qti` (D16) and is one more writer of that model; it
-replaces the plan of #37, an intermediate JSON guessing ExerPlaza's schema.
+`tex.py` takes its items from `quiz_to_qti` (D16) and is one more writer of that model. It is
+the file-based route, a teacher uploads the file; it does not replace #37, the direct export to
+ExerPlaza.
 
 *Alternative:* a second mapping from `quiz.json`, duplicating `quiz_to_qti`; or moving the model
 now to a format-neutral module with typed review and origin fields.

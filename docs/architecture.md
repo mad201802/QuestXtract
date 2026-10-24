@@ -1569,7 +1569,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `filtering.py` | not a stage | time and text filters done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --score-vision` (4.4) | |
 | `qti.py`, `qti_package.py`, `qti_v2.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 and 2.1 packages of a `quiz.json` (12.4) | |
-| `tex.py` | not a stage | done: the ExerPlaza TeX of a `quiz.json` (12.5); the upload itself is a separate issue | |
+| `tex.py` | not a stage | done: the ExerPlaza TeX of a `quiz.json` (12.5); the direct export to ExerPlaza is #37 | |
 | `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz`, `qti` and `tex` work ([cli.md](cli.md)); `process --vision --detector llm --quiz` runs every stage and the quiz in one run, tested offline | |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
@@ -1586,7 +1586,8 @@ Explicit boundaries, so the package does not grow into them by accident.
 - **The teacher review/edit UI** ([issue #15](https://github.com/mad201802/QuestXtract/issues/15))
   is a separate application. This package's part is that its JSON round-trips (section 12.2).
 - **ExerPlaza upload.** `tex` writes a file for ExerPlaza's TeX upload (section 12.5); nothing in
-  `questxtract` talks to ExerPlaza.
+  `questxtract` talks to ExerPlaza yet. The direct export is planned in
+  [issue #37](https://github.com/mad201802/QuestXtract/issues/37).
 - **No LMS upload**; `qti` only writes a ZIP (section 12.4).
 - **The labelled dataset** is test
   material under `tests/data/`, not an importable subpackage. The *harness* that reads it is
