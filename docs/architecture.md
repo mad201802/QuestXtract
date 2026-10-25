@@ -1430,7 +1430,8 @@ The element names below are QTI 3.0's; the QTI 2.1 bullet says how 2.1 spells th
 `questxtract tex quiz.json -o quiz.tex --content-unit NAME` turns a quiz (section 12.3) into the
 `IndexedQuestion` format that ExerPlaza imports at `/questions/upload/tex`, as read by its parser
 `exerplaza/backend/quiz/latex_parser.py` v2.1. A quiz reaches ExerPlaza with no change on
-ExerPlaza's side and no network access. The file is a transport format for that parser, not a
+ExerPlaza's side and no network access: a teacher uploads the file. `tex` does not connect to
+ExerPlaza (section 13.4). The file is a transport format for that parser, not a
 document to compile: there is no preamble.
 
 **Verbatim texts.** ExerPlaza stores every text as parsed and shows it with MathJax (`$...$`,

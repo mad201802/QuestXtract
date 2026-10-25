@@ -12,7 +12,7 @@
   author, accepted ones to everybody, and rejected ones are left out: the same items as `qti`.
   Texts are written verbatim for MathJax. A text with unbalanced braces or a command of the
   format fails, naming the text, and nothing is written. The same quiz gives the same bytes.
-  (#178)
+  You upload the file in ExerPlaza yourself. (#178)
 - `--vision-reader ocr` (`vision_reader = "ocr"`) reads the board with GLM-OCR
   (`vision_ocr_model`, `zai-org/GLM-OCR` on NTNU's service) instead of the vision model: the text
   and the formulas as LaTeX, labels such as circled numbers and units left out, no description,
