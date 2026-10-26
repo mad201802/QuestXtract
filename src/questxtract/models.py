@@ -231,7 +231,9 @@ class Sentence:
     def __post_init__(self) -> None:
         """Fill in the content-hash ``id`` when none was given."""
         if not self.id:
-            digest = hashlib.sha1(f"{self.start:.3f}|{self.text}".encode()).hexdigest()
+            digest = hashlib.sha1(
+                f"{self.start:.3f}|{self.text}".encode(), usedforsecurity=False
+            ).hexdigest()
             object.__setattr__(self, "id", f"s_{digest[:6]}")
 
 
@@ -293,7 +295,7 @@ class VisualContext:
     def id(self) -> str:
         """Stable identifier from the lifetime and keyframe; a new caption keeps it."""
         key = f"{self.start:.3f}|{self.end:.3f}|{self.keyframe_path}"
-        return f"v_{hashlib.sha1(key.encode()).hexdigest()[:6]}"
+        return f"v_{hashlib.sha1(key.encode(), usedforsecurity=False).hexdigest()[:6]}"
 
 
 def overlapping(
@@ -373,7 +375,7 @@ class QAPair:
 
         Not from ``question.text``: the LLM detector may reword it, and the id must not move.
         """
-        digest = hashlib.sha1(self.question.sentence_id.encode()).hexdigest()
+        digest = hashlib.sha1(self.question.sentence_id.encode(), usedforsecurity=False).hexdigest()
         return f"q_{digest[:6]}"
 
 
