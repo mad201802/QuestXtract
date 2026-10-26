@@ -965,6 +965,65 @@ def test_qti_has_no_version_or_filter_flags(capsys: pytest.CaptureFixture[str]) 
         assert f"unrecognized arguments: {flag}" in capsys.readouterr().err
 
 
+# --- tex (#178) ----------------------------------------------------------------
+
+
+def test_tex_exports_a_quiz_for_exerplaza_and_leaves_rejected_items_out(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    quiz = make_quiz("q_aaa", "q_bbb", "q_ccc")
+    quiz["questions"][1]["review"]["status"] = "accepted"
+    quiz["questions"][2]["review"]["status"] = "rejected"
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(quiz), encoding="utf-8")
+
+    command = ["tex", "lecture.quiz.json", "-o", "lecture.tex"]
+    assert main([*command, "--content-unit", "Sorting", "--content-unit", "Stability"]) == 0
+
+    assert capsys.readouterr().err == "ExerPlaza TeX, 2 questions -> lecture.tex\n"
+    tex = (tmp_path / "lecture.tex").read_text(encoding="utf-8")
+    assert tex.count("\\begin{IndexedQuestion}") == 2
+    assert "quiz_q_ccc" not in tex
+    assert tex.count("\\QuestionContentUnits{Sorting}{Stability}\n") == 2
+
+
+@pytest.mark.parametrize("content", [None, "{", '{"schema_version": "2.0", "questions": []}'])
+def test_tex_bad_input_gets_one_line_and_no_output(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], content: str | None
+) -> None:
+    source = tmp_path / "quiz.json"
+    if content is not None:
+        source.write_text(content, encoding="utf-8")
+    output = tmp_path / "out.tex"
+
+    assert main(["tex", str(source), "-o", str(output), "--content-unit", "Sorting"]) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("error: tex: ") and err.count("\n") == 1
+    assert not output.exists()
+
+
+def test_tex_with_every_item_rejected_fails_and_writes_nothing(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    quiz = make_quiz("q_aaa")
+    quiz["questions"][0]["review"]["status"] = "rejected"
+    source = tmp_path / "quiz.json"
+    source.write_text(json.dumps(quiz), encoding="utf-8")
+    output = tmp_path / "out.tex"
+
+    assert main(["tex", str(source), "-o", str(output), "--content-unit", "Sorting"]) == 1
+
+    assert "no question to export" in capsys.readouterr().err
+    assert not output.exists()
+
+
+def test_tex_needs_a_content_unit(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as caught:
+        main(["tex", "quiz.json", "-o", "out.tex"])
+    assert caught.value.code == 2
+    assert "the following arguments are required: --content-unit" in capsys.readouterr().err
+
+
 # --- the whole chain: speech, vision, the LLM judge and the quiz in one run (#160) ---
 
 _LECTURE = [

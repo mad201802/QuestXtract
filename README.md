@@ -38,6 +38,7 @@ turns them into study material. It **extracts** questions, it never invents them
 | 📦 **JSON export** | `questions.json` with a fixed key set and a formal JSON Schema |
 | 🧩 **Quizzes** | Multiple-choice items from the questions asked, with explanations; every generated text is marked and starts as pending review |
 | 🎓 **LMS export** | `questxtract qti` writes a `quiz.json` as a QTI 3.0 or 2.1 package for an LMS to import |
+| 📝 **ExerPlaza TeX** | `questxtract tex` writes a `quiz.json` as a TeX file to upload to ExerPlaza |
 
 What is built today:
 [architecture.md 13.3](docs/architecture.md#133-status).
@@ -265,6 +266,7 @@ slow starts:
 questxtract process lecture.mp4 --vision --detector llm --quiz
 # -> lecture.questions.json, lecture.keyframes/ and lecture.quiz.json
 questxtract qti lecture.quiz.json -o lecture.qti.zip   # the quiz as a QTI 3.0 package for an LMS
+questxtract tex lecture.quiz.json -o lecture.tex --content-unit "Sorting"   # or as TeX for ExerPlaza
 ```
 
 ### Output

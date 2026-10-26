@@ -148,7 +148,7 @@ def _item(
     if interaction_type != "choice_single":
         raise QtiExportError(
             f"{path}.interaction_type: {interaction_type!r} is not supported; "
-            "the QTI export handles 'choice_single' only"
+            "only 'choice_single' is supported"
         )
     identifier = _identifier(item.get("id"), f"{path}.id")
     prompt, prompt_origin = _text(item.get("prompt"), f"{path}.prompt")

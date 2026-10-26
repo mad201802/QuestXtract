@@ -555,6 +555,29 @@ feedback per option; `quiz` writes 1 point per item, so only the feedback is los
 second XSD tree, 37 files, joins the CI cache, and a cold cache needs www.imsglobal.org and
 www.w3.org once.
 
+### D24: TeX for ExerPlaza, written from the QTI model
+
+*Chose:* `questxtract tex` writes a `quiz.json` in the `IndexedQuestion` format that ExerPlaza's
+parser (`latex_parser.py` v2.1) imports at `/questions/upload/tex` (#178, architecture.md 12.5).
+`tex.py` takes its items from `quiz_to_qti` (D16) and is one more writer of that model. It is
+the file-based route, a teacher uploads the file; it does not replace #37, the direct export to
+ExerPlaza.
+
+*Alternative:* a second mapping from `quiz.json`, duplicating `quiz_to_qti`; or moving the model
+now to a format-neutral module with typed review and origin fields.
+
+*Why:* with one mapping, the TeX and QTI exports of a quiz hold the same items by construction:
+the same selection, order and single-choice rule, and the field checks that already exist and
+are tested. Targeting the format ExerPlaza already imports needs no change on ExerPlaza's side
+and no network access. ExerPlaza's parser reports no error for a malformed item but reads it
+wrong, so the writer guarantees what the parser needs and fails naming the text.
+
+*Cost:* `tex.py` reads the review status, the stem's origin and `generation` from the model's
+untyped `metadata`, whose keys only the existing tests pin, and the model keeps its QTI names. If
+a third writer such as HTML arrives, the model moves to a format-neutral module. The format
+follows ExerPlaza's parser, not ExerPlaza's own TeX export, which writes `\correctanswer{...}`
+and does not re-import; if the parser changes, this writer has to follow.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |
