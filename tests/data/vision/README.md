@@ -154,8 +154,7 @@ question's `visual_ids` against the label.
 | `state_start` | number | `start` of the board state in `../<recording-name>.visual.json` on screen when the question was asked; when the screen changes during the question, the state the question is about |
 
 `ttk4225_2026_09_14` has 22 questions, spread over the lecture and biased towards questions near
-a change of board state. **Status.** Drafted from the board states' times and descriptions, and
-provisional until a human has checked each against the video.
+a change of board state. **Status.** Checked by hand against the video.
 
 ## Sources and licences
 

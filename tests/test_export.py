@@ -177,11 +177,9 @@ def _jsonl(path):
     return [json.loads(line) for line in lines if line.strip()]
 
 
-def test_questions_link_to_the_drafted_board_state():
+def test_questions_link_to_the_board_state_on_screen():
     # #135: questions of a real lecture, each with the board state on screen when it was asked
     # (tests/data/vision/README.md), against the committed board states: no video, no network.
-    # The links were drafted from the board states' times and stay provisional until checked
-    # against the video, so this pins the linking rule; it cannot catch a board state cut late.
     name = "ttk4225_2026_09_14"
     visual = json.loads((DATA / f"{name}.visual.json").read_text(encoding="utf-8"))
     states = tuple(VisualContext(**state) for state in visual["board_states"])
