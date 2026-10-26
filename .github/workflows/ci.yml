@@ -26,9 +26,51 @@ jobs:
         env:
           QUESTXTRACT_REQUIRE_QTI_XSD: "1"
 
+  # Installs the built wheel the way a user would: a fresh venv that resolves the wheel's own
+  # dependency list from PyPI (not uv.lock), run outside the checkout so nothing imports src/.
+  wheel:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: uv build --wheel
+      - run: uv venv --python ${{ matrix.python }} "$RUNNER_TEMP/venv"
+      - run: uv pip install --python "$RUNNER_TEMP/venv" dist/*.whl
+      - name: version matches pyproject.toml
+        working-directory: ${{ runner.temp }}
+        run: |
+          test "$("$RUNNER_TEMP/venv/bin/python" -I -c 'import questxtract; print(questxtract.__version__)')" \
+            = "$(uv version --short --project "$GITHUB_WORKSPACE")"
+      - name: --help lists the commands
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$RUNNER_TEMP/venv/bin/questxtract" --help > help.txt
+          for c in process transcribe eval; do grep -qw "$c" help.txt; done
+      - name: process a transcript offline
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$RUNNER_TEMP/venv/bin/questxtract" process \
+            "$GITHUB_WORKSPACE/tests/data/ttk4225_2026_09_14.transcript.json" -o - > questions.json
+      # Installed only now, so the run above saw the bare install.
+      - name: output validates against the schema in the wheel
+        working-directory: ${{ runner.temp }}
+        run: |
+          uv pip install --python "$RUNNER_TEMP/venv" jsonschema
+          "$RUNNER_TEMP/venv/bin/python" -I -c '
+          import json
+          from importlib.resources import files
+          import jsonschema
+          schema = files("questxtract").joinpath("questions.schema.json").read_text(encoding="utf-8")
+          with open("questions.json", encoding="utf-8") as f:
+              jsonschema.validate(json.load(f), json.loads(schema))
+          '
+
   ci:
     if: always()
-    needs: test
+    needs: [test, wheel]
     runs-on: ubuntu-latest
     steps:
-      - run: ${{ needs.test.result == 'success' }}
+      - run: ${{ needs.test.result == 'success' && needs.wheel.result == 'success' }}
