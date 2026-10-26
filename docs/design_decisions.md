@@ -706,22 +706,23 @@ in the bibliography (some came via an AI-generated literature survey).
 
 *Chose:* `judge_model` and `quiz_model` = `Qwen/Qwen3.8-27B-FP8` on NTNU's LLM service, sending
 no reasoning setting (`reasoning_effort = ""`); `vision_model` stays DeepSeek-V4.1-Flash, with
-`vision_reasoning_effort = "none"` as its own default. `--llm-reasoning` sets both (#179). This
-changes the judge and quiz half of D22.
+`vision_reasoning_effort = "none"` as its own default. `--llm-reasoning` sets the judge and the
+quiz only; vision's setting is in the settings file (#179). This changes the judge and quiz half
+of D22.
 
 *Alternative:* DeepSeek for everything, thinking off (D22); DeepSeek judging with low thinking;
 Qwen for everything.
 
-*Why:* every pair of judge and vision model was run three times on the labelled lectures
-(`eval --detector llm --board`, numbers on #179). Qwen judged with F1 0.945 against DeepSeek's
-0.885 to 0.912, beyond the spread between runs, from higher precision at the same recall, and
-whichever model had read the board hardly changed it. DeepSeek with low thinking reached 0.923,
-took 14 to 23 minutes a run and timed out on NTNU. DeepSeek read the labelled keyframes better
-(formulas 0.83 against 0.64) and twice as fast, so it keeps the board. Both are on NTNU's
-service, so there is still one endpoint and one key. The quiz follows the judge because the two
-share `reasoning_effort`, and DeepSeek without `"none"` thinks.
+*Why:* every pair of judge and vision model was run three times on the labelled lectures and
+scored with `eval --detector llm --board` (numbers on #179). Qwen judged best of the pairs tried,
+from higher precision at the same recall, and which model had read the board hardly changed the
+judging. DeepSeek with low thinking was about as good but took many minutes a run and timed out
+on NTNU. DeepSeek read the labelled keyframes better on formulas and about twice as fast, so it
+keeps the board. Both are on NTNU's service, so there is still one endpoint and one key. The
+quiz follows the judge because the two share `reasoning_effort`, and DeepSeek without `"none"`
+thinks.
 
 *Cost:* two models on the service instead of one, and two reasoning defaults to keep apart.
-Qwen judges about four times slower than DeepSeek with its thinking off (minutes per lecture,
+Qwen judges several times slower than DeepSeek with its thinking off (minutes per lecture,
 still free). The quiz on Qwen was not measured against DeepSeek's.
 

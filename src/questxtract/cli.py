@@ -237,8 +237,6 @@ def _config(args: argparse.Namespace) -> Config:
     }
     if changes.get("reasoning_effort") == "server":
         changes["reasoning_effort"] = ""
-    if "reasoning_effort" in changes:  # the flag sets every model; the file can split them
-        changes["vision_reasoning_effort"] = changes["reasoning_effort"]
     config = config.replace(**changes)
     if not 0.0 <= config.min_confidence <= 1.0:
         raise ValueError("min_confidence / --threshold must be between 0 and 1")
@@ -321,9 +319,14 @@ def _check_endpoint(config: Config, what: str, *, model_flag: str, vision: bool 
     else:
         mover = "--llm-url (base_url)"
         to_openai = f"pass --llm-url {OPENAI_URL}"
+    # vision's reasoning setting lives in the settings file, not on the command line (#179)
+    reasoning = (
+        ' and vision_reasoning_effort = "" in questxtract.toml'
+        if vision
+        else " --llm-reasoning server"
+    )
     openai_hint = (
-        f"for OpenAI instead, {to_openai} {model_flag} gpt-4o --llm-reasoning server, "
-        f"with {OPENAI_KEY_ENV}"
+        f"for OpenAI instead, {to_openai} {model_flag} gpt-4o{reasoning}, with {OPENAI_KEY_ENV}"
     )
     model = getattr(config, _MODEL_FLAGS[model_flag])
     if is_ntnu(url) and "/" not in model:
@@ -695,11 +698,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="LEVEL",
         help="how long a thinking model may think before it answers: none, low, medium or high, "
         "or server to send no setting, for a model that takes none such as gpt-4o or rejects "
-        f"none such as Qwen (default: {defaults.reasoning_effort or 'server'}, and "
-        f"{defaults.vision_reasoning_effort} for vision, which DeepSeek needs). It sets vision "
-        "too; vision_reasoning_effort in the settings file sets vision apart, and the OCR "
-        "model gets none. Small models such as qwen3.5:9b judge much better with low; low, "
-        "medium and high also allow each request 10 minutes instead of 2",
+        f"none such as Qwen (default: {defaults.reasoning_effort or 'server'}). It sets the judge "
+        "and the quiz; vision has vision_reasoning_effort in the settings file (default "
+        f"{defaults.vision_reasoning_effort}, which DeepSeek needs). Small models such as "
+        "qwen3.5:9b judge much better with low; low, medium and high also allow each request "
+        "10 minutes instead of 2",
     )
 
     # How the quiz is made: `process --quiz` and `quiz` share these.

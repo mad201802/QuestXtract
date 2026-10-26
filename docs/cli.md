@@ -43,7 +43,7 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--detector` | `rules` or `llm` | `rules` | How questions are found: fast offline rules, or a language model that reads the transcript. See [Finding questions with an LLM](#finding-questions-with-an-llm). |
 | `--llm-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
 | `--llm-url` | a URL | NTNU's LLM service | An OpenAI-compatible endpoint for `--detector llm`, the quiz and vision, e.g. `https://api.openai.com/v1` for OpenAI or `http://localhost:11434/v1` for Ollama. The key goes with the endpoint: NTNU's service (`https://llm.hpc.ntnu.no/v1`, NTNU network or VPN) reads `QUESTXTRACT_NTNU_API_KEY`, every other endpoint `OPENAI_API_KEY`. Vision goes there too unless `vision_base_url` is set in `questxtract.toml`. |
-| `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `server` (vision: `none`) | How long a thinking model may think before it answers: the judge, the quiz and vision (the OCR model gets no setting). By default the judge and the quiz send no setting (`server`), since Qwen rejects `none`, and vision sends `none`, which switches DeepSeek's thinking off and makes it far faster at reading the board for nearly the same result. The flag sets all of them; `vision_reasoning_effort` in the settings file sets vision apart. `server` also suits a model that has no setting (`gpt-4o`); a DeepSeek judge needs `none`. Small models such as `qwen3.5:9b` judge much better with `low`. `low`, `medium` and `high` allow each request 10 minutes instead of 2; for a server that thinks on its own with `server`, raise `timeout_seconds` in the settings file. |
+| `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `server` | How long a thinking model may think before it answers: the judge and the quiz. By default they send no setting (`server`), since Qwen rejects `none`. `server` also suits a model that has no setting (`gpt-4o`); a DeepSeek judge needs `none`. Vision is not set here: `vision_reasoning_effort` in the settings file, `"none"` by default, switches DeepSeek's thinking off, which makes it far faster at reading the board for nearly the same result. Small models such as `qwen3.5:9b` judge much better with `low`. `low`, `medium` and `high` allow each request 10 minutes instead of 2; for a server that thinks on its own with `server`, raise `timeout_seconds` in the settings file. |
 | `--vision`, `--no-vision` | nothing | off | Also reads the slides or the board with a vision model: by default DeepSeek on NTNU's LLM service with the key from `QUESTXTRACT_NTNU_API_KEY` (NTNU network or VPN), or at `vision_base_url`, or at `--llm-url`. Needs the `questxtract[llm]` extra. `--no-vision` turns off `vision_enabled` from the settings file for one run. A recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript has no board, so the board is not read (a note says so). See [Reading the board](../README.md#reading-the-board). |
 | `--vision-model` | a model name | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | The model that reads the board, as the endpoint names it. It must take images. |
 | `--vision-reader` | `vlm` or `ocr` | `vlm` | How keyframes are read: `vlm`, the vision model (text, formulas and a description), or `ocr`, `vision_ocr_model` (GLM-OCR: text and formulas only, faster). The layout probe always asks `--vision-model`. |
@@ -191,11 +191,11 @@ questxtract eval tests/data/ --config other.toml
 Every `Config` field can be set, including those without flags. Names must match exactly:
 `--model` corresponds to `model_size`, `--threshold` to `min_confidence`, `--llm-model` to
 `judge_model`, `--llm-url` to `base_url`, and `--llm-reasoning` to `reasoning_effort`
-(`judge_reasoning_effort` is still read as its old name). `vision_reasoning_effort` is vision's
-(`"none"` by default, for DeepSeek), so the judge and vision can differ (Qwen judging with
-`""`, DeepSeek reading the board with `"none"`); `--llm-reasoning` sets both. `reasoning_effort = ""` is the
-equivalent of `--llm-reasoning server`. A reasoning level (`"low"`, `"medium"` or `"high"`) raises the request timeout to at least 600
-seconds for `process` and `eval`, including when it comes from the file.
+(`judge_reasoning_effort` is still read as its old name). `--llm-reasoning` does not set vision:
+`vision_reasoning_effort` does, `"none"` by default for DeepSeek, so the judge (Qwen, `""`) and
+the board (DeepSeek, `"none"`) can differ. `reasoning_effort = ""` is the equivalent of
+`--llm-reasoning server`. A reasoning level (`"low"`, `"medium"` or `"high"`) raises the request
+timeout to at least 600 seconds for `process` and `eval`, including when it comes from the file.
 
 The file must be UTF-8; a leading BOM from a Windows editor is accepted. No nested sections or
 `[tool.questxtract]` table are read. Integer fields require integers, not `5.5` or `true`;
@@ -356,8 +356,11 @@ put that provider's key in `OPENAI_API_KEY` (stored the same way) and pass its U
 
 ```bash
 questxtract process lecture.mp4 --detector llm \
-    --llm-url https://openrouter.ai/api/v1 --llm-model deepseek/deepseek-v4.1-flash
+    --llm-url https://openrouter.ai/api/v1 --llm-model deepseek/deepseek-v4.1-flash \
+    --llm-reasoning none
 ```
+
+DeepSeek thinks unless told not to, so it needs `--llm-reasoning none`; Qwen and gpt-4o take no setting, which is the default.
 
 **Local (Ollama).** Any OpenAI-compatible server works (Ollama, llama.cpp's `llama-server`,
 vLLM, LM Studio); pass its URL. With [Ollama](https://ollama.com), give it an 8k context first:

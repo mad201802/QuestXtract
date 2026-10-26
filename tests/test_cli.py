@@ -450,7 +450,8 @@ def test_llm_reasoning_reaches_the_request_and_allows_a_longer_wait(
     assert config().timeout_seconds == Config().timeout_seconds == 120
     assert config("--llm-reasoning", "none").timeout_seconds == 120
     thinking = config("--llm-reasoning", "low")
-    assert thinking.reasoning_effort == thinking.vision_effort == "low"  # the flag sets both
+    assert thinking.reasoning_effort == "low"
+    assert thinking.vision_effort == "none"  # the flag leaves DeepSeek's board reading alone (#179)
     with pytest.raises(SystemExit):  # a typo fails at once, not at the provider after ASR
         config("--llm-reasoning", "hgih")
     assert thinking.timeout_seconds == 600
@@ -458,6 +459,7 @@ def test_llm_reasoning_reaches_the_request_and_allows_a_longer_wait(
     # asked for gets the long timeout, so a stalled request is noticed after 2 minutes.
     server = config("--llm-reasoning", "server")
     assert server.reasoning_effort == ""
+    assert server.vision_effort == "none"  # vision keeps DeepSeek's setting (#179)
     assert server.timeout_seconds == 120
 
 
@@ -801,7 +803,7 @@ _VISION_SETTINGS_FILE_ONLY = {
     "vision_change_hold",
     "vision_base_url",  # an endpoint is set once per machine; --llm-url still moves vision too
     "vision_ocr_model",  # one OCR model is measured; --vision-reader picks the reader
-    "vision_reasoning_effort",  # only for a vision model apart from the judge; --llm-reasoning
+    "vision_reasoning_effort",  # the board's model has its own setting; --llm-reasoning is the judge's
 }
 
 

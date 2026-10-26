@@ -490,7 +490,7 @@ keyframes (`eval --score-vision`, 4.4) it reads the text about as well as Qwen3.
 `latex` on more of the formulas, at no cost per lecture; with its thinking on it is far slower
 for nearly the same reading. Qwen3.8-27B on the same service catches somewhat more plain words
 on chalk and lightboards but fewer formulas, and is one setting away (it rejects `"none"`, so it
-needs `--llm-reasoning server`).
+needs `vision_reasoning_effort = ""` in `questxtract.toml`).
 The service needs the NTNU network or VPN; the customer may move hosting later, which is a
 `Config` change (10.1). Of the hosted OpenAI models, `gpt-5.6-luna` is the cheapest that
 stays under the customer's cost per lecture, fills `latex` on every formula frame, and reads about
@@ -934,13 +934,15 @@ pydantic-ai, instructor): `base_url` already reaches every server we target, and
 of 10.3 are ours to write either way ([design_decisions.md](design_decisions.md), D12).
 
 `reasoning_effort` (`--llm-reasoning`) sets how long a thinking model may think first. The judge
-and the quiz send it with every request; vision sends `vision_reasoning_effort` with every
+and the quiz send it with every request. Vision sends `vision_reasoning_effort` with every
 request to `vision_model` (the layout probe and its readings), or `reasoning_effort` when that
-is `None`, and `--llm-reasoning` sets both. The OCR model gets no setting: it does not think.
+is `None`; only the settings file sets it, so `--llm-reasoning` leaves the board's model alone.
+The OCR model gets no setting: it does not think.
 The judge's default, `""` (`--llm-reasoning server`), sends no setting: Qwen3.8-27B rejects
 `"none"` and thinks briefly on its own, and gpt-4o has no setting. Vision's default, `"none"`,
 switches DeepSeek's thinking off: it thinks unless told so, and on NTNU's service `"none"` is
-the only value that stops it (`"low"` still thinks).
+the only value that stops it (`"low"` still thinks). A vision model with no setting, such as
+gpt-4o, needs `vision_reasoning_effort = ""` in `questxtract.toml`.
 Thinking costs minutes per request instead of seconds, and it is what lets a small model such as
 Qwen3.5 9B judge well, so the CLI raises the per-request deadline to 10 minutes when a level
 (`low`, `medium`, `high`) is asked for. Ollama's context length cannot be set per

@@ -185,7 +185,7 @@ Windows), from the repository folder.
 | `--detector llm goes to NTNU's LLM service ..., so it needs QUESTXTRACT_NTNU_API_KEY` | The key is not loaded in this terminal | `source .env` |
 | `... Connection error` with NTNU's service | Not on the NTNU network | Connect the NTNU VPN |
 | `401 ... invalid_api_key` | The stored key is incomplete, or was revoked | Compare its end with the original (step 2) and save it again (step 1); if they match, ask for a new key |
-| `400 ... reasoning_effort` | The vision model has no reasoning setting (`gpt-4o`), or rejects `none` (Qwen); vision sends `none` by default, which DeepSeek needs | Pass `--llm-reasoning server` |
+| `400 ... reasoning_effort` | The judge or the quiz model rejects `none` (Qwen) or takes no setting (`gpt-4o`); the vision model has no setting (`gpt-4o`, `qwen3-vl`) but vision sends `none` by default, which DeepSeek needs | Judge: pass `--llm-reasoning server`. Vision: set `vision_reasoning_effort = ""` in `questxtract.toml` |
 
 **For the project team.** We use NTNU's LLM service with our NTNU key, and the customer's
 pay-as-you-go OpenAI key only for the OpenAI fallback, with `gpt-4o`. Never
@@ -205,7 +205,7 @@ frame far slower for nearly the same reading. Switch vision on for one run with 
 ```bash
 questxtract process lecture.mp4 --vision        # DeepSeek on NTNU
 questxtract process lecture.mp4 --vision --llm-url http://localhost:11434/v1 \
-    --vision-model qwen3-vl:2b-instruct --llm-reasoning server   # a local model in Ollama
+    --vision-model qwen3-vl:2b-instruct   # a local model in Ollama; see vision_reasoning_effort below
 ```
 
 or for every run in `questxtract.toml` (`--no-vision` turns it off again for one run):
@@ -214,6 +214,7 @@ or for every run in `questxtract.toml` (`--no-vision` turns it off again for one
 vision_enabled = true
 vision_model = "deepseek-ai/DeepSeek-V4.1-Flash-1017"   # the default, on NTNU's LLM service
 # vision_base_url = "http://localhost:8000/v1"         # vision elsewhere; the judge stays on base_url
+# vision_reasoning_effort = ""                         # for a vision model with no setting, such as qwen3-vl
 ```
 
 Without `vision_base_url`, vision goes where `base_url` (`--llm-url`) points, NTNU's service by
