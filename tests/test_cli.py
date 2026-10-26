@@ -22,7 +22,7 @@ from jsonschema import Draft202012Validator
 
 from questxtract import Transcript, asr, cli, endpoint
 from questxtract.cli import main
-from questxtract.config import DEEPSEEK, NTNU_LLM_URL, Config
+from questxtract.config import DEEPSEEK, NTNU_LLM_URL, QWEN, Config
 from questxtract.export import SCHEMA_PATH
 from questxtract.pipeline import STAGES
 from questxtract.quiz_schema import QUIZ_SCHEMA_PATH, read_quiz
@@ -445,11 +445,12 @@ def test_llm_reasoning_reaches_the_request_and_allows_a_longer_wait(
         args = cli.build_parser().parse_args(["process", source, "--detector", "llm", *flags])
         return cli._with_llm(cli._config(args))
 
-    assert config().reasoning_effort == "none"  # DeepSeek thinks unless told none (#173)
+    assert config().reasoning_effort == ""  # Qwen judges, and it rejects "none" (#179)
+    assert config().vision_effort == "none"  # DeepSeek reads, and thinks unless told (#173)
     assert config().timeout_seconds == Config().timeout_seconds == 120
     assert config("--llm-reasoning", "none").timeout_seconds == 120
     thinking = config("--llm-reasoning", "low")
-    assert thinking.reasoning_effort == "low"
+    assert thinking.reasoning_effort == thinking.vision_effort == "low"  # the flag sets both
     with pytest.raises(SystemExit):  # a typo fails at once, not at the provider after ASR
         config("--llm-reasoning", "hgih")
     assert thinking.timeout_seconds == 600
@@ -1106,9 +1107,17 @@ def test_one_run_reads_the_board_finds_the_questions_and_writes_the_quiz(
     # Vision asked as vision, the judge and the quiz as the judge (#160) ...
     assert models.names(vision=True) == ["layout", "board", "board", "board"]
     assert models.names(vision=False) == ["judgements", "quiz_item", "quiz_item"]
-    # ... and by default all of it went to DeepSeek on NTNU's service, thinking off (#173 AC1).
+    # ... and by default all of it went to NTNU's service: DeepSeek read the board with its
+    # thinking off (#173 AC1), Qwen judged and wrote the quiz with no setting (#179 AC1).
     assert models.routes == {(NTNU_LLM_URL, "ntnu-test")}
-    assert {(r["model"], r["reasoning_effort"]) for _, r in models.requests} == {(DEEPSEEK, "none")}
+    asked = {(r["model"], r.get("reasoning_effort")) for _, r in models.requests}
+    assert asked == {(DEEPSEEK, "none"), (QWEN, None)}
+    for name, vision in (("layout", True), ("board", True), ("judgements", False)):
+        assert all(
+            r["model"] == (DEEPSEEK if vision else QWEN)
+            for _, r in models.requests
+            if r["response_format"]["json_schema"]["name"] == name
+        )
     assert "2 quiz items" in capsys.readouterr().err
 
 

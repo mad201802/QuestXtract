@@ -134,6 +134,12 @@
 
 ### Changed (breaking)
 
+- The LLM detector and the quiz use `Qwen/Qwen3.8-27B-FP8` on NTNU's LLM service by default
+  (`judge_model`, `quiz_model`) and send no reasoning setting (`reasoning_effort = ""`, the
+  same as `--llm-reasoning server`), since Qwen rejects `none`. Vision stays on
+  DeepSeek-V4.1-Flash with its thinking off, now from its own default
+  (`vision_reasoning_effort = "none"`); `--llm-reasoning` sets both. To judge with DeepSeek as
+  before, pass `--llm-model deepseek-ai/DeepSeek-V4.1-Flash-1017 --llm-reasoning none`. (#179)
 - Vision, the LLM detector and the quiz run on one model by default:
   `deepseek-ai/DeepSeek-V4.1-Flash-1017` on NTNU's LLM service (`base_url`), with its thinking
   off. The key goes with the endpoint: `QUESTXTRACT_NTNU_API_KEY` for NTNU's service,

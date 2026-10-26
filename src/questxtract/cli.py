@@ -237,6 +237,8 @@ def _config(args: argparse.Namespace) -> Config:
     }
     if changes.get("reasoning_effort") == "server":
         changes["reasoning_effort"] = ""
+    if "reasoning_effort" in changes:  # the flag sets every model; the file can split them
+        changes["vision_reasoning_effort"] = changes["reasoning_effort"]
     config = config.replace(**changes)
     if not 0.0 <= config.min_confidence <= 1.0:
         raise ValueError("min_confidence / --threshold must be between 0 and 1")
@@ -693,10 +695,11 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="LEVEL",
         help="how long a thinking model may think before it answers: none, low, medium or high, "
         "or server to send no setting, for a model that takes none such as gpt-4o or rejects "
-        f"none such as Qwen (default: {defaults.reasoning_effort or 'server'}). Vision follows "
-        "it unless vision_reasoning_effort is set; the OCR model gets none. Small models such "
-        "as qwen3.5:9b judge much better with low; low, medium and high also allow each "
-        "request 10 minutes instead of 2",
+        f"none such as Qwen (default: {defaults.reasoning_effort or 'server'}, and "
+        f"{defaults.vision_reasoning_effort} for vision, which DeepSeek needs). It sets vision "
+        "too; vision_reasoning_effort in the settings file sets vision apart, and the OCR "
+        "model gets none. Small models such as qwen3.5:9b judge much better with low; low, "
+        "medium and high also allow each request 10 minutes instead of 2",
     )
 
     # How the quiz is made: `process --quiz` and `quiz` share these.
