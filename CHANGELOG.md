@@ -10,7 +10,7 @@
   shows progress, Cancel (between stages), the written path and an Open folder button. Install with
   `pip install "questxtract[gui]"`; drag and drop needs `tkinterdnd2`, and where it cannot start the
   window says so and Browse still works. The start view has only the file, the output and Run;
-  the options are behind Advanced settings, except Read the board (vision), which stays on the start view. The window starts with the LLM detector and Read the board on (the CLI's defaults are unchanged); both need the NTNU key. The window is in English, Norsk or Italiano (the
+  the options are behind Advanced settings, except Read the board (vision), which stays on the start view. Without a `questxtract.toml` the window starts with the LLM detector and Read the board on (both need the NTNU key; the CLI's defaults are unchanged); with one, it starts from the file. The judge's model is greyed out with the rules detector. The window is in English, Norsk or Italiano (the
   switch at the top right). Needs a Python with tkinter. (#124)
 - `questxtract tex quiz.json -o quiz.tex --content-unit NAME` (and `export_tex()`) writes a
   `quiz.json` as TeX for ExerPlaza's upload at `/questions/upload/tex`: one `IndexedQuestion`
@@ -200,12 +200,14 @@
 ### Fixed
 
 - The quiz no longer drops an item because two options differ only by a sign (`-2` and `2`) or a
-  decimal point (`1.5` and `15`): the sameness check keeps minus signs, operators and a point or
-  comma inside a number. The quiz prompt (now `v1`) leaves out check-ins on the class, names the
+  decimal point (`1.5` and `15`): the sameness check ignores only case, math delimiters, runs of
+  spaces and punctuation at the end, and keeps everything inside an option. The quiz prompt (now `v1`) leaves out check-ins on the class, names the
   real expression from the board, and makes the model work the answer out instead of copying a
   lecturer's answer that does not fit the stem. (#124)
 - The transcription bar starts moving while the recording is decoded to audio (the first tenth of
   the bar) instead of sitting at 0 % until the first words arrive. (#124)
+- Installing no longer picks PyAV 19, with which faster-whisper 1.2.1 cannot open a recording
+  (`av>=14.0,<19`). (#124)
 - The rules detector penalises framing questions without content words ("So how do we do
   that?") and excludes their adjacent answer seeds, so they stay below the default output
   threshold. Questions naming a concept and questions with negation remain eligible. (#49)

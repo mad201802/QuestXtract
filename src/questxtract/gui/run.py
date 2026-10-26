@@ -19,6 +19,7 @@ from ..cli import (
     check_input,
     execute,
 )
+from ..config import Config
 from ..models import Progress
 from ..quiz_schema import read_quiz
 from .options import OPTIONS, OUTPUTS, TRANSCRIBE_DESTS, Option
@@ -97,9 +98,12 @@ def to_argv(
         argv += ["--output", str(output_path)]
     if output == "quiz":
         argv.append("--quiz")
+    judging = (values.get("detector") or Config().detector) == "llm"
     for option in OPTIONS:
         if option.kind == "implicit" or option.dest == "output" or not applies(option, output):
             continue
+        if option.dest == "llm_model" and not judging:
+            continue  # the judge's model is not used without the LLM detector
         value = values.get(option.dest)
         if value is None or value == "":
             continue

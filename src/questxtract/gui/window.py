@@ -101,6 +101,7 @@ class QuestXtractWindow:
         self.language = tk.StringVar(master=root, value=i18n.language())
         self.fields: dict[str, tk.StringVar | tk.BooleanVar] = {}
         self.option_rows: dict[str, ttk.Frame] = {}
+        self.controls: dict[str, Any] = {}
         self.option_labels: dict[str, tuple[ttk.Label, Option]] = {}
         self.tristate_combos: dict[str, ttk.Combobox] = {}
         self.output_buttons: dict[str, ttk.Radiobutton] = {}
@@ -235,24 +236,23 @@ class QuestXtractWindow:
             var = tk.BooleanVar(master=line, value=False)
             control: tk.Widget = ttk.Checkbutton(line, variable=var)
         elif option.kind == "tristate":
-            start = state.START_VALUES.get(option.dest, "Default")
+            start = state.start_tristate(option)
             var = tk.StringVar(master=line, value=tr(f"tristate.{start.lower()}"))
             combo = ttk.Combobox(line, textvariable=var, state="readonly", width=26)
             self.tristate_combos[option.dest] = combo
             control = combo
             self._set_tristate_values(option.dest)
         elif option.kind == "choice":
-            var = tk.StringVar(
-                master=line, value=state.START_VALUES.get(option.dest, state.default_text(option))
-            )
+            var = tk.StringVar(master=line, value=state.start_text(option))
             control = ttk.Combobox(
                 line, textvariable=var, values=option.choices, state="readonly", width=26
             )
         else:
-            initial = "" if option.kind in ("file", "path") else state.default_text(option)
+            initial = "" if option.kind in ("file", "path") else state.start_text(option)
             var = tk.StringVar(master=line, value=initial)
             control = ttk.Entry(line, textvariable=var, width=36)
         control.grid(row=0, column=1, sticky="w")
+        self.controls[option.dest] = control
         if option.kind in ("file", "path"):
             browse = ttk.Button(line, command=lambda: self._browse_into(option, var))
             self._text(browse, "button.browse")
@@ -375,6 +375,12 @@ class QuestXtractWindow:
                     row.grid()
                 else:
                     row.grid_remove()
+        # The judge's model only matters to the LLM detector; the URL and the reasoning setting
+        # also serve the quiz and vision, so they stay open whatever the detector is.
+        judge_model = self.controls.get("llm_model")
+        if judge_model is not None:
+            judging = self.fields["detector"].get() == "llm"
+            judge_model.state(["!disabled"] if judging else ["disabled"])
         problem = None if self.busy else self._problem()
         self.run_button.state(["disabled"] if self.busy or problem else ["!disabled"])
         cancellable = self.busy and not self.cancel.is_set()
@@ -577,7 +583,7 @@ class QuestXtractWindow:
             self._set_stage(lambda: tr("stage.cancelled"))
         else:
             self._set_status(lambda: payload)
-            self._set_stage(lambda: tr("stage.stopped"))
+            self._set_stage(lambda: tr("stage.failed"))
         self._refresh()
 
     def _show_result(self, result: RunResult) -> None:

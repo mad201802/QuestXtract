@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from ..config import GUI_START_DETECTOR, GUI_START_VISION, Config
+from ..config import GUI_START_DETECTOR, GUI_START_VISION, Config, load_config
 from ..pipeline import STAGES, stage_info
 from .i18n import has, tr
 from .options import OPTIONS, OUTPUTS, Option
@@ -31,6 +31,8 @@ __all__ = [
     "form_values",
     "hint",
     "one_line",
+    "start_text",
+    "start_tristate",
     "open_folder",
     "output_offered",
     "overall_fraction",
@@ -68,13 +70,42 @@ START_VALUES: dict[str, str] = {
 }
 
 
+_SETTINGS_FILE = Path("questxtract.toml")  # the one the CLI reads when --config is not given
+
+
+def start_text(option: Option) -> str:
+    """Return the text a control starts with.
+
+    With a ``questxtract.toml`` here, the file's value (or the default it leaves), so an
+    untouched form runs what the file says. Without one, the window's start values.
+    """
+    if option.field is None:
+        return ""
+    if _SETTINGS_FILE.is_file():
+        try:
+            value = getattr(load_config(), option.field)
+        except (OSError, ValueError):  # the run check reports the file's problem
+            return default_text(option)
+        return "" if value is None else str(value)
+    return START_VALUES.get(option.dest, default_text(option))
+
+
+def start_tristate(option: Option) -> str:
+    """Return the choice a tri-state control starts with: the file decides when there is one."""
+    if _SETTINGS_FILE.is_file():
+        return TRISTATE_LABELS[0]
+    return START_VALUES.get(option.dest, TRISTATE_LABELS[0])
+
+
 def hint(option: Option) -> str:
-    """Return the default as a short phrase for the label beside the control."""
+    """Return the value the control starts with, as a short phrase beside it."""
     if option.dest == "output":
         return tr("hint.next_input")
-    text = default_text(option)
+    if option.kind == "tristate" and start_tristate(option) != TRISTATE_LABELS[0]:
+        return tr("hint.on") if start_tristate(option) == "On" else tr("hint.off")
     if option.kind in ("bool", "tristate"):
-        return tr("hint.on") if text == "True" else tr("hint.off")
+        return tr("hint.on") if default_text(option) == "True" else tr("hint.off")
+    text = start_text(option)
     if option.dest == "llm_reasoning" and not text:
         return "server"  # "" sends no setting; the CLI spells that server
     return text or tr("hint.unset")

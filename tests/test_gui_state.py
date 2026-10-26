@@ -221,3 +221,22 @@ def test_the_quiz_output_does_not_reach_the_end_when_the_pipeline_is_done():
     assert state.overall_fraction("done", 1.0) == 1.0
     assert state.overall_fraction("quiz", 0.0) == pytest.approx(quiz_start)
     assert state.overall_fraction("quiz", 1.0) == 1.0
+
+
+def test_the_window_starts_from_its_start_values_without_a_settings_file(tmp_path, monkeypatch):
+    """No questxtract.toml: the LLM judge and the board start on, and the labels say so."""
+    monkeypatch.chdir(tmp_path)
+
+    assert state.start_text(_option("detector")) == "llm"
+    assert state.start_tristate(_option("vision")) == "On"
+    assert state.hint(_option("detector")) == "llm"
+
+
+def test_a_settings_file_decides_the_start(tmp_path, monkeypatch):
+    """With a questxtract.toml, the form starts from the file, so an untouched form runs it."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "questxtract.toml").write_text('detector = "rules"\n', encoding="utf-8")
+
+    assert state.start_text(_option("detector")) == "rules"
+    assert state.start_tristate(_option("vision")) == "Default"
+    assert state.form_values({"detector": "rules"})["detector"] is None  # the file applies

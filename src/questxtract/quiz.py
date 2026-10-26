@@ -317,18 +317,17 @@ def _usable(distractors: int) -> Callable[[dict[str, Any]], bool]:
 
 
 _MATH_DELIMITERS = re.compile(r"\$|\\[()\[\]]")
-_NOT_MEANING = re.compile(r"[^\w\-+=/^<>*(){}\\.,]")  # a point or comma inside a number counts
 _SENTENCE_END = " .,;:!?"
 
 
 def _normal(text: str) -> str:
-    """Options compared for sameness: case, spacing, end punctuation, math delimiters: not counted.
+    """Options compared for sameness: case, math delimiters, runs of spaces and end punctuation.
 
-    A sign does: ``-2`` and ``2``, or ``s = -1`` and ``s = 1``, are different options; so does a
-    decimal point: ``1.5`` and ``15`` are different options.
+    Everything inside an option counts: ``-2`` and ``2``, ``1.5`` and ``15``, ``1 2`` and ``12``
+    are different options.
     """
-    text = _MATH_DELIMITERS.sub("", text.casefold()).strip(_SENTENCE_END)
-    return _NOT_MEANING.sub("", text)
+    text = " ".join(_MATH_DELIMITERS.sub("", text.casefold()).split())
+    return text.strip(_SENTENCE_END)
 
 
 def _item_dict(

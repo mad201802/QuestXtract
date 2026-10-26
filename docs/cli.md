@@ -196,9 +196,12 @@ it with the extra, `pip install "questxtract[gui]"`.
   and `<name>.qti.zip`, next to the input unless an output file is given.
 - **The options** are behind the Advanced settings button; the start view has only the file, the
   output, Run and the language. Each control is one option of `process` or `transcribe` above,
-  with its default in the label. A control left at its default is not passed, so a `questxtract.toml` (see
-  [Configuration files](#configuration-files)) still applies. The LLM and quiz controls
-  appear only for the outputs that use them. Run stays disabled, with the reason beside it, while
+  with the value it starts from in the label. Without a `questxtract.toml` (see
+  [Configuration files](#configuration-files)) the window starts with the LLM detector and
+  reading the board on; with one, it starts from the file. A control left at the CLI's default
+  is not passed, so the file still applies. The LLM and quiz controls appear only for the outputs
+  that use them, and the LLM model is greyed out with the rules detector. Each output has its own
+  output file: changing the output clears the field. Run stays disabled, with the reason beside it, while
   a value is refused (a threshold outside 0 to 1, an LLM detector with an empty model) or the file
   is the wrong kind.
 - **Run, Cancel, progress.** A run can take as long as the recording, and the bar moves with the

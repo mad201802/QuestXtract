@@ -12,9 +12,9 @@ import sys
 
 import pytest
 
-from questxtract.cli import build_parser
+from questxtract.cli import FLAG_FIELDS, build_parser
 from questxtract.config import Config
-from questxtract.gui.options import EXCLUDED, FLAG_FIELDS, OPTIONS
+from questxtract.gui.options import EXCLUDED, OPTIONS
 
 
 def _commands() -> dict[str, dict[str, argparse.Action]]:
@@ -82,12 +82,11 @@ def test_each_setting_is_a_config_field_and_keeps_its_default():
             assert mapped[option.dest] == option.field, option.dest
 
 
-def test_the_cli_and_the_app_share_one_flag_mapping():
-    """AC: the mapping the CLI applies is the one the app's table uses (no second copy)."""
-    from questxtract import cli
+def test_the_flag_mapping_lives_in_the_cli_only():
+    """The app has no second copy of the CLI's flag mapping: it runs the CLI, which applies it."""
     from questxtract.gui import options
 
-    assert cli.FLAG_FIELDS is options.FLAG_FIELDS
+    assert not hasattr(options, "FLAG_FIELDS")
 
 
 def test_a_new_cli_option_fails_the_parity_check(monkeypatch):

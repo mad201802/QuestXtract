@@ -257,3 +257,12 @@ def test_a_bad_argument_is_a_one_line_error_and_prints_nothing(
     # kept the "questxtract: error:" prefix.
     assert str(caught.value).startswith("argument -t/--threshold")
     assert capsys.readouterr() == ("", "")
+
+
+def test_the_judge_model_is_passed_only_with_the_llm_detector() -> None:
+    """With the rules detector the judge's model is not used, so it is not passed."""
+    rules = gui.to_argv(TRANSCRIPT, "questions", {"llm_model": "some/model"})
+    judged = gui.to_argv(TRANSCRIPT, "questions", {"detector": "llm", "llm_model": "some/model"})
+
+    assert "--llm-model" not in rules
+    assert judged[judged.index("--llm-model") + 1] == "some/model"

@@ -282,7 +282,8 @@ def test_the_language_switch_relabels_the_window_and_keeps_the_form(window, root
     assert window.fields["detector"].get() == "llm"
     assert tr_shown(window, "vision") == "Standard"
     assert window._values()["vision"] is None
-    assert "(standard: av)" in window.option_labels["vision"][0].cget("text")
+    # the label names what the window starts with: reading the board on
+    assert "(standard: på)" in window.option_labels["vision"][0].cget("text")
 
 
 def test_a_run_in_norsk_finishes_in_norsk(window, root, tmp_path: Path):
@@ -504,3 +505,29 @@ def test_browse_for_the_qti_package_suggests_a_zip(window, monkeypatch):
     window._browse_into(output, window.fields["output"])
 
     assert asked["defaultextension"] == ".zip"
+
+
+def test_a_settings_file_decides_where_the_form_starts(root, tmp_path, monkeypatch):
+    """With a questxtract.toml, an untouched form runs what the file says."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "questxtract.toml").write_text('detector = "rules"\n', encoding="utf-8")
+
+    window = gui_window.QuestXtractWindow(root, drag_and_drop=False)
+
+    assert window.fields["detector"].get() == "rules"
+    assert window._values()["detector"] is None  # not passed, so the file applies
+    assert window._values()["vision"] is None
+
+
+def test_the_judge_model_is_open_only_for_the_llm_detector(window):
+    """The judge's model is greyed out and not passed with the rules detector."""
+    window.fields["llm_model"].set("some/model")
+    window.fields["detector"].set("rules")
+    window._refresh()
+    assert not _enabled(window.controls["llm_model"])
+    assert "--llm-model" not in gui_run.to_argv(TRANSCRIPT, "questions", window._values())
+
+    window.fields["detector"].set("llm")
+    window._refresh()
+    assert _enabled(window.controls["llm_model"])
+    assert "--llm-model" in gui_run.to_argv(TRANSCRIPT, "questions", window._values())

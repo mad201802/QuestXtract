@@ -12,8 +12,9 @@ import os
 import sys
 import warnings
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
-from typing import NamedTuple, NoReturn
+from typing import NoReturn
 
 from . import __version__
 from .config import (
@@ -29,7 +30,6 @@ from .config import (
 from .evaluate import evaluate, evaluate_vision, format_report, format_vision_report
 from .export import read_questions, result_to_json, write_questions
 from .filtering import filter_document
-from .gui.options import FLAG_FIELDS
 from .models import Context, Progress, Sentence, Stage, Transcript
 from .pipeline import STAGES, Cancelled, cached_transcript, run
 from .qti import QtiExportError
@@ -48,6 +48,24 @@ from .vision import has_video
 
 PROCESS_INPUTS = (".mp4", ".mp3", ".json")  # what `process` takes (the graphical app too, #124)
 TRANSCRIBE_INPUTS = (".mp4", ".mp3")  # what `transcribe` takes
+
+# The argparse destination of each flag -> the Config field it sets (_config). The graphical
+# app passes the same flags, so it gets the same mapping.
+FLAG_FIELDS: tuple[tuple[str, str], ...] = (
+    ("model", "model_size"),
+    ("from_scratch", "from_scratch"),
+    ("threshold", "min_confidence"),
+    ("detector", "detector"),
+    ("llm_model", "judge_model"),
+    ("llm_url", "base_url"),
+    ("llm_reasoning", "reasoning_effort"),
+    ("vision", "vision_enabled"),
+    ("vision_model", "vision_model"),
+    ("vision_reader", "vision_reader"),
+    ("quiz_model", "quiz_model"),
+    ("strictness", "quiz_strictness"),
+    ("options", "quiz_options"),
+)
 
 _AFTER_TRANSCRIBE = 2  # STAGES[:2] is ingest + transcribe; a transcript input skips both
 
@@ -352,6 +370,11 @@ def _check_endpoint(config: Config, what: str, *, model_flag: str, vision: bool 
         )
 
 
+def _quiz_text(result: QuizResult) -> str:
+    """Return the quiz file's text: the same bytes from the CLI and the app."""
+    return quiz_to_json(result.quiz).rstrip("\n")
+
+
 def _write_quiz(
     questions: Path,
     output: Path | None,
@@ -370,7 +393,7 @@ def _write_quiz(
         print(f"warning: quiz: {question_id} left out: {reason}", file=sys.stderr)
     items = len(result.quiz["questions"])
     left_out = f" ({len(result.skipped)} left out, {len(result.failed)} failed)"
-    _write(quiz_to_json(result.quiz).rstrip("\n"), output, f"{items} quiz items{left_out}")
+    _write(_quiz_text(result), output, f"{items} quiz items{left_out}")
     usage = result.usage
     if usage.get("quiz_requests"):
         print(
@@ -473,7 +496,8 @@ def _run(
         raise
 
 
-class RunResult(NamedTuple):
+@dataclass(frozen=True, kw_only=True)
+class RunResult:
     """What a finished ``process`` or ``transcribe`` run produced (issue #124).
 
     ``path`` is the file it wrote, or ``None`` when the output goes to stdout, in which case
@@ -566,20 +590,20 @@ def _process_run(
     ctx, config, output = _process_core(args, progress, stop)
     summary = f"{len(ctx.pairs)} questions"
     if output is None:
-        return RunResult(None, summary, result_to_json(ctx))
+        return RunResult(path=None, summary=summary, text=result_to_json(ctx))
     if not args.quiz:
-        return RunResult(output, summary)
+        return RunResult(path=output, summary=summary)
     # The quiz comes after the questions file is written, as in the CLI; Cancel stops before it.
     if stop is not None and stop():
         raise Cancelled("stopped before the quiz")
     result = _quiz_result(output, config, ctx.sentences, progress)
     quiz_path = _output_path(None, output, "quiz")
     assert quiz_path is not None  # noqa: S101 - a file name is given, never stdout
-    quiz_path.write_text(quiz_to_json(result.quiz).rstrip("\n") + "\n", encoding="utf-8")
+    quiz_path.write_text(_quiz_text(result), encoding="utf-8")
     items = len(result.quiz["questions"])
     left_out = f" ({len(result.skipped)} left out, {len(result.failed)} failed)"
     warnings = tuple(f"quiz: {qid} left out: {reason}" for qid, reason in result.failed)
-    return RunResult(quiz_path, f"{items} quiz items{left_out}", warnings=warnings)
+    return RunResult(path=quiz_path, summary=f"{items} quiz items{left_out}", warnings=warnings)
 
 
 def _transcribe_core(
@@ -627,8 +651,8 @@ def _transcribe_run(
     assert ctx.transcript is not None  # noqa: S101 - set by the transcribe stage
     summary = f"{len(ctx.transcript.asr_segments)} segments"
     if output is None:
-        return RunResult(None, summary, text)
-    return RunResult(output, summary)
+        return RunResult(path=None, summary=summary, text=text)
+    return RunResult(path=output, summary=summary)
 
 
 def execute(
@@ -661,7 +685,7 @@ def execute(
             export_qti(args.quiz, args.output)
         except QtiExportError as exc:
             raise ValueError(f"qti: {exc}") from None
-        return RunResult(Path(args.output), "QTI 3.0 package")
+        return RunResult(path=Path(args.output), summary="QTI 3.0 package")
     raise ValueError(f"the app runs process, transcribe or qti, not {args.command}")
 
 

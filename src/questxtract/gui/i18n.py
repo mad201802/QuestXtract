@@ -247,7 +247,7 @@ _MESSAGES: dict[str, dict[str, str]] = {
     },
     "stage.done": {"en": "Done", "nb": "Ferdig", "it": "Fatto"},
     "stage.cancelled": {"en": "Cancelled", "nb": "Avbrutt", "it": "Annullato"},
-    "stage.stopped": {"en": "Stopped", "nb": "Stoppet", "it": "Interrotto"},
+    "stage.failed": {"en": "Failed", "nb": "Mislyktes", "it": "Non riuscito"},
 }
 
 _language = DEFAULT_LANGUAGE

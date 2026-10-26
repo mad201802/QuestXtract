@@ -745,7 +745,7 @@ def test_options_that_differ_only_by_a_sign_are_different_options() -> None:
 
 
 def test_a_decimal_point_or_comma_makes_a_different_option() -> None:
-    """1.5 and 15 are two answers, and so are 1,5 and 15; a full stop at the end is not one."""
+    """1.5 and 15, 1 2 and 12 are different answers; case, spacing and a final full stop are not."""
     usable = _usable(2)
     base = {
         "quiz_material": True,
@@ -757,7 +757,21 @@ def test_a_decimal_point_or_comma_makes_a_different_option() -> None:
     }
 
     decimal = {**base, "correct_answer": "1.5", "distractor_1": "15", "distractor_2": "1,5"}
+    spaced = {**base, "correct_answer": "1 2", "distractor_1": "12", "distractor_2": "21"}
+    words = {
+        **base,
+        "correct_answer": "sort in place",
+        "distractor_1": "sortinplace",
+        "distractor_2": "copy",
+    }
     ending = {**base, "correct_answer": "15", "distractor_1": "15.", "distractor_2": "16"}
+    spacing = {
+        **base,
+        "correct_answer": "sort in place",
+        "distractor_1": "Sort  in place",
+        "distractor_2": "copy",
+    }
 
-    assert usable(decimal)
+    assert usable(decimal) and usable(spaced) and usable(words)
     assert not usable(ending)
+    assert not usable(spacing)  # case and a run of spaces do not make an option different
