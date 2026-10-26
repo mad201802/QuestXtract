@@ -629,19 +629,19 @@ needs `--strictness strict`.
 
 | Requirement (general_requirements.md) | Where it lands | Status |
 |---|---|---|
-| FR1 accept `.mp4` | `media.py` `ingest` (#7) | hash done, probe stubbed |
-| FR2 extract audio track | none needed — `faster_whisper.audio.decode_audio` reads the container in process (architecture.md 2.1) | by design |
-| FR3 transcribe with ASR | `transcribe.py` (#8) → `Transcript` | stub |
-| FR4 extract drawing/animation from video | `vision.py` (M2/M3) | roadmap |
-| FR5 teacher can edit after extraction | package side: fixed-key JSON with content-hash sentence ids (`export.py`); the editing UI itself is #15, a separate app (D6) | partial — export only |
-| FR6 identify question sentences | `detect.py` (#10), or the LLM detector in `llm.py` (#88) | keyword heuristic, or an LLM per run |
+| FR1 accept `.mp4` | `media.py` `ingest`: validates and probes the container, hashes it for the cache key; `.mp3` and a `.json` transcript are accepted too | done |
+| FR2 extract audio track | `media.extract_audio`: PyAV decodes the first audio stream to a temporary 16 kHz mono WAV for ASR, removed afterwards | done |
+| FR3 transcribe with ASR | `transcribe.py` stage, faster-whisper behind the `AsrBackend` registry in `asr.py` → `Transcript` with word timestamps | done |
+| FR4 extract drawing/animation from video | `vision.py` with `--vision`: the layout probe finds the board, stable views get one keyframe each, a vision model or OCR reads text, LaTeX and a description, and questions link to the board state on screen (`visual_ids`). What changed between states is #137; Manim animations are optional (#185, D21) | static views done; changes over time open |
+| FR5 teacher can edit after extraction | `questions.json` is the edit surface: each question's `review` block (status, text, note) belongs to people and the pipeline never writes into it (architecture.md 12.2). The editor is a separate app (D6); the graphical app runs the pipeline but does not edit; keeping edits across a re-run is not planned (#15) | partial: the format, not an editor |
+| FR6 identify question sentences | `detect.py` rules by default (#10), or per run the LLM detector in `llm.py` (#88), Qwen on NTNU's service by default (D25) | done |
 | FR7 start timestamp per question | `QAPair.start`, a slice of the word list — word-accurate by construction, never interpolated (architecture.md 2.5) | done |
 | FR8 export JSON | `export.py`, architecture.md 12.1 (#13) | done |
-| FR9 progress for long recordings | `Progress = Callable[[str, float], None]`, emitted once per stage by the runner (#14) | done for stage granularity |
+| FR9 progress for long recordings | `Progress = Callable[[str, float], None]` from the runner per stage, and within transcription as the audio is decoded and the words arrive; the CLI draws a bar, the graphical app a progress bar | done |
 | FR10 show detection confidence | `QAPair.confidence` + `confidence_label` + `reasons` | done |
-| FR11 filter by time/topic | time: `filter_questions` / `filter_document` over `QAPair.start` / exported `start`, half-open `[start, end)` (#16). topic: experimental `topic=` on the same functions, matching `segments[].topic`; `Segment` is a *time* unit, not a topic one (architecture.md 3.2), so the label is still missing | time done, topic unbacked (experimental hook) |
+| FR11 filter by time/topic | `questxtract filter` and `filter_questions` / `filter_document`: a time range, half-open `[start, end)` (#16), and words said or on the board on screen (#136). Topic: an experimental `topic=` matching `segments[].topic`, but no stage produces topics, since a `Segment` is a time unit (architecture.md 3.2) | time and text done; topic experimental |
 | NFR1 Python ≥ 3.10, Linux/macOS/Windows | Linux CI on Python 3.10, the wheel installed fresh and run on 3.10 and 3.13 (macOS, Windows untested); no system binaries, no ffmpeg on PATH | done |
-| NFR2 recall ≥ 50 % on labelled set | #11 dataset under `tests/data/`, `evaluate.py` harness (#12) | stub |
+| NFR2 recall ≥ 50 % on labelled set | labelled recordings in `tests/data/` (#11), `evaluate.py` and `questxtract eval` (#12); `tests/test_evaluate.py` fails when pooled recall drops below 0.50 | done, gated in CI |
 | NFR3 docstrings, type hints, tests, ≥ 70 % coverage | ruff `D` rules, mypy strict, pytest gate | done |
 | NFR4 tested on every PR | GitHub Actions (#19) | done |
 | Constraint: never invent questions | the rules extract verbatim spans; the LLM detector answers with sentence ids checked against the transcript, may reword but never add, and the spoken text stays as `original_text`; generation is a separate command (architecture.md 1.4, 10.3, 12.3) | by design |
