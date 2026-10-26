@@ -483,13 +483,14 @@ reads handwriting, diagrams and slides and emits LaTeX in one call, through the 
 client as the LLM detector (section 10), so it adds no dependency. `vision` is one `STAGES` entry,
 so a local OCR pass or a stub that loads pre-captioned frames in tests replaces that one entry.
 
-**Model and prompt (spike #52, #153, #173).** The default `vision_model` is DeepSeek-V4.1-Flash
-(`deepseek-ai/DeepSeek-V4.1-Flash-1017`) on NTNU's LLM service, the same model and endpoint as
-the LLM detector (10.1), with its thinking off (`reasoning_effort = "none"`). On the labelled
+**Model and prompt (spike #52, #153, #173, #179).** The default `vision_model` is DeepSeek-V4.1-Flash
+(`deepseek-ai/DeepSeek-V4.1-Flash-1017`) on NTNU's LLM service, the same endpoint as the LLM
+detector (10.1), with its thinking off (`vision_reasoning_effort = "none"`). On the labelled
 keyframes (`eval --score-vision`, 4.4) it reads the text about as well as Qwen3.8-27B and fills
 `latex` on more of the formulas, at no cost per lecture; with its thinking on it is far slower
-for nearly the same reading. Qwen3.8-27B on the same service reads the board well too and is
-one setting away (it rejects `reasoning_effort = "none"`, so it needs `--llm-reasoning server`).
+for nearly the same reading. Qwen3.8-27B on the same service catches somewhat more plain words
+on chalk and lightboards but fewer formulas, and is one setting away (it rejects `"none"`, so it
+needs `vision_reasoning_effort = ""` in `questxtract.toml`).
 The service needs the NTNU network or VPN; the customer may move hosting later, which is a
 `Config` change (10.1). Of the hosted OpenAI models, `gpt-5.6-luna` is the cheapest that
 stays under the customer's cost per lecture, fills `latex` on every formula frame, and reads about
@@ -665,7 +666,7 @@ board.
 > `vision_model`, `vision_states_per_minute` (3.0), `vision_min_states` (80),
 > `vision_change_fraction` (0.02),
 > `vision_change_hold` (3 samples), `vision_base_url` (`None`: vision follows `base_url`, 10.1),
-> `vision_reasoning_effort` (`None`: `reasoning_effort`, 10.1). Offline use points `vision_base_url` or `base_url` at a local
+> `vision_reasoning_effort` (`"none"`; `None`: `reasoning_effort`, 10.1). Offline use points `vision_base_url` or `base_url` at a local
 > OpenAI-compatible server; worse quality there is accepted.
 
 ---
@@ -900,7 +901,8 @@ OpenAI(api_key=openai_key, base_url="https://api.openai.com/v1")  # OpenAI
 OpenAI(api_key="local", base_url="http://localhost:11434/v1")  # local device
 ```
 
-By default the judge, the quiz and vision all go to NTNU's LLM service with one model. Vision
+By default the judge, the quiz and vision all go to NTNU's LLM service: Qwen judges and writes
+the quiz, DeepSeek reads the board. Vision
 follows `base_url` unless `vision_base_url` sends it elsewhere (`endpoint.route`). The key goes
 with the endpoint, not with the caller:
 
@@ -922,9 +924,9 @@ new code. Offline results may be worse, but the path must be *available* on a lo
 
 | Config key | Default | Role |
 |---|---|---|
-| `judge_model` | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | the LLM detector; one request per group of nearby candidates |
+| `judge_model` | `Qwen/Qwen3.8-27B-FP8` | the LLM detector; one request per group of nearby candidates |
 | `vision_model` | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | reads the board (6.5) and finds it (6.2); tens of board-state calls per lecture |
-| `quiz_model` | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | writes the quiz (12.3); one request per question |
+| `quiz_model` | `Qwen/Qwen3.8-27B-FP8` | writes the quiz (12.3); one request per question |
 
 A local server takes its own model names (`qwen3.5:9b` in Ollama). Swapping a model or pointing at
 a local server is a `Config` change, no code. No abstraction library sits on top (litellm,
@@ -932,12 +934,15 @@ pydantic-ai, instructor): `base_url` already reaches every server we target, and
 of 10.3 are ours to write either way ([design_decisions.md](design_decisions.md), D12).
 
 `reasoning_effort` (`--llm-reasoning`) sets how long a thinking model may think first. The judge
-and the quiz send it with every request, and vision with every request to `vision_model` (the
-layout probe and its readings) unless `vision_reasoning_effort` sets vision apart, for a vision
-model other than the judge's. The OCR model gets no setting: it does not think. The default,
-`"none"`, switches DeepSeek's thinking off: it thinks unless told so, and on NTNU's service
-`"none"` is the only value that stops it (`"low"` still thinks). `""` (`--llm-reasoning server`)
-sends no setting, for a model that has none (gpt-4o) or rejects `"none"` (Qwen3.8-27B).
+and the quiz send it with every request. Vision sends `vision_reasoning_effort` with every
+request to `vision_model` (the layout probe and its readings), or `reasoning_effort` when that
+is `None`; only the settings file sets it, so `--llm-reasoning` leaves the board's model alone.
+The OCR model gets no setting: it does not think.
+The judge's default, `""` (`--llm-reasoning server`), sends no setting: Qwen3.8-27B rejects
+`"none"` and thinks briefly on its own, and gpt-4o has no setting. Vision's default, `"none"`,
+switches DeepSeek's thinking off: it thinks unless told so, and on NTNU's service `"none"` is
+the only value that stops it (`"low"` still thinks). A vision model with no setting, such as
+gpt-4o, needs `vision_reasoning_effort = ""` in `questxtract.toml`.
 Thinking costs minutes per request instead of seconds, and it is what lets a small model such as
 Qwen3.5 9B judge well, so the CLI raises the per-request deadline to 10 minutes when a level
 (`low`, `medium`, `high`) is asked for. Ollama's context length cannot be set per
@@ -1050,7 +1055,7 @@ it made no calls. Prices are not applied: they depend on the provider and the da
 > **Decision.** `questxtract/llm.py` (the judge), `questxtract/endpoint.py` (client and requests,
 > shared with vision). Config: `detector` (`rules`), `base_url` (NTNU's LLM service), `api_key`
 > (the key for `base_url`, 10.1), `judge_model`, `judge_window` (10), `judge_batch_size` (8),
-> `judge_parallel` (1), `reasoning_effort` (`"none"`), `timeout_seconds` (120). Prompt and
+> `judge_parallel` (1), `reasoning_effort` (`""`), `timeout_seconds` (120). Prompt and
 > schema are module-level, so a prompt change is a reviewable diff. Dependency: `openai`, in the
 > optional extra `questxtract[llm]`, imported inside the functions.
 
@@ -1184,8 +1189,8 @@ empty, `verdict` is `unjudged` and the judge and vision settings are `null`:
   "schema_version": "2.4",
   "source": {"path": "lecture.mp4", "duration_seconds": 4812.3, "hash": "9f2a..."},
   "config": {"model_size": "turbo", "language": "en", "min_confidence": 0.4,
-             "detector": "llm", "judge_model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
-             "judge_prompt_version": "v5", "judge_reasoning_effort": "none",
+             "detector": "llm", "judge_model": "Qwen/Qwen3.8-27B-FP8",
+             "judge_prompt_version": "v5", "judge_reasoning_effort": "",
              "vision_model": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
              "vision_reasoning_effort": "none", "vision_ocr_model": null},
   "stats": {"sentences": 1840, "sentences_unpunctuated": 12, "segments": 96,
@@ -1324,7 +1329,7 @@ unreachable endpoint or a bad key ends the run, as the same error would hit ever
 correct option's place from a hash of the question id, and nothing records the time of the run.
 
 > **Decision.** `questxtract/quiz.py`, not a stage. Config: `quiz_model`
-> (`deepseek-ai/DeepSeek-V4.1-Flash-1017`), `quiz_strictness` (`lenient`), `quiz_options` (3,
+> (`Qwen/Qwen3.8-27B-FP8`), `quiz_strictness` (`lenient`), `quiz_options` (3,
 > from 3 to 5); `base_url` and `reasoning_effort` are shared with the judge. Every written file passes `validate_quiz`.
 
 Schema 1.0, formally [`quiz.schema.json`](../src/questxtract/quiz.schema.json), which ships in
@@ -1345,20 +1350,34 @@ unique, `end >= start`, and, given the source `questions.json`, the source quest
 explanations cannot be checked without the transcript, so they stay a rule for the writer. The
 validator is plain Python: `jsonschema` checks the schema in the tests only.
 
-### 12.4 QTI 3.0 package
+### 12.4 QTI packages
 
-`questxtract qti quiz.json -o quiz.qti.zip` turns a quiz (section 12.3) into a 1EdTech QTI 3.0
-content package an LMS can import: `qti.py` maps the quiz to a model, `qti_v3.py` writes the XML
-and the ZIP. The file is read through `read_quiz`, which refuses another major version and the
-errors across fields; the structure is not checked at runtime, so `qti.py` checks every field it
-uses and names its path.
+`questxtract qti quiz.json -o quiz.qti.zip` turns a quiz (section 12.3) into a 1EdTech QTI
+content package an LMS can import. It writes QTI 3.0 by default, or QTI 2.1 with
+`--qti-version 2.1` (`export_qti(..., version="2.1")`) for an LMS that does not import 3.0, such
+as Canvas New Quizzes. Both versions hold the same items, scoring, feedback and instructions; only the XML
+binding differs. The file is read through `read_quiz`, which refuses another major version and
+the errors across fields; the structure is not checked at runtime, so `qti.py` checks every field
+it uses and names its path.
+
+The code has three parts, and imports point one way, from the package to the writers to the
+model:
+
+- `qti.py`: the model, independent of the version, and the mapping from `quiz.json`.
+- `qti_v3.py` and `qti_v2.py`: one writer per version. Each turns the model into the package's
+  XML entries in ZIP order: the items, the test, the manifest.
+- `qti_package.py`: `export_qti` checks the version before it reads the quiz, dispatches to that
+  version's writer through a table, adds the JSON sidecar and writes the ZIP. A version is one
+  writer module and one entry in that table.
 
 ```text
-items/<item id>.xml            one qti-assessment-item per quiz item, in document order
+items/<item id>.xml            one assessment item per quiz item, in document order
 assessmentTest.xml             one linear test part and section referencing every item
 imsmanifest.xml                the content package manifest
 metadata/questxtract.json      provenance, review status and the origin of every text
 ```
+
+The element names below are QTI 3.0's; the QTI 2.1 bullet says how 2.1 spells them.
 
 - **Selection.** Every item except those whose `review.status` is `rejected`.
 - **Items.** A `qti-choice-interaction` with `max-choices="1"` and one `qti-simple-choice` per
@@ -1369,8 +1388,8 @@ metadata/questxtract.json      provenance, review status and the origin of every
 - **Scoring.** `SCORE` (float, default `0.0`) and `MAXSCORE` (the item's points). With points
   above zero, `SCORE` carries `normal-maximum` and `normal-minimum`. Explicit response
   processing from the Core subset: a match against the correct response sets `SCORE` to
-  `MAXSCORE`, otherwise to `0.0`. The `match_correct` template is not used, because it always
-  scores 1.
+  `MAXSCORE`, otherwise to `0.0`. Scoring never relies on the `match_correct` template, which
+  always scores 1; 2.1 only names it beside the rules, as the QTI 2.1 bullet says.
 - **Feedback.** Response processing sets the `FEEDBACK` outcome to the chosen option. Each option
   has a `qti-modal-feedback` with its own explanation, then the general one, both from
   `solution`. No response, no feedback.
@@ -1378,20 +1397,93 @@ metadata/questxtract.json      provenance, review status and the origin of every
   `qti-item-session-control`, `shuffle_options` the interaction's `shuffle`,
   `shuffle_questions` a `qti-ordering shuffle="true"` in the section, and `text` a candidate
   `qti-rubric-block`.
-- **XML.** Items and the test use the default namespace `imsqtiasi_v3p0` with an
+- **XML, QTI 3.0.** Items and the test use the default namespace `imsqtiasi_v3p0` with an
   `xsi:schemaLocation` to the 3.0.1 XSD, as every official example does, never prefixes. The
   manifest uses the QTI 3.0 content-package namespace and `schemaversion` `3.0.0`, the only value
   the implementation guide and the 3.0.0 CP XSD allow. Every file but the manifest is a resource;
   the JSON sidecar is `type="extension"`.
-- **Validation.** The tests validate every package they write against the official XSDs (items
-  and test against ASI 3.0.1, the manifest against the content-package XSD), then check what an
-  XSD cannot: the correct response and every feedback name an option, every `href` and
-  dependency resolves, identifiers are unique. `scripts/fetch_qti_xsd.py` downloads the 17
-  schema files once, pinned by SHA-256, into `.cache/qti-xsd/`, and the tests compile them from
-  there with network access off. Without that copy they are skipped, except in CI, where they
-  fail. The package itself does not depend on the XSDs.
-- **Determinism.** The same input gives the same bytes: entries are written in a fixed order with
-  the date 1980-01-01, deflate, Unix permissions `0644` and no clock or platform data.
+- **XML, QTI 2.1.** Elements and attributes are camelCase, without the `qti-` prefix:
+  `assessmentItem`, `choiceInteraction`, `maxChoices`, `showHide`. 2.1 has no
+  `qti-content-body`, so `modalFeedback` and `rubricBlock` hold their paragraphs directly. Items
+  and the test use the default namespace `imsqti_v2p1` with an `xsi:schemaLocation` to the ASI
+  2.1.2 XSD. The manifest follows the QTI 2.1 profile of content packaging 1.2: namespace
+  `imscp_v1p1`, `schema` `QTIv2.1 Package` and `schemaversion` `1.0.0`, which the profile
+  requires, and the resource types `imsqti_test_xmlv2p1` and `imsqti_item_xmlv2p1`. The profile
+  has no `extension` type, so the sidecar is `webcontent`. Its `format` is `questxtract-qti-2.1`,
+  where 3.0 writes `questxtract-qti-3.0`. `responseProcessing` also names the standard
+  `match_correct` template beside the rules: QTI 2.1 makes generalized response processing
+  optional (information model 8.1), and Blackboard skips questions whose response processing it
+  does not support. An engine that runs the item's own rules prefers them (8.2); one that
+  supports only templates scores 1 and shows no feedback per option, so a 2.1 export warns about
+  items worth other than 1 point. No 2.1 package has been imported into a real LMS yet.
+- **Validation.** The tests validate every package they write against the official XSDs of its
+  version: items and test against ASI 3.0.1 or 2.1.2, the manifest against that version's
+  content-package XSD. They then check what an XSD cannot: the correct response and every
+  feedback name an option, every `href` and dependency resolves, identifiers are unique, and a
+  2.1 package holds what the 3.0 package of the same quiz holds. `scripts/fetch_qti_xsd.py`
+  downloads both schema trees once, 17 files for 3.0 and 37 for 2.1, pinned by SHA-256, into
+  `.cache/qti-xsd/`, and the tests compile them from there with network access off. The 2.1
+  schemas name their imports over `http`; the script fetches them over `https`, which serves the
+  same bytes. Without that copy the tests are skipped, except in CI, where they fail. The package
+  itself does not depend on the XSDs.
+- **Determinism.** The same input and version give the same bytes: entries are written in a
+  fixed order with the date 1980-01-01, deflate, Unix permissions `0644` and no clock or platform
+  data.
+
+### 12.5 ExerPlaza TeX
+
+`questxtract tex quiz.json -o quiz.tex --content-unit NAME` turns a quiz (section 12.3) into the
+`IndexedQuestion` format that ExerPlaza imports at `/questions/upload/tex`, as read by its parser
+`exerplaza/backend/quiz/latex_parser.py` v2.1. A quiz reaches ExerPlaza with no change on
+ExerPlaza's side and no network access: a teacher uploads the file. `tex` does not connect to
+ExerPlaza (section 14). The file is a transport format for that parser, not a
+document to compile: there is no preamble.
+
+**Verbatim texts.** ExerPlaza stores every text as parsed and shows it with MathJax (`$...$`,
+`processEscapes`), so texts are written without LaTeX escaping; a `\%` would show up on the page
+as `\%`.
+
+**Mapping.** UTF-8 without a BOM, LF line endings. A header of four comment lines (quiz id, schema
+version, title), then one block per item, each starting with `% questxtract: <quiz id>/<item id>`
+so an import can recognise a re-import.
+
+| TeX | From |
+|---|---|
+| `\QuestionContentUnits` | every `--content-unit`, in order, the same for every item |
+| `\QuestionType` | always `multiple choice` |
+| `\QuestionLanguage` | the language's primary subtag: `en` is `english`, `it` is `italian`; any other fails |
+| `\QuestionDisclosability`, `\SolutionDisclosability` | `review.status`: `pending` is `only me`, `accepted` is `everybody` |
+| `\QuestionBody` | the stem, verbatim, CRLF as LF |
+| `\QuestionPotentialAnswers` | one `\correctanswer text` or `\answer text` line per option, in order, whitespace collapsed |
+| `\QuestionNotesForTheTeachers` | the reference, the source question, its times (`m:ss`, `h:mm:ss` from one hour on), the stem's origin, and the model and prompt version (the method when there is no model) |
+| `\SolutionBody` | the explanation, a blank line, then `- <option>[ (correct)] — <explanation>` per option |
+
+Points, instructions, the description, the source and the review note have no place in
+ExerPlaza and are not written. ExerPlaza parses `\QuestionFeedbackForTheStudents` but does not
+save it, which is why the option explanations go into `\SolutionBody`.
+
+**Guarantees.** The parser reports none of these mistakes; it reads the item wrong instead. So
+the writer guarantees them, and fails naming the text's path (for example
+`questions[1].options[2].text: unbalanced braces`) without writing anything:
+
+- answers are `\answer text` with a space and no braces, one per line;
+- braces are balanced in every text, counting those of `\{` and `\}`: one `}` too many cuts the
+  field short, one `{` too many makes the upload preview fail;
+- no text holds a command of the format (`\begin{Indexed`, `\end{Indexed`, `\Question`,
+  `\Solution`, `\answer`, `\correctanswer`, `\penalizableanswer`); the title only gets this check,
+  as it sits in a comment;
+- exactly one `\correctanswer` per block;
+- `IndexedSolution` sits inside `IndexedQuestion`, after `\QuestionContentUnits`.
+
+A quiz with no item left (all rejected, or none) fails: an upload of a header alone does nothing.
+A content unit must be non-empty, on one line and free of braces. ExerPlaza links it to an existing
+unit only on an exact name and language match.
+
+**Reuse of the QTI model.** `tex.py` takes its items from `quiz_to_qti` (12.4), so selection,
+order, single choice only, one correct option and the field checks are the same as for QTI, and a
+quiz exports the same items in both formats. Its errors are re-raised as `TexExportError`. The
+review status, the stem's origin and `generation` come from the model's untyped `metadata`, and
+`tex.py` checks each value it reads. The XML writers are not used.
 
 ---
 
@@ -1401,7 +1493,8 @@ metadata/questxtract.json      provenance, review status and the origin of every
 
 ```
 src/questxtract/
-  __init__.py      public API: process(), run(), STAGES, read/write, filters, export_qti()
+  __init__.py      public API: process(), run(), STAGES, read/write, filters,
+                   export_qti() for QTI 2.1 and 3.0, export_tex()
   models.py        Word, AsrSegment, Transcript, Sentence, Segment, VisualContext,
                    QuestionCandidate, QAPair, Context, SchemaError, the @stage decorator
   config.py        one flat frozen Config dataclass, every default
@@ -1419,13 +1512,16 @@ src/questxtract/
   export.py        questions.json writer and reader, with questions.schema.json
   quiz_schema.py   quiz.json reader and validator, with quiz.schema.json
   qti.py           QTI model and the quiz.json mapping
-  qti_v3.py        QTI 3.0 XML and the ZIP package
+  qti_package.py   export_qti(): version dispatch, JSON sidecar, deterministic ZIP
+  qti_v2.py        QTI 2.1 XML
+  qti_v3.py        QTI 3.0 XML
+  tex.py           ExerPlaza TeX from the QTI model
   filtering.py     time and text filters, experimental topic filter
   evaluate.py      labelled-set metrics
   schema.py        Question, a standalone shape the pipeline does not produce
   pipeline.py      STAGES, run(), process(), cache, progress
   quiz.py          quiz.json from questions.json: selection, one request per question
-  cli.py           process / transcribe / filter / eval / quiz / qti / gui
+  cli.py           process / transcribe / filter / eval / quiz / qti / tex / gui
   gui/             the graphical app, a run launcher over cli.execute (14):
     options.py     one table of the CLI options the app shows, checked against the CLI
     run.py         form values -> the CLI's argv -> cli.execute; no pipeline of its own
@@ -1485,8 +1581,9 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `quiz_schema.py` | not a stage | done: the `quiz.json` reader and validator (12.3); `quiz.py` writes it (12.3) |  |
 | `filtering.py` | not a stage | time and text filters done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --score-vision` (4.4) | |
-| `qti.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 package of a `quiz.json` (12.4) | |
-| `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz` and `qti` work ([cli.md](cli.md)); `process --vision --detector llm --quiz` runs every stage and the quiz in one run, tested offline | |
+| `qti.py`, `qti_package.py`, `qti_v2.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 and 2.1 packages of a `quiz.json` (12.4) | |
+| `tex.py` | not a stage | done: the ExerPlaza TeX of a `quiz.json` (12.5); the direct export to ExerPlaza is #37 | |
+| `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz`, `qti` and `tex` work ([cli.md](cli.md)); `process --vision --detector llm --quiz` runs every stage and the quiz in one run, tested offline | |
 | `gui/` | not a stage | done: the window and its run launcher (`questxtract gui`, 13.1); it runs the CLI's code and does not review or edit questions (14) | |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
@@ -1504,8 +1601,9 @@ Explicit boundaries, so the package does not grow into them by accident.
   is a separate application. This package's part is that its JSON round-trips (section 12.2).
   The graphical app (13.1) is a run launcher, not that UI: it starts a run and shows the file it
   wrote, and never shows or edits a question.
-- **exerplaza.com upload** is likewise a separate consumer of the exported JSON. Nothing in
-  `questxtract` talks to exerplaza directly.
+- **ExerPlaza upload.** `tex` writes a file for ExerPlaza's TeX upload (section 12.5); nothing in
+  `questxtract` talks to ExerPlaza yet. The direct export is planned in
+  [issue #37](https://github.com/mad201802/QuestXtract/issues/37).
 - **No LMS upload**; `qti` only writes a ZIP (section 12.4).
 - **The labelled dataset** is test
   material under `tests/data/`, not an importable subpackage. The *harness* that reads it is

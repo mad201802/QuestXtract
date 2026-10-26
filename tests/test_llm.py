@@ -15,7 +15,7 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from questxtract import Config, Context, Transcript, endpoint, llm
-from questxtract.config import DEEPSEEK
+from questxtract.config import QWEN
 from questxtract.export import SCHEMA_PATH, result_to_dict
 from questxtract.pipeline import STAGES, run
 from questxtract.sentences import split_sentences
@@ -96,7 +96,7 @@ def test_the_schema_requires_exactly_the_candidates_and_later_answers(
     assert schema["schema"]["required"] == [sentences[1].id]
     answers = schema["schema"]["properties"][sentences[1].id]["properties"]["answer_sentence_ids"]
     assert answers["items"]["enum"] == [sentences[2].id]
-    assert request["model"] == DEEPSEEK and request["reasoning_effort"] == "none"  # #173
+    assert request["model"] == QWEN and "reasoning_effort" not in request  # #179
     lines = request["messages"][1]["content"].splitlines()
     assert lines[0].startswith(f"   {sentences[0].id} 0s ")
     assert lines[1] == f">> {sentences[1].id} 2s What is a stable sort?"

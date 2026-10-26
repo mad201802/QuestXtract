@@ -22,7 +22,7 @@ from jsonschema import Draft202012Validator
 
 from questxtract import Transcript, asr, cli, endpoint
 from questxtract.cli import main
-from questxtract.config import DEEPSEEK, NTNU_LLM_URL, Config
+from questxtract.config import DEEPSEEK, NTNU_LLM_URL, QWEN, Config
 from questxtract.export import SCHEMA_PATH
 from questxtract.pipeline import STAGES
 from questxtract.quiz_schema import QUIZ_SCHEMA_PATH, read_quiz
@@ -449,11 +449,13 @@ def test_llm_reasoning_reaches_the_request_and_allows_a_longer_wait(
         args = cli.build_parser().parse_args(["process", source, "--detector", "llm", *flags])
         return cli._with_llm(cli._config(args))
 
-    assert config().reasoning_effort == "none"  # DeepSeek thinks unless told none (#173)
+    assert config().reasoning_effort == ""  # Qwen judges, and it rejects "none" (#179)
+    assert config().vision_effort == "none"  # DeepSeek reads, and thinks unless told (#173)
     assert config().timeout_seconds == Config().timeout_seconds == 120
     assert config("--llm-reasoning", "none").timeout_seconds == 120
     thinking = config("--llm-reasoning", "low")
     assert thinking.reasoning_effort == "low"
+    assert thinking.vision_effort == "none"  # the flag leaves DeepSeek's board reading alone (#179)
     with pytest.raises(SystemExit):  # a typo fails at once, not at the provider after ASR
         config("--llm-reasoning", "hgih")
     assert thinking.timeout_seconds == 600
@@ -461,6 +463,7 @@ def test_llm_reasoning_reaches_the_request_and_allows_a_longer_wait(
     # asked for gets the long timeout, so a stalled request is noticed after 2 minutes.
     server = config("--llm-reasoning", "server")
     assert server.reasoning_effort == ""
+    assert server.vision_effort == "none"  # vision keeps DeepSeek's setting (#179)
     assert server.timeout_seconds == 120
 
 
@@ -804,7 +807,7 @@ _VISION_SETTINGS_FILE_ONLY = {
     "vision_change_hold",
     "vision_base_url",  # an endpoint is set once per machine; --llm-url still moves vision too
     "vision_ocr_model",  # one OCR model is measured; --vision-reader picks the reader
-    "vision_reasoning_effort",  # only for a vision model apart from the judge; --llm-reasoning
+    "vision_reasoning_effort",  # the board's model has its own; --llm-reasoning is the judge's
 }
 
 
@@ -969,6 +972,65 @@ def test_qti_has_no_version_or_filter_flags(capsys: pytest.CaptureFixture[str]) 
         assert f"unrecognized arguments: {flag}" in capsys.readouterr().err
 
 
+# --- tex (#178) ----------------------------------------------------------------
+
+
+def test_tex_exports_a_quiz_for_exerplaza_and_leaves_rejected_items_out(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    quiz = make_quiz("q_aaa", "q_bbb", "q_ccc")
+    quiz["questions"][1]["review"]["status"] = "accepted"
+    quiz["questions"][2]["review"]["status"] = "rejected"
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(quiz), encoding="utf-8")
+
+    command = ["tex", "lecture.quiz.json", "-o", "lecture.tex"]
+    assert main([*command, "--content-unit", "Sorting", "--content-unit", "Stability"]) == 0
+
+    assert capsys.readouterr().err == "ExerPlaza TeX, 2 questions -> lecture.tex\n"
+    tex = (tmp_path / "lecture.tex").read_text(encoding="utf-8")
+    assert tex.count("\\begin{IndexedQuestion}") == 2
+    assert "quiz_q_ccc" not in tex
+    assert tex.count("\\QuestionContentUnits{Sorting}{Stability}\n") == 2
+
+
+@pytest.mark.parametrize("content", [None, "{", '{"schema_version": "2.0", "questions": []}'])
+def test_tex_bad_input_gets_one_line_and_no_output(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], content: str | None
+) -> None:
+    source = tmp_path / "quiz.json"
+    if content is not None:
+        source.write_text(content, encoding="utf-8")
+    output = tmp_path / "out.tex"
+
+    assert main(["tex", str(source), "-o", str(output), "--content-unit", "Sorting"]) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("error: tex: ") and err.count("\n") == 1
+    assert not output.exists()
+
+
+def test_tex_with_every_item_rejected_fails_and_writes_nothing(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    quiz = make_quiz("q_aaa")
+    quiz["questions"][0]["review"]["status"] = "rejected"
+    source = tmp_path / "quiz.json"
+    source.write_text(json.dumps(quiz), encoding="utf-8")
+    output = tmp_path / "out.tex"
+
+    assert main(["tex", str(source), "-o", str(output), "--content-unit", "Sorting"]) == 1
+
+    assert "no question to export" in capsys.readouterr().err
+    assert not output.exists()
+
+
+def test_tex_needs_a_content_unit(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as caught:
+        main(["tex", "quiz.json", "-o", "out.tex"])
+    assert caught.value.code == 2
+    assert "the following arguments are required: --content-unit" in capsys.readouterr().err
+
+
 # --- the whole chain: speech, vision, the LLM judge and the quiz in one run (#160) ---
 
 _LECTURE = [
@@ -1110,10 +1172,89 @@ def test_one_run_reads_the_board_finds_the_questions_and_writes_the_quiz(
     # Vision asked as vision, the judge and the quiz as the judge (#160) ...
     assert models.names(vision=True) == ["layout", "board", "board", "board"]
     assert models.names(vision=False) == ["judgements", "quiz_item", "quiz_item"]
-    # ... and by default all of it went to DeepSeek on NTNU's service, thinking off (#173 AC1).
+    # ... and by default all of it went to NTNU's service: DeepSeek read the board with its
+    # thinking off (#173 AC1), Qwen judged and wrote the quiz with no setting (#179 AC1).
     assert models.routes == {(NTNU_LLM_URL, "ntnu-test")}
-    assert {(r["model"], r["reasoning_effort"]) for _, r in models.requests} == {(DEEPSEEK, "none")}
+    asked = {(r["model"], r.get("reasoning_effort")) for _, r in models.requests}
+    assert asked == {(DEEPSEEK, "none"), (QWEN, None)}
+    for name, vision in (("layout", True), ("board", True), ("judgements", False)):
+        assert all(
+            r["model"] == (DEEPSEEK if vision else QWEN)
+            for _, r in models.requests
+            if r["response_format"]["json_schema"]["name"] == name
+        )
     assert "2 quiz items" in capsys.readouterr().err
+
+
+# --- qti --qti-version (#163) ------------------------------------------------------
+
+
+def test_qti_version_2_1_writes_a_qti_2_1_package(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    quiz = make_quiz("q_aaa")
+    quiz["questions"][0]["points"] = 1  # 1 point: no template warning
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(quiz), encoding="utf-8")
+
+    assert main(["qti", "lecture.quiz.json", "-o", "lecture.zip", "--qti-version", "2.1"]) == 0
+
+    assert capsys.readouterr().err == "QTI 2.1 package -> lecture.zip\n"
+    with zipfile.ZipFile(tmp_path / "lecture.zip") as package:
+        item = package.read("items/quiz_q_aaa.xml")
+        metadata = json.loads(package.read("metadata/questxtract.json"))
+    assert b'xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1"' in item
+    assert b"<choiceInteraction " in item
+    assert metadata["format"] == "questxtract-qti-2.1"
+
+
+def test_qti_2_1_prints_a_warning_line_for_items_not_worth_1_point(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    quiz = make_quiz("q_aaa")
+    quiz["questions"][0]["points"] = 2
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(quiz), encoding="utf-8")
+
+    assert main(["qti", "lecture.quiz.json", "-o", "lecture.zip", "--qti-version", "2.1"]) == 0
+
+    err = capsys.readouterr().err.splitlines()
+    assert err[0].startswith("warning: qti: QTI 2.1: 1 item(s) are worth other than 1 point")
+    assert err[1] == "QTI 2.1 package -> lecture.zip" and len(err) == 2
+
+
+@pytest.mark.parametrize("value", ["2.2", "3", "1.2"])
+def test_qti_version_outside_the_choices_names_them_and_writes_nothing(
+    tmp_path: Path,
+    make_quiz: Callable[..., dict[str, Any]],
+    capsys: pytest.CaptureFixture[str],
+    value: str,
+) -> None:
+    (tmp_path / "quiz.json").write_text(json.dumps(make_quiz("q_aaa")), encoding="utf-8")
+
+    with pytest.raises(SystemExit) as raised:
+        main(["qti", "quiz.json", "-o", "out.zip", "--qti-version", value])
+
+    assert raised.value.code == 2
+    error = capsys.readouterr().err.strip().splitlines()[-1]
+    assert f"argument --qti-version: invalid choice: '{value}'" in error
+    assert "2.1" in error and "3.0" in error
+    assert not (tmp_path / "out.zip").exists()
+
+
+def test_qti_without_the_flag_still_writes_qti_3_0(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "quiz.json").write_text(json.dumps(make_quiz("q_aaa")), encoding="utf-8")
+
+    assert main(["qti", "quiz.json", "-o", "default.zip"]) == 0
+    assert main(["qti", "quiz.json", "-o", "explicit.zip", "--qti-version", "3.0"]) == 0
+
+    assert capsys.readouterr().err == (
+        "QTI 3.0 package -> default.zip\nQTI 3.0 package -> explicit.zip\n"
+    )
+    assert (tmp_path / "default.zip").read_bytes() == (tmp_path / "explicit.zip").read_bytes()
+    with zipfile.ZipFile(tmp_path / "default.zip") as package:
+        metadata = json.loads(package.read("metadata/questxtract.json"))
+    assert metadata["format"] == "questxtract-qti-3.0"
 
 
 @pytest.mark.parametrize(

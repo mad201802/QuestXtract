@@ -520,7 +520,236 @@ customer runs after the project may differ; OpenAI stays one setting away
 NTNU may replace it. `"none"` is model-specific: Qwen rejects it and gpt-4o takes no setting, so
 another model needs `--llm-reasoning server`.
 
-### D23: A checking pass for the quiz, not built until wrong keys recur
+### D23: QTI 2.1 beside 3.0, one export_qti that dispatches by version
+
+*Chose:* `questxtract qti --qti-version 2.1` writes a QTI 2.1 package (ASI 2.1.2, with the QTI
+2.1 profile of content packaging 1.2) beside the 3.0 one of D16, which stays the default (#163,
+architecture.md 12.4). Both come from the same model in `qti.py`, with the same items, explicit
+response processing, feedback and instructions. Each 2.1 item also names the standard
+`match_correct` template beside its rules. One `export_qti(..., version=...)` checks the
+version before it reads the quiz and dispatches through a table in `qti_package.py` to one writer
+module per version; the ZIP and the JSON sidecar are shared. The tests validate every 2.1 package
+against the official 2.1 XSDs, from the same pinned offline mirror as 3.0.
+
+*Alternative:* QTI 1.2, which Canvas and Brightspace import; QTI 2.2, the current 2.x; scoring
+with the `match_correct` or `map_response` template alone; explicit rules alone; 2.1 as the
+default; a separate `export_qti_v2` function.
+
+*Why:* few LMS import 3.0 yet. Blackboard imports QTI 2.1 packages only and Canvas New Quizzes
+imports 1.2 and 2.x, so one 2.1 package reaches both, where 1.2 would miss Blackboard. No LMS
+checked asks for 2.2, which has its own namespace. The templates set only `SCORE`, not the
+`FEEDBACK` outcome the per-option feedback needs, and `match_correct` scores 1 whatever the item
+is worth. But QTI 2.1 makes generalized response processing an optional feature, for which an
+engine may implement the standard templates instead (information model 8.1), and Blackboard
+skips questions that use "the optional QTI response processing". Naming `match_correct` beside
+the rules gives such an engine a way to score the item, and costs nothing where the rules run,
+because an item's own rules are preferred when it gives both (8.2). With 3.0 as the default,
+`qti` without the flag writes the same bytes as before. One function with a version argument
+keeps one public name and one CLI path, and a version is one writer module plus one table entry.
+
+*Cost:* 2.1 is deprecated for 1EdTech certification: no new 2.1 certifications after 2023-12-31,
+and every 2.1 system certification expired on 2024-12-31. A valid package is not a proven import:
+no package has been imported into a real LMS yet, and Blackboard may still skip an item that
+carries rules beside the template. Where only the template runs, an item scores 1 and shows no
+feedback per option; `quiz` writes 1 point per item, so only the feedback is lost there. A
+second XSD tree, 37 files, joins the CI cache, and a cold cache needs www.imsglobal.org and
+www.w3.org once.
+
+### D24: TeX for ExerPlaza, written from the QTI model
+
+*Chose:* `questxtract tex` writes a `quiz.json` in the `IndexedQuestion` format that ExerPlaza's
+parser (`latex_parser.py` v2.1) imports at `/questions/upload/tex` (#178, architecture.md 12.5).
+`tex.py` takes its items from `quiz_to_qti` (D16) and is one more writer of that model. It is
+the file-based route, a teacher uploads the file; it does not replace #37, the direct export to
+ExerPlaza.
+
+*Alternative:* a second mapping from `quiz.json`, duplicating `quiz_to_qti`; or moving the model
+now to a format-neutral module with typed review and origin fields.
+
+*Why:* with one mapping, the TeX and QTI exports of a quiz hold the same items by construction:
+the same selection, order and single-choice rule, and the field checks that already exist and
+are tested. Targeting the format ExerPlaza already imports needs no change on ExerPlaza's side
+and no network access. ExerPlaza's parser reports no error for a malformed item but reads it
+wrong, so the writer guarantees what the parser needs and fails naming the text.
+
+*Cost:* `tex.py` reads the review status, the stem's origin and `generation` from the model's
+untyped `metadata`, whose keys only the existing tests pin, and the model keeps its QTI names. If
+a third writer such as HTML arrives, the model moves to a format-neutral module. The format
+follows ExerPlaza's parser, not ExerPlaza's own TeX export, which writes `\correctanswer{...}`
+and does not re-import; if the parser changes, this writer has to follow.
+
+## 4. Requirements traceability (→ report ch. 6)
+
+| Requirement (general_requirements.md) | Where it lands | Status |
+|---|---|---|
+| FR1 accept `.mp4` | `media.py` `ingest` (#7) | hash done, probe stubbed |
+| FR2 extract audio track | none needed — `faster_whisper.audio.decode_audio` reads the container in process (architecture.md 2.1) | by design |
+| FR3 transcribe with ASR | `transcribe.py` (#8) → `Transcript` | stub |
+| FR4 extract drawing/animation from video | `vision.py` (M2/M3) | roadmap |
+| FR5 teacher can edit after extraction | package side: fixed-key JSON with content-hash sentence ids (`export.py`); the editing UI itself is #15, a separate app (D6) | partial — export only |
+| FR6 identify question sentences | `detect.py` (#10), or the LLM detector in `llm.py` (#88) | keyword heuristic, or an LLM per run |
+| FR7 start timestamp per question | `QAPair.start`, a slice of the word list — word-accurate by construction, never interpolated (architecture.md 2.5) | done |
+| FR8 export JSON | `export.py`, architecture.md 12.1 (#13) | done |
+| FR9 progress for long recordings | `Progress = Callable[[str, float], None]`, emitted once per stage by the runner (#14) | done for stage granularity |
+| FR10 show detection confidence | `QAPair.confidence` + `confidence_label` + `reasons` | done |
+| FR11 filter by time/topic | time: `filter_questions` / `filter_document` over `QAPair.start` / exported `start`, half-open `[start, end)` (#16). topic: experimental `topic=` on the same functions, matching `segments[].topic`; `Segment` is a *time* unit, not a topic one (architecture.md 3.2), so the label is still missing | time done, topic unbacked (experimental hook) |
+| NFR1 Python ≥ 3.10, Linux/macOS/Windows | Linux CI on Python 3.10 (macOS, Windows untested); no system binaries, no ffmpeg on PATH | done |
+| NFR2 recall ≥ 50 % on labelled set | #11 dataset under `tests/data/`, `evaluate.py` harness (#12) | stub |
+| NFR3 docstrings, type hints, tests, ≥ 70 % coverage | ruff `D` rules, mypy strict, pytest gate | done |
+| NFR4 tested on every PR | GitHub Actions (#19) | done |
+| Constraint: never invent questions | the rules extract verbatim spans; the LLM detector answers with sentence ids checked against the transcript, may reword but never add, and the spoken text stays as `original_text`; generation is a separate command (architecture.md 1.4, 10.3, 12.3) | by design |
+
+## 5. The review and what it changed (→ report ch. 7, ch. 12 "AI")
+
+Before merging the M1 layout we ran a structured, AI-assisted review of the architecture
+PR: ten independent "finder" passes (line-by-line, removed behaviour, cross-file callers,
+language pitfalls, reuse, simplification, efficiency, altitude/fit, conventions), each
+candidate then checked by a separate verifier against the code, the issues and the customer
+brief, then a final sweep for gaps. 22 candidates were verified, one refuted, 15 applied.
+
+What it changed, in order of consequence:
+
+| Finding | Change | Decision affected |
+|---|---|---|
+| Solution extraction and question builder had no home | added as stages 7 and a separate `quiz` command | D6 |
+| Video decoding filed under `audio/` | decoding kept out of the ASR module | D2 |
+| No identity for edits/upload | question `id` + content-hash sentence ids | D4 |
+| Word timestamps dropped at the ASR boundary | `Word`, and words as the atomic unit | D5 |
+| `source` framed M2 as a second detector | documented as enrichment of existing questions | D5 |
+| Positional construction would silently misassign a new field | `kw_only=True` | D3 |
+| Malformed transcripts produced tracebacks | `SchemaError` + one-line CLI errors | D9 |
+| Nested test dirs would collide on same-named files | `--import-mode=importlib` | D10 |
+| Transcript I/O lived in `output/`; no way to persist transcripts | the runner's one cache | D8 |
+| Progress reporting (#14) unplaced | `Progress` callable, emitted by the runner per stage | — |
+| Status table said "done" for open issues; README contradicted the non-goals; rename unflagged | doc/README/CHANGELOG corrections | — |
+| Non-ASCII first word skipped by the tokeniser; int confidence at threshold 0 | `\w+` + `casefold()`, float seed | D7 |
+| `output/json.py` shadowed the stdlib module | renamed, then folded into `export.py` | — |
+
+Two more surfaced while moving the code onto the stage contract, both of which the packaging
+had hidden rather than caused:
+
+| Finding | Change | Decision affected |
+|---|---|---|
+| A cached stage with no source hash shared one `unknown/` bucket, replaying one recording's results into another's | skip the cache when there is no content hash | D8 |
+| `judge` declared `cache="pairs"` but its `uses` header holds only config, so a stale verdict would survive a detection change | judge caches only once keyed on the candidate set (architecture.md 10.4) | D8 |
+
+The one refuted candidate ("the empty `audio/` package contradicts the no-scaffolding rule")
+is worth mentioning in the report as an example of why verification matters: the rule is about
+planned *modules*; package boundaries are deliberately created early.
+
+**Reflection for the AI section.** The review's value was not bug-finding — the diff was a
+reorganisation with almost no logic — but *fit-checking the design against documents the code
+cannot see*: the customer brief, the open issues, the roadmap. That is the part of a review a
+student team most often skips under time pressure. Two responsible-use points: every finding was
+verified against a concrete line, issue or requirement before we acted on it, and the decisions
+(e.g. keeping the builder inside the boundary, choosing a changelog over a version bump) were
+made by us, not adopted from the tool. The tool also produced wrong details along the way (it
+asserted a `--model` CLI flag that does not exist), which the verification step caught.
+
+## 6. Security at the design level (→ report ch. 9; compendium touchpoints 2, 5, 6)
+
+*Assets:* lecture recordings and transcripts (may contain names and voices of students —
+personal data under GDPR if real lectures are used); the extracted question bank; later, the
+exerplaza credentials used by the uploader.
+
+*Threats (STRIDE, the relevant ones):*
+- **Tampering** — an edited or hand-crafted results/transcript JSON is re-imported. Mitigated
+  by schema validation (`SchemaError`); *not* mitigated: integrity or provenance of edits. Fine
+  for a local tool; revisit if files travel between users.
+- **Information disclosure** — transcripts leaving the machine. Design choice: ASR runs
+  offline (customer brief: "offline speech-to-text, e.g. Whisper") and never over a hosted
+  transcribe endpoint. The optional LLM layer (architecture.md 6 and 10) is the one component that
+  *can* leave the machine, and only when the caller configures an endpoint: the default
+  `Config` makes zero outbound calls, and every result the pipeline produces is reachable
+  without one. Pointing `base_url` at a local OpenAI-compatible server keeps even that on the
+  device. The uploader (outside the package) is the only component that always talks out.
+- **Denial of service / resource exhaustion** — hour-long inputs, temp files from decoding.
+  #7 owns temp-file cleanup; #14 progress reporting is also the cancellation point.
+- **Elevation of privilege / spoofing** — none inside the package: no accounts, no privileges.
+  Both reappear at the exerplaza boundary and should be threat-modelled with that module.
+
+*Abuse cases to write up:* (1) a malicious transcript file (deeply nested JSON, huge strings)
+fed to the CLI; (2) a lecturer uploading someone else's lecture; (3) a review UI user injecting
+LaTeX/HTML into a question that exerplaza renders.
+
+*Security requirements to state:* **S1 no network access unless the caller configures an
+endpoint** — the default `Config` makes zero outbound calls, the pipeline produces a complete
+result without one, and ASR is local always (this is the narrowed form; the original blanket
+"no network access in `questxtract` itself" was incompatible with the optional LLM layer the
+design needs for handwriting and board diagrams, and a blanket rule nobody can keep is worse
+than a precise one that holds); S2 all external JSON validated before use; S3 credentials never
+stored in the package or the result files — the API key is read from the environment at call
+time and is not a `Config` field; S4 temporary media deleted after extraction; S5 test material
+is public or mock lectures only (the brief already promises "no student data"); **S6 when an
+endpoint is configured, the user must be able to tell** — the exported `config` block names the
+models used, so a result carries whether it went out.
+
+Suggested exercise for the report: play Microsoft EoP over the figure in §2 with the
+information-flow arrows — the compendium asks for an architecture sketch with flows first.
+
+## 7. Sustainability and diversity hooks (→ report ch. 12, ch. 13-style reflections)
+
+- **Compute once.** Persisting transcripts (D8) and keeping ASR offline means the expensive
+  step runs once per lecture rather than per edit or per threshold change. Worth quantifying
+  in the report (minutes of GPU/CPU per hour of lecture × number of re-runs avoided).
+- **Read a page once.** Within a run, a slide that comes back unchanged copies its earlier
+  reading instead of another vision call (D18). `stats.vision_reused` counts the readings copied;
+  each is a call saved unless the request cache would have answered it anyway.
+- **Small dependency footprint.** The core is stdlib-only; heavy models are isolated in
+  `transcribe.py` and `vision.py`, and the LLM client is an optional `[llm]` extra imported
+  inside the function that needs it, so a transcript-only user never installs any of them.
+  There is no torch anywhere in the base install (architecture.md 13.2).
+- **Software sustainability (maintainability).** Typed contracts, one error type, one test
+  module per source module, and the pipeline document itself are what let the customer build on
+  the code after the semester (a graded criterion). The document is load-bearing rather than
+  decorative: a test asserts that `STAGES` matches the stage order it specifies.
+- **Diversity dimensions the design touches.** Language: the requirements assume English
+  lectures; the tokeniser fix (non-ASCII first words) is a small but real example of an
+  assumption that excluded non-native names and fillers. Accessibility: per-word timestamps
+  make the same output usable for captions/navigation. Pedagogy: the "extract, never invent"
+  rule keeps the lecturer in control of what students are quizzed on.
+
+## 8. Sources worth citing (verify each before use)
+
+Collected in the team's research notes; check every entry on Google Scholar before it goes
+in the bibliography (some came via an AI-generated literature survey).
+
+- Context selection and rewriting for video-based educational question generation —
+  AAAI 2025 (arXiv:2504.19406). *Supports D7: the bottleneck is context on noisy ASR text.*
+- Chapter-Llama: efficient chaptering in hour-long videos with LLMs (arXiv:2504.00072).
+  *Supports the text-first pipeline over end-to-end vision-language models.*
+- FCN-LectureNet: extractive summarization of whiteboard and chalkboard lecture videos;
+  LEARNet (Entropy, 2026). *Background for `visual/` in M2/M3.*
+- MAGMA-Edu and "Hallucination-free automatic question & answer generation" (arXiv:2511.18714,
+  arXiv:2601.14280). *Argument for validation stages around any LLM in `builder/`.*
+- IEEE Std 830-1998 (requirements); Sommerville, *Software Engineering* 10th ed. (modular
+  design); McGraw, "The 7 touchpoints of secure software"; Microsoft STRIDE / EoP.
+
+### D25: Qwen judges and writes the quiz, DeepSeek reads the board
+
+*Chose:* `judge_model` and `quiz_model` = `Qwen/Qwen3.8-27B-FP8` on NTNU's LLM service, sending
+no reasoning setting (`reasoning_effort = ""`); `vision_model` stays DeepSeek-V4.1-Flash, with
+`vision_reasoning_effort = "none"` as its own default. `--llm-reasoning` sets the judge and the
+quiz only; vision's setting is in the settings file (#179). This changes the judge and quiz half
+of D22.
+
+*Alternative:* DeepSeek for everything, thinking off (D22); DeepSeek judging with low thinking;
+Qwen for everything.
+
+*Why:* every pair of judge and vision model was run three times on the labelled lectures and
+scored with `eval --detector llm --board` (numbers on #179). Qwen judged best of the pairs tried,
+from higher precision at the same recall, and which model had read the board hardly changed the
+judging. DeepSeek with low thinking was about as good but took many minutes a run and timed out
+on NTNU. DeepSeek read the labelled keyframes better on formulas and about twice as fast, so it
+keeps the board. Both are on NTNU's service, so there is still one endpoint and one key. The
+quiz follows the judge because the two share `reasoning_effort`, and DeepSeek without `"none"`
+thinks.
+
+*Cost:* two models on the service instead of one, and two reasoning defaults to keep apart.
+Qwen judges several times slower than DeepSeek with its thinking off (minutes per lecture,
+still free). The quiz on Qwen was not measured against DeepSeek's.
+
+### D26: A checking pass for the quiz, not built until wrong keys recur
 
 *Chose:* no second model run over the quiz yet; the quiz prompt carries the rules instead (work the
 answer out, never state a false premise, name the real expression, leave check-ins out). If a

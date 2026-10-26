@@ -73,6 +73,8 @@ def hint(option: Option) -> str:
     text = default_text(option)
     if option.kind in ("bool", "tristate"):
         return tr("hint.on") if text == "True" else tr("hint.off")
+    if option.dest == "llm_reasoning" and not text:
+        return "server"  # "" sends no setting; the CLI spells that server
     return text or tr("hint.unset")
 
 
@@ -186,8 +188,8 @@ def open_folder(folder: Path) -> None:
 
     """
     if sys.platform == "win32":
-        os.startfile(folder)
+        os.startfile(folder)  # noqa: S606 - the OS opens a folder the app wrote
     elif sys.platform == "darwin":
-        subprocess.Popen(["open", str(folder)])
+        subprocess.Popen(["open", str(folder)])  # noqa: S603, S607 - a fixed program, our folder
     else:
-        subprocess.Popen(["xdg-open", str(folder)])
+        subprocess.Popen(["xdg-open", str(folder)])  # noqa: S603, S607 - a fixed program, our folder

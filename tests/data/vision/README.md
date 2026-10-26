@@ -24,6 +24,7 @@ at least 5 frames.
 tests/data/vision/
   <recording-name>.frames.jsonl      one file per recording, one line per labelled frame
   <recording-name>_<seconds>.png     the frames, named by the second they were taken at
+  <recording-name>.links.jsonl       questions labelled with the board state on screen
   prompt_v0.txt, prompt_v1.txt       the captioning prompts of #52
   prompt_v0.schema.json              the JSON the model must return
   results/<run>/results.jsonl        raw answers of the #52 comparison
@@ -133,6 +134,27 @@ uv run python scripts/extract_keyframes.py lecture.mp4 -o keyframes/ --max-views
 | `uw_machine_intelligence_l13_03420.0` | Matrices and a neuron diagram, lecturer covering part |
 | `uw_machine_intelligence_l13_03811.0` | Two boards: formulas and 3D volume sketches |
 | `uw_machine_intelligence_l13_04659.0` | A pipeline of box sketches with short labels |
+
+## Question links
+
+`<recording-name>.links.jsonl` checks the `visual_ids` that link each question in `questions.json`
+to board states (#135): one line per question, labelled with the board state on screen when it
+was asked. `tests/test_export.py` runs the pipeline on the committed transcript and board states
+(`../<recording-name>.visual.json`), so no video and no network, and checks each detected
+question's `visual_ids` against the label.
+
+```json
+{"start": 97.27, "end": 98.57, "text": "Is it absolutely integrable?", "state_start": 93.0}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `start`, `end`, `text` | number, number, string | copied from a `content` line of `../<recording-name>.labels.jsonl` |
+| `state_start` | number | `start` of the board state in `../<recording-name>.visual.json` on screen when the question was asked; when the screen changes during the question, the state the question is about |
+
+`ttk4225_2026_09_14` has 22 questions, spread over the lecture and biased towards questions near
+a change of board state. **Status.** Drafted from the board states' times and descriptions, and
+provisional until a human has checked each against the video.
 
 ## Sources and licences
 

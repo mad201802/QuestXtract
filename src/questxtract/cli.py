@@ -1,4 +1,4 @@
-"""Command line interface: ``process``, ``transcribe``, ``filter``, ``eval``, ``quiz`` and ``qti``.
+"""CLI: ``process``, ``transcribe``, ``filter``, ``eval``, ``quiz``, ``qti`` and ``tex``.
 
 Every command and option, with recipes: docs/cli.md.
 """
@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 import sys
+import warnings
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import NamedTuple, NoReturn
@@ -32,7 +33,7 @@ from .gui.options import FLAG_FIELDS
 from .models import Context, Progress, Sentence, Stage, Transcript
 from .pipeline import STAGES, Cancelled, cached_transcript, run
 from .qti import QtiExportError
-from .qti_v3 import export_qti
+from .qti_package import DEFAULT_QTI_VERSION, QTI_VERSIONS, export_qti
 from .quiz import (
     MAX_OPTIONS,
     MIN_OPTIONS,
@@ -42,6 +43,7 @@ from .quiz import (
     file_hash,
     quiz_to_json,
 )
+from .tex import TexExportError, export_tex
 from .vision import has_video
 
 PROCESS_INPUTS = (".mp4", ".mp3", ".json")  # what `process` takes (the graphical app too, #124)
@@ -317,9 +319,14 @@ def _check_endpoint(config: Config, what: str, *, model_flag: str, vision: bool 
     else:
         mover = "--llm-url (base_url)"
         to_openai = f"pass --llm-url {OPENAI_URL}"
+    # vision's reasoning setting lives in the settings file, not on the command line (#179)
+    reasoning = (
+        ' and vision_reasoning_effort = "" in questxtract.toml'
+        if vision
+        else " --llm-reasoning server"
+    )
     openai_hint = (
-        f"for OpenAI instead, {to_openai} {model_flag} gpt-4o --llm-reasoning server, "
-        f"with {OPENAI_KEY_ENV}"
+        f"for OpenAI instead, {to_openai} {model_flag} gpt-4o{reasoning}, with {OPENAI_KEY_ENV}"
     )
     model = getattr(config, _MODEL_FLAGS[model_flag])
     if is_ntnu(url) and "/" not in model:
@@ -798,13 +805,29 @@ def _quiz(args: argparse.Namespace) -> int:
 
 
 def _qti(args: argparse.Namespace) -> int:
-    """Export quiz.json as a QTI 3.0 package."""
+    """Export quiz.json as a QTI 2.1 or 3.0 package."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        try:
+            export_qti(args.quiz, args.output, version=args.qti_version)
+        except QtiExportError as exc:
+            print(f"error: qti: {exc}", file=sys.stderr)
+            return 1
+    for warning in caught:
+        print(f"warning: qti: {warning.message}", file=sys.stderr)
+    print(f"QTI {args.qti_version} package -> {args.output}", file=sys.stderr)
+    return 0
+
+
+def _tex(args: argparse.Namespace) -> int:
+    """Export quiz.json as ExerPlaza TeX."""
     try:
-        export_qti(args.quiz, args.output)
-    except QtiExportError as exc:
-        print(f"error: qti: {exc}", file=sys.stderr)
+        count = export_tex(args.quiz, args.output, content_units=args.content_units)
+    except TexExportError as exc:
+        print(f"error: tex: {exc}", file=sys.stderr)
         return 1
-    print(f"QTI 3.0 package -> {args.output}", file=sys.stderr)
+    noun = "question" if count == 1 else "questions"
+    print(f"ExerPlaza TeX, {count} {noun} -> {args.output}", file=sys.stderr)
     return 0
 
 
@@ -890,10 +913,11 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         metavar="LEVEL",
         help="how long a thinking model may think before it answers: none, low, medium or high, "
         "or server to send no setting, for a model that takes none such as gpt-4o or rejects "
-        f"none such as Qwen (default: {defaults.reasoning_effort or 'server'}). Vision follows "
-        "it unless vision_reasoning_effort is set; the OCR model gets none. Small models such "
-        "as qwen3.5:9b judge much better with low; low, medium and high also allow each "
-        "request 10 minutes instead of 2",
+        f"none such as Qwen (default: {defaults.reasoning_effort or 'server'}). It sets the judge "
+        "and the quiz; vision has vision_reasoning_effort in the settings file (default "
+        f"{defaults.vision_reasoning_effort}, which DeepSeek needs). Small models such as "
+        "qwen3.5:9b judge much better with low; low, medium and high also allow each request "
+        "10 minutes instead of 2",
     )
 
     # How the quiz is made: `process --quiz` and `quiz` share these.
@@ -1096,9 +1120,15 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
     )
     quiz.set_defaults(handler=_quiz)
 
-    qti = subs.add_parser("qti", help="export quiz.json as a QTI 3.0 package")
+    qti = subs.add_parser("qti", help="export quiz.json as a QTI 2.1 or 3.0 package")
     qti.add_argument("quiz", help="a quiz.json")
     qti.add_argument("-o", "--output", required=True, help="write the QTI ZIP package here")
+    qti.add_argument(
+        "--qti-version",
+        choices=QTI_VERSIONS,
+        default=DEFAULT_QTI_VERSION,
+        help=f"QTI version of the package: 2.1 or 3.0 (default: {DEFAULT_QTI_VERSION})",
+    )
     qti.set_defaults(handler=_qti)
 
     gui = subs.add_parser(
@@ -1106,6 +1136,21 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         help="open the graphical app (needs questxtract[gui])",
     )
     gui.set_defaults(handler=_gui)
+    tex = subs.add_parser(
+        "tex", help="export quiz.json as TeX for ExerPlaza's upload at /questions/upload/tex"
+    )
+    tex.add_argument("quiz", help="a quiz.json")
+    tex.add_argument("-o", "--output", required=True, help="write the .tex file here")
+    tex.add_argument(
+        "--content-unit",
+        action="append",
+        required=True,
+        dest="content_units",
+        metavar="NAME",
+        help="an ExerPlaza content unit for every question; repeat for more. Spell it exactly as "
+        "in ExerPlaza: any other spelling creates a new, unlinked unit",
+    )
+    tex.set_defaults(handler=_tex)
 
     return parser
 

@@ -32,7 +32,8 @@ NTNU_KEY_ENV = "IDUN_API_KEY"  # the key for NTNU's LLM service
 OLD_NTNU_KEY_ENV = "QUESTXTRACT_NTNU_API_KEY"  # its former name, still read when the new is unset
 VISION_KEY_ENV = "QUESTXTRACT_VISION_API_KEY"  # for a vision_base_url of another service
 OPENAI_KEY_ENV = "OPENAI_API_KEY"  # the key for OpenAI and base_url's other endpoints
-DEEPSEEK = "deepseek-ai/DeepSeek-V4.1-Flash-1017"  # every model's default, on NTNU's service
+DEEPSEEK = "deepseek-ai/DeepSeek-V4.1-Flash-1017"  # vision's default, on NTNU's service
+QWEN = "Qwen/Qwen3.8-27B-FP8"  # the judge's and the quiz's default, on NTNU's service
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -65,7 +66,8 @@ class Config:
     vision_reader: str = "vlm"  # or "ocr": vision_ocr_model reads text and formulas only (6.5)
     vision_ocr_model: str = "zai-org/GLM-OCR"  # its name on NTNU's LLM service
     vision_base_url: str | None = None  # None: vision follows base_url
-    vision_reasoning_effort: str | None = None  # None: reasoning_effort; never sent to OCR
+    # DeepSeek thinks unless told "none"; None follows reasoning_effort; never sent to OCR
+    vision_reasoning_effort: str | None = "none"
     vision_states_per_minute: float = 3.0  # board states allowed per minute of recording
     vision_min_states: int = 80  # never fewer, however short the recording
     vision_change_fraction: float = 0.02  # share of pixels that must change
@@ -85,18 +87,18 @@ class Config:
     # --- 10 the LLM layer ---
     detector: str = "rules"  # or "llm": the judge reads the transcript and picks the questions
     base_url: str | None = NTNU_LLM_URL  # None or OPENAI_URL is OpenAI; or e.g. a local Ollama
-    judge_model: str = DEEPSEEK
+    judge_model: str = QWEN
     judge_window: int = 10  # sentences of lecture on each side of a candidate
     judge_batch_size: int = 8  # nearby candidates judged in one request
     judge_parallel: int = 1  # requests in flight; a local server queues them past the deadline
-    # Sent with every judge and quiz request, and vision's unless vision_reasoning_effort is set:
-    # DeepSeek thinks unless told "none". "" sends no setting, for a model that takes none
-    # (gpt-4o) or rejects "none" (Qwen).
-    reasoning_effort: str = "none"
+    # Sent with every judge and quiz request, and vision's when vision_reasoning_effort is
+    # None. "" sends no setting, for a model that rejects "none" (Qwen) or takes none
+    # (gpt-4o); "none" switches DeepSeek's thinking off.
+    reasoning_effort: str = ""
     timeout_seconds: int = 120  # per LLM request, start to answer, retries included
 
     # --- 12.3 quiz (a separate command; shares base_url and reasoning_effort) ---
-    quiz_model: str = DEEPSEEK
+    quiz_model: str = QWEN
     quiz_strictness: str = "lenient"  # or "strict": only questions the lecture answered
     quiz_options: int = 3  # options per item, one correct; 3 to 5
 
