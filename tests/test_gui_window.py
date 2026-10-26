@@ -124,6 +124,7 @@ def test_a_threshold_out_of_range_is_refused_before_running(window):
     """AC: a threshold outside 0 to 1 disables Run and says why."""
     window.choose_source(TRANSCRIPT)
     window.fields["threshold"].set("2")
+    window._refresh()  # the checks wait for typing to pause; a test does not wait for that
 
     assert not _enabled(window.run_button)
     assert "between 0 and 1" in window.hint.cget("text")

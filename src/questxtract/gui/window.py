@@ -31,6 +31,7 @@ from .options import OPTIONS, Option
 __all__ = ["run_app"]
 
 _POLL_MS = 100
+_TYPING_PAUSE_MS = 150  # how long the form must be still before its checks run
 
 
 def run_app() -> int:
@@ -72,6 +73,16 @@ def _new_root() -> tuple[tk.Tk, bool]:
     return tk.Tk(), False
 
 
+def _file_stamp(path: Path | None) -> int | None:
+    """Return the modification time of ``path``, or ``None`` when there is no such file."""
+    if path is None:
+        return None
+    try:
+        return path.stat().st_mtime_ns
+    except OSError:
+        return None
+
+
 class QuestXtractWindow:
     """The one window: a file, an output, the options, Run, Cancel, progress and the result."""
 
@@ -80,6 +91,8 @@ class QuestXtractWindow:
         self.root = root
         self.source: Path | None = None
         self.busy = False
+        self._refresh_job: str | None = None
+        self._problem_memo: tuple[object, str | None] | None = None
         self.result_path: Path | None = None
         self.cancel = threading.Event()
         self.events: queue.Queue[tuple[str, Any]] = queue.Queue()
@@ -243,7 +256,7 @@ class QuestXtractWindow:
             self._text(browse, "button.browse")
             browse.grid(row=0, column=2, padx=(4, 0))
         self.fields[option.dest] = var
-        var.trace_add("write", lambda *_: self._refresh())
+        var.trace_add("write", lambda *_: self._schedule_refresh())
         return line
 
     def _set_tristate_values(self, dest: str) -> None:
@@ -320,13 +333,25 @@ class QuestXtractWindow:
         return state.default_output(self.source, self.output.get())
 
     def _problem(self) -> str | None:
-        """Why Run is disabled now, or ``None``."""
-        return state.run_problem(
-            self.source, self.output.get(), self._values(), self._output_path()
-        )
+        """Why Run is disabled now, or ``None``; checked again when the form or file changes."""
+        values = self._values()
+        output = self.output.get()
+        output_path = self._output_path()
+        stamp = _file_stamp(self.source)
+        key = (self.source, output, tuple(sorted(values.items())), output_path, stamp)
+        if self._problem_memo is None or self._problem_memo[0] != key:
+            self._problem_memo = (key, state.run_problem(self.source, output, values, output_path))
+        return self._problem_memo[1]
+
+    def _schedule_refresh(self) -> None:
+        """Refresh once typing pauses, so a word typed quickly costs one check, not one per key."""
+        if self._refresh_job is not None:
+            self.root.after_cancel(self._refresh_job)
+        self._refresh_job = self.root.after(_TYPING_PAUSE_MS, self._refresh)
 
     def _refresh(self) -> None:
         """Bring every control in line with the form: shown rows, enabled buttons, the hint."""
+        self._refresh_job = None
         output = self.output.get()
         for name, button in self.output_buttons.items():
             offered = state.output_offered(name, self.source)

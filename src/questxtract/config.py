@@ -33,6 +33,10 @@ OLD_NTNU_KEY_ENV = "QUESTXTRACT_NTNU_API_KEY"  # its former name, still read whe
 VISION_KEY_ENV = "QUESTXTRACT_VISION_API_KEY"  # for a vision_base_url of another service
 OPENAI_KEY_ENV = "OPENAI_API_KEY"  # the key for OpenAI and base_url's other endpoints
 DEEPSEEK = "deepseek-ai/DeepSeek-V4.1-Flash-1017"  # vision's default, on NTNU's service
+# The graphical app opens with the LLM judge and the board reading on (#124). The CLI's own
+# defaults are the ones above; these only set where the window starts.
+GUI_START_DETECTOR = "llm"
+GUI_START_VISION = True
 QWEN = "Qwen/Qwen3.8-27B-FP8"  # the judge's and the quiz's default, on NTNU's service
 
 

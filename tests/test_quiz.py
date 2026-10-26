@@ -742,3 +742,22 @@ def test_options_that_differ_only_by_a_sign_are_different_options() -> None:
 
     assert usable(signed)
     assert not usable(same)  # delimiters and a full stop do not make an option different
+
+
+def test_a_decimal_point_or_comma_makes_a_different_option() -> None:
+    """1.5 and 15 are two answers, and so are 1,5 and 15; a full stop at the end is not one."""
+    usable = _usable(2)
+    base = {
+        "quiz_material": True,
+        "stem": "s",
+        "correct_explanation": "e",
+        "explanation": "x",
+        "why_wrong_1": "w",
+        "why_wrong_2": "w",
+    }
+
+    decimal = {**base, "correct_answer": "1.5", "distractor_1": "15", "distractor_2": "1,5"}
+    ending = {**base, "correct_answer": "15", "distractor_1": "15.", "distractor_2": "16"}
+
+    assert usable(decimal)
+    assert not usable(ending)

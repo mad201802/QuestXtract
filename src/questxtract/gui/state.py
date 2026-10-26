@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from ..config import Config
+from ..config import GUI_START_DETECTOR, GUI_START_VISION, Config
 from ..pipeline import STAGES, stage_info
 from .i18n import has, tr
 from .options import OPTIONS, OUTPUTS, Option
@@ -60,10 +60,12 @@ def default_text(option: Option) -> str:
     return "" if value is None else str(value)
 
 
-#: What the window starts with where it differs from the CLI's default: the LLM judge and reading
-#: the board are on. A control left at its start value is passed as a flag, so the run is the
-#: command line it shows; the CLI's own defaults (offline, rules) do not change.
-START_VALUES: dict[str, str] = {"detector": "llm", "vision": "On"}
+#: What the window starts with where it differs from the CLI's default (set in config.py). A
+#: control left at its start value is passed as a flag, so the run is the command line it shows.
+START_VALUES: dict[str, str] = {
+    "detector": GUI_START_DETECTOR,
+    "vision": "On" if GUI_START_VISION else "Off",
+}
 
 
 def hint(option: Option) -> str:
