@@ -64,7 +64,7 @@ Input: $ARGUMENTS
      `### Fixed`, ending with `(#N)`, when users can see the change.
    - A stub landed: delete its `ponytail:` marker, update the Status table in
      `docs/architecture.md`, drop "(planned, #N)" from its heading.
-   - CLI flags changed: the option tables in README.md and docs/cli.md.
+   - CLI flags changed: the option tables in docs/cli.md.
    - `questions.json` shape changed: `questions.schema.json` and `schema_version` (minor = added
      keys, major = moved or removed).
 12. **Commit** with a Conventional Commits message (`feat:`, `fix:`, `docs:`, `test:`, `chore:`).

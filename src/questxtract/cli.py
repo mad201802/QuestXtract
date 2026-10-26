@@ -451,7 +451,7 @@ def _questions(document: dict[str, object]) -> list[dict[str, object]]:
 
 # Vision flags (#61). The vision design is still moving in M3 (ink curve #133). When vision
 # gains a setting, decide whether it gets a flag here or stays TOML-only, and update together:
-# `_config`, this check, the `process` parser, the "Reading the board" section in README.md,
+# `_config`, this check, the `process` parser, the "Reading the board" section,
 # the option and error tables in docs/cli.md, and
 # test_every_vision_setting_has_a_flag_decision in tests/test_cli.py, which fails until you do.
 def _with_vision(config: Config, source: Path) -> Config:

@@ -18,7 +18,7 @@ Report only; change nothing unless asked. Finish with one list,
 3. **Dependencies.** `[project] dependencies` in pyproject.toml vs the dependency section of
    docs/architecture.md.
 4. **CLI.** `uv run questxtract <command> --help` for each subcommand vs the option tables in
-   README.md and docs/cli.md.
+   docs/cli.md.
 5. **Dead references.**
    ```bash
    grep -rn 'pipeline\.md' src tests scripts docs README.md
