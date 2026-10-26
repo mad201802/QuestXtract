@@ -803,7 +803,7 @@ _VISION_SETTINGS_FILE_ONLY = {
     "vision_change_hold",
     "vision_base_url",  # an endpoint is set once per machine; --llm-url still moves vision too
     "vision_ocr_model",  # one OCR model is measured; --vision-reader picks the reader
-    "vision_reasoning_effort",  # the board's model has its own setting; --llm-reasoning is the judge's
+    "vision_reasoning_effort",  # the board's model has its own; --llm-reasoning is the judge's
 }
 
 
