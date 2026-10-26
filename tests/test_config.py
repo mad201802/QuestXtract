@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from questxtract.config import DEEPSEEK, Config, load_config
+from questxtract.config import DEEPSEEK, QWEN, Config, load_config
 
 
 def test_missing_implicit_file_keeps_defaults(tmp_path, monkeypatch):
@@ -178,18 +178,21 @@ def test_tests_see_neither_the_developers_key_nor_their_checkout():
     assert load_config() == Config()
 
 
-def test_everything_defaults_to_deepseek_on_ntnu_with_one_key(tmp_path, monkeypatch):
-    """#173: vision, the judge and the quiz on one model at NTNU's service, with its key."""
+def test_everything_defaults_to_ntnu_with_one_key(tmp_path, monkeypatch):
+    """#173, #179: DeepSeek reads the board, Qwen judges and writes the quiz, at NTNU's
+    service with its key."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
     Path(".env").write_text("QUESTXTRACT_NTNU_API_KEY=ntnu-dotenv\n", encoding="utf-8")
 
     config = Config()
 
-    assert config.vision_model == config.judge_model == config.quiz_model == DEEPSEEK
+    assert config.vision_model == DEEPSEEK
+    assert config.judge_model == config.quiz_model == QWEN
     assert config.base_url == config.vision_url == "https://llm.hpc.ntnu.no/v1"
     assert config.api_key == config.vision_api_key == "ntnu-dotenv"  # never the OpenAI key
-    assert config.reasoning_effort == "none"
+    # Qwen rejects "none" and DeepSeek thinks without it, so each gets its own (#179)
+    assert (config.reasoning_effort, config.vision_effort) == ("", "none")
     assert "ntnu-dotenv" not in repr(config)
 
 
@@ -231,7 +234,7 @@ def test_the_ntnu_key_in_the_environment_wins_over_dotenv(tmp_path, monkeypatch)
 def test_vision_reasoning_follows_reasoning_effort_unless_set():
     """#173 review: vision may need another setting than the judge (gpt-4o judge, DeepSeek
     vision; or a local vision model and DeepSeek judging)."""
-    assert Config(reasoning_effort="low").vision_effort == "low"
+    assert Config(reasoning_effort="low", vision_reasoning_effort=None).vision_effort == "low"
     split = Config(reasoning_effort="", vision_reasoning_effort="none")
     assert (split.reasoning_effort, split.vision_effort) == ("", "none")
 

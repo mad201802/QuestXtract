@@ -98,7 +98,7 @@ spoken. It needs the `llm` extra
 (`pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`) and a model:
 
 ```bash
-# the default: DeepSeek-V4.1-Flash on NTNU's LLM service, key from QUESTXTRACT_NTNU_API_KEY
+# the default: Qwen3.8-27B on NTNU's LLM service, key from QUESTXTRACT_NTNU_API_KEY
 questxtract process lecture.mp4 --detector llm
 
 # OpenAI instead, key from OPENAI_API_KEY; gpt-4o takes no reasoning setting, hence server
@@ -186,7 +186,7 @@ Windows), from the repository folder.
 | `--detector llm goes to NTNU's LLM service ..., so it needs QUESTXTRACT_NTNU_API_KEY` | The key is not loaded in this terminal | `source .env` |
 | `... Connection error` with NTNU's service | Not on the NTNU network | Connect the NTNU VPN |
 | `401 ... invalid_api_key` | The stored key is incomplete, or was revoked | Compare its end with the original (step 2) and save it again (step 1); if they match, ask for a new key |
-| `400 ... reasoning_effort` | The model has no reasoning setting (`gpt-4o`), or rejects `none` (Qwen); the default sends `none`, which DeepSeek needs | Pass `--llm-reasoning server` |
+| `400 ... reasoning_effort` | The judge or the quiz model rejects `none` (Qwen) or takes no setting (`gpt-4o`); the vision model has no setting (`gpt-4o`, `qwen3-vl`) but vision sends `none` by default, which DeepSeek needs | Judge: pass `--llm-reasoning server`. Vision: set `vision_reasoning_effort = ""` in `questxtract.toml` |
 
 **For the project team.** We use NTNU's LLM service with our NTNU key, and the customer's
 pay-as-you-go OpenAI key only for the OpenAI fallback, with `gpt-4o`. Never
@@ -199,15 +199,14 @@ If a key leaks, tell its owner at once so it can be revoked.
 A vision model can also read the slides or the board. Each stable view of the recording becomes a
 board state: its text, its formulas as LaTeX, a short description and a confidence, linked to the
 questions asked while it was on screen. It needs the `llm` extra and a model that takes images.
-By default it is the same model as the LLM detector, DeepSeek-V4.1-Flash on NTNU's LLM service,
-with the same key (`QUESTXTRACT_NTNU_API_KEY`, set up as above) and its thinking off: with it on,
-DeepSeek reads a frame far slower for nearly the same reading. Switch vision on for
-one run with `--vision`:
+By default it is DeepSeek-V4.1-Flash on NTNU's LLM service, with the same key as the LLM detector
+(`QUESTXTRACT_NTNU_API_KEY`, set up as above) and its thinking off: with it on, DeepSeek reads a
+frame far slower for nearly the same reading. Switch vision on for one run with `--vision`:
 
 ```bash
 questxtract process lecture.mp4 --vision        # DeepSeek on NTNU
 questxtract process lecture.mp4 --vision --llm-url http://localhost:11434/v1 \
-    --vision-model qwen3-vl:2b-instruct --llm-reasoning server   # a local model in Ollama
+    --vision-model qwen3-vl:2b-instruct   # a local model in Ollama; see vision_reasoning_effort below
 ```
 
 or for every run in `questxtract.toml` (`--no-vision` turns it off again for one run):
@@ -216,6 +215,7 @@ or for every run in `questxtract.toml` (`--no-vision` turns it off again for one
 vision_enabled = true
 vision_model = "deepseek-ai/DeepSeek-V4.1-Flash-1017"   # the default, on NTNU's LLM service
 # vision_base_url = "http://localhost:8000/v1"         # vision elsewhere; the judge stays on base_url
+# vision_reasoning_effort = ""                         # for a vision model with no setting, such as qwen3-vl
 ```
 
 Without `vision_base_url`, vision goes where `base_url` (`--llm-url`) points, NTNU's service by
@@ -258,9 +258,9 @@ count the whole lecture. How it works:
 
 ### Everything in one run
 
-Reading the board, the LLM detector and the quiz run together in one command, all on
-DeepSeek at NTNU's service with `QUESTXTRACT_NTNU_API_KEY`; the key is checked before anything
-slow starts:
+Reading the board, the LLM detector and the quiz run together in one command, all at NTNU's
+service with `QUESTXTRACT_NTNU_API_KEY` (DeepSeek reads the board, Qwen judges and writes the
+quiz); the key is checked before anything slow starts:
 
 ```bash
 questxtract process lecture.mp4 --vision --detector llm --quiz

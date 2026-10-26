@@ -41,14 +41,14 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `-m`, `--model` | a model name | `turbo` | The Whisper model used to transcribe. Only matters for `.mp4` or `.mp3` input. See [Choosing a model](#choosing-a-model). |
 | `--from-scratch` | nothing | off | Ignores cached results and recomputes everything, transcription included. |
 | `--detector` | `rules` or `llm` | `rules` | How questions are found: fast offline rules, or a language model that reads the transcript. See [Finding questions with an LLM](#finding-questions-with-an-llm). |
-| `--llm-model` | a model name | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
+| `--llm-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
 | `--llm-url` | a URL | NTNU's LLM service | An OpenAI-compatible endpoint for `--detector llm`, the quiz and vision, e.g. `https://api.openai.com/v1` for OpenAI or `http://localhost:11434/v1` for Ollama. The key goes with the endpoint: NTNU's service (`https://llm.hpc.ntnu.no/v1`, NTNU network or VPN) reads `QUESTXTRACT_NTNU_API_KEY`, every other endpoint `OPENAI_API_KEY`. Vision goes there too unless `vision_base_url` is set in `questxtract.toml`. |
-| `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | How long a thinking model may think before it answers: the judge, the quiz and vision (unless `vision_reasoning_effort` is set; the OCR model gets no setting). `none`, the default, switches DeepSeek's thinking off, which makes it far faster at reading the board for nearly the same result. `server` sends no setting, for a model that has none (`gpt-4o`) or rejects `none` (Qwen). Small models such as `qwen3.5:9b` judge much better with `low`. `low`, `medium` and `high` allow each request 10 minutes instead of 2; for a server that thinks on its own with `server`, raise `timeout_seconds` in the settings file. |
+| `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `server` | How long a thinking model may think before it answers: the judge and the quiz. By default they send no setting (`server`), since Qwen rejects `none`. `server` also suits a model that has no setting (`gpt-4o`); a DeepSeek judge needs `none`. Vision is not set here: `vision_reasoning_effort` in the settings file, `"none"` by default, switches DeepSeek's thinking off, which makes it far faster at reading the board for nearly the same result. Small models such as `qwen3.5:9b` judge much better with `low`. `low`, `medium` and `high` allow each request 10 minutes instead of 2; for a server that thinks on its own with `server`, raise `timeout_seconds` in the settings file. |
 | `--vision`, `--no-vision` | nothing | off | Also reads the slides or the board with a vision model: by default DeepSeek on NTNU's LLM service with the key from `QUESTXTRACT_NTNU_API_KEY` (NTNU network or VPN), or at `vision_base_url`, or at `--llm-url`. Needs the `questxtract[llm]` extra. `--no-vision` turns off `vision_enabled` from the settings file for one run. A recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript has no board, so the board is not read (a note says so). See [Reading the board](../README.md#reading-the-board). |
 | `--vision-model` | a model name | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | The model that reads the board, as the endpoint names it. It must take images. |
 | `--vision-reader` | `vlm` or `ocr` | `vlm` | How keyframes are read: `vlm`, the vision model (text, formulas and a description), or `ocr`, `vision_ocr_model` (GLM-OCR: text and formulas only, faster). The layout probe always asks `--vision-model`. |
 | `--quiz` | nothing | off | Also writes a multiple-choice quiz next to the questions file (`lecture.quiz.json`), as [`questxtract quiz`](#questxtract-quiz-questionsjson) does. Needs a file output, so not `-o -`. If the quiz fails, the questions file is kept and the exit code is 1. |
-| `--quiz-model` | a model name | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | The model that writes the quiz. Only with `--quiz`. |
+| `--quiz-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The model that writes the quiz. Only with `--quiz`. |
 | `--strictness`, `--options` | | | As for `questxtract quiz`. Only with `--quiz`. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
@@ -87,9 +87,9 @@ not used.
 | `--strictness` | `strict` or `lenient` | `lenient` | `lenient` also uses questions the lecture did not answer, whose correct answer the model writes from what was said around them; `strict` uses only questions the lecture answered. |
 | `--options` | a number, 3 to 5 | `3` | Options per item, one of them correct. |
 | `--transcript` | a path | the cached transcript | The lecture's transcript, for what was said around each question. |
-| `--quiz-model` | a model name | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | The model that writes the quiz (`quiz_model`). |
+| `--quiz-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The model that writes the quiz (`quiz_model`). |
 | `--llm-url` | a URL | NTNU's LLM service | An OpenAI-compatible endpoint, as for `process`. |
-| `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `none` | As for `process`. |
+| `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `server` | As for `process`. |
 | `--config` | a path | `questxtract.toml` | The settings file. `quiz_model`, `quiz_strictness` and `quiz_options` can be set there. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
@@ -210,11 +210,11 @@ questxtract eval tests/data/ --config other.toml
 Every `Config` field can be set, including those without flags. Names must match exactly:
 `--model` corresponds to `model_size`, `--threshold` to `min_confidence`, `--llm-model` to
 `judge_model`, `--llm-url` to `base_url`, and `--llm-reasoning` to `reasoning_effort`
-(`judge_reasoning_effort` is still read as its old name). Vision follows `reasoning_effort`
-unless `vision_reasoning_effort` is set, for a vision model other than the judge's (gpt-4o
-judging with `""`, DeepSeek reading the board with `"none"`). `reasoning_effort = ""` is the
-equivalent of `--llm-reasoning server`. A reasoning level (`"low"`, `"medium"` or `"high"`) raises the request timeout to at least 600
-seconds for `process` and `eval`, including when it comes from the file.
+(`judge_reasoning_effort` is still read as its old name). `--llm-reasoning` does not set vision:
+`vision_reasoning_effort` does, `"none"` by default for DeepSeek, so the judge (Qwen, `""`) and
+the board (DeepSeek, `"none"`) can differ. `reasoning_effort = ""` is the equivalent of
+`--llm-reasoning server`. A reasoning level (`"low"`, `"medium"` or `"high"`) raises the request
+timeout to at least 600 seconds for `process` and `eval`, including when it comes from the file.
 
 The file must be UTF-8; a leading BOM from a Windows editor is accepted. No nested sections or
 `[tool.questxtract]` table are read. Integer fields require integers, not `5.5` or `true`;
@@ -302,8 +302,8 @@ almost instantly. It works the other way round too.
 questxtract process lecture.transcript.json -o -
 ```
 
-**Everything in one run: the board, the LLM detector and a quiz.** All three run on DeepSeek at
-NTNU's service with `QUESTXTRACT_NTNU_API_KEY`. It writes `lecture.questions.json`, the keyframes in `lecture.keyframes/` and
+**Everything in one run: the board, the LLM detector and a quiz.** All three run at NTNU's
+service with `QUESTXTRACT_NTNU_API_KEY`: DeepSeek reads the board, Qwen judges and writes the quiz. It writes `lecture.questions.json`, the keyframes in `lecture.keyframes/` and
 `lecture.quiz.json`; `qti` then packs the quiz for an LMS.
 
 ```bash
@@ -361,8 +361,8 @@ their `reasons` stay on the questions the model keeps, and those gain `llm`.
 
 It needs the `llm` extra: `pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`.
 
-**NTNU's LLM service (the default).** `deepseek-ai/DeepSeek-V4.1-Flash-1017` with its thinking off, free, on the NTNU network or
-VPN. Put the key in `QUESTXTRACT_NTNU_API_KEY`, the safe way described in the README
+**NTNU's LLM service (the default).** `Qwen/Qwen3.8-27B-FP8`, free, on the NTNU network or
+VPN. To judge with DeepSeek instead, pass `--llm-model deepseek-ai/DeepSeek-V4.1-Flash-1017 --llm-reasoning none`. Put the key in `QUESTXTRACT_NTNU_API_KEY`, the safe way described in the README
 ([Setting up the API key](../README.md#setting-up-the-api-key)), never typed into a command.
 
 ```bash
@@ -385,8 +385,11 @@ put that provider's key in `OPENAI_API_KEY` (stored the same way) and pass its U
 
 ```bash
 questxtract process lecture.mp4 --detector llm \
-    --llm-url https://openrouter.ai/api/v1 --llm-model deepseek/deepseek-v4.1-flash
+    --llm-url https://openrouter.ai/api/v1 --llm-model deepseek/deepseek-v4.1-flash \
+    --llm-reasoning none
 ```
+
+DeepSeek thinks unless told not to, so it needs `--llm-reasoning none`; Qwen and gpt-4o take no setting, which is the default.
 
 **Local (Ollama).** Any OpenAI-compatible server works (Ollama, llama.cpp's `llama-server`,
 vLLM, LM Studio); pass its URL. With [Ollama](https://ollama.com), give it an 8k context first:
@@ -495,8 +498,8 @@ is not the cache, so it works on a first run too ([architecture.md 6.5](architec
 | `--vision / vision_enabled needs the LLM extra: ...` | Install `questxtract[llm]`, or turn vision off with `--no-vision`. |
 | `note: <file> has no video, so the board is not read` | Not an error: a recording without video, or a transcript, has no board to read. The questions are written as usual. |
 | `judge: <endpoint>: ...` | The model endpoint failed: it is not running, the key is wrong, or the model name is unknown to it. The message after the endpoint says which. |
-| `judge: <endpoint>: ... reasoning_effort` (HTTP 400) | The model has no reasoning setting (`gpt-4o`) or rejects `none` (Qwen), and the default sends `none`. Pass `--llm-reasoning server`. |
-| `judge: <endpoint>: no answer within 120 s, twice` | The model did not answer one request in time, and not on a second try either. With a thinking model, pass a `--llm-reasoning` level, which allows 10 minutes; otherwise the provider is overloaded, try again later. |
+| `judge: <endpoint>: ... reasoning_effort` (HTTP 400) | The model has no reasoning setting (`gpt-4o`) or rejects `none` (Qwen), and `--llm-reasoning none` or the settings file sends it. Pass `--llm-reasoning server`. |
+| `judge: <endpoint>: no answer within 120 s, twice` | The model did not answer one request in time, and not on a second try either. DeepSeek thinks unless told not to: pass `--llm-reasoning none`. With another thinking model, pass a `--llm-reasoning` level, which allows 10 minutes; otherwise the provider is overloaded, try again later. |
 | `judge: <model> did not return the expected JSON, twice` | The model could not follow the output format. Try a larger model; rerun to try again. |
 | `judge: <model> judged none of the N candidates; ...` | The endpoint answered, but in a shape other than the one asked for, so no candidate was judged. Check that the server supports structured output (`response_format`); try another model or server. |
 

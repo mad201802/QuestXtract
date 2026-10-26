@@ -132,11 +132,10 @@
 
 ### Changed
 
-- The LLM detector and the quiz use `gpt-4o` on OpenAI by default (`judge_model`, `quiz_model`),
-  and send no reasoning setting by default (`judge_reasoning_effort = ""`, the same as
-  `--llm-reasoning server`), since gpt-4o takes none. Only `--llm-reasoning low`, `medium` or
-  `high` now raise the request timeout to 10 minutes; `server` keeps 2 minutes, so set
-  `timeout_seconds` for a server that thinks on its own. (#164)
+- The LLM detector and the quiz send no reasoning setting by default (`reasoning_effort = ""`,
+  the same as `--llm-reasoning server`). Only `--llm-reasoning low`, `medium` or `high` now raise
+  the request timeout to 10 minutes; `server` keeps 2 minutes, so set `timeout_seconds` for a
+  server that thinks on its own. (#164)
 - `questions.json` schema 2.1: `keyframe_path` is relative to the JSON file. Writing the file
   copies each keyframe into a folder beside it named after the file (`lecture.keyframes/` for
   `lecture.questions.json`), so the two can be moved or shared together and lectures written to
@@ -144,26 +143,30 @@
 
 ### Changed (breaking)
 
-- Vision, the LLM detector and the quiz run on one model by default:
-  `deepseek-ai/DeepSeek-V4.1-Flash-1017` on NTNU's LLM service (`base_url`), with its thinking
-  off. The key goes with the endpoint: `QUESTXTRACT_NTNU_API_KEY` for NTNU's service,
-  `QUESTXTRACT_VISION_API_KEY` only for a `vision_base_url` on another host than NTNU's or
-  OpenAI's, `OPENAI_API_KEY` for any other; an NTNU key stored as `QUESTXTRACT_VISION_API_KEY`
-  must be renamed, and vision on OpenAI now reads `OPENAI_API_KEY`. A setup that
-  only has `OPENAI_API_KEY` now stops before anything slow with one line naming both ways; for
-  OpenAI, pass `--llm-url https://api.openai.com/v1 --llm-model gpt-4o --llm-reasoning server`.
-  `judge_reasoning_effort` is now `reasoning_effort` (the old name still works in
-  `questxtract.toml`), default `none`, and is sent with every judge and quiz request and to the
-  vision model, not to the OCR model; `vision_reasoning_effort` sets vision apart. A model
-  that rejects `none`, such as Qwen3.8-27B or gpt-4o, needs `--llm-reasoning server`. The
+- The LLM detector and the quiz use `Qwen/Qwen3.8-27B-FP8` on NTNU's LLM service by default
+  (`judge_model`, `quiz_model`) and send no reasoning setting (`reasoning_effort = ""`, the
+  same as `--llm-reasoning server`), since Qwen rejects `none`. `--llm-reasoning` sets the judge
+  and the quiz only. To judge with DeepSeek as before, pass
+  `--llm-model deepseek-ai/DeepSeek-V4.1-Flash-1017 --llm-reasoning none`. (#179)
+- Vision reads the board with `deepseek-ai/DeepSeek-V4.1-Flash-1017` on NTNU's LLM service by
+  default, with its thinking off (`vision_reasoning_effort = "none"`). The key goes with the
+  endpoint: `QUESTXTRACT_NTNU_API_KEY` for NTNU's service, `QUESTXTRACT_VISION_API_KEY` only for a
+  `vision_base_url` on another host than NTNU's or OpenAI's, `OPENAI_API_KEY` for any other; an
+  NTNU key stored as `QUESTXTRACT_VISION_API_KEY` must be renamed, and vision on OpenAI now reads
+  `OPENAI_API_KEY`. A setup that only has `OPENAI_API_KEY` now stops before anything slow with one
+  line naming both ways; for OpenAI, pass `--llm-url https://api.openai.com/v1 --llm-model gpt-4o
+  --llm-reasoning server`, and for vision on OpenAI also `vision_reasoning_effort = ""` in
+  `questxtract.toml`. `judge_reasoning_effort` is now `reasoning_effort` (the old name still
+  works in `questxtract.toml`) and is sent with every judge and quiz request, not to the OCR
+  model. A model that rejects `none` or takes no setting needs `reasoning_effort = ""`. The
   `questions.json` key `config.judge_reasoning_effort` is unchanged. (#173)
 - `hotwords_from_vision` is removed from the settings: nothing read it, and the second
   transcription pass it was for is not planned (#62). A `questxtract.toml` that still sets it
   stops with an unknown-key error; delete the line. (#169)
-- Vision reads the board with Qwen3.8-27B on NTNU's LLM service by default
-  (`vision_model = "Qwen/Qwen3.8-27B-FP8"`), with an endpoint and a key of its own:
+- Vision has an endpoint and a key of its own, so the board can be read on another service than
+  the judge's:
   `vision_base_url` in `questxtract.toml` and `QUESTXTRACT_VISION_API_KEY` in the environment or
-  `.env`. The LLM detector stays on `base_url` (OpenAI by default) with `OPENAI_API_KEY`, so the two
+  `.env`. The LLM detector stays on `base_url` with its own key, so the two
   run together and neither key reaches the other service. A setup that sets only `base_url` (or
   `--llm-url`) still sends vision there with the same key. To keep reading the board on OpenAI,
   set `vision_model = "gpt-5.6-luna"` and `vision_base_url = "https://api.openai.com/v1"`, and put
