@@ -409,7 +409,8 @@ questxtract eval --score-vision tests/data/vision/    # vision_model, per lectur
 
 Each frame is read by `vision.read_keyframe`, the function the vision stage uses (6.5), so eval
 scores what a run sends: `vision_model` (`--vision-model`), prompt v0 with the label's kind, as
-when the layout probe gets the kind right, and no speech; cached per request. Per frame: the
+when the layout probe gets the kind right, and no speech or previous state (6.5); cached per
+request. Per frame: the
 **character error rate** of `text` (edits per label character, casefolded and with whitespace
 collapsed, capped at 1) and **formula recall**, a labelled formula counting as found when some
 run of whole LaTeX tokens in the answer is within one edit per four of its tokens, after removing
@@ -575,23 +576,43 @@ panning chalkboard camera adds a view per pan, which the cap absorbs. A lecturer
 front of the board for the whole hold is a view of its own, with the board partly hidden in its
 keyframe (6.3).
 
-**Ink curve (planned, #133).** Count ink pixels per sampled frame after an adaptive threshold. A
-rising curve means writing, a sharp drop is an erase, and the local maximum before a drop is the
-completed board: the keyframe. The recording is cut into **board states** between erase events,
-roughly 20 to 60 per lecture. On slides the same curve works unchanged: a slide change is a large
-ink delta.
+**Ink curve (not planned, #133).** Cutting the recording into board states between erase events,
+found by counting ink pixels per sample, saved calls by losing board content on the lectures it
+was measured on, so the views above stay. Its ink rule tells a board filling up from a new one in
+captioning (6.5).
 
 ### 6.5 Captioning
 
 One VLM call per view, sent as prompt v0 was measured on #52: the prompt
 (`VISION_PROMPT_VERSION`), filled in with the layout probe's `kind` (6.2) and what was said
 while the view was on screen (up to 1500 characters), as the system message, and the keyframe
-alone, as a PNG data URL, as the user message. The previous state's description and the ink
-difference are to join it (planned, #137). Out, under a strict JSON schema and checked again in
+alone, as a PNG data URL, as the user message. Out, under a strict JSON schema and checked again in
 code: `description`, `text`, `latex` (or null) and `confidence`. The prompt asks for what is
 visible only, with `[unreadable]` for a word it cannot read. Cached per request, the image
 included (10.4), so no keyframe is sent twice. `latex` is there because prose does not compile,
 and the quiz and `filter --text` use the formulas.
+
+**The previous board state goes with each reading.** A board that fills up over several views
+would otherwise be read from scratch each time, with no way to tell what is new. So a view gets
+the view just before it as its previous state: that reading's `description`, `text` and `latex`,
+and the box around the new ink, as fractions of the frame. This is prompt v2
+(`tests/data/vision/prompt_v2.txt`): v0 with that block and one rule, to report everything
+visible and never copy from the previous state what is no longer there. The reading stays a
+full reading of the board, not a list of changes, because every consumer (6.6) reads one state
+on its own. Ink is a pixel more than 20 grey levels from the mean of the 15 px square around it,
+on the small grey copy (6.3). The board is new, and v0 is sent word for word, when less than
+70 % of the previous keyframe's ink is still ink: an erase, a camera cut or a page flip. It is
+also new for the first view, after a view whose reading failed, and after a blank board. New ink
+is boxed by the 8 px cells at least 20 % new ink, so codec noise draws no box. A copied reading
+(below) is a previous state like any other. The previous reading is in the request, so a changed
+one asks again rather than hitting the cache. The OCR reader has no prompt and gets none.
+
+> **Decision.** The ink rule and its 15 px and 20-level settings come from the ink curve's
+> measurement on #133; the curve itself was not built. On the #58 frames the one pair of a board
+> filling up keeps nearly all its ink and different boards keep less than half; two pages under
+> the same app toolbar keep about 60 %, so the limit sits above that. A previous state missed
+> costs only the context, while a wrong one invites the model to copy an erased board, so the
+> limit errs high.
 
 **A page that comes back is not read again.** Lecturers return to earlier slides and pages, and
 each return is a view of its own. The request cache cannot catch it: two captures of one page
@@ -1570,7 +1591,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not planned | |
 | `sentences.py` | 3 sentences | done | |
 | `segments.py` | 4 segments | done | |
-| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5) or the OCR reader (6.5), reusing the reading of a page that comes back (6.5) and the interval join; the ink curve (6.4) is not built, de-occlusion (6.3) is not planned | #133 |
+| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v2, the previous board state included unless the board is new, (6.5) or the OCR reader (6.5), reusing the reading of a page that comes back (6.5) and the interval join; the ink curve (6.4) and de-occlusion (6.3) are not planned | |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery wait for a labelled miss (7.1) | |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |
