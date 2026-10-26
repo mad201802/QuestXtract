@@ -26,7 +26,7 @@ from .config import Config
 from .models import Sentence
 from .quiz_schema import QUIZ_SCHEMA_VERSION, normalise_spoken
 
-QUIZ_PROMPT_VERSION = "v0"
+QUIZ_PROMPT_VERSION = "v1"
 
 STRICTNESS = ("strict", "lenient")
 MIN_OPTIONS, MAX_OPTIONS = 3, 5
@@ -46,16 +46,23 @@ the board what was meant.
 
 Write:
 - "quiz_material": false only when the question is addressed to the room ("what would you
-  answer, people?"), rhetorical, about organisation, or when neither the question, the
-  lecturer's answer, the speech around it nor the board says what it is about. A question that
-  points at something ("this one", "here") is still quiz material when the context makes the
-  topic clear: then name that topic in the stem. When false, leave every other field as an
-  empty string.
+  answer, people?"), rhetorical, a check on the class ("do you see how...", "are we together",
+  "is that clear"), about organisation, or when neither the question, the lecturer's answer,
+  the speech around it nor the board says what it is about. A question that points at
+  something ("this one", "here") is still quiz material when the context makes the topic
+  clear: then name that topic in the stem, with the actual expression from the board or the
+  speech, never a placeholder such as "square" or "star". When you cannot tell what it points
+  at, it is false. When false, leave every other field as an empty string.
 - "stem": the question for the quiz. Keep the lecturer's wording when it is clear on its own;
   otherwise add only the context a student needs to answer it. Never turn it into another
   question.
 - "correct_answer": the right answer as one short option. When the lecturer answered, it must
   say the same as the lecturer's answer, condensed. Write it yourself only when there is none.
+  The lecturer's answer is an automatic transcript of speech and can answer a different
+  question, or only a step of one. Work the answer out yourself and check the stem against it:
+  if the lecturer's answer is wrong for the stem you write, give the correct answer instead.
+  A stem never states something false, and never brings in a concept that neither the lecturer
+  nor the board used.
 - "correct_explanation": one or two sentences on why it is right.
 - "distractor_1" to "distractor_{distractors}": wrong options that a student with a typical
   misconception about this topic would choose. Each must be clearly wrong to a student who
@@ -309,9 +316,18 @@ def _usable(distractors: int) -> Callable[[dict[str, Any]], bool]:
     return usable
 
 
+_MATH_DELIMITERS = re.compile(r"\$|\\[()\[\]]")
+_SENTENCE_END = " .,;:!?"
+
+
 def _normal(text: str) -> str:
-    """Options compared for sameness: case, spacing and punctuation do not count."""
-    return " ".join(re.findall(r"\w+", text.casefold()))
+    """Options compared for sameness: case, math delimiters, runs of spaces and end punctuation.
+
+    Everything inside an option counts: ``-2`` and ``2``, ``1.5`` and ``15``, ``1 2`` and ``12``
+    are different options.
+    """
+    text = " ".join(_MATH_DELIMITERS.sub("", text.casefold()).split())
+    return text.strip(_SENTENCE_END)
 
 
 def _item_dict(

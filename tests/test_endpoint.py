@@ -57,7 +57,7 @@ def test_by_default_every_request_goes_to_ntnu_with_its_key(
 ) -> None:
     """#173 AC1: the judge and vision on NTNU's service, one key."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
 
     _ask(Config(), vision=False)
     _ask(Config(from_scratch=True), vision=True)  # the same request, so past the cache
@@ -72,7 +72,7 @@ def test_openai_gets_the_openai_key_and_no_reasoning_setting_with_server(
 ) -> None:
     """#173 AC2: the fallback; the NTNU key never leaves for another endpoint."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
     config = Config(base_url=OPENAI_URL, reasoning_effort="")
 
     _ask(config, vision=False)
@@ -89,7 +89,7 @@ def test_only_base_url_still_sends_vision_there_with_the_judges_key(
 ) -> None:
     """#162 AC: a config from before vision had its own endpoint keeps working."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-local")
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
 
     _ask(Config(base_url="http://localhost:11434/v1"), vision=True)
 
@@ -101,7 +101,7 @@ def test_vision_base_url_takes_vision_elsewhere_with_that_endpoints_key(
     recorder: _Recorder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-key")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
     config = Config(base_url="http://localhost:11434/v1", vision_base_url=NTNU_LLM_URL)
 
     _ask(config, vision=False)
@@ -113,7 +113,7 @@ def test_vision_base_url_takes_vision_elsewhere_with_that_endpoints_key(
 
 
 def test_the_vision_key_is_hidden_in_errors(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "ntnu-secret")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-secret")
 
     def refused(**kwargs: Any) -> Any:
         def create(**request: Any) -> Any:

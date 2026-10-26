@@ -18,7 +18,7 @@ import dataclasses
 import json
 import types
 import typing
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +36,7 @@ from .vision import attach_visual, layout, vision
 
 __all__ = [
     "STAGES",
+    "Cancelled",
     "Stage",
     "StageInfo",
     "cached_transcript",
@@ -148,13 +149,29 @@ STAGES: tuple[Stage, ...] = (
 )
 
 
+class Cancelled(Exception):
+    """A run was stopped between two stages, on request (the graphical app's Cancel, #124).
+
+    A stage that is running is not interrupted: the stop takes effect before the next one.
+    """
+
+
 def run(
-    ctx: Context, stages: Sequence[Stage] = STAGES, progress: Progress | None = None
+    ctx: Context,
+    stages: Sequence[Stage] = STAGES,
+    progress: Progress | None = None,
+    stop: Callable[[], bool] | None = None,
 ) -> Context:
     """Run ``stages`` over ``ctx`` in order, caching and reporting as each declares.
 
     List order is execution order. There is no DAG resolver: a stage that needs something
-    an earlier stage did not produce fails on the spot with a ``None``.
+    an earlier stage did not produce fails on the spot with a ``None``. ``stop``, when given, is
+    asked before each stage; once it returns true, :class:`Cancelled` is raised and no later
+    stage runs.
+
+    Raises:
+        Cancelled: If ``stop`` asked for it before a stage.
+
     """
     progress = progress or ctx.progress
     # A stage that reports its own intra-stage progress (transcribe.py) reads ctx.progress
@@ -164,6 +181,8 @@ def run(
     ctx.progress = progress
     for fn in stages:
         info = stage_info(fn)
+        if stop is not None and stop():
+            raise Cancelled(f"stopped before {info.name}")
         if progress:
             progress(info.name, 0.0)
         ctx = _cached(fn, ctx) if info.cache else fn(ctx)

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import cast
@@ -40,8 +40,10 @@ def _validate_source(path: Path) -> None:
 
 
 @contextmanager
-def extract_audio(path: Path) -> Iterator[Path]:
+def extract_audio(path: Path, progress: Callable[[float], None] | None = None) -> Iterator[Path]:
     """Extract a recording's first audio stream to a temporary 16 kHz mono WAV file.
+
+    ``progress`` is called with the fraction of the recording decoded so far, in ``[0, 1]``.
 
     The yielded file exists only inside the context manager and is removed when the
     context exits, including when decoding or the consumer raises an exception.
@@ -68,7 +70,7 @@ def extract_audio(path: Path) -> Iterator[Path]:
         with tempfile.TemporaryDirectory(prefix="questxtract-audio-") as directory:
             output = Path(directory) / "audio.wav"
             try:
-                _write_wav(container, audio_stream, output)
+                _write_wav(container, audio_stream, output, progress)
             except (av.error.FFmpegError, OSError) as exc:
                 raise MediaError(f"{path}: audio extraction failed") from exc
             yield output
@@ -78,13 +80,17 @@ def _write_wav(
     container: av.container.InputContainer,
     audio_stream: av.audio.stream.AudioStream,
     output: Path,
+    progress: Callable[[float], None] | None = None,
 ) -> None:
     """Decode an audio stream and write resampled PCM samples to ``output``."""
+    duration = float(container.duration / av.time_base) if container.duration else 0.0
     resampler = av.audio.resampler.AudioResampler(format="s16", layout="mono", rate=_AUDIO_RATE)
     with av.open(str(output), mode="w", format="wav") as destination:
         output_stream = destination.add_stream("pcm_s16le", rate=_AUDIO_RATE)
         output_stream.layout = "mono"
         for frame in container.decode(audio_stream):
+            if progress and duration and frame.time is not None:
+                progress(min(1.0, frame.time / duration))
             for converted in resampler.resample(frame):
                 for packet in output_stream.encode(converted):
                     destination.mux(packet)

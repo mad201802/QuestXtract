@@ -499,7 +499,7 @@ so a later Manim step can read it.
 
 *Chose:* `deepseek-ai/DeepSeek-V4.1-Flash-1017` on NTNU's LLM service for reading the board, the
 LLM detector and the quiz, with `reasoning_effort = "none"` sent with every request. The key goes
-with the endpoint: `QUESTXTRACT_NTNU_API_KEY` for NTNU's service, `OPENAI_API_KEY` for any other
+with the endpoint: `IDUN_API_KEY` for NTNU's service, `OPENAI_API_KEY` for any other
 (#173).
 
 *Alternative:* Qwen3.8-27B on NTNU for vision and gpt-4o on OpenAI for the judge and the quiz,
@@ -577,6 +577,53 @@ untyped `metadata`, whose keys only the existing tests pin, and the model keeps 
 a third writer such as HTML arrives, the model moves to a format-neutral module. The format
 follows ExerPlaza's parser, not ExerPlaza's own TeX export, which writes `\correctanswer{...}`
 and does not re-import; if the parser changes, this writer has to follow.
+
+### D25: Qwen judges and writes the quiz, DeepSeek reads the board
+
+*Chose:* `judge_model` and `quiz_model` = `Qwen/Qwen3.8-27B-FP8` on NTNU's LLM service, sending
+no reasoning setting (`reasoning_effort = ""`); `vision_model` stays DeepSeek-V4.1-Flash, with
+`vision_reasoning_effort = "none"` as its own default. `--llm-reasoning` sets the judge and the
+quiz only; vision's setting is in the settings file (#179). This changes the judge and quiz half
+of D22.
+
+*Alternative:* DeepSeek for everything, thinking off (D22); DeepSeek judging with low thinking;
+Qwen for everything.
+
+*Why:* every pair of judge and vision model was run three times on the labelled lectures and
+scored with `eval --detector llm --board` (numbers on #179). Qwen judged best of the pairs tried,
+from higher precision at the same recall, and which model had read the board hardly changed the
+judging. DeepSeek with low thinking was about as good but took many minutes a run and timed out
+on NTNU. DeepSeek read the labelled keyframes better on formulas and about twice as fast, so it
+keeps the board. Both are on NTNU's service, so there is still one endpoint and one key. The
+quiz follows the judge because the two share `reasoning_effort`, and DeepSeek without `"none"`
+thinks.
+
+*Cost:* two models on the service instead of one, and two reasoning defaults to keep apart.
+Qwen judges several times slower than DeepSeek with its thinking off (minutes per lecture,
+still free). The quiz on Qwen was not measured against DeepSeek's.
+
+### D26: A checking pass for the quiz, not built until wrong keys recur
+
+*Chose:* no second model run over the quiz yet; the quiz prompt carries the rules instead (work the
+answer out, never state a false premise, name the real expression, leave check-ins out). If a
+generated quiz keeps a wrong key or a stem that lost the condition its answer depends on, add the
+pass to the pipeline: send each item's stem and options alone to the model, without the key,
+and compare its answer with the key. A disagreement, or "the stem is ambiguous", is written as a
+note for the teacher; the item stays pending.
+
+*Alternative:* trust the writer's key; or check with the same call that writes the item.
+
+*Why:* on the first lecture, two keys copied a lecturer's answer that did not fit the question the
+stem asked, and a rewritten stem twice dropped the number its key depended on. A prompt lowers that
+but cannot rule it out, and the teacher reads every item either way. A blind solver would have
+caught most of these. It costs one more request per item, and the same model has the same
+blind spots, so a different model on the service is better if there is one. It also needs a place
+for the note: the pipeline never writes into `review`, so it means a new quiz.json key and a minor
+`schema_version` bump.
+
+*Cost:* until it exists, a wrong key reaches the teacher as a pending item with nothing marking
+it. An invented answer for a question the lecture never answered is not caught by this pass; that
+needs `--strictness strict`.
 
 ## 4. Requirements traceability (→ report ch. 6)
 
@@ -724,28 +771,3 @@ in the bibliography (some came via an AI-generated literature survey).
   arXiv:2601.14280). *Argument for validation stages around any LLM in `builder/`.*
 - IEEE Std 830-1998 (requirements); Sommerville, *Software Engineering* 10th ed. (modular
   design); McGraw, "The 7 touchpoints of secure software"; Microsoft STRIDE / EoP.
-
-### D24: Qwen judges and writes the quiz, DeepSeek reads the board
-
-*Chose:* `judge_model` and `quiz_model` = `Qwen/Qwen3.8-27B-FP8` on NTNU's LLM service, sending
-no reasoning setting (`reasoning_effort = ""`); `vision_model` stays DeepSeek-V4.1-Flash, with
-`vision_reasoning_effort = "none"` as its own default. `--llm-reasoning` sets the judge and the
-quiz only; vision's setting is in the settings file (#179). This changes the judge and quiz half
-of D22.
-
-*Alternative:* DeepSeek for everything, thinking off (D22); DeepSeek judging with low thinking;
-Qwen for everything.
-
-*Why:* every pair of judge and vision model was run three times on the labelled lectures and
-scored with `eval --detector llm --board` (numbers on #179). Qwen judged best of the pairs tried,
-from higher precision at the same recall, and which model had read the board hardly changed the
-judging. DeepSeek with low thinking was about as good but took many minutes a run and timed out
-on NTNU. DeepSeek read the labelled keyframes better on formulas and about twice as fast, so it
-keeps the board. Both are on NTNU's service, so there is still one endpoint and one key. The
-quiz follows the judge because the two share `reasoning_effort`, and DeepSeek without `"none"`
-thinks.
-
-*Cost:* two models on the service instead of one, and two reasoning defaults to keep apart.
-Qwen judges several times slower than DeepSeek with its thinking off (minutes per lecture,
-still free). The quiz on Qwen was not measured against DeepSeek's.
-

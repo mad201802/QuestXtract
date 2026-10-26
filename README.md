@@ -69,6 +69,13 @@ questxtract quiz lecture.questions.json        # multiple-choice quiz -> lecture
 questxtract filter lecture.questions.json --text eigenvalue   # the questions about a word
 ```
 
+### Graphical app
+
+For a lecturer who does not use a terminal: `pip install "questxtract[gui]"`, then `questxtract gui`.
+Drop a recording or a transcript on the window (or click Browse), pick the output and press Run.
+The options (the same ones as the CLI, with the same defaults) are behind Advanced settings. Questions, transcript, quiz and
+QTI package are written next to the input, or where you choose. Details: [docs/cli.md](docs/cli.md#graphical-app).
+
 The input decides how much runs: an `.mp4` or `.mp3` goes through every stage (an audio-only
 recording simply has no board to read), while a `.json` transcript skips transcription. A progress bar renders on stderr, and transcripts are cached, so running
 `process` again with another threshold takes seconds. Every option, the cache, error messages and
@@ -98,7 +105,7 @@ spoken. It needs the `llm` extra
 (`pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`) and a model:
 
 ```bash
-# the default: Qwen3.8-27B on NTNU's LLM service, key from QUESTXTRACT_NTNU_API_KEY
+# the default: Qwen3.8-27B on NTNU's LLM service, key from IDUN_API_KEY
 questxtract process lecture.mp4 --detector llm
 
 # OpenAI instead, key from OPENAI_API_KEY; gpt-4o takes no reasoning setting, hence server
@@ -127,7 +134,7 @@ questxtract eval --score-vision tests/data/vision/   # how well vision_model rea
 #### Setting up the API key
 
 A hosted model needs a key; a local server (`--llm-url`) does not. The key goes with the
-endpoint: NTNU's LLM service, the default, reads `QUESTXTRACT_NTNU_API_KEY`; OpenAI and any other
+endpoint: NTNU's LLM service, the default, reads `IDUN_API_KEY`; OpenAI and any other
 endpoint read `OPENAI_API_KEY`, so neither key is ever sent to the other service. NTNU's service
 needs the NTNU network or VPN, and NTNU asks that heavy use wait until after 18:00 or the
 weekend. QuestXtract reads each key from the environment, or from a local `.env` (see
@@ -162,7 +169,7 @@ Windows), from the repository folder.
    no key:
 
    ```bash
-   echo 'export QUESTXTRACT_NTNU_API_KEY="$(uvx keyring get questxtract-llm ntnu)"' >> .env
+   echo 'export IDUN_API_KEY="$(uvx keyring get questxtract-llm ntnu)"' >> .env
    ```
 
 4. **Load it in every new terminal**, before running `questxtract`:
@@ -173,17 +180,17 @@ Windows), from the repository folder.
 
    On macOS the first read may ask whether Python may use the Keychain item: choose *Always
    Allow*. In PowerShell instead of Git Bash, step 4 is
-   `$env:QUESTXTRACT_NTNU_API_KEY = (uvx keyring get questxtract-llm ntnu)`.
+   `$env:IDUN_API_KEY = (uvx keyring get questxtract-llm ntnu)`.
 
 5. **Test it.** Listing the models costs nothing:
 
    ```bash
-   uv run python -c "import os, openai; print(len(openai.OpenAI(base_url='https://llm.hpc.ntnu.no/v1', api_key=os.environ['QUESTXTRACT_NTNU_API_KEY']).models.list().data), 'models visible - the key works')"
+   uv run python -c "import os, openai; print(len(openai.OpenAI(base_url='https://llm.hpc.ntnu.no/v1', api_key=os.environ['IDUN_API_KEY']).models.list().data), 'models visible - the key works')"
    ```
 
 | Error | Cause | Fix |
 |---|---|---|
-| `--detector llm goes to NTNU's LLM service ..., so it needs QUESTXTRACT_NTNU_API_KEY` | The key is not loaded in this terminal | `source .env` |
+| `--detector llm goes to NTNU's LLM service ..., so it needs IDUN_API_KEY` | The key is not loaded in this terminal | `source .env` |
 | `... Connection error` with NTNU's service | Not on the NTNU network | Connect the NTNU VPN |
 | `401 ... invalid_api_key` | The stored key is incomplete, or was revoked | Compare its end with the original (step 2) and save it again (step 1); if they match, ask for a new key |
 | `400 ... reasoning_effort` | The judge or the quiz model rejects `none` (Qwen) or takes no setting (`gpt-4o`); the vision model has no setting (`gpt-4o`, `qwen3-vl`) but vision sends `none` by default, which DeepSeek needs | Judge: pass `--llm-reasoning server`. Vision: set `vision_reasoning_effort = ""` in `questxtract.toml` |
@@ -200,7 +207,7 @@ A vision model can also read the slides or the board. Each stable view of the re
 board state: its text, its formulas as LaTeX, a short description and a confidence, linked to the
 questions asked while it was on screen. It needs the `llm` extra and a model that takes images.
 By default it is DeepSeek-V4.1-Flash on NTNU's LLM service, with the same key as the LLM detector
-(`QUESTXTRACT_NTNU_API_KEY`, set up as above) and its thinking off: with it on, DeepSeek reads a
+(`IDUN_API_KEY`, set up as above) and its thinking off: with it on, DeepSeek reads a
 frame far slower for nearly the same reading. Switch vision on for one run with `--vision`:
 
 ```bash
@@ -259,7 +266,7 @@ count the whole lecture. How it works:
 ### Everything in one run
 
 Reading the board, the LLM detector and the quiz run together in one command, all at NTNU's
-service with `QUESTXTRACT_NTNU_API_KEY` (DeepSeek reads the board, Qwen judges and writes the
+service with `IDUN_API_KEY` (DeepSeek reads the board, Qwen judges and writes the
 quiz); the key is checked before anything slow starts:
 
 ```bash

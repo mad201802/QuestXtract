@@ -4,6 +4,14 @@
 
 ### Added
 
+- `questxtract gui` opens a window for people who do not use a terminal: drop or browse a
+  recording (`.mp4`, `.mp3`) or a transcript (`.json`), choose questions, transcript, quiz or QTI
+  package, set the options (the CLI's own, with its defaults) and press Run. It runs the CLI's code,
+  shows progress, Cancel (between stages), the written path and an Open folder button. Install with
+  `pip install "questxtract[gui]"`; drag and drop needs `tkinterdnd2`, and where it cannot start the
+  window says so and Browse still works. The start view has only the file, the output and Run;
+  the options are behind Advanced settings, except Read the board (vision), which stays on the start view. Without a `questxtract.toml` the window starts with the LLM detector and Read the board on (both need the NTNU key; the CLI's defaults are unchanged); with one, it starts from the file. The judge's model is greyed out with the rules detector. The window is in English, Norsk or Italiano (the
+  switch at the top right). Needs a Python with tkinter. (#124)
 - `questxtract tex quiz.json -o quiz.tex --content-unit NAME` (and `export_tex()`) writes a
   `quiz.json` as TeX for ExerPlaza's upload at `/questions/upload/tex`: one `IndexedQuestion`
   block per item, in English or Italian, with the given content units, its options and the
@@ -132,6 +140,9 @@
 
 ### Changed
 
+- NTNU's LLM service (the default endpoint) reads its key from `IDUN_API_KEY`, in the environment
+  or `.env`. `QUESTXTRACT_NTNU_API_KEY`, its former name, is still read when `IDUN_API_KEY` is not
+  set, so nothing has to be renamed. (#124)
 - The LLM detector and the quiz send no reasoning setting by default (`reasoning_effort = ""`,
   the same as `--llm-reasoning server`). Only `--llm-reasoning low`, `medium` or `high` now raise
   the request timeout to 10 minutes; `server` keeps 2 minutes, so set `timeout_seconds` for a
@@ -150,7 +161,7 @@
   `--llm-model deepseek-ai/DeepSeek-V4.1-Flash-1017 --llm-reasoning none`. (#179)
 - Vision reads the board with `deepseek-ai/DeepSeek-V4.1-Flash-1017` on NTNU's LLM service by
   default, with its thinking off (`vision_reasoning_effort = "none"`). The key goes with the
-  endpoint: `QUESTXTRACT_NTNU_API_KEY` for NTNU's service, `QUESTXTRACT_VISION_API_KEY` only for a
+  endpoint: `IDUN_API_KEY` for NTNU's service, `QUESTXTRACT_VISION_API_KEY` only for a
   `vision_base_url` on another host than NTNU's or OpenAI's, `OPENAI_API_KEY` for any other; an
   NTNU key stored as `QUESTXTRACT_VISION_API_KEY` must be renamed, and vision on OpenAI now reads
   `OPENAI_API_KEY`. A setup that only has `OPENAI_API_KEY` now stops before anything slow with one
@@ -188,6 +199,15 @@
 
 ### Fixed
 
+- The quiz no longer drops an item because two options differ only by a sign (`-2` and `2`) or a
+  decimal point (`1.5` and `15`): the sameness check ignores only case, math delimiters, runs of
+  spaces and punctuation at the end, and keeps everything inside an option. The quiz prompt (now `v1`) leaves out check-ins on the class, names the
+  real expression from the board, and makes the model work the answer out instead of copying a
+  lecturer's answer that does not fit the stem. (#124)
+- The transcription bar starts moving while the recording is decoded to audio (the first tenth of
+  the bar) instead of sitting at 0 % until the first words arrive. (#124)
+- Installing no longer picks PyAV 19, with which faster-whisper 1.2.1 cannot open a recording
+  (`av>=14.0,<19`). (#124)
 - The rules detector penalises framing questions without content words ("So how do we do
   that?") and excludes their adjacent answer seeds, so they stay below the default output
   threshold. Questions naming a concept and questions with negation remain eligible. (#49)
