@@ -1431,7 +1431,7 @@ The element names below are QTI 3.0's; the QTI 2.1 bullet says how 2.1 spells th
 `IndexedQuestion` format that ExerPlaza imports at `/questions/upload/tex`, as read by its parser
 `exerplaza/backend/quiz/latex_parser.py` v2.1. A quiz reaches ExerPlaza with no change on
 ExerPlaza's side and no network access: a teacher uploads the file. `tex` does not connect to
-ExerPlaza (section 13.4). The file is a transport format for that parser, not a
+ExerPlaza (section 14). The file is a transport format for that parser, not a
 document to compile: there is no preamble.
 
 **Verbatim texts.** ExerPlaza stores every text as parsed and shows it with MathJax (`$...$`,
@@ -1470,6 +1470,7 @@ the writer guarantees them, and fails naming the text's path (for example
 - exactly one `\correctanswer` per block;
 - `IndexedSolution` sits inside `IndexedQuestion`, after `\QuestionContentUnits`.
 
+A quiz with no item left (all rejected, or none) fails: an upload of a header alone does nothing.
 A content unit must be non-empty, on one line and free of braces. ExerPlaza links it to an existing
 unit only on an exact name and language match.
 

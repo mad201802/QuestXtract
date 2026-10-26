@@ -236,7 +236,7 @@ def test_unbalanced_braces_fail_naming_the_text(
     quiz = make_quiz("q_rejected", "q_aaa")
     quiz["questions"][0]["review"]["status"] = "rejected"  # the path is the document's index
     _set_text(quiz, location, text)
-    _fails(tmp_path, quiz, rf"^{_PATHS[location]}: unbalanced braces$")
+    _fails(tmp_path, quiz, rf"^{_PATHS[location]}: unbalanced braces ")
 
 
 @pytest.mark.parametrize("location", list(_PATHS))
@@ -380,3 +380,30 @@ def test_an_unreadable_quiz_or_output_fails_readably(tmp_path: Path, make_quiz: 
     _fails(tmp_path, make_quiz("q_aaa", schema_version="2.0"), r"schema version 2\.0")
     with pytest.raises(TexExportError, match="cannot write the TeX file"):
         _export(tmp_path, make_quiz("q_aaa"), name="missing/quiz.tex")
+
+
+def test_a_quiz_with_no_item_left_fails_and_writes_nothing(
+    tmp_path: Path, make_quiz: MakeQuiz
+) -> None:
+    quiz = make_quiz("q_aaa")
+    quiz["questions"][0]["review"]["status"] = "rejected"
+    _fails(tmp_path, quiz, r"^no question to export")
+    _fails(tmp_path, make_quiz(), r"^no question to export")
+
+
+def test_a_failed_write_leaves_no_partial_file(
+    tmp_path: Path, make_quiz: MakeQuiz, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(*_args: object) -> None:
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr("questxtract.tex.os.replace", broken)
+    with pytest.raises(TexExportError, match="cannot write the TeX file"):
+        _export(tmp_path, make_quiz("q_aaa"))
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["quiz.json"]
+
+
+def test_a_command_prefix_is_refused_too(tmp_path: Path, make_quiz: MakeQuiz) -> None:
+    quiz = make_quiz("q_aaa")
+    quiz["questions"][0]["options"][0]["text"]["text"] = "a \\Questionable idea"
+    _fails(tmp_path, quiz, r"options\[0\]\.text: '\\\\Question' is a command")

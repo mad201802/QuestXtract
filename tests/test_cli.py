@@ -1002,6 +1002,21 @@ def test_tex_bad_input_gets_one_line_and_no_output(
     assert not output.exists()
 
 
+def test_tex_with_every_item_rejected_fails_and_writes_nothing(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    quiz = make_quiz("q_aaa")
+    quiz["questions"][0]["review"]["status"] = "rejected"
+    source = tmp_path / "quiz.json"
+    source.write_text(json.dumps(quiz), encoding="utf-8")
+    output = tmp_path / "out.tex"
+
+    assert main(["tex", str(source), "-o", str(output), "--content-unit", "Sorting"]) == 1
+
+    assert "no question to export" in capsys.readouterr().err
+    assert not output.exists()
+
+
 def test_tex_needs_a_content_unit(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as caught:
         main(["tex", "quiz.json", "-o", "out.tex"])

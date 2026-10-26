@@ -153,7 +153,7 @@ the lecture the question was asked and which model wrote the text. Pending items
 to you in ExerPlaza, accepted ones to everybody; rejected ones are left out. The quiz must be in
 English or Italian, the two languages ExerPlaza's parser accepts. Texts are written as they are,
 not LaTeX-escaped, because ExerPlaza shows them with MathJax. A text with unbalanced braces or a
-command of the format (such as `\answer`) fails, naming that text, and nothing is written. The
+command of the format (such as `\answer`) fails, naming that text, and nothing is written; so does a quiz with no item left after the rejected ones. The
 same quiz file always gives the same file, byte for byte. You upload the file yourself: `tex`
 does not connect to ExerPlaza.
 

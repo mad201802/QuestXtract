@@ -15,7 +15,9 @@ TeX and as QTI.
 from __future__ import annotations
 
 import math
+import os
 import re
+import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -26,6 +28,8 @@ from .quiz_schema import read_quiz
 
 _LANGUAGES = {"en": "english", "it": "italian"}  # the only two ExerPlaza's parser accepts
 _DISCLOSABILITY = {"pending": "only me", "accepted": "everybody"}
+# A prefix match on purpose: ``\\Questionable`` is refused too, since the parser would read it as
+# the start of a command.
 _FORMAT_COMMAND = re.compile(
     r"\\(?:begin|end)\{Indexed|\\Question|\\Solution|\\(?:correct|penalizable)?answer"
 )
@@ -45,7 +49,7 @@ def export_tex(
     ``IndexedQuestion`` block with its options, its solution and notes for the teachers. Items
     a reviewer marked ``rejected`` are left out; ``pending`` items are visible only to their
     author, ``accepted`` ones to everybody. The file is UTF-8 with LF line endings, and the same
-    input gives the same bytes. Nothing is written if any check fails.
+    input gives the same bytes. Nothing is written if any check fails or no item is left.
 
     Args:
         quiz_path: A ``quiz.json``, schema version 1.x, in English or Italian.
@@ -57,10 +61,10 @@ def export_tex(
         The number of questions written.
 
     Raises:
-        TexExportError: If a content unit is empty, spans lines or holds a brace; if the quiz
-            file cannot be read or breaks a rule of ``quiz.json``; if an item cannot be written
-            for ExerPlaza (another language, unbalanced braces, a command of the format in a
-            text), naming the field; or if the file cannot be written.
+        TexExportError: If no item is left to export; if a content unit is empty, spans lines or
+            holds a brace; if the quiz file cannot be read or breaks a rule of ``quiz.json``; if
+            an item cannot be written for ExerPlaza (another language, unbalanced braces, a
+            command of the format in a text), naming the field; or if the file cannot be written.
 
     """
     units = _content_units(content_units)
@@ -71,13 +75,27 @@ def export_tex(
     except SchemaError as exc:
         raise TexExportError(str(exc)) from exc
     text, count = _tex(document, units)
+    if count == 0:
+        raise TexExportError("no question to export: every item is rejected or the quiz is empty")
     try:
-        Path(output_path).write_bytes(text.encode("utf-8"))
+        _write_atomic(Path(output_path), text.encode("utf-8"))
     except OSError as exc:
         raise TexExportError(
             f"{output_path}: cannot write the TeX file ({exc.strerror or exc})"
         ) from exc
     return count
+
+
+def _write_atomic(path: Path, data: bytes) -> None:
+    """Write beside ``path`` and rename, so a failed write leaves no partial file."""
+    handle, name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(handle, "wb") as out:
+            out.write(data)
+        os.replace(name, path)
+    except BaseException:
+        Path(name).unlink(missing_ok=True)
+        raise
 
 
 def quiz_to_tex(document: Mapping[str, Any], content_units: Sequence[str]) -> str:
@@ -262,7 +280,7 @@ def _check(text: str, path: str, *, braces: bool = True) -> None:
         if depth < 0:
             break
     if depth != 0:
-        raise TexExportError(f"{path}: unbalanced braces")
+        raise TexExportError(f"{path}: unbalanced braces (\\{{ and \\}} count as braces)")
 
 
 def _verbatim(text: str) -> str:
