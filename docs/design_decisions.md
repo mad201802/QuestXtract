@@ -593,7 +593,7 @@ and does not re-import; if the parser changes, this writer has to follow.
 | FR9 progress for long recordings | `Progress = Callable[[str, float], None]`, emitted once per stage by the runner (#14) | done for stage granularity |
 | FR10 show detection confidence | `QAPair.confidence` + `confidence_label` + `reasons` | done |
 | FR11 filter by time/topic | time: `filter_questions` / `filter_document` over `QAPair.start` / exported `start`, half-open `[start, end)` (#16). topic: experimental `topic=` on the same functions, matching `segments[].topic`; `Segment` is a *time* unit, not a topic one (architecture.md 3.2), so the label is still missing | time done, topic unbacked (experimental hook) |
-| NFR1 Python ≥ 3.10, Linux/macOS/Windows | Linux CI on Python 3.10 (macOS, Windows untested); no system binaries, no ffmpeg on PATH | done |
+| NFR1 Python ≥ 3.10, Linux/macOS/Windows | Linux CI on Python 3.10, the wheel installed fresh and run on 3.10 and 3.13 (macOS, Windows untested); no system binaries, no ffmpeg on PATH | done |
 | NFR2 recall ≥ 50 % on labelled set | #11 dataset under `tests/data/`, `evaluate.py` harness (#12) | stub |
 | NFR3 docstrings, type hints, tests, ≥ 70 % coverage | ruff `D` rules, mypy strict, pytest gate | done |
 | NFR4 tested on every PR | GitHub Actions (#19) | done |
