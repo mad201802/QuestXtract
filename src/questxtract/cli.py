@@ -362,7 +362,8 @@ def _check_endpoint(config: Config, what: str, *, model_flag: str, vision: bool 
         if is_ntnu(url):
             raise ValueError(
                 f"{what} goes to NTNU's LLM service ({NTNU_LLM_URL}, NTNU network or VPN), so "
-                f"it needs {NTNU_KEY_ENV} in the environment or .env; {openai_hint}"
+                f"it needs {NTNU_KEY_ENV} in the environment, in .env or saved in the app; "
+                f"{openai_hint}"
             )
         raise ValueError(
             f"{what} goes to OpenAI, so it needs {OPENAI_KEY_ENV} in the environment or .env, "

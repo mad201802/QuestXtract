@@ -531,3 +531,86 @@ def test_the_judge_model_is_open_only_for_the_llm_detector(window):
     window._refresh()
     assert _enabled(window.controls["llm_model"])
     assert "--llm-model" in gui_run.to_argv(TRANSCRIPT, "questions", window._values())
+
+
+# --- the NTNU key window (#189) ------------------------------------------------------------
+
+
+def _key_dialog(root: Any, monkeypatch: pytest.MonkeyPatch, answer: str):
+    from questxtract.gui import key_dialog, keys
+
+    monkeypatch.setattr(keys, "check_key", lambda key: answer)
+    return key_dialog.KeyDialog(root)
+
+
+def test_the_window_has_a_key_button_that_opens_the_key_window(window, monkeypatch):
+    opened: list[object] = []
+    monkeypatch.setattr(gui_window, "KeyDialog", lambda root, **kwargs: opened.append(kwargs))
+
+    window._open_key_dialog()
+
+    assert len(opened) == 1 and opened[0]["on_change"] == window._refresh
+    assert any(
+        str(widget.cget("text")) == i18n.tr("button.ntnu_key")
+        for widget, key in window.static_texts
+        if key == "button.ntnu_key"
+    )
+
+
+def test_save_in_the_key_window_stores_the_key_and_empties_the_field(root, monkeypatch):
+    from questxtract.config import Config
+
+    dialog = _key_dialog(root, monkeypatch, "accepted")
+    dialog.key.set("ntnu-typed")
+
+    dialog.save()
+    _pump(root, lambda: not dialog.busy, timeout=5)
+
+    assert Config().api_key == "ntnu-typed"
+    assert dialog.message.cget("text") == i18n.tr("key.saved")
+    assert dialog.key.get() == ""
+    assert dialog.source.cget("text") == i18n.tr("key.source.file")
+
+
+def test_a_refused_key_is_not_saved_and_says_so(root, monkeypatch):
+    from questxtract.config import Config
+
+    dialog = _key_dialog(root, monkeypatch, "refused")
+    dialog.key.set("wrong")
+
+    dialog.save()
+    _pump(root, lambda: not dialog.busy, timeout=5)
+
+    assert Config().api_key is None
+    assert dialog.message.cget("text") == i18n.tr("key.refused")
+
+
+def test_test_only_tests_and_an_unusable_key_is_told_at_once(root, monkeypatch):
+    from questxtract.config import Config
+
+    dialog = _key_dialog(root, monkeypatch, "unreachable")
+    dialog.key.set("has space")
+    dialog.test()
+    assert "key" in dialog.message.cget("text") and not dialog.busy
+
+    dialog.key.set("fine")
+    dialog.test()
+    _pump(root, lambda: not dialog.busy, timeout=5)
+
+    assert dialog.message.cget("text") == i18n.tr("key.unreachable")
+    assert Config().api_key is None
+
+
+def test_remove_in_the_key_window_removes_the_saved_key(root, monkeypatch):
+    from questxtract.config import Config
+
+    dialog = _key_dialog(root, monkeypatch, "accepted")
+    dialog.key.set("ntnu-typed")
+    dialog.save()
+    _pump(root, lambda: not dialog.busy, timeout=5)
+
+    dialog.remove()
+    assert dialog.message.cget("text") == i18n.tr("key.removed")
+    assert Config().api_key is None
+    dialog.remove()
+    assert dialog.message.cget("text") == i18n.tr("key.nothing_to_remove")
