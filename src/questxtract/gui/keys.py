@@ -92,10 +92,11 @@ def key_source() -> str | None:
 
     """
     names = (NTNU_KEY_ENV, OLD_NTNU_KEY_ENV)
-    if any(name in os.environ for name in names):
-        return "environment"
-    if any(_dotenv_api_key(name) is not None for name in names):
-        return "dotenv"
+    for name in names:
+        if name in os.environ:
+            return "environment"
+        if _dotenv_api_key(name) is not None:
+            return "dotenv"
     if any(_dotenv_api_key(name, user_env_path()) is not None for name in names):
         return "file"
     return None

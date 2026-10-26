@@ -122,6 +122,8 @@ def test_the_source_follows_the_order_a_run_uses(monkeypatch):
     Path(".env").write_text("IDUN_API_KEY=d\n", encoding="utf-8")
     assert keys.key_source() == "dotenv"
     monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "old-name")
+    assert keys.key_source() == "dotenv"  # IDUN_API_KEY in .env wins over the old name
+    monkeypatch.setenv("IDUN_API_KEY", "e")
     assert keys.key_source() == "environment"
 
 

@@ -278,16 +278,23 @@ def endpoint_key(url: str | None) -> str | None:
     """
     if not is_ntnu(url):
         return _read_key(OPENAI_KEY_ENV)
-    key = _read_key(NTNU_KEY_ENV)
-    return key if key is not None else _read_key(OLD_NTNU_KEY_ENV)
+    names = (NTNU_KEY_ENV, OLD_NTNU_KEY_ENV)
+    for name in names:
+        key = _read_key(name)
+        if key is not None:
+            return key
+    for name in names:  # the app's key file comes after both names in the environment and .env
+        key = _dotenv_api_key(name, user_env_path())
+        if key is not None:
+            return key
+    return None
 
 
 def _read_key(name: str) -> str | None:
-    """Return ``name`` from the environment, else cwd's ``.env``, else the user's key file."""
+    """Return ``name`` from the environment, else from cwd's ``.env``."""
     if name in os.environ:
         return os.environ[name]
-    value = _dotenv_api_key(name)
-    return value if value is not None else _dotenv_api_key(name, user_env_path())
+    return _dotenv_api_key(name)
 
 
 def user_env_path() -> Path:

@@ -449,3 +449,26 @@ def test_the_saved_key_never_goes_to_another_service(monkeypatch):
     assert endpoint_key("https://llm.hpc.ntnu.no/v1") == "ntnu-saved"
     assert endpoint_key("https://api.openai.com/v1") is None
     assert endpoint_key("http://localhost:11434/v1") is None
+
+
+def test_the_former_name_in_the_environment_or_dotenv_beats_the_saved_key(monkeypatch):
+    from questxtract.config import save_user_key
+
+    save_user_key("saved")
+    Path(".env").write_text("QUESTXTRACT_NTNU_API_KEY=dotenv-old\n", encoding="utf-8")
+    assert Config().api_key == "dotenv-old"
+    monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "environment-old")
+    assert Config().api_key == "environment-old"
+
+
+def test_only_the_ntnu_key_is_read_from_the_key_file():
+    from questxtract.config import save_user_key
+
+    path = save_user_key("ntnu-saved")
+    path.write_text(
+        path.read_text(encoding="utf-8") + "OPENAI_API_KEY=sk-file\nQUESTXTRACT_VISION_API_KEY=v\n",
+        encoding="utf-8",
+    )
+
+    assert Config(base_url="https://api.openai.com/v1").api_key is None
+    assert Config(vision_base_url="https://vision.example/v1").vision_api_key is None

@@ -111,6 +111,8 @@ class KeyDialog:
                 self.answers.put(work(text))
             except (OSError, ValueError) as exc:
                 self.answers.put(f"!{exc}")
+            except Exception:  # an answer must come; the text may hold the key, so it is not shown
+                self.answers.put("unreachable")
 
         threading.Thread(target=worker, daemon=True).start()
 
