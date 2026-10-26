@@ -914,8 +914,8 @@ with the endpoint, not with the caller:
 
 The service is told by the URL's host alone. So the OpenAI key is never sent to NTNU, the NTNU
 key never leaves it, and neither goes to a host set up for vision alone. Each key is read from
-its variable, in the environment or the working directory's `.env`, never from
-`questxtract.toml`, and hidden in error messages. The CLI checks the key of every endpoint a run
+its variable, in the environment or the working directory's `.env` (the NTNU key also from the
+user's key file, cli.md "API keys and .env"), never from `questxtract.toml`, and hidden in error messages. The CLI checks the key of every endpoint a run
 will use before anything slow starts, and refuses a model name from the other service: every
 model on NTNU's is named `organisation/model`, and no OpenAI model has a `/`.
 
@@ -1112,7 +1112,9 @@ the working directory is read if present. `load_config` checks keys against the 
 and values against their annotations. The CLI validates the resulting choices and ranges before
 running stages or writing output. Relative paths remain relative to the working directory.
 `Config.api_key` and `Config.vision_api_key` read the key for their endpoint (10.1) from the
-environment first, then from that directory's UTF-8 `.env` file. It never stores the key in the dataclass or expands shell expressions.
+environment first, then from that directory's UTF-8 `.env` file, and for NTNU's key then from the
+per-user file `config.user_env_path()` that the app writes. It never stores the key in the
+dataclass or expands shell expressions.
 Secret-like TOML keys are rejected. Library callers can use `load_config` from `config.py`
 explicitly; constructing `Config()` alone does not read TOML.
 
@@ -1526,6 +1528,8 @@ src/questxtract/
     options.py     one table of the CLI options the app shows, checked against the CLI
     run.py         form values -> the CLI's argv -> cli.execute; no pipeline of its own
     state.py       what the form holds, what Run needs, progress fractions (no tkinter)
+    keys.py        the NTNU key: test, save, remove, where it is read from (no tkinter)
+    key_dialog.py  the key window: a masked field, Test, Save, Remove
     window.py      the tkinter window, classic ttk look; drag and drop via tkinterdnd2
 
 tests/            flat, one test module per source module, plus conftest.py
@@ -1584,7 +1588,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `qti.py`, `qti_package.py`, `qti_v2.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 and 2.1 packages of a `quiz.json` (12.4) | |
 | `tex.py` | not a stage | done: the ExerPlaza TeX of a `quiz.json` (12.5); the direct export to ExerPlaza is #37 | |
 | `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz`, `qti` and `tex` work ([cli.md](cli.md)); `process --vision --detector llm --quiz` runs every stage and the quiz in one run, tested offline | |
-| `gui/` | not a stage | done: the window and its run launcher (`questxtract gui`, 13.1); it runs the CLI's code and does not review or edit questions (14) | |
+| `gui/` | not a stage | done: the window, its run launcher and the NTNU key window (`questxtract gui`, 13.1); it runs the CLI's code and does not review or edit questions (14) | |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
 running list of what this document describes and the code does not yet do.

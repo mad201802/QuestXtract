@@ -317,3 +317,135 @@ def test_any_spelling_of_ntnus_url_gets_the_ntnu_key(monkeypatch, url):
     monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
     assert Config(base_url=url).api_key == "ntnu-key"
     assert Config(base_url="https://api.openai.com/v1").api_key == "sk-openai"
+
+
+# --- the key the app saves (#189) ---------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("platform", "setup", "expected"),
+    [
+        ("win32", {"APPDATA": "{tmp}/roaming"}, "{tmp}/roaming/questxtract/.env"),
+        ("darwin", {}, "{home}/Library/Application Support/questxtract/.env"),
+        ("linux", {"XDG_CONFIG_HOME": "{tmp}/xdg"}, "{tmp}/xdg/questxtract/.env"),
+        ("linux", {}, "{home}/.config/questxtract/.env"),
+        ("linux", {"XDG_CONFIG_HOME": "relative"}, "{home}/.config/questxtract/.env"),
+    ],
+)
+def test_the_key_file_is_in_each_systems_config_folder(
+    monkeypatch, tmp_path, platform, setup, expected
+):
+    from questxtract.config import user_env_path
+
+    monkeypatch.setattr("sys.platform", platform)
+    for name, value in setup.items():
+        monkeypatch.setenv(name, value.format(tmp=tmp_path))
+    home = Path.home()
+    assert user_env_path() == Path(expected.format(tmp=tmp_path, home=home))
+
+
+def test_a_saved_key_is_found_from_any_working_directory(monkeypatch, tmp_path):
+    from questxtract.config import save_user_key
+
+    path = save_user_key("  ntnu-saved\n")
+    other = tmp_path / "elsewhere"
+    other.mkdir()
+    monkeypatch.chdir(other)
+
+    assert path.read_text(encoding="utf-8") == 'IDUN_API_KEY="ntnu-saved"\n'
+    assert Config().api_key == "ntnu-saved"
+
+
+def test_the_environment_beats_dotenv_beats_the_saved_key(monkeypatch):
+    from questxtract.config import save_user_key
+
+    save_user_key("saved")
+    assert Config().api_key == "saved"
+    Path(".env").write_text("IDUN_API_KEY=dotenv\n", encoding="utf-8")
+    assert Config().api_key == "dotenv"
+    monkeypatch.setenv("IDUN_API_KEY", "environment")
+    assert Config().api_key == "environment"
+
+
+def test_saving_keeps_the_other_lines_and_replaces_the_key_line():
+    from questxtract.config import save_user_key, user_env_path
+
+    path = user_env_path()
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        '# mine\nOPENAI_API_KEY=sk-1\nIDUN_API_KEY="old"\n\nexport IDUN_API_KEY=older\nOTHER=1',
+        encoding="utf-8",
+    )
+
+    save_user_key("new")
+
+    assert path.read_text(encoding="utf-8") == (
+        '# mine\nOPENAI_API_KEY=sk-1\nIDUN_API_KEY="new"\n\nOTHER=1\n'
+    )
+
+
+def test_the_key_file_is_private_and_leaves_no_temporary_file():
+    import os
+    import stat
+    import sys
+
+    from questxtract.config import save_user_key
+
+    path = save_user_key("secret")
+
+    assert [p.name for p in path.parent.iterdir()] == [".env"]
+    if sys.platform != "win32":
+        assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+
+
+@pytest.mark.parametrize(
+    "key", ["", "   ", "a b", 'a"b', "a'b", "a\\b", "a$b", "a`b", "a\nb", "a\tb"]
+)
+def test_a_key_the_reader_would_refuse_is_refused_and_nothing_is_written(key):
+    from questxtract.config import save_user_key, user_env_path
+
+    with pytest.raises(ValueError, match="key"):
+        save_user_key(key)
+    assert not user_env_path().exists()
+
+
+def test_removing_keeps_other_lines_and_deletes_an_emptied_file():
+    from questxtract.config import remove_user_key, save_user_key, user_env_path
+
+    assert remove_user_key() is False  # no file at all
+    path = save_user_key("k")
+    path.write_text(path.read_text(encoding="utf-8") + "OTHER=1\n", encoding="utf-8")
+
+    assert remove_user_key() is True
+    assert path.read_text(encoding="utf-8") == "OTHER=1\n"
+    assert remove_user_key() is False
+    path.write_text('IDUN_API_KEY="k"\n\n', encoding="utf-8")
+    assert remove_user_key() is True
+    assert not user_env_path().exists()
+    assert Config().api_key is None
+
+
+def test_a_failed_write_leaves_the_old_key_and_no_temporary_file(monkeypatch):
+    from questxtract.config import save_user_key
+
+    path = save_user_key("old")
+
+    def broken(*_args):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr("questxtract.config.os.replace", broken)
+    with pytest.raises(OSError, match="No space"):
+        save_user_key("new")
+
+    assert path.read_text(encoding="utf-8") == 'IDUN_API_KEY="old"\n'
+    assert [p.name for p in path.parent.iterdir()] == [".env"]
+
+
+def test_the_saved_key_never_goes_to_another_service(monkeypatch):
+    from questxtract.config import endpoint_key, save_user_key
+
+    save_user_key("ntnu-saved")
+
+    assert endpoint_key("https://llm.hpc.ntnu.no/v1") == "ntnu-saved"
+    assert endpoint_key("https://api.openai.com/v1") is None
+    assert endpoint_key("http://localhost:11434/v1") is None

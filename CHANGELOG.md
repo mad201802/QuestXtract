@@ -4,6 +4,13 @@
 
 ### Added
 
+- The app saves the NTNU key for you: the **NTNU key...** button on the start view opens a window
+  where you paste the key and press Test (NTNU's service is asked once), Save or Remove. The key is
+  saved as plain text in `questxtract/.env` in your user config folder (`%APPDATA%` on Windows,
+  `~/Library/Application Support` on macOS, `~/.config` elsewhere), so every run finds it, from
+  any folder. A key NTNU refuses is not saved; a key that could not be tested (off the NTNU
+  network or VPN) is saved with a note. The CLI reads the same file, after the environment and
+  `.env`. (#189)
 - `questxtract gui` opens a window for people who do not use a terminal: drop or browse a
   recording (`.mp4`, `.mp3`) or a transcript (`.json`), choose questions, transcript, quiz or QTI
   package, set the options (the CLI's own, with its defaults) and press Run. It runs the CLI's code,

@@ -138,7 +138,9 @@ endpoint: NTNU's LLM service, the default, reads `IDUN_API_KEY`; OpenAI and any 
 endpoint read `OPENAI_API_KEY`, so neither key is ever sent to the other service. NTNU's service
 needs the NTNU network or VPN, and NTNU asks that heavy use wait until after 18:00 or the
 weekend. QuestXtract reads each key from the environment, or from a local `.env` (see
-[docs/cli.md](docs/cli.md#api-keys-and-env)); there is no `--api-key` flag and TOML files
+[docs/cli.md](docs/cli.md#api-keys-and-env)); in the graphical app, the **NTNU key...** button
+saves the NTNU key for you, as plain text in a file in your user config folder (the steps below
+keep it safer); there is no `--api-key` flag and TOML files
 reject secrets, so a key never sits in the repository or in your shell history. The steps below
 use the NTNU key; for an OpenAI key, use `openai` and `OPENAI_API_KEY` in its place. The setup
 below keeps it in your system's password store (the Keychain on macOS, Credential Manager on
