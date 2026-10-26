@@ -140,6 +140,9 @@
 
 ### Changed
 
+- NTNU's LLM service (the default endpoint) reads its key from `IDUN_API_KEY`, in the environment
+  or `.env`. `QUESTXTRACT_NTNU_API_KEY`, its former name, is still read when `IDUN_API_KEY` is not
+  set, so nothing has to be renamed. (#124)
 - The LLM detector and the quiz send no reasoning setting by default (`reasoning_effort = ""`,
   the same as `--llm-reasoning server`). Only `--llm-reasoning low`, `medium` or `high` now raise
   the request timeout to 10 minutes; `server` keeps 2 minutes, so set `timeout_seconds` for a
@@ -196,6 +199,13 @@
 
 ### Fixed
 
+- The quiz no longer drops an item because two options differ only by a sign (`-2` and `2`) or a
+  decimal point (`1.5` and `15`): the sameness check keeps minus signs, operators and a point or
+  comma inside a number. The quiz prompt (now `v1`) leaves out check-ins on the class, names the
+  real expression from the board, and makes the model work the answer out instead of copying a
+  lecturer's answer that does not fit the stem. (#124)
+- The transcription bar starts moving while the recording is decoded to audio (the first tenth of
+  the bar) instead of sitting at 0 % until the first words arrive. (#124)
 - The rules detector penalises framing questions without content words ("So how do we do
   that?") and excludes their adjacent answer seeds, so they stay below the default output
   threshold. Questions naming a concept and questions with negation remain eligible. (#49)

@@ -26,12 +26,13 @@ from ..pipeline import Cancelled
 from . import i18n, state
 from . import run as gui_run
 from .i18n import tr
-from .options import OPTIONS, Option
+from .options import OPTIONS, OUTPUTS, Option
 
 __all__ = ["run_app"]
 
 _POLL_MS = 100
 _TYPING_PAUSE_MS = 150  # how long the form must be still before its checks run
+_OUTPUT_OPTION = next(option for option in OPTIONS if option.dest == "output")
 
 
 def run_app() -> int:
@@ -118,6 +119,7 @@ class QuestXtractWindow:
         if "classic" in style.theme_names():
             style.theme_use("classic")
         self._build()
+        self.output.trace_add("write", lambda *_: self._output_changed())
         self._enable_drop(drag_and_drop)
         self._retranslate()
         root.after(_POLL_MS, self._poll)
@@ -326,19 +328,29 @@ class QuestXtractWindow:
         return state.form_values(raw)
 
     def _output_path(self) -> Path | None:
-        """Return the file to write: the output field, else the output's default (QTI only)."""
+        """Return the file to write: the output field where it is shown, else the default."""
+        output = self.output.get()
         text = str(self.fields["output"].get()).strip()
-        if text:
+        if text and gui_run.applies(_OUTPUT_OPTION, output):
             return Path(text)
-        return state.default_output(self.source, self.output.get())
+        return state.default_output(self.source, output)
+
+    def _output_changed(self) -> None:
+        """Forget the file typed for the last output, so a new output never writes over it."""
+        field = self.fields["output"]
+        if isinstance(field, tk.StringVar):  # a path field, never a checkbox
+            field.set("")
+        self._refresh()
 
     def _problem(self) -> str | None:
         """Why Run is disabled now, or ``None``; checked again when the form or file changes."""
         values = self._values()
         output = self.output.get()
         output_path = self._output_path()
-        stamp = _file_stamp(self.source)
-        key = (self.source, output, tuple(sorted(values.items())), output_path, stamp)
+        # The settings file and .env are part of the check, so an edit to them counts too.
+        settings = Path(values.get("config") or "questxtract.toml")
+        stamps = (_file_stamp(self.source), _file_stamp(settings), _file_stamp(Path(".env")))
+        key = (self.source, output, tuple(sorted(values.items())), output_path, stamps)
         if self._problem_memo is None or self._problem_memo[0] != key:
             self._problem_memo = (key, state.run_problem(self.source, output, values, output_path))
         return self._problem_memo[1]
@@ -416,11 +428,12 @@ class QuestXtractWindow:
     def _browse_into(self, option: Option, var: tk.Variable) -> None:
         """Ask the system dialog for the file an option names, and put it in its control."""
         if option.dest == "output":
+            kind = ("ZIP", ".zip") if OUTPUTS[self.output.get()] == "qti" else ("JSON", ".json")
             name = filedialog.asksaveasfilename(
                 parent=self.root,
                 title=tr("dialog.output"),
-                defaultextension=".json",
-                filetypes=[("JSON", "*.json"), (tr("filetype.all"), "*.*")],
+                defaultextension=kind[1],
+                filetypes=[(kind[0], f"*{kind[1]}"), (tr("filetype.all"), "*.*")],
             )
         else:
             name = filedialog.askopenfilename(
@@ -445,6 +458,9 @@ class QuestXtractWindow:
         """Start the run on a worker thread; the window keeps answering while it works."""
         source = self.source
         if source is None or self.busy:
+            return
+        if self._problem() is not None:  # a value typed just now, before its check ran
+            self._refresh()
             return
         self.busy = True
         self.run_output = self.output.get()

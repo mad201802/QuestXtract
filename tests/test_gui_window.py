@@ -430,3 +430,77 @@ def test_a_failed_drag_and_drop_start_leaves_one_root_and_binds_the_variables_to
         assert var._root is root
     finally:
         root.destroy()
+
+
+def _counting_checks(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Count the window's calls to the run check."""
+    calls: list[int] = []
+    real = state.run_problem
+
+    def counted(*args: Any, **kwargs: Any) -> str | None:
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(state, "run_problem", counted)
+    return calls
+
+
+def test_typing_is_checked_once_after_a_pause(window, monkeypatch):
+    """Keystrokes in a row cost one check, after typing pauses, not one per key."""
+    window.choose_source(TRANSCRIPT)
+    calls = _counting_checks(monkeypatch)
+
+    for text in ("0", "0.", "0.5"):
+        window.fields["threshold"].set(text)
+    assert calls == []  # nothing checked while typing
+
+    time.sleep(gui_window._TYPING_PAUSE_MS / 1000 + 0.1)
+    window.root.update()
+    assert len(calls) == 1
+
+
+def test_an_unchanged_form_is_not_checked_again(window, monkeypatch):
+    """A refresh with the same form, file and settings reuses the last check."""
+    window.choose_source(TRANSCRIPT)
+    calls = _counting_checks(monkeypatch)
+
+    window._refresh()
+    window._refresh()
+    assert calls == []  # choose_source already checked this form
+
+
+def test_run_checks_a_value_typed_just_before_it(window):
+    """Run during the typing pause re-checks, so a bad value never starts a run."""
+    window.choose_source(TRANSCRIPT)
+    window.fields["threshold"].set("2")  # its check has not run yet
+
+    window._run()
+
+    assert not window.busy
+    assert "between 0 and 1" in window.hint.cget("text")
+
+
+def test_a_new_output_does_not_reuse_the_file_typed_for_the_last(window, tmp_path):
+    """A path typed for Questions is not written by Transcript or QTI."""
+    window.choose_source(TRANSCRIPT)
+    questions = tmp_path / "lecture.questions.json"
+    window.fields["output"].set(str(questions))
+    assert window._output_path() == questions
+
+    window.output.set("qti")
+    assert window.fields["output"].get() == ""
+    assert window._output_path() != questions
+
+
+def test_browse_for_the_qti_package_suggests_a_zip(window, monkeypatch):
+    """The save dialog names the ZIP for QTI, not a JSON file."""
+    asked: dict[str, Any] = {}
+    monkeypatch.setattr(
+        gui_window.filedialog, "asksaveasfilename", lambda **kwargs: asked.update(kwargs) or ""
+    )
+    output = next(option for option in OPTIONS if option.dest == "output")
+
+    window.output.set("qti")
+    window._browse_into(output, window.fields["output"])
+
+    assert asked["defaultextension"] == ".zip"
