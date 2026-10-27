@@ -175,6 +175,34 @@ does not connect to ExerPlaza.
 | `--content-unit` | a name | required | An ExerPlaza content unit for every question. Repeat it for more than one. Spell it exactly as in ExerPlaza: any other spelling creates a new, unlinked unit. No braces, one line. |
 | `-h`, `--help` | nothing | | Shows the options. |
 
+### `questxtract exerplaza <quiz.json>`
+
+Sends a quiz file straight to ExerPlaza, with no file to upload by hand. It logs in with your
+ExerPlaza email and password, from `QUESTXTRACT_EXERPLAZA_EMAIL` and
+`QUESTXTRACT_EXERPLAZA_PASSWORD` (see [API keys and .env](#api-keys-and-env)), and ExerPlaza
+saves the quiz in one go: a quiz in your course session, one multiple-choice question per item,
+with its options, a solution explaining every option, notes for the teachers on where the
+question was asked and which model wrote the text, and the mark that the text was generated.
+Pending items are visible only to you in ExerPlaza, accepted ones to everybody; rejected ones are
+not sent. Either every question is saved or none is.
+
+Sending the same quiz again updates the quiz and its questions instead of adding new ones. A
+question students have already answered is left as it is and listed as skipped, so their answers
+never change. Nothing is ever deleted in ExerPlaza.
+
+On success it prints `ExerPlaza quiz <id> (created): 3 created, 0 updated, 0 skipped`, then
+one line per skipped question. The quiz is checked before anything is sent, and a broken item
+fails naming the field, as with `qti` and `tex`. The password is never shown. The ExerPlaza
+server needs the import endpoint; without it, the command fails with HTTP 404 and `tex` is the
+way in.
+
+| Option | Takes | Default | What it does |
+|---|---|---|---|
+| `--url` | an address | required | ExerPlaza's address, such as `https://exerplaza.example.org`. It must be `https`, because your password goes with the login; plain `http` only for `localhost`. |
+| `--course-session` | a number | required | The course session the quiz belongs to: the number at the end of its page's address in ExerPlaza, `/course/session/<number>`. You must be a teacher of it. |
+| `--content-unit` | a name | required | An ExerPlaza content unit for every question. Repeat it for more than one. Spell it exactly as in ExerPlaza: any other spelling creates a new, unlinked unit. One line. |
+| `-h`, `--help` | nothing | | Shows the options. |
+
 ### Everywhere
 
 | Option | What it does |
@@ -311,6 +339,12 @@ for a safer store, keep it in your password store and load it into the environme
 This reader does not run shell commands or expand variables. If your setup uses a password
 store and a shell script to retrieve the key, load it into the environment before running
 QuestXtract. That environment value wins, so the `.env` reader is not used in that case.
+
+**The ExerPlaza login.** `exerplaza` reads your ExerPlaza email and password from
+`QUESTXTRACT_EXERPLAZA_EMAIL` and `QUESTXTRACT_EXERPLAZA_PASSWORD`, in the environment or in
+`.env` in the working directory, the same way: never from the command line, where the shell
+history would keep it, and never from the app's key file. A password containing `$` or a backtick
+cannot go in `.env`; set it in the environment.
 
 ### Setting up the API key
 
@@ -458,6 +492,18 @@ questxtract tex lecture.quiz.json -o lecture.tex --content-unit "Improper integr
 Upload `lecture.tex` at `/questions/upload/tex` in ExerPlaza, check the preview and save. On a
 re-upload, ExerPlaza asks about every question whose text it already has: choose Cancel, because
 Overwrite deletes the existing question and the students' answers to it.
+
+**Send a quiz straight to ExerPlaza**
+
+```bash
+export QUESTXTRACT_EXERPLAZA_EMAIL=you@example.org
+read -rs QUESTXTRACT_EXERPLAZA_PASSWORD && export QUESTXTRACT_EXERPLAZA_PASSWORD
+questxtract exerplaza lecture.quiz.json --url https://exerplaza.example.org \
+    --course-session 42 --content-unit "Improper integrals"
+```
+
+The number 42 comes from the course session's page, `/course/session/42`. Run it again after
+editing the quiz: the questions are updated, except those students have already answered.
 
 **See which questions the threshold threw away.** This is a development tool, not a CLI
 command:
@@ -695,6 +741,13 @@ is not the cache, so it works on a first run too ([architecture.md 6.5](architec
 | `judge: <endpoint>: ... reasoning_effort` (HTTP 400) | The model has no reasoning setting (`gpt-4o`) or rejects `none` (Qwen), and `--llm-reasoning none` or the settings file sends it. Pass `--llm-reasoning server`. |
 | `judge: <endpoint>: no answer within 120 s, twice` | The model did not answer one request in time, and not on a second try either. DeepSeek thinks unless told not to: pass `--llm-reasoning none`. With another thinking model, pass a `--llm-reasoning` level, which allows 10 minutes; otherwise the provider is overloaded, try again later. |
 | `judge: <model> did not return the expected JSON, twice` | The model could not follow the output format. Try a larger model; rerun to try again. |
+| `exerplaza: set QUESTXTRACT_EXERPLAZA_EMAIL ...` / `... PASSWORD ...` | Put your ExerPlaza email and password in the environment or `.env` (see [API keys and .env](#api-keys-and-env)). |
+| `exerplaza: url: http://... is not encrypted ...` | Use the `https://` address; plain `http` is for a local ExerPlaza only. |
+| `exerplaza: POST .../login: ExerPlaza refused the login ...` | Wrong email or password, or a disabled account: try them on ExerPlaza's login page. |
+| `exerplaza: POST .../api/v1/quizzes/import: ... HTTP 403 ...` / `... HTTP 404 Not Found: course session ...` | You do not teach that course session, or the number is wrong: check it in the page's address. |
+| `exerplaza: ... HTTP 404, not a JSON answer ...` | This ExerPlaza has no import endpoint yet, or `--url` points elsewhere. Use `tex` meanwhile. |
+| `exerplaza: ... HTTP 422 ...` with `questions[...]` lines | ExerPlaza refused the quiz; each line names the item and field, as ExerPlaza sent them. Nothing was saved. |
+| `exerplaza: ...: cannot reach ExerPlaza (...)` / `no answer within 30 s` | Check the address and your network or VPN; try again later. |
 | `judge: <model> judged none of the N candidates; ...` | The endpoint answered, but in a shape other than the one asked for, so no candidate was judged. Check that the server supports structured output (`response_format`); try another model or server. |
 
 A missing file or wrong file type is caught before anything runs, and so is `--detector llm`

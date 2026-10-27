@@ -1,4 +1,4 @@
-"""CLI: ``process``, ``transcribe``, ``filter``, ``eval``, ``quiz``, ``qti`` and ``tex``.
+"""CLI: ``process``, ``transcribe``, ``filter``, ``eval``, ``quiz`` and the three exports.
 
 Every command and option, with recipes: docs/cli.md.
 """
@@ -18,6 +18,8 @@ from typing import NoReturn
 
 from . import __version__
 from .config import (
+    EXERPLAZA_EMAIL_ENV,
+    EXERPLAZA_PASSWORD_ENV,
     NTNU_KEY_ENV,
     NTNU_LLM_URL,
     OPENAI_KEY_ENV,
@@ -28,6 +30,7 @@ from .config import (
     load_config,
 )
 from .evaluate import evaluate, evaluate_vision, format_report, format_vision_report
+from .exerplaza import ExerPlazaExportError, export_exerplaza
 from .export import read_questions, result_to_json, write_questions
 from .filtering import filter_document
 from .models import Context, Progress, Sentence, Stage, Transcript
@@ -135,6 +138,17 @@ _TRANSCRIBE_EXAMPLES = """\
 examples:
   questxtract transcribe lecture.mp4                     writes lecture.transcript.json
   questxtract transcribe lecture.mp4 -m small -o t.json  smaller model, custom path
+"""
+
+_EXERPLAZA_EXAMPLES = f"""\
+examples:
+  questxtract exerplaza lecture.quiz.json --url https://exerplaza.example.org \\
+      --course-session 42 --content-unit "Improper integrals"
+                                                         a quiz in course session 42
+  questxtract exerplaza lecture.quiz.json --url http://localhost:54321 \\
+      --course-session 1 --content-unit Sorting          a local ExerPlaza
+
+the login: {EXERPLAZA_EMAIL_ENV} and {EXERPLAZA_PASSWORD_ENV}, in the environment or .env
 """
 
 _FILTER_EXAMPLES = """\
@@ -856,6 +870,31 @@ def _tex(args: argparse.Namespace) -> int:
     return 0
 
 
+def _exerplaza(args: argparse.Namespace) -> int:
+    """Send quiz.json to ExerPlaza's import endpoint."""
+    try:
+        result = export_exerplaza(
+            args.quiz,
+            url=args.url,
+            course_session=args.course_session,
+            content_units=args.content_units,
+        )
+    except ExerPlazaExportError as exc:
+        print(f"error: exerplaza: {exc}", file=sys.stderr)
+        return 1
+    outcomes = [item.outcome for item in result.items]
+    print(
+        f"ExerPlaza quiz {result.quiz_uid} ({result.quiz_outcome}): "
+        f"{outcomes.count('created')} created, {outcomes.count('updated')} updated, "
+        f"{outcomes.count('skipped')} skipped",
+        file=sys.stderr,
+    )
+    for item in result.items:
+        if item.outcome == "skipped":
+            print(f"  skipped {item.ref}: {item.reason or 'no reason given'}", file=sys.stderr)
+    return 0
+
+
 class _QuietParser(argparse.ArgumentParser):
     """A parser whose errors raise ``ValueError`` instead of printing usage and exiting."""
 
@@ -1176,6 +1215,42 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         "in ExerPlaza: any other spelling creates a new, unlinked unit",
     )
     tex.set_defaults(handler=_tex)
+
+    exerplaza = subs.add_parser(
+        "exerplaza",
+        help="send quiz.json to ExerPlaza, as a quiz in a course session",
+        description="Send a quiz to ExerPlaza's import endpoint, logged in with your ExerPlaza "
+        f"email and password from {EXERPLAZA_EMAIL_ENV} and {EXERPLAZA_PASSWORD_ENV}. "
+        "Rejected items are not sent; pending ones are visible only to you in ExerPlaza. "
+        "Sending the same quiz again updates its questions, except those students have answered.",
+        epilog=_EXERPLAZA_EXAMPLES,
+        formatter_class=raw,
+    )
+    exerplaza.add_argument("quiz", help="a quiz.json")
+    exerplaza.add_argument(
+        "--url",
+        required=True,
+        metavar="URL",
+        help="ExerPlaza's address, e.g. https://exerplaza.example.org (http for localhost only)",
+    )
+    exerplaza.add_argument(
+        "--course-session",
+        required=True,
+        type=int,
+        metavar="ID",
+        help="the course session the quiz belongs to: the number at the end of its page's "
+        "address, /course/session/ID. You must teach it",
+    )
+    exerplaza.add_argument(
+        "--content-unit",
+        action="append",
+        required=True,
+        dest="content_units",
+        metavar="NAME",
+        help="an ExerPlaza content unit for every question; repeat for more. Spell it exactly as "
+        "in ExerPlaza: any other spelling creates a new, unlinked unit",
+    )
+    exerplaza.set_defaults(handler=_exerplaza)
 
     return parser
 

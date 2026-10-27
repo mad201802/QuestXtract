@@ -8,6 +8,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from .asr import AsrBackend, register_backend, resolve_backend
 from .config import Config
+from .exerplaza import ExerPlazaExportError, ExerPlazaImport, ExerPlazaItem, export_exerplaza
 from .export import read_questions, result_to_json, write_questions
 from .filtering import filter_document, filter_questions
 from .media import MediaError, extract_audio
@@ -42,6 +43,9 @@ __all__ = [
     "AsrSegment",
     "Config",
     "Context",
+    "ExerPlazaExportError",
+    "ExerPlazaImport",
+    "ExerPlazaItem",
     "Layout",
     "MediaError",
     "QAPair",
@@ -56,6 +60,7 @@ __all__ = [
     "VisualContext",
     "Word",
     "__version__",
+    "export_exerplaza",
     "extract_audio",
     "export_qti",
     "export_tex",

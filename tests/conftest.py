@@ -14,7 +14,7 @@ from questxtract import Config, Context, Sentence, Transcript, Word, endpoint
 def _isolated_from_the_developer(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
-    """Keep the developer's API keys, .env, key file and questxtract.toml out of every test.
+    """Keep the developer's keys, ExerPlaza login, .env, key file and questxtract.toml out of tests.
 
     Each test runs in its own empty ``tmp_path`` with no key in the environment, so the
     cwd-relative reads (``.env``, ``questxtract.toml``, the ``.questxtract`` cache) see
@@ -24,6 +24,8 @@ def _isolated_from_the_developer(
     monkeypatch.delenv("QUESTXTRACT_VISION_API_KEY", raising=False)
     monkeypatch.delenv("IDUN_API_KEY", raising=False)
     monkeypatch.delenv("QUESTXTRACT_NTNU_API_KEY", raising=False)
+    monkeypatch.delenv("QUESTXTRACT_EXERPLAZA_EMAIL", raising=False)
+    monkeypatch.delenv("QUESTXTRACT_EXERPLAZA_PASSWORD", raising=False)
     # The key file the app saves (config.user_env_path) lives under the home folder.
     home = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(home))

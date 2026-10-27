@@ -657,6 +657,39 @@ kept the formula in its LaTeX. It also carries a misreading forward (`FR (now)` 
 rate counts as errors, and sometimes its layout, joining several board lines into one. The
 measurement is one six-view sequence of one lecture, mostly diagram, with little text.
 
+### D28: Direct ExerPlaza export: quiz.json to an import endpoint, after ExerPlaza's own login
+
+*Chose:* `questxtract exerplaza` (#37, architecture.md 12.6) logs in through ExerPlaza's web form
+at `/login` with the teacher's email and password, then sends the `quiz.json` without its
+rejected items in one `POST` to a new import endpoint in ExerPlaza, `/api/v1/quizzes/import`.
+ExerPlaza saves it in one transaction, links the quiz to a course session given by id, and
+recognises a re-import by `<quiz id>/<item id>`. A question students have answered is skipped,
+never changed. The client uses only the standard library.
+
+*Alternative:* driving the TeX upload page's own endpoints (`/questions/upload/tex`, then
+`/questions/upload/single` per question); a personal API token in ExerPlaza, stored as a hash and
+shown once; a JSON login endpoint in ExerPlaza's API; TeX as the request body; `requests` or
+`httpx` as the HTTP client.
+
+*Why:* the upload page's endpoints save one question per request outside a transaction, create
+no quiz and no course-session link, leave `created_by_llm` false, find duplicates by text only,
+and delete students' answers on "Overwrite". A token would be safer, but ExerPlaza
+authenticates with sessions only and its maintainers want no change there; its login form
+already works for a program, as a run against ExerPlaza's own production image showed (the
+token in the page, the cookie across both uwsgi workers, a JSON `POST` with the cookie and no
+CSRF token, every refusal). A JSON login would change ExerPlaza's authentication for no gain the
+form does not give. `quiz.json` keeps what TeX drops (origins, provenance, points) and ExerPlaza
+can validate it with the schema that ships with the package. Three requests with a cookie jar do
+not need a dependency.
+
+*Cost:* the teacher's ExerPlaza password sits in the environment or a `.env`, and it opens the
+whole account, where a token could be scoped and revoked. The login depends on the form's field
+names and on the redirect back to `/login` on a failure; a copy of the form in the tests pins
+them, and a change on ExerPlaza's side fails the login with a clear message. If ExerPlaza turns
+on CSRF protection for the whole site, the import route needs an exemption. The endpoint is
+ExerPlaza's code, so the contract lives in two repositories, each with a copy of the example
+request and answer.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |
@@ -728,8 +761,8 @@ asserted a `--model` CLI flag that does not exist), which the verification step 
 ## 6. Security at the design level (→ report ch. 9; compendium touchpoints 2, 5, 6)
 
 *Assets:* lecture recordings and transcripts (may contain names and voices of students —
-personal data under GDPR if real lectures are used); the extracted question bank; later, the
-exerplaza credentials used by the uploader.
+personal data under GDPR if real lectures are used); the extracted question bank; the teacher's
+ExerPlaza email and password, which `exerplaza` reads from the environment or `.env` (D28).
 
 *Threats (STRIDE, the relevant ones):*
 - **Tampering** — an edited or hand-crafted results/transcript JSON is re-imported. Mitigated
@@ -741,11 +774,15 @@ exerplaza credentials used by the uploader.
   *can* leave the machine, and only when the caller configures an endpoint: the default
   `Config` makes zero outbound calls, and every result the pipeline produces is reachable
   without one. Pointing `base_url` at a local OpenAI-compatible server keeps even that on the
-  device. The uploader (outside the package) is the only component that always talks out.
+  device. `exerplaza` (D28) is the only command that always talks out, to the address its
+  `--url` names, over HTTPS unless that is `localhost`.
 - **Denial of service / resource exhaustion** — hour-long inputs, temp files from decoding.
   #7 owns temp-file cleanup; #14 progress reporting is also the cancellation point.
 - **Elevation of privilege / spoofing** — none inside the package: no accounts, no privileges.
-  Both reappear at the exerplaza boundary and should be threat-modelled with that module.
+  At the ExerPlaza boundary, `exerplaza` acts as the teacher whose password it holds: a stolen
+  `.env` is a stolen ExerPlaza account. Mitigated: never a CLI argument, never printed, logged or
+  stored, HTTPS required, no redirect followed, the server's text printed with control
+  characters replaced. ExerPlaza checks that the teacher teaches the course session.
 
 *Abuse cases to write up:* (1) a malicious transcript file (deeply nested JSON, huge strings)
 fed to the CLI; (2) a lecturer uploading someone else's lecture; (3) a review UI user injecting
@@ -758,7 +795,7 @@ result without one, and ASR is local always (this is the narrowed form; the orig
 design needs for handwriting and board diagrams, and a blanket rule nobody can keep is worse
 than a precise one that holds); S2 all external JSON validated before use; S3 credentials never
 stored in the package or the result files — the API key is read from the environment at call
-time and is not a `Config` field; S4 temporary media deleted after extraction; S5 test material
+time and is not a `Config` field, and so is the ExerPlaza login; S4 temporary media deleted after extraction; S5 test material
 is public or mock lectures only (the brief already promises "no student data"); **S6 when an
 endpoint is configured, the user must be able to tell** — the exported `config` block names the
 models used, so a result carries whether it went out.
