@@ -663,7 +663,7 @@ measurement is one six-view sequence of one lecture, mostly diagram, with little
 at `/login` with the teacher's email and password, then sends the `quiz.json` without its
 rejected items in one `POST` to a new import endpoint in ExerPlaza, `/api/v1/quizzes/import`.
 ExerPlaza saves it in one transaction and links the quiz to a course session given by id; how
-it recognises a re-import is D28. The client uses only the standard library.
+it recognises a re-import is D29. The client uses only the standard library.
 
 *Alternative:* driving the TeX upload page's own endpoints (`/questions/upload/tex`, then
 `/questions/upload/single` per question); a personal API token in ExerPlaza, stored as a hash and
@@ -689,7 +689,7 @@ on CSRF protection for the whole site, the import route needs an exemption. The 
 ExerPlaza's code, so the contract lives in two repositories, each with a copy of the example
 request and answer.
 
-### D28: ExerPlaza recognises a re-import by text, with no change to its database
+### D29: ExerPlaza recognises a re-import by text, with no change to its database
 
 *Chose:* the import endpoint uses ExerPlaza's tables as they are (architecture.md 12.6). The quiz
 is the course session's quiz with the `quiz.json`'s `title`, or a new one; two such quizzes are a
@@ -700,7 +700,7 @@ shape, `updated` included, so `exerplaza` did not change.
 
 *Alternative:* an `external_ref` column on ExerPlaza's `quiz` and `quiz_question`, holding the
 quiz id and `<quiz id>/<item id>`, so that a re-import updates every question nobody has
-answered (the first version of D27); the reference in the notes for the teachers, which a
+answered (the first version of D28); the reference in the notes for the teachers, which a
 teacher can edit; the uids of the last import kept beside the `quiz.json` on the client; or a
 new quiz and new questions on every import.
 
