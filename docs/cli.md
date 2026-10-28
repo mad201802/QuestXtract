@@ -198,7 +198,7 @@ the model once per frame and caches the answers.
 
 `questxtract gui` opens a window over the same commands. It is a launcher: it runs the CLI's own
 code, so a run from the window writes the same file as the command with the same options. Install
-it with the extra, `pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.2.0"`;
+it with the extra, `pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.3.0"`;
 the extra includes what the LLM detector and reading the board need, since the window starts with
 both on.
 
