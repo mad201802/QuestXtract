@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 ### Added
 
@@ -15,7 +15,7 @@
   recording (`.mp4`, `.mp3`) or a transcript (`.json`), choose questions, transcript, quiz or QTI
   package, set the options (the CLI's own, with its defaults) and press Run. It runs the CLI's code,
   shows progress, Cancel (between stages), the written path and an Open folder button. Install with
-  `pip install "questxtract[gui]"`; drag and drop needs `tkinterdnd2`, and where it cannot start the
+  the `[gui]` extra; drag and drop needs `tkinterdnd2`, and where it cannot start the
   window says so and Browse still works. The start view has only the file, the output and Run;
   the options are behind Advanced settings, except Read the board (vision), which stays on the start view. Without a `questxtract.toml` the window starts with the LLM detector and Read the board on (both need the NTNU key; the CLI's defaults are unchanged); with one, it starts from the file. The judge's model is greyed out with the rules detector. The window is in English, Norsk or Italiano (the
   switch at the top right). Needs a Python with tkinter. (#124)
@@ -206,6 +206,12 @@
 
 ### Fixed
 
+- The app installs and runs with one command: the `[gui]` extra also installs `openai`, which
+  the app needs since it starts with the LLM detector and reading the board on. The README and
+  docs/cli.md install lines now point at this release
+  (`pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.2.0"`), and a
+  Download button at the top of the README opens the latest GitHub Release, whose wheel installs
+  with `pip install "questxtract-0.2.0-py3-none-any.whl[gui]"`. (#228)
 - The quiz no longer drops an item because two options differ only by a sign (`-2` and `2`) or a
   decimal point (`1.5` and `15`): the sameness check ignores only case, math delimiters, runs of
   spaces and punctuation at the end, and keeps everything inside an option. The quiz prompt (now `v1`) leaves out check-ins on the class, names the
