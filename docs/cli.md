@@ -186,7 +186,9 @@ the model once per frame and caches the answers.
 
 `questxtract gui` opens a window over the same commands. It is a launcher: it runs the CLI's own
 code, so a run from the window writes the same file as the command with the same options. Install
-it with the extra, `pip install "questxtract[gui]"`.
+it with the extra, `pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.2.0"`;
+the extra includes what the LLM detector and reading the board need, since the window starts with
+both on.
 
 - **The file.** Drop an `.mp4`, `.mp3` or `.json` on the box, or click Browse. One file at a time.
   A `.json` transcript skips transcription, so the Transcript output is not offered for it.

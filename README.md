@@ -7,6 +7,8 @@
 Feed it a lecture video, get back every question that was actually asked in it, with timestamps,
 confidence scores and a clean JSON export.
 
+[![Download](https://img.shields.io/github/v/release/mad201802/QuestXtract?label=Download&logo=github&style=for-the-badge&color=2ea44f)](https://github.com/mad201802/QuestXtract/releases/latest)
+
 [![CI](https://github.com/mad201802/QuestXtract/actions/workflows/ci.yml/badge.svg)](https://github.com/mad201802/QuestXtract/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12%20|%203.13-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -46,14 +48,20 @@ What is built today:
 ## Install
 
 ```bash
-# with uv (recommended)
-uv add git+https://github.com/mad201802/QuestXtract@v0.1.0
+# with pip, the graphical app included
+pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.2.0"
 
-# or with pip
-pip install git+https://github.com/mad201802/QuestXtract@v0.1.0
+# or with uv
+uv add "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.2.0"
 ```
 
-Drop the `@v0.1.0` for the latest `main`. Releases: [GitHub Releases](https://github.com/mad201802/QuestXtract/releases).
+Or click **Download** at the top, take the `.whl` file from the release, and install it from the
+folder you saved it in: `pip install "questxtract-0.2.0-py3-none-any.whl[gui]"`.
+
+The extras: `[gui]` is the graphical app, with what the LLM detector and reading the board need;
+`[llm]` is only those, for the command line. Without an extra you get the command line with the
+offline rules. Drop the `@v0.2.0` for the latest `main`. Releases:
+[GitHub Releases](https://github.com/mad201802/QuestXtract/releases).
 
 Requires Python 3.10+ on Linux, macOS or Windows.
 
@@ -71,7 +79,7 @@ questxtract filter lecture.questions.json --text eigenvalue   # the questions ab
 
 ### Graphical app
 
-For a lecturer who does not use a terminal: `pip install "questxtract[gui]"`, then `questxtract gui`.
+For a lecturer who does not use a terminal: install with the `[gui]` extra ([Install](#install)), then `questxtract gui`.
 Drop a recording or a transcript on the window (or click Browse), pick the output and press Run.
 The options (the same ones as the CLI, with the same defaults) are behind Advanced settings. Questions, transcript, quiz and
 QTI package are written next to the input, or where you choose. Details: [docs/cli.md](docs/cli.md#graphical-app).
