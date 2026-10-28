@@ -762,6 +762,13 @@ is public or mock lectures only (the brief already promises "no student data"); 
 endpoint is configured, the user must be able to tell** — the exported `config` block names the
 models used, so a result carries whether it went out.
 
+*Accepted risks:* `filelock` on Python 3.10. The lock pins 3.32.7 there, which three advisories
+cover (GHSA-v4x8-3wr5-3wq8 high, GHSA-9vhv-jxww-xfm5 and GHSA-567q-5qvw-pf92 low); their fix,
+4.2.1, needs Python 3.11, where the lock has 4.2.4. `filelock` arrives only through
+`huggingface-hub` for the Whisper download, and each advisory needs another local user or a
+file planted beside the lock. The pip-audit job in `ci.yml` ignores these three ids and no
+others. The risk ends when Python 3.10 support is dropped (#239).
+
 Suggested exercise for the report: play Microsoft EoP over the figure in §2 with the
 information-flow arrows — the compendium asks for an architecture sketch with flows first.
 
