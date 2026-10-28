@@ -647,11 +647,11 @@ of the 30 labelled keyframes, only `math231_2020_r2` 180 s to 306 s is one board
 its 0.99 is a single pair, and two different pages under one app toolbar keep 0.62, a margin of
 0.08. A partial erase (a quarter of the board wiped and written again) still keeps 70 % or more,
 so the next view is sent with erased content in its previous state. That is the copying risk,
-and no labelled pair covers it. `scripts/compare_previous_state.py` pairs labelled frames that
-are far apart rather than consecutive views, and chains from v0 readings rather than v2 ones,
-so it tests copying across boards more than a lecture as the stage reads it. The model also
-takes over the previous reading's notation (`x²` for `x^2`), which character error rate counts
-as errors, and sometimes its layout, joining several board lines into one.
+and no labelled pair covers it (#230). `scripts/compare_previous_state.py` pairs labelled
+frames that are far apart rather than consecutive views, and chains from v0 readings rather
+than v2 ones, so it tests copying across boards more than a lecture as the stage reads it. The
+model also takes over the previous reading's notation (`x²` for `x^2`), which character error
+rate counts as errors, and sometimes its layout, joining several board lines into one.
 
 ## 4. Requirements traceability (→ report ch. 6)
 
