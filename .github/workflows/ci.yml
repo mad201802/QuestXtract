@@ -8,6 +8,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Every uv run on 3.10 too: without this, .python-version (3.13) makes uv run replace the venv.
+    env:
+      UV_PYTHON: "3.10"
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7

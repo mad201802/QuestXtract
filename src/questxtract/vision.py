@@ -290,7 +290,8 @@ def _probe_frames(path: Path) -> list[bytes]:
                     continue
                 width = min(frame.width, _PROBE_WIDTH)
                 height = round(frame.height * width / frame.width / 2) * 2 or 2
-                picture: Frame = frame.reformat(width=width, height=height).to_ndarray(
+                # av < 18 (on Python 3.10) types to_ndarray as a union of dtypes; rgb24 is uint8.
+                picture: Frame = frame.reformat(width=width, height=height).to_ndarray(  # type: ignore[assignment, unused-ignore]
                     format="rgb24"
                 )
                 pngs.append(_png(picture))
@@ -821,7 +822,7 @@ def _sample_frames(
             if frame.time is None or frame.time + 1e-6 < due / fps:
                 continue
             due = int(frame.time * fps + 1e-6) + 1
-            picture: Frame = frame.to_ndarray(format="rgb24")
+            picture: Frame = frame.to_ndarray(format="rgb24")  # type: ignore[assignment, unused-ignore]
             if crop is not None:
                 height, width = picture.shape[:2]
                 picture = picture[
