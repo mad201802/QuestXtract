@@ -45,6 +45,11 @@ turns them into study material. It **extracts** questions, it never invents them
 What is built today:
 [architecture.md 13.3](docs/architecture.md#133-status).
 
+**Not included:** animations of the board with [Manim](https://www.manim.community/). They would
+need Python 3.11 or newer, a LaTeX installation and a teacher's check of every clip, so they are
+not planned ([#185](https://github.com/mad201802/QuestXtract/issues/185),
+[D21](docs/design_decisions.md#d21-manim-animations-are-optional-outside-the-core-delivery)).
+
 ## Install
 
 ```bash
