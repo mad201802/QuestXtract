@@ -1,6 +1,6 @@
 [project]
 name = "questxtract"
-version = "0.2.0"
+version = "0.3.0"
 description = "Extract questions from lecture audio and video and turn them into quizzes"
 readme = "README.md"
 license = "MIT"

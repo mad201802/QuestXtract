@@ -49,18 +49,18 @@ What is built today:
 
 ```bash
 # with pip, the graphical app included
-pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.2.0"
+pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.3.0"
 
 # or with uv
-uv add "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.2.0"
+uv add "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.3.0"
 ```
 
 Or click **Download** at the top, take the `.whl` file from the release, and install it from the
-folder you saved it in: `pip install "questxtract-0.2.0-py3-none-any.whl[gui]"`.
+folder you saved it in: `pip install "questxtract-0.3.0-py3-none-any.whl[gui]"`.
 
 The extras: `[gui]` is the graphical app, with what the LLM detector and reading the board need;
 `[llm]` is only those, for the command line. Without an extra you get the command line with the
-offline rules. Drop the `@v0.2.0` for the latest `main`. Releases:
+offline rules. Drop the `@v0.3.0` for the latest `main`. Releases:
 [GitHub Releases](https://github.com/mad201802/QuestXtract/releases).
 
 Requires Python 3.10+ on Linux, macOS or Windows.
