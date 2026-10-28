@@ -70,9 +70,29 @@ jobs:
               jsonschema.validate(json.load(f), json.loads(schema))
           '
 
+  # Known vulnerabilities in the locked dependencies. pip-audit applies the lock's environment
+  # markers for the Python it runs on, so both ends of the supported range are audited.
+  audit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: >-
+          uv export --locked --all-extras --no-emit-project --format requirements.txt
+          -o "$RUNNER_TEMP/requirements.txt"
+      # Ignored: the filelock advisories with no fix on Python 3.10 (#239).
+      - run: >-
+          uvx --python ${{ matrix.python }} pip-audit==2.10.1 --require-hashes --disable-pip
+          -r "$RUNNER_TEMP/requirements.txt"
+          --ignore-vuln GHSA-v4x8-3wr5-3wq8 --ignore-vuln GHSA-9vhv-jxww-xfm5
+          --ignore-vuln GHSA-567q-5qvw-pf92
+
   ci:
     if: always()
-    needs: [test, wheel]
+    needs: [test, wheel, audit]
     runs-on: ubuntu-latest
     steps:
-      - run: ${{ needs.test.result == 'success' && needs.wheel.result == 'success' }}
+      - run: ${{ needs.test.result == 'success' && needs.wheel.result == 'success' && needs.audit.result == 'success' }}
