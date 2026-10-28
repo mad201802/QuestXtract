@@ -494,6 +494,9 @@ quiz are complete without one.
 *Cost:* the customer's idea of animations made from the board's flow (milestone 4 in
 general_requirements.md) is not delivered unless time is left. `latex` stays in each board state,
 so a later Manim step can read it.
+A prototype (#185, closed 28.10.2026) confirmed it: Manim needs Python 3.11+, pycairo has no
+Linux wheel, typeset formulas need LaTeX, and on TTK4225 2026-09-14 some clips plotted the wrong
+function or gave the answer away, so every clip would need a teacher's check.
 
 ### D22: One model on one endpoint: DeepSeek-V4.1-Flash on NTNU's service, thinking off
 
@@ -660,7 +663,7 @@ rate counts as errors, and sometimes its layout, joining several board lines int
 | FR1 accept `.mp4` | `media.py` `ingest`: validates and probes the container, hashes it for the cache key; `.mp3` and a `.json` transcript are accepted too | done |
 | FR2 extract audio track | `media.extract_audio`: PyAV decodes the first audio stream to a temporary 16 kHz mono WAV for ASR, removed afterwards | done |
 | FR3 transcribe with ASR | `transcribe.py` stage, faster-whisper behind the `AsrBackend` registry in `asr.py` → `Transcript` with word timestamps | done |
-| FR4 extract drawing/animation from video | `vision.py` with `--vision`: the layout probe finds the board, stable views get one keyframe each, a vision model or OCR reads text, LaTeX and a description, and questions link to the board state on screen (`visual_ids`). What changed between states is #137; Manim animations are optional (#185, D21) | static views done; changes over time open |
+| FR4 extract drawing/animation from video | `vision.py` with `--vision`: the layout probe finds the board, stable views get one keyframe each, a vision model or OCR reads text, LaTeX and a description, and questions link to the board state on screen (`visual_ids`). What changed between states is #137; Manim animations are not planned (#185, D21) | static views done; changes over time open |
 | FR5 teacher can edit after extraction | `questions.json` is the edit surface: each question's `review` block (status, text, note) belongs to people and the pipeline never writes into it (architecture.md 12.2). The editor is a separate app (D6); the graphical app runs the pipeline but does not edit; keeping edits across a re-run is not planned (#15) | partial: the format, not an editor |
 | FR6 identify question sentences | `detect.py` rules by default (#10), or per run the LLM detector in `llm.py` (#88), Qwen on NTNU's service by default (D25) | done |
 | FR7 start timestamp per question | `QAPair.start`, a slice of the word list — word-accurate by construction, never interpolated (architecture.md 2.5) | done |
