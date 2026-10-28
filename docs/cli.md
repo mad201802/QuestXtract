@@ -302,8 +302,9 @@ is never stored in Config, logs, cache entries or `questions.json`.
 
 **The key file.** The app's **NTNU key...** button writes `IDUN_API_KEY="..."` to `questxtract/.env`
 in your user config folder: `%APPDATA%` on Windows, `~/Library/Application Support` on macOS,
-`$XDG_CONFIG_HOME` or `~/.config` elsewhere. Every other line of that file is kept, and it is
-readable by you only where the system allows. The key sits there as plain text, like in any `.env`;
+`$XDG_CONFIG_HOME` or `~/.config` elsewhere. Every other line of that file is kept. On Linux and
+macOS the file and its `questxtract` folder are readable by you only; on Windows they are as
+private as your user profile folder, which other users cannot open by default. The key sits there as plain text, like in any `.env`;
 for a safer store, keep it in your password store and load it into the environment as in the
 [Setting up the API key](#setting-up-the-api-key). Only the NTNU key is read from this file.
 
