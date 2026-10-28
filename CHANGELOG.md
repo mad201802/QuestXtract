@@ -39,8 +39,9 @@
   and password from `QUESTXTRACT_EXERPLAZA_EMAIL` and `QUESTXTRACT_EXERPLAZA_PASSWORD`
   (environment or `.env`), and ExerPlaza saves, in one go, a quiz in the course session with one
   multiple-choice question per item, marked as generated. Rejected items are not sent; pending
-  ones are visible only to you. Sending the same quiz again updates it, and leaves the questions
-  students have answered as they are. The address must be `https` (plain `http` for `localhost`
+  ones are visible only to you. Sending the same quiz again adds its new items to the same quiz
+  and skips, unchanged, those whose text ExerPlaza already has: ExerPlaza's database schema does
+  not change. The address must be `https` (plain `http` for `localhost`
   only), and the password is never shown. Needs ExerPlaza's import endpoint on the server.
   (#37)
 - The app saves the NTNU key for you: the **NTNU key...** button on the start view opens a window
