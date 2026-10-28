@@ -186,12 +186,19 @@ question was asked and which model wrote the text, and the mark that the text wa
 Pending items are visible only to you in ExerPlaza, accepted ones to everybody; rejected ones are
 not sent. Either every question is saved or none is.
 
-Sending the same quiz again updates the quiz and its questions instead of adding new ones. A
-question students have already answered is left as it is and listed as skipped, so their answers
-never change. Nothing is ever deleted in ExerPlaza.
+Sending the same quiz again adds to the course session's quiz with the same title instead of
+making a new one. ExerPlaza recognises a question by its text, as its TeX upload does: an item
+whose text, in the quiz's language, is already a question of that quiz or one of yours is not
+saved again but listed as skipped, and that question is in the quiz as it was. So new items are
+added, but an item you edited after the first import keeps its old version in ExerPlaza, options,
+solution and visibility included (a pending item you accept later stays visible only to you):
+change it in ExerPlaza. Nothing is ever updated or deleted in ExerPlaza, so no question students
+have answered ever changes. A quiz renamed in ExerPlaza, or a new title, makes the next import a
+new quiz; if the course session has two quizzes with the title, ExerPlaza refuses the import.
 
 On success it prints `ExerPlaza quiz <id> (created): 3 created, 0 updated, 0 skipped`, then
-one line per skipped question. The quiz is checked before anything is sent, and a broken item
+one line per skipped question with ExerPlaza's reason; the quiz is `(updated)` when it already
+existed. The quiz is checked before anything is sent, and a broken item
 fails naming the field, as with `qti` and `tex`. The password is never shown. The ExerPlaza
 server needs the import endpoint; without it, the command fails with HTTP 404 and `tex` is the
 way in.
@@ -503,7 +510,8 @@ questxtract exerplaza lecture.quiz.json --url https://exerplaza.example.org \
 ```
 
 The number 42 comes from the course session's page, `/course/session/42`. Run it again after
-editing the quiz: the questions are updated, except those students have already answered.
+adding items: the new ones join the quiz, and those ExerPlaza already has are skipped and left as
+they are.
 
 **See which questions the threshold threw away.** This is a development tool, not a CLI
 command:
@@ -746,6 +754,7 @@ is not the cache, so it works on a first run too ([architecture.md 6.5](architec
 | `exerplaza: POST .../login: ExerPlaza refused the login ...` | Wrong email or password, or a disabled account: try them on ExerPlaza's login page. |
 | `exerplaza: POST .../api/v1/quizzes/import: ... HTTP 403 ...` / `... HTTP 404 Not Found: course session ...` | You do not teach that course session, or the number is wrong: check it in the page's address. |
 | `exerplaza: ... HTTP 404, not a JSON answer ...` | This ExerPlaza has no import endpoint yet, or `--url` points elsewhere. Use `tex` meanwhile. |
+| `exerplaza: ... HTTP 409 Conflict: course session ... has 2 quizzes named ...` | ExerPlaza cannot tell which quiz to add to: rename all but one in ExerPlaza, or give the quiz another `title`. Nothing was saved. |
 | `exerplaza: ... HTTP 422 ...` with `questions[...]` lines | ExerPlaza refused the quiz; each line names the item and field, as ExerPlaza sent them. Nothing was saved. |
 | `exerplaza: ...: cannot reach ExerPlaza (...)` / `no answer within 30 s` | Check the address and your network or VPN; try again later. |
 | `judge: <model> judged none of the N candidates; ...` | The endpoint answered, but in a shape other than the one asked for, so no candidate was judged. Check that the server supports structured output (`response_format`); try another model or server. |

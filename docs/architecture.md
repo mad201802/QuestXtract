@@ -1531,13 +1531,18 @@ for that one call. The login depends on the form's field names (`email`, `passwo
 **Import.** One `POST /api/v1/quizzes/import?course_session=<id>&content_unit=<name>...`, whose
 body is the `quiz.json` without its rejected items and is still a valid `quiz.json`. The items
 are those of `quiz_to_qti` (12.4), so `qti`, `tex` and `exerplaza` send the same ones. ExerPlaza
-saves the quiz in one transaction: a quiz linked to the course session and one multiple-choice
+saves the quiz in one transaction, with no change to its database schema: one multiple-choice
 question per item, with the disclosability, solution and notes for the teachers that `tex` writes
-(12.5), `created_by_llm` set when any text of the item is `generated`, and `<quiz id>/<item id>`
-as each question's reference. It answers `created`, `updated` or `skipped` per item. A re-import
-updates the quiz and every question nobody has answered; a question with answers is `skipped`
-(`has answers`), so students' answers never change. Nothing is deleted. An error is an RFC 9457
-problem whose `errors` list names each item's path, printed as ExerPlaza sent it.
+(12.5) and `created_by_llm` set when any text of the item is `generated`, in the course session's
+quiz with the quiz's `title`, or in a new one (two such quizzes are a 409). It recognises a
+re-import by text, as its TeX upload does: an item whose stem, in the quiz's language, is already
+the text of a question of that quiz, of a question the teacher is an author of, or of an earlier
+item, is `skipped` with a reason, and that question is in the quiz unchanged. It answers
+`created` or `skipped` per item, with `<quiz id>/<item id>` as the item's `ref`; the contract
+keeps `updated` for an import that updates, which this one never does. Nothing is updated or
+deleted, so students' answers never change, and an item edited after its import is changed in
+ExerPlaza, not by sending it again. An error is an RFC 9457 problem whose `errors` list names
+each item's path, printed as ExerPlaza sent it.
 
 **Safety.** Every check that needs no network comes first: the URL, the course session, the
 content units, `read_quiz` and `quiz_to_qti`, then the credentials. Plain `http` is refused except

@@ -8,9 +8,9 @@ call. ExerPlaza checks CSRF per form, not for the whole site, so the JSON import
 cookie.
 
 The body is the ``quiz.json`` without its rejected items, still a valid ``quiz.json``.
-ExerPlaza saves the quiz in one transaction and answers, per item, whether it created, updated
-or skipped it. Redirects are never followed: on the login a redirect is the answer, and on the
-import it is an error.
+ExerPlaza saves the quiz in one transaction and answers, per item, whether it created or
+skipped it, and why it skipped it. Redirects are never followed: on the login a redirect is the
+answer, and on the import it is an error.
 """
 
 from __future__ import annotations
@@ -49,9 +49,11 @@ class ExerPlazaExportError(SchemaError):
 class ExerPlazaItem:
     """What ExerPlaza did with one quiz item.
 
-    ``ref`` is ``<quiz id>/<item id>``, the reference ExerPlaza keeps to recognise a re-import,
-    and ``uid`` the question's id in ExerPlaza. ``outcome`` is ``created``, ``updated`` or
-    ``skipped``; ``reason`` says why an item was skipped (``has answers``), else it is ``None``.
+    ``ref`` is ``<quiz id>/<item id>``, naming the item, and ``uid`` the id of its question in
+    ExerPlaza: for a skipped item, the question ExerPlaza already had. ``outcome`` is ``created``,
+    ``updated`` or ``skipped``, though ExerPlaza never updates a question today; ``reason`` says
+    why an item was skipped (``a question with the same text already exists``), else it is
+    ``None``.
     """
 
     ref: str
@@ -81,11 +83,12 @@ def export_exerplaza(
 ) -> ExerPlazaImport:
     """Send a ``quiz.json`` to ExerPlaza, logged in as the teacher whose credentials are set.
 
-    ExerPlaza creates a quiz in the course session, or updates the one an earlier import of
-    this quiz created, with one multiple-choice question per item. Items a reviewer marked
-    ``rejected`` are not sent; ``pending`` items are visible only to their author in ExerPlaza,
-    ``accepted`` ones to everybody. A question students have answered is left as it is and
-    reported ``skipped``. Every check that needs no network runs before the first request.
+    ExerPlaza adds one multiple-choice question per item to the course session's quiz with the
+    quiz's title, creating that quiz if there is none. Items a reviewer marked ``rejected`` are
+    not sent; ``pending`` items are visible only to their author in ExerPlaza, ``accepted`` ones
+    to everybody. An item whose text ExerPlaza already has, in that quiz or among the teacher's
+    questions, is not saved again: it is reported ``skipped`` and its question is left as it is.
+    Every check that needs no network runs before the first request.
 
     The login is ExerPlaza's own form, with the email and password from
     ``QUESTXTRACT_EXERPLAZA_EMAIL`` and ``QUESTXTRACT_EXERPLAZA_PASSWORD``, in the environment or

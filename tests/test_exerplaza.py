@@ -109,7 +109,8 @@ CONTRACT_RESPONSE = """{
   "quiz": {"uid": 7, "outcome": "created"},
   "questions": [
     {"ref": "quiz_lecture/quiz_q_aaa", "uid": 123, "outcome": "created", "reason": null},
-    {"ref": "quiz_lecture/quiz_q_bbb", "uid": 124, "outcome": "skipped", "reason": "has answers"}
+    {"ref": "quiz_lecture/quiz_q_bbb", "uid": 123, "outcome": "skipped",
+     "reason": "same text as questions[0]"}
   ]
 }"""
 CONTRACT_PROBLEM = """{
@@ -138,6 +139,8 @@ class FakeExerPlaza(ThreadingHTTPServer):
 
     A session is a cookie, as in Flask: ``GET /login`` sets one holding the form's CSRF token,
     and a login with that token, the email and the password replaces it with a logged-in one.
+    The import works as ExerPlaza's: the quiz is the course session's quiz with the title, and an
+    item whose text ExerPlaza already has, or an earlier item has, is skipped, never changed.
     """
 
     daemon_threads = True
@@ -150,9 +153,8 @@ class FakeExerPlaza(ThreadingHTTPServer):
         self.login_page = LOGIN_FORM
         self.wrong_token = False  # the page shows a token the session does not hold
         self.course_sessions = {42}
-        self.quizzes: dict[str, int] = {}
-        self.questions: dict[str, int] = {}
-        self.answered: set[str] = set()  # refs of questions students have answered
+        self.quizzes: dict[tuple[int, str], int] = {}  # (course session, title) -> uid
+        self.questions: dict[str, int] = {}  # text -> uid
         self.import_reply: tuple[int, dict[str, str], str] | None = None  # a canned answer
         self.delay = 0.0
 
@@ -231,17 +233,28 @@ class _Handler(BaseHTTPRequestHandler):
             self._problem(404, "Not Found", f"course session {course} does not exist")
             return
         document = json.loads(body)
-        quiz_outcome = "updated" if document["id"] in fake.quizzes else "created"
-        quiz_uid = fake.quizzes.setdefault(document["id"], 7)
-        answer = []
-        for item in document["questions"]:
-            ref = f"{document['id']}/{item['id']}"
-            outcome = "skipped" if ref in fake.answered else "updated"
-            if ref not in fake.questions:
-                fake.questions[ref], outcome = 123 + len(fake.questions), "created"
-            reason = "has answers" if outcome == "skipped" else None
+        key = (int(course), document["title"])
+        quiz_outcome = "updated" if key in fake.quizzes else "created"
+        quiz_uid = fake.quizzes.setdefault(key, 7 + len(fake.quizzes))
+        answer: list[dict[str, Any]] = []
+        first_with_text: dict[str, int] = {}
+        for index, item in enumerate(document["questions"]):
+            text = item["prompt"]["text"]
+            reason = None
+            if text in first_with_text:
+                reason = f"same text as questions[{first_with_text[text]}]"
+            elif text in fake.questions:
+                reason = "a question with the same text already exists"
+            else:
+                fake.questions[text] = 123 + len(fake.questions)
+            first_with_text.setdefault(text, index)
             answer.append(
-                {"ref": ref, "uid": fake.questions[ref], "outcome": outcome, "reason": reason}
+                {
+                    "ref": f"{document['id']}/{item['id']}",
+                    "uid": fake.questions[text],
+                    "outcome": "created" if reason is None else "skipped",
+                    "reason": reason,
+                }
             )
         reply = {"quiz": {"uid": quiz_uid, "outcome": quiz_outcome}, "questions": answer}
         self._reply(200, {"Content-Type": "application/json"}, json.dumps(reply))
@@ -335,7 +348,10 @@ def test_a_quiz_goes_in_one_login_and_one_import(
 
     assert code == 0
     assert exerplaza.routes() == ["GET /login", "POST /login", "POST /api/v1/quizzes/import"]
-    assert output == "ExerPlaza quiz 7 (created): 2 created, 0 updated, 0 skipped\n"
+    assert output == (
+        "ExerPlaza quiz 7 (created): 1 created, 0 updated, 1 skipped\n"
+        "  skipped quiz_lecture/quiz_q_bbb: same text as questions[0]\n"
+    )
 
 
 def test_the_body_is_the_quiz_without_rejected_items(
@@ -365,7 +381,10 @@ def test_the_contract_answer_is_read_item_by_item(
         items=(
             ExerPlazaItem(ref="quiz_lecture/quiz_q_aaa", uid=123, outcome="created", reason=None),
             ExerPlazaItem(
-                ref="quiz_lecture/quiz_q_bbb", uid=124, outcome="skipped", reason="has answers"
+                ref="quiz_lecture/quiz_q_bbb",
+                uid=123,
+                outcome="skipped",
+                reason="same text as questions[0]",
             ),
         ),
     )
@@ -483,7 +502,7 @@ def test_the_credentials_can_come_from_dotenv(
 
     result = _export(exerplaza.url, _file(tmp_path, _quiz(make_quiz)))
 
-    assert [item.outcome for item in result.items] == ["created", "created"]
+    assert [item.outcome for item in result.items] == ["created", "skipped"]
 
 
 @pytest.mark.parametrize(
@@ -642,7 +661,7 @@ def test_a_server_that_does_not_answer_times_out(
         _export(exerplaza.url, _file(tmp_path, _quiz(make_quiz)))
 
 
-def test_sending_twice_updates_and_skips_what_students_answered(
+def test_sending_twice_skips_what_exerplaza_already_has(
     tmp_path: Path,
     make_quiz: MakeQuiz,
     exerplaza: FakeExerPlaza,
@@ -650,16 +669,16 @@ def test_sending_twice_updates_and_skips_what_students_answered(
 ) -> None:
     argv = _args(exerplaza.url, _file(tmp_path, _quiz(make_quiz)))
     assert _cli(capsys, argv)[0] == 0
-    exerplaza.answered.add("quiz_lecture/quiz_q_aaa")
 
     code, output = _cli(capsys, argv)
 
     assert code == 0
     assert output == (
-        "ExerPlaza quiz 7 (updated): 0 created, 1 updated, 1 skipped\n"
-        "  skipped quiz_lecture/quiz_q_aaa: has answers\n"
+        "ExerPlaza quiz 7 (updated): 0 created, 0 updated, 2 skipped\n"
+        "  skipped quiz_lecture/quiz_q_aaa: a question with the same text already exists\n"
+        "  skipped quiz_lecture/quiz_q_bbb: same text as questions[0]\n"
     )
-    assert len(exerplaza.questions) == 2
+    assert len(exerplaza.questions) == 1
 
 
 def test_control_characters_from_the_server_are_not_printed(
