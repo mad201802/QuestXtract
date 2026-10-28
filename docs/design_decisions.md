@@ -639,7 +639,7 @@ erase check; the model asked only for what changed.
 previous reading the model can keep names and notation the same across states and see what is
 new. The reading stays a full reading, since detection, search and the quiz read one state on
 its own. The ink rule is #133's, whose curve was not built. The erase check exists because the
-risk is copying from an erased board, which the comparison on #137 is to measure.
+risk is copying from an erased board, which the comparison on #137 measured.
 
 *Cost:* one more full reading in every request, so longer prompts. A previous state that changes
 asks the next state again, as the cache key holds it. The 70 % limit rests on very little data:
@@ -649,7 +649,9 @@ its 0.99 is a single pair, and two different pages under one app toolbar keep 0.
 so the next view is sent with erased content in its previous state. That is the copying risk,
 and no labelled pair covers it. `scripts/compare_previous_state.py` pairs labelled frames that
 are far apart rather than consecutive views, and chains from v0 readings rather than v2 ones,
-so it tests copying across boards more than a lecture as the stage reads it.
+so it tests copying across boards more than a lecture as the stage reads it. The model also
+takes over the previous reading's notation (`x²` for `x^2`), which character error rate counts
+as errors, and sometimes its layout, joining several board lines into one.
 
 ## 4. Requirements traceability (→ report ch. 6)
 
