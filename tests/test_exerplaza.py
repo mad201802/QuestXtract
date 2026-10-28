@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import socket
+import sys
 import threading
 import time
 import urllib.parse
@@ -167,6 +168,15 @@ class FakeExerPlaza(ThreadingHTTPServer):
 
     def last_import(self) -> Seen:
         return next(s for s in reversed(self.seen) if s.path == "/api/v1/quizzes/import")
+
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        """Ignore a client that hung up, as the timeout test's does.
+
+        The handler thread outlives that test, so the traceback would land in a later test's
+        captured stderr. Any other error is still printed.
+        """
+        if not isinstance(sys.exc_info()[1], ConnectionError):
+            super().handle_error(request, client_address)
 
 
 class _Handler(BaseHTTPRequestHandler):
