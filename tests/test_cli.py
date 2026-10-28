@@ -792,8 +792,8 @@ def test_without_a_vision_flag_or_setting_vision_stays_off() -> None:
 
 # Every vision setting has a decision: a `process` flag, or the settings file only. A new
 # vision_* field in config.py fails this test until it is added to one of the two (and, for a
-# flag, to the parser, cli._config, cli._with_vision if it needs checking, docs/cli.md and
-# README.md). Each flag maps to the field it is listed with, and to a value it can set.
+# flag, to the parser, cli._config, cli._with_vision if it needs checking, and
+# docs/cli.md). Each flag maps to the field it is listed with, and to a value it can set.
 _VISION_FLAGS: dict[str, tuple[list[str], Any]] = {
     "vision_enabled": (["--vision"], True),
     "vision_model": (["--vision-model", "some-model"], "some-model"),

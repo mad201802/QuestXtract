@@ -1,7 +1,7 @@
 # Command line
 
 How to run QuestXtract from a terminal: every command, every option, and recipes for the common
-jobs. For the library API see the [README](../README.md#python-api); for how the pipeline works
+jobs. For the library API see [architecture.md 15](architecture.md#15-python-api); for how the pipeline works
 inside, [architecture.md](architecture.md).
 
 ## Quick start
@@ -26,6 +26,18 @@ The file you pass in. There are no flags for picking stages.
 | a `.json` transcript | everything after transcription (much faster: no speech recognition) |
 | anything else | nothing: `error: ...: expected an .mp4 recording or an .mp3 recording or a .json transcript` |
 
+`process` also takes a transcript made by any other ASR engine: a list of segments, or an object
+with a `segments` key, which is what most engines emit:
+
+```json
+{
+  "segments": [
+    { "text": "Today we cover sorting. What is a stable sort?", "start": 0.0, "end": 6.0 },
+    { "text": "Does anyone know why that matters", "start": 9.0, "end": 12.0 }
+  ]
+}
+```
+
 ## Commands
 
 The defaults below apply when neither a config file nor an explicit flag supplies a value.
@@ -44,7 +56,7 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--llm-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
 | `--llm-url` | a URL | NTNU's LLM service | An OpenAI-compatible endpoint for `--detector llm`, the quiz and vision, e.g. `https://api.openai.com/v1` for OpenAI or `http://localhost:11434/v1` for Ollama. The key goes with the endpoint: NTNU's service (`https://llm.hpc.ntnu.no/v1`, NTNU network or VPN) reads `IDUN_API_KEY`, every other endpoint `OPENAI_API_KEY`. Vision goes there too unless `vision_base_url` is set in `questxtract.toml`. |
 | `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `server` | How long a thinking model may think before it answers: the judge and the quiz. By default they send no setting (`server`), since Qwen rejects `none`. `server` also suits a model that has no setting (`gpt-4o`); a DeepSeek judge needs `none`. Vision is not set here: `vision_reasoning_effort` in the settings file, `"none"` by default, switches DeepSeek's thinking off, which makes it far faster at reading the board for nearly the same result. Small models such as `qwen3.5:9b` judge much better with `low`. `low`, `medium` and `high` allow each request 10 minutes instead of 2; for a server that thinks on its own with `server`, raise `timeout_seconds` in the settings file. |
-| `--vision`, `--no-vision` | nothing | off | Also reads the slides or the board with a vision model: by default DeepSeek on NTNU's LLM service with the key from `IDUN_API_KEY` (NTNU network or VPN), or at `vision_base_url`, or at `--llm-url`. Needs the `questxtract[llm]` extra. `--no-vision` turns off `vision_enabled` from the settings file for one run. A recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript has no board, so the board is not read (a note says so). See [Reading the board](../README.md#reading-the-board). |
+| `--vision`, `--no-vision` | nothing | off | Also reads the slides or the board with a vision model: by default DeepSeek on NTNU's LLM service with the key from `IDUN_API_KEY` (NTNU network or VPN), or at `vision_base_url`, or at `--llm-url`. Needs the `questxtract[llm]` extra. `--no-vision` turns off `vision_enabled` from the settings file for one run. A recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript has no board, so the board is not read (a note says so). See [Reading the board](#reading-the-board). |
 | `--vision-model` | a model name | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | The model that reads the board, as the endpoint names it. It must take images. |
 | `--vision-reader` | `vlm` or `ocr` | `vlm` | How keyframes are read: `vlm`, the vision model (text, formulas and a description), or `ocr`, `vision_ocr_model` (GLM-OCR: text and formulas only, faster). The layout probe always asks `--vision-model`. |
 | `--quiz` | nothing | off | Also writes a multiple-choice quiz next to the questions file (`lecture.quiz.json`), as [`questxtract quiz`](#questxtract-quiz-questionsjson) does. Needs a file output, so not `-o -`. If the quiz fails, the questions file is kept and the exit code is 1. |
@@ -293,11 +305,73 @@ in your user config folder: `%APPDATA%` on Windows, `~/Library/Application Suppo
 `$XDG_CONFIG_HOME` or `~/.config` elsewhere. Every other line of that file is kept, and it is
 readable by you only where the system allows. The key sits there as plain text, like in any `.env`;
 for a safer store, keep it in your password store and load it into the environment as in the
-[README](../README.md#setting-up-the-api-key). Only the NTNU key is read from this file.
+[Setting up the API key](#setting-up-the-api-key). Only the NTNU key is read from this file.
 
 This reader does not run shell commands or expand variables. If your setup uses a password
 store and a shell script to retrieve the key, load it into the environment before running
 QuestXtract. That environment value wins, so the `.env` reader is not used in that case.
+
+### Setting up the API key
+
+A hosted model needs a key; a local server (`--llm-url`) does not. The key goes with the
+endpoint: NTNU's LLM service, the default, reads `IDUN_API_KEY`; OpenAI and any other
+endpoint read `OPENAI_API_KEY`, so neither key is ever sent to the other service. NTNU's service
+needs the NTNU network or VPN, and NTNU asks that heavy use wait until after 18:00 or the
+weekend. There is no `--api-key` flag and TOML files reject secrets, so a key never sits in the
+repository or in your shell history. The steps below use the NTNU key; for an OpenAI key, use
+`openai` and `OPENAI_API_KEY` in its place. The setup keeps it in your system's password store
+(the Keychain on macOS, Credential Manager on Windows) and lets a git-ignored `.env` file
+*refer* to it, so no file anywhere holds the key itself. The environment wins over `.env`, which
+is why step 4 loads it into the shell. It is the same on macOS and Windows: run it in Terminal on
+macOS, in **Git Bash** on Windows (it comes with Git for Windows), from the repository folder.
+
+1. **Save the key.** Copy the whole key, then store it from the clipboard:
+
+   ```bash
+   pbpaste | tr -d '[:space:]' | uvx keyring set questxtract-llm ntnu             # macOS
+   cat /dev/clipboard | tr -d '[:space:]' | uvx keyring set questxtract-llm ntnu  # Windows
+   ```
+
+   Then empty the clipboard (`pbcopy < /dev/null` on macOS, copy any other text on Windows).
+   Piping the key in avoids typing it into a hidden prompt: macOS's own
+   `security add-generic-password -w` prompt silently cuts a key at 128 characters, and keys
+   can be longer.
+
+2. **Check it.** This prints only the last three characters; they must match your key's:
+
+   ```bash
+   uvx keyring get questxtract-llm ntnu | tail -c 4
+   ```
+
+3. **Point `.env` at it.** One line per key, written once; `.env` is in `.gitignore` and holds
+   no key:
+
+   ```bash
+   echo 'export IDUN_API_KEY="$(uvx keyring get questxtract-llm ntnu)"' >> .env
+   ```
+
+4. **Load it in every new terminal**, before running `questxtract`:
+
+   ```bash
+   source .env
+   ```
+
+   On macOS the first read may ask whether Python may use the Keychain item: choose *Always
+   Allow*. In PowerShell instead of Git Bash, step 4 is
+   `$env:IDUN_API_KEY = (uvx keyring get questxtract-llm ntnu)`.
+
+5. **Test it.** Listing the models costs nothing:
+
+   ```bash
+   uv run python -c "import os, openai; print(len(openai.OpenAI(base_url='https://llm.hpc.ntnu.no/v1', api_key=os.environ['IDUN_API_KEY']).models.list().data), 'models visible - the key works')"
+   ```
+
+| Error | Cause | Fix |
+|---|---|---|
+| `--detector llm goes to NTNU's LLM service ..., so it needs IDUN_API_KEY` | The key is not loaded in this terminal | `source .env` |
+| `... Connection error` with NTNU's service | Not on the NTNU network | Connect the NTNU VPN |
+| `401 ... invalid_api_key` | The stored key is incomplete, or was revoked | Compare its end with the original (step 2) and save it again (step 1); if they match, ask for a new key |
+| `400 ... reasoning_effort` | The judge or the quiz model rejects `none` (Qwen) or takes no setting (`gpt-4o`); the vision model has no setting (`gpt-4o`, `qwen3-vl`) but vision sends `none` by default, which DeepSeek needs | Judge: pass `--llm-reasoning server`. Vision: set `vision_reasoning_effort = ""` in `questxtract.toml` |
 
 ## Where files go
 
@@ -316,7 +390,7 @@ refers to them by relative path, so move or share the two together. With `-o -` 
 copied and the file points into the cache instead.
 
 A second run overwrites the file. Pass `-o` to keep several versions side by side. The
-questions file format is described in the [README](../README.md#output) and in
+questions file format is described in
 [architecture.md 12.1](architecture.md#121-questionsjson).
 
 ## Recipes
@@ -418,8 +492,8 @@ their `reasons` stay on the questions the model keeps, and those gain `llm`.
 It needs the `llm` extra: `pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`.
 
 **NTNU's LLM service (the default).** `Qwen/Qwen3.8-27B-FP8`, free, on the NTNU network or
-VPN. To judge with DeepSeek instead, pass `--llm-model deepseek-ai/DeepSeek-V4.1-Flash-1017 --llm-reasoning none`. Put the key in `IDUN_API_KEY`, the safe way described in the README
-([Setting up the API key](../README.md#setting-up-the-api-key)), never typed into a command.
+VPN. To judge with DeepSeek instead, pass `--llm-model deepseek-ai/DeepSeek-V4.1-Flash-1017 --llm-reasoning none`. Put the key in `IDUN_API_KEY`, the safe way described in
+[Setting up the API key](#setting-up-the-api-key), never typed into a command.
 
 ```bash
 questxtract process lecture.mp4 --detector llm
@@ -485,6 +559,69 @@ for the cost of a lecture.
 **When the endpoint fails.** You asked for the model, so there is no quiet fallback to the rules:
 the run stops with one `error:` line (see [When something goes wrong](#when-something-goes-wrong)).
 Parts already answered stay cached, so running the same command again picks up where it stopped.
+
+## Reading the board
+
+A vision model can also read the slides or the board. Each stable view of the recording becomes a
+board state: its text, its formulas as LaTeX, a short description and a confidence, linked to the
+questions asked while it was on screen. It needs the `llm` extra and a model that takes images.
+By default it is DeepSeek-V4.1-Flash on NTNU's LLM service, with the same key as the LLM detector
+(`IDUN_API_KEY`, see [Setting up the API key](#setting-up-the-api-key)) and its thinking off:
+with it on, DeepSeek reads a frame far slower for nearly the same reading. Switch vision on for
+one run with `--vision`:
+
+```bash
+questxtract process lecture.mp4 --vision        # DeepSeek on NTNU
+questxtract process lecture.mp4 --vision --llm-url http://localhost:11434/v1 \
+    --vision-model qwen3-vl:2b-instruct   # a local model in Ollama; see vision_reasoning_effort below
+```
+
+or for every run in `questxtract.toml` (`--no-vision` turns it off again for one run):
+
+```toml
+vision_enabled = true
+vision_model = "deepseek-ai/DeepSeek-V4.1-Flash-1017"   # the default, on NTNU's LLM service
+# vision_base_url = "http://localhost:8000/v1"         # vision elsewhere; the judge stays on base_url
+# vision_reasoning_effort = ""                         # for a vision model with no setting, such as qwen3-vl
+```
+
+Without `vision_base_url`, vision goes where `base_url` (`--llm-url`) points, NTNU's service by
+default, with that endpoint's key.
+
+`--vision-reader ocr` (or `vision_reader = "ocr"`) reads the keyframes with GLM-OCR instead,
+through the same endpoint: faster and lighter, with the text and formulas but no description.
+The vision model still finds the board first, once per lecture, so the room and the app around
+it are cropped away before OCR reads the frame. GLM-OCR also runs on an 8 GB laptop through
+Ollama. Give it a small vision model for finding the board too, or every run warns that it reads
+the full frame, room included:
+
+```bash
+ollama pull glm-ocr:q8_0
+ollama pull qwen3-vl:2b-instruct
+```
+
+```toml
+vision_enabled = true
+vision_reader = "ocr"
+vision_base_url = "http://localhost:11434/v1"
+vision_ocr_model = "glm-ocr:q8_0"
+vision_model = "qwen3-vl:2b-instruct"   # finds the board; leave it out to read the full frame
+vision_reasoning_effort = ""            # send no reasoning setting to the local models
+```
+
+A server that does not return token probabilities still works; its readings get confidence 0.5,
+which means "not measured".
+
+A lecture costs one model call to find the slides or board and at most 3 per minute to read
+them, at least 80 allowed, so up to 270 for a 90-minute lecture (`vision_states_per_minute`,
+`vision_min_states`), plus a resend when a call fails. A slide or page that comes back later in the
+lecture with nothing changed is not read again: its earlier reading is copied. Readings and
+keyframe images are cached, so running it again sends nothing. A reading that fails leaves its
+view out with a warning, and the run goes on. Example output:
+[demo/](demo/mit_18_100b_l1.questions.json), four questions from MIT 18.100B Lecture 1
+(MIT OpenCourseWare, CC BY-NC-SA) with the boards they were asked about; `stats` there still
+count the whole lecture. How it works:
+[architecture.md 6](architecture.md#6-vision).
 
 ## Choosing a model
 

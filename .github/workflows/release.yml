@@ -3,7 +3,7 @@ name: Release
 # Push a tag `vX.Y.Z` matching `version` in pyproject.toml, with a `## X.Y.Z` section in
 # CHANGELOG.md, and this builds the package, creates the GitHub Release with that CHANGELOG
 # section as its notes, and publishes to PyPI when the repository variable PUBLISH_TO_PYPI is
-# 'true'. See README "Releasing".
+# 'true'. See CONTRIBUTING.md "Releasing".
 
 on:
   push:

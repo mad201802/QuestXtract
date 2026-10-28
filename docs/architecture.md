@@ -1638,3 +1638,93 @@ Explicit boundaries, so the package does not grow into them by accident.
 - **Speaker identification by name** and diarization (section 2.6).
 - **Manim animations** of the board are optional and outside the core delivery
   ([design_decisions.md](design_decisions.md), D21). The package has no Manim code or dependency.
+
+## 15. Python API
+
+```python
+from pathlib import Path
+
+from questxtract import STAGES, Config, Context, Transcript, run, write_questions
+
+ctx = Context(
+    source=Path("lecture.mp4"),
+    config=Config(min_confidence=0.4),
+    transcript=Transcript.from_file("lecture.transcript.json"),  # or let stage 2 produce it
+)
+ctx = run(ctx, STAGES[2:])  # skip ingest + transcribe: the transcript is already in hand
+
+for pair in ctx.pairs:
+    print(f"[{pair.start:7.2f}s] ({pair.confidence:.0%}) {pair.question.text}")
+
+write_questions(ctx, "questions.json")
+```
+
+The pipeline is a list of `Context -> Context` functions. Passing your own `stages=` list is the
+whole plugin system: swap the detector, drop a stage, add an enrichment step:
+
+```python
+run(ctx, [my_detector if s.__name__ == "detect" else s for s in STAGES[2:]])
+```
+
+### 15.1 Filtering questions
+
+`filter_questions` narrows a finished `Context`, `filter_document` a `questions.json` document
+(edited or not). Both return a new value and leave the input untouched:
+
+```python
+from questxtract import filter_document, filter_questions, process, read_questions
+
+ctx = process("lecture.mp4")
+window = filter_questions(ctx, start=300, end=600)  # new Context, ctx untouched
+
+data = read_questions("lecture.questions.json")
+window = filter_document(data, start=300, end=600)  # new dict, same schema
+board = filter_document(data, text="eigenvalue")  # said, or on the board on screen
+```
+
+A question is kept when `start <= question.start < end`, in seconds; leave out either bound to
+open that side. Only the question list shrinks, so `segment_id` and `visual_ids` still resolve.
+An invalid range raises `ValueError`. `text=` keeps a question when every word of it appears, as
+a whole word and ignoring case, in the question, its answer, its `review` text, or a board state
+in its `visual_ids`; `questxtract filter` does the same from the command line
+([cli.md](cli.md)). `topic=` is **experimental**: no stage produces topics yet,
+so it warns and matches nothing.
+
+### 15.2 Reading a quiz.json
+
+`read_quiz` reads a `quiz.json` ([schema](../src/questxtract/quiz.schema.json)) and checks the rules
+its schema cannot express; `validate_quiz` does the same for a document already in memory. Pass
+the source `questions.json` to also check that each item's question exists and that a stem
+marked `spoken` is the question as it was said:
+
+```python
+from questxtract import read_questions, read_quiz
+
+quiz = read_quiz("lecture.quiz.json", read_questions("lecture.questions.json"))
+```
+
+Every problem is listed in one `SchemaError`, one line each, with its path.
+
+### 15.3 Swapping the ASR engine
+
+The ASR engine is a pluggable backend behind `Config.asr_backend`, not a hardcoded import.
+A second engine is one class:
+
+```python
+from questxtract import AsrBackend, Config, register_backend
+
+
+@register_backend("my_engine")
+class MyBackend:
+    def transcribe(self, source, config, on_progress=None):
+        # return raw segments: [{"text": ..., "start": ..., "end": ...}, ...]
+        # on_progress(fraction) is optional to call, but required in the signature -
+        # accept and ignore it if this engine can't estimate progress.
+        ...
+
+
+ctx = Context(source=Path("lecture.mp4"), config=Config(asr_backend="my_engine"))
+```
+
+`faster_whisper` is the default (`Config.asr_backend = "faster_whisper"`), registered the same
+way in `asr.py`.
