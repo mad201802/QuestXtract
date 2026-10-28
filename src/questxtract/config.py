@@ -11,6 +11,7 @@ import os
 import re
 import shlex
 import sys
+import tempfile
 from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any, get_args, get_type_hints
@@ -267,17 +268,26 @@ def is_openai(url: str | None) -> bool:
 
 
 def endpoint_key(url: str | None) -> str | None:
-    """Read the key for ``url`` from the environment or cwd's ``.env``, never storing it.
+    """Read the key for ``url`` from the environment, cwd's ``.env`` or the user's key file.
 
     NTNU's service has a key of its own, ``IDUN_API_KEY`` (or its former name,
     ``QUESTXTRACT_NTNU_API_KEY``, when that is unset), so the OpenAI key never
     goes there and the NTNU key never goes anywhere else. Every other endpoint (OpenAI,
     OpenRouter, a local server) reads ``OPENAI_API_KEY``, which a local server may leave unset.
+    The key is never stored in a ``Config``.
     """
     if not is_ntnu(url):
         return _read_key(OPENAI_KEY_ENV)
-    key = _read_key(NTNU_KEY_ENV)
-    return key if key is not None else _read_key(OLD_NTNU_KEY_ENV)
+    names = (NTNU_KEY_ENV, OLD_NTNU_KEY_ENV)
+    for name in names:
+        key = _read_key(name)
+        if key is not None:
+            return key
+    for name in names:  # the app's key file comes after both names in the environment and .env
+        key = _dotenv_api_key(name, user_env_path())
+        if key is not None:
+            return key
+    return None
 
 
 def _read_key(name: str) -> str | None:
@@ -287,9 +297,129 @@ def _read_key(name: str) -> str | None:
     return _dotenv_api_key(name)
 
 
-def _dotenv_api_key(name: str = OPENAI_KEY_ENV) -> str | None:
-    """Read only the key ``name``; never execute or expand .env contents."""
-    path = Path(".env")
+def user_env_path() -> Path:
+    """Return the file the app saves the NTNU key in: ``questxtract/.env`` in the config folder.
+
+    The folder is ``%APPDATA%`` on Windows, ``~/Library/Application Support`` on macOS and
+    ``$XDG_CONFIG_HOME`` (else ``~/.config``) elsewhere, so a key saved once is found from any
+    working directory.
+    """
+    home = Path.home()
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA") or home / "AppData" / "Roaming")
+    elif sys.platform == "darwin":
+        base = home / "Library" / "Application Support"
+    else:
+        configured = os.environ.get("XDG_CONFIG_HOME", "")
+        base = (
+            Path(configured) if configured and Path(configured).is_absolute() else home / ".config"
+        )
+    return base / "questxtract" / ".env"
+
+
+def valid_key(key: str) -> str:
+    """Return ``key`` without surrounding whitespace, or raise why the ``.env`` cannot hold it.
+
+    Raises:
+        ValueError: If the key is empty, or holds whitespace, a quote, a backslash, ``$`` or a
+            backtick, which the ``.env`` reader refuses or reads differently.
+
+    """
+    key = key.strip()
+    if not key:
+        raise ValueError("the key is empty")
+    if any(char.isspace() or char in "\\\"'$`" for char in key):
+        raise ValueError("the key has a space, quote, backslash, $ or backtick; copy it again")
+    return key
+
+
+def save_user_key(key: str) -> Path:
+    """Save the NTNU key in :func:`user_env_path` as ``IDUN_API_KEY``, keeping every other line.
+
+    Replaces an earlier line for the key and writes the file in one step with mode ``0600`` where
+    the system has it. The value is written in double quotes.
+
+    Returns:
+        The file written.
+
+    Raises:
+        ValueError: If :func:`valid_key` refuses the key.
+        OSError: If the file cannot be read or written.
+
+    """
+    key = valid_key(key)
+    path = user_env_path()
+    lines = _env_lines(path)
+    entry = f'{NTNU_KEY_ENV}="{key}"'
+    replaced = False
+    kept: list[str] = []
+    for line in lines:
+        if _variable(line) != NTNU_KEY_ENV:
+            kept.append(line)
+        elif not replaced:  # the reader takes the last line, so later copies would win: drop them
+            kept.append(entry)
+            replaced = True
+    if not replaced:
+        kept.append(entry)
+    _write_env(path, kept)
+    return path
+
+
+def remove_user_key() -> bool:
+    """Remove ``IDUN_API_KEY`` from :func:`user_env_path`, keeping every other line.
+
+    The file is deleted when nothing but blank lines is left.
+
+    Returns:
+        Whether a key line was there.
+
+    Raises:
+        OSError: If the file cannot be read or written.
+
+    """
+    path = user_env_path()
+    lines = _env_lines(path)
+    kept = [line for line in lines if _variable(line) != NTNU_KEY_ENV]
+    if len(kept) == len(lines):
+        return False
+    if any(line.strip() for line in kept):
+        _write_env(path, kept)
+    else:
+        path.unlink()
+    return True
+
+
+def _variable(line: str) -> str:
+    """Return the variable a ``.env`` line sets, cut as the reader cuts it, or ``""``."""
+    return line.strip().removeprefix("export ").partition("=")[0].strip() if "=" in line else ""
+
+
+def _env_lines(path: Path) -> list[str]:
+    try:
+        return path.read_text(encoding="utf-8").removeprefix("\ufeff").splitlines()
+    except FileNotFoundError:
+        return []
+    except UnicodeError:
+        raise ValueError(f"{path}: expected UTF-8 text") from None
+
+
+def _write_env(path: Path, lines: list[str]) -> None:
+    """Write ``lines`` to ``path`` through a temporary file in its folder, private to the user."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle, name = tempfile.mkstemp(dir=path.parent, prefix=".env.", suffix=".tmp")
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as out:
+            out.write("\n".join(lines) + "\n")
+        os.chmod(name, 0o600)
+        os.replace(name, path)
+    except BaseException:
+        Path(name).unlink(missing_ok=True)
+        raise
+
+
+def _dotenv_api_key(name: str = OPENAI_KEY_ENV, path: Path | None = None) -> str | None:
+    """Read only the key ``name`` from ``path`` (cwd's ``.env``); never execute or expand it."""
+    path = path if path is not None else Path(".env")
     try:
         text = path.read_text(encoding="utf-8").removeprefix("\ufeff")
     except FileNotFoundError:

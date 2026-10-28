@@ -1,6 +1,6 @@
 [project]
 name = "questxtract"
-version = "0.1.0"
+version = "0.2.0"
 description = "Extract questions from lecture audio and video and turn them into quizzes"
 readme = "README.md"
 license = "MIT"
@@ -35,8 +35,9 @@ dependencies = [
 [project.optional-dependencies]
 llm = ["openai>=1.0"]
 # The graphical app (`questxtract gui`, issue #124): drag and drop. Optional at runtime: a
-# platform where it cannot start gets the Browse button and a line saying so.
-gui = ["tkinterdnd2>=0.6.3"]
+# platform where it cannot start gets the Browse button and a line saying so. The app starts with
+# the LLM detector and reading the board on, so it also needs what `llm` installs (#228).
+gui = ["tkinterdnd2>=0.6.3", "openai>=1.0"]
 
 [project.urls]
 Homepage = "https://github.com/mad201802/QuestXtract"

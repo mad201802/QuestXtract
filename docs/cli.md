@@ -198,7 +198,9 @@ the model once per frame and caches the answers.
 
 `questxtract gui` opens a window over the same commands. It is a launcher: it runs the CLI's own
 code, so a run from the window writes the same file as the command with the same options. Install
-it with the extra, `pip install "questxtract[gui]"`.
+it with the extra, `pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.2.0"`;
+the extra includes what the LLM detector and reading the board need, since the window starts with
+both on.
 
 - **The file.** Drop an `.mp4`, `.mp3` or `.json` on the box, or click Browse. One file at a time.
   A `.json` transcript skips transcription, so the Transcript output is not offered for it.
@@ -220,8 +222,11 @@ it with the extra, `pip install "questxtract[gui]"`.
   pipeline's stages. Cancel stops before the next stage; a stage that has started finishes first,
   and no partial file is written. Errors show as the CLI's one line, never a traceback.
 - **Open folder** opens the folder of the file the run wrote.
-- **Keys.** The app reads `OPENAI_API_KEY` and `.env` exactly as the CLI does
-  ([API keys](#api-keys-and-env)). It never shows, stores or logs a key.
+- **Keys.** The app reads the keys exactly as the CLI does ([API keys](#api-keys-and-env)). The
+  **NTNU key...** button opens a window to paste the NTNU key: **Test** asks NTNU's service once,
+  **Save** tests and then saves it (a key NTNU refuses is not saved; one that could not be tested
+  is saved with a note), **Remove** deletes it. The key is saved as plain text in the file named in
+  the window. The app never shows, logs or passes the key on a command line.
 
 **Languages.** The window opens in English; the switch at the top right shows it in Norsk or
 Italiano, and keeps what was entered. Messages from the CLI itself stay in English.
@@ -290,9 +295,17 @@ The key goes with the endpoint. NTNU's LLM service, the default, reads
 never sent to NTNU, the NTNU key never leaves NTNU, and neither goes to a host set up for vision
 alone. `QUESTXTRACT_NTNU_API_KEY`, the NTNU key's former name, is still read when `IDUN_API_KEY`
 is not set. Each name comes from the environment if set; otherwise it is read from `.env` in the
-working directory. This file is ignored by Git. The supported format is `NAME=VALUE`, with
-optional single or double quotes, blank lines and `#` comments. Other variables are ignored; parent and user directories are not searched. The key
+working directory (Git ignores this file); otherwise, for the NTNU key, from the key file the app
+saves (below). The supported format is `NAME=VALUE`, with optional single or double quotes, blank
+lines and `#` comments. Other variables are ignored; parent directories are not searched. The key
 is never stored in Config, logs, cache entries or `questions.json`.
+
+**The key file.** The app's **NTNU key...** button writes `IDUN_API_KEY="..."` to `questxtract/.env`
+in your user config folder: `%APPDATA%` on Windows, `~/Library/Application Support` on macOS,
+`$XDG_CONFIG_HOME` or `~/.config` elsewhere. Every other line of that file is kept, and it is
+readable by you only where the system allows. The key sits there as plain text, like in any `.env`;
+for a safer store, keep it in your password store and load it into the environment as in the
+[Setting up the API key](#setting-up-the-api-key). Only the NTNU key is read from this file.
 
 This reader does not run shell commands or expand variables. If your setup uses a password
 store and a shell script to retrieve the key, load it into the environment before running

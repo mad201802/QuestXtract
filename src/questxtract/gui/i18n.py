@@ -124,6 +124,92 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "nb": "Én fil om gangen: den første brukes.",
         "it": "Un file alla volta: viene usato il primo.",
     },
+    # --- the NTNU key window (issue #189) ---
+    "button.ntnu_key": {"en": "NTNU key...", "nb": "NTNU-nøkkel...", "it": "Chiave NTNU..."},
+    "key.title": {"en": "NTNU key", "nb": "NTNU-nøkkel", "it": "Chiave NTNU"},
+    "key.explain": {
+        "en": "Paste the key for NTNU's LLM service. It is saved on this computer, as plain text, "
+        "and used for every run. The service needs the NTNU network or VPN.",
+        "nb": "Lim inn nøkkelen til NTNUs LLM-tjeneste. Den lagres på denne datamaskinen, som "
+        "ren tekst, og brukes i hver kjøring. Tjenesten krever NTNU-nettverket eller VPN.",
+        "it": "Incolla la chiave del servizio LLM di NTNU. Viene salvata su questo computer, come "
+        "testo semplice, e usata a ogni esecuzione. Il servizio richiede la rete NTNU o la VPN.",
+    },
+    "key.label": {"en": "Key:", "nb": "Nøkkel:", "it": "Chiave:"},
+    "key.file": {
+        "en": "Saved in: {path}",
+        "nb": "Lagres i: {path}",
+        "it": "Salvata in: {path}",
+    },
+    "key.source.environment": {
+        "en": "A key is set in the environment. It is used before a saved one.",
+        "nb": "En nøkkel er satt i miljøet. Den brukes før en lagret nøkkel.",
+        "it": "Una chiave è impostata nell'ambiente. Viene usata prima di una salvata.",
+    },
+    "key.source.dotenv": {
+        "en": "A key is in .env in the folder the app was started in. "
+        "It is used before a saved one.",
+        "nb": "En nøkkel står i .env i mappen appen ble startet i. "
+        "Den brukes før en lagret nøkkel.",
+        "it": "Una chiave è in .env nella cartella da cui è stata avviata l'app. "
+        "Viene usata prima di una salvata.",
+    },
+    "key.source.file": {
+        "en": "A key is saved.",
+        "nb": "En nøkkel er lagret.",
+        "it": "Una chiave è salvata.",
+    },
+    "key.source.none": {
+        "en": "No key is set.",
+        "nb": "Ingen nøkkel er satt.",
+        "it": "Nessuna chiave impostata.",
+    },
+    "button.key_test": {"en": "Test", "nb": "Test", "it": "Prova"},
+    "button.key_save": {"en": "Save", "nb": "Lagre", "it": "Salva"},
+    "button.key_remove": {"en": "Remove", "nb": "Fjern", "it": "Rimuovi"},
+    "button.key_close": {"en": "Close", "nb": "Lukk", "it": "Chiudi"},
+    "key.testing": {"en": "Asking NTNU...", "nb": "Spør NTNU...", "it": "Chiedo a NTNU..."},
+    "key.accepted": {
+        "en": "NTNU accepted the key.",
+        "nb": "NTNU godtok nøkkelen.",
+        "it": "NTNU ha accettato la chiave.",
+    },
+    "key.refused": {
+        "en": "NTNU refused the key. Copy it again; nothing was saved.",
+        "nb": "NTNU avviste nøkkelen. Kopier den på nytt; ingenting ble lagret.",
+        "it": "NTNU ha rifiutato la chiave. Copiala di nuovo; non è stato salvato nulla.",
+    },
+    "key.unreachable": {
+        "en": "NTNU's service did not answer. Use the NTNU network or VPN. The key was not tested.",
+        "nb": "NTNUs tjeneste svarte ikke. Bruk NTNU-nettverket eller VPN. "
+        "Nøkkelen ble ikke testet.",
+        "it": "Il servizio NTNU non risponde. Usa la rete NTNU o la VPN. "
+        "La chiave non è stata provata.",
+    },
+    "key.no_llm_extra": {
+        "en": "The key cannot be tested: questxtract[llm] is not installed.",
+        "nb": "Nøkkelen kan ikke testes: questxtract[llm] er ikke installert.",
+        "it": "La chiave non può essere provata: questxtract[llm] non è installato.",
+    },
+    "key.saved": {
+        "en": "Key saved. NTNU accepted it.",
+        "nb": "Nøkkelen er lagret. NTNU godtok den.",
+        "it": "Chiave salvata. NTNU l'ha accettata.",
+    },
+    "key.saved_unchecked": {
+        "en": "Key saved, but not tested: NTNU's service did not answer, or questxtract[llm] is "
+        "missing.",
+        "nb": "Nøkkelen er lagret, men ikke testet: NTNUs tjeneste svarte ikke, eller "
+        "questxtract[llm] mangler.",
+        "it": "Chiave salvata, ma non provata: il servizio NTNU non risponde, oppure manca "
+        "questxtract[llm].",
+    },
+    "key.removed": {"en": "Key removed.", "nb": "Nøkkelen er fjernet.", "it": "Chiave rimossa."},
+    "key.nothing_to_remove": {
+        "en": "There is no saved key to remove.",
+        "nb": "Det er ingen lagret nøkkel å fjerne.",
+        "it": "Non c'è nessuna chiave salvata da rimuovere.",
+    },
     "hint.drop_first": {
         "en": "Drop a recording or transcript here, or click Browse.",
         "nb": "Slipp et opptak eller en transkripsjon her, eller klikk Bla gjennom.",

@@ -409,7 +409,8 @@ questxtract eval --score-vision tests/data/vision/    # vision_model, per lectur
 
 Each frame is read by `vision.read_keyframe`, the function the vision stage uses (6.5), so eval
 scores what a run sends: `vision_model` (`--vision-model`), prompt v0 with the label's kind, as
-when the layout probe gets the kind right, and no speech; cached per request. Per frame: the
+when the layout probe gets the kind right, and no speech or previous state (6.5); cached per
+request. Per frame: the
 **character error rate** of `text` (edits per label character, casefolded and with whitespace
 collapsed, capped at 1) and **formula recall**, a labelled formula counting as found when some
 run of whole LaTeX tokens in the answer is within one edit per four of its tokens, after removing
@@ -575,23 +576,43 @@ panning chalkboard camera adds a view per pan, which the cap absorbs. A lecturer
 front of the board for the whole hold is a view of its own, with the board partly hidden in its
 keyframe (6.3).
 
-**Ink curve (planned, #133).** Count ink pixels per sampled frame after an adaptive threshold. A
-rising curve means writing, a sharp drop is an erase, and the local maximum before a drop is the
-completed board: the keyframe. The recording is cut into **board states** between erase events,
-roughly 20 to 60 per lecture. On slides the same curve works unchanged: a slide change is a large
-ink delta.
+**Ink curve (not planned, #133).** Cutting the recording into board states between erase events,
+found by counting ink pixels per sample, saved calls by losing board content on the lectures it
+was measured on, so the views above stay. Its ink rule tells a board filling up from a new one in
+captioning (6.5).
 
 ### 6.5 Captioning
 
 One VLM call per view, sent as prompt v0 was measured on #52: the prompt
 (`VISION_PROMPT_VERSION`), filled in with the layout probe's `kind` (6.2) and what was said
 while the view was on screen (up to 1500 characters), as the system message, and the keyframe
-alone, as a PNG data URL, as the user message. The previous state's description and the ink
-difference are to join it (planned, #137). Out, under a strict JSON schema and checked again in
+alone, as a PNG data URL, as the user message. Out, under a strict JSON schema and checked again in
 code: `description`, `text`, `latex` (or null) and `confidence`. The prompt asks for what is
 visible only, with `[unreadable]` for a word it cannot read. Cached per request, the image
 included (10.4), so no keyframe is sent twice. `latex` is there because prose does not compile,
 and the quiz and `filter --text` use the formulas.
+
+**The previous board state goes with each reading.** A board that fills up over several views
+would otherwise be read from scratch each time, with no way to tell what is new. So a view gets
+the view just before it as its previous state: that reading's `description`, `text` and `latex`,
+and the box around the new ink, as fractions of the frame. This is prompt v2
+(`tests/data/vision/prompt_v2.txt`): v0 with that block and one rule, to report everything
+visible and never copy from the previous state what is no longer there. The reading stays a
+full reading of the board, not a list of changes, because every consumer (6.6) reads one state
+on its own. Ink is a pixel more than 20 grey levels from the mean of the 15 px square around it,
+on the small grey copy (6.3). The board is new, and v0 is sent word for word, when less than
+70 % of the previous keyframe's ink is still ink: an erase, a camera cut or a page flip. It is
+also new for the first view, after a view whose reading failed, and after a blank board. New ink
+is boxed by the 8 px cells at least 20 % new ink, so codec noise draws no box. A copied reading
+(below) is a previous state like any other. The previous reading is in the request, so a changed
+one asks again rather than hitting the cache. The OCR reader has no prompt and gets none.
+
+> **Decision.** The ink rule and its 15 px and 20-level settings come from the ink curve's
+> measurement on #133; the curve itself was not built. On the #58 frames the one pair of a board
+> filling up keeps nearly all its ink and different boards keep less than half; two pages under
+> the same app toolbar keep about 60 %, so the limit sits above that. A previous state missed
+> costs only the context, while a wrong one invites the model to copy an erased board, so the
+> limit errs high.
 
 **A page that comes back is not read again.** Lecturers return to earlier slides and pages, and
 each return is a view of its own. The request cache cannot catch it: two captures of one page
@@ -914,8 +935,8 @@ with the endpoint, not with the caller:
 
 The service is told by the URL's host alone. So the OpenAI key is never sent to NTNU, the NTNU
 key never leaves it, and neither goes to a host set up for vision alone. Each key is read from
-its variable, in the environment or the working directory's `.env`, never from
-`questxtract.toml`, and hidden in error messages. The CLI checks the key of every endpoint a run
+its variable, in the environment or the working directory's `.env` (the NTNU key also from the
+user's key file, cli.md "API keys and .env"), never from `questxtract.toml`, and hidden in error messages. The CLI checks the key of every endpoint a run
 will use before anything slow starts, and refuses a model name from the other service: every
 model on NTNU's is named `organisation/model`, and no OpenAI model has a `/`.
 
@@ -1112,7 +1133,9 @@ the working directory is read if present. `load_config` checks keys against the 
 and values against their annotations. The CLI validates the resulting choices and ranges before
 running stages or writing output. Relative paths remain relative to the working directory.
 `Config.api_key` and `Config.vision_api_key` read the key for their endpoint (10.1) from the
-environment first, then from that directory's UTF-8 `.env` file. It never stores the key in the dataclass or expands shell expressions.
+environment first, then from that directory's UTF-8 `.env` file, and for NTNU's key then from the
+per-user file `config.user_env_path()` that the app writes. It never stores the key in the
+dataclass or expands shell expressions.
 Secret-like TOML keys are rejected. Library callers can use `load_config` from `config.py`
 explicitly; constructing `Config()` alone does not read TOML.
 
@@ -1526,6 +1549,8 @@ src/questxtract/
     options.py     one table of the CLI options the app shows, checked against the CLI
     run.py         form values -> the CLI's argv -> cli.execute; no pipeline of its own
     state.py       what the form holds, what Run needs, progress fractions (no tkinter)
+    keys.py        the NTNU key: test, save, remove, where it is read from (no tkinter)
+    key_dialog.py  the key window: a masked field, Test, Save, Remove
     window.py      the tkinter window, classic ttk look; drag and drop via tkinterdnd2
 
 tests/            flat, one test module per source module, plus conftest.py
@@ -1570,7 +1595,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `transcribe.py`, `asr.py` | 2 transcribe | done: faster-whisper behind the `AsrBackend` registry; the vision-informed second pass (2.4) is not planned | |
 | `sentences.py` | 3 sentences | done | |
 | `segments.py` | 4 segments | done | |
-| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v0 (6.5) or the OCR reader (6.5), reusing the reading of a page that comes back (6.5) and the interval join; the ink curve (6.4) is not built, de-occlusion (6.3) is not planned | #133 |
+| `vision.py` | 5 layout, vision, attach_visual | done: the layout probe (6.2), frame sampling (6.3), stable views with one keyframe each (6.4, static), captioning with prompt v2 (6.5), with the previous board state unless the board is new, or the OCR reader (6.5), reusing the reading of a page that comes back (6.5) and the interval join; the ink curve (6.4) and de-occlusion (6.3) are not planned | |
 | `detect.py` | 6 detect | done (7.1 to 7.3); implicit cues and missing-`?` recovery wait for a labelled miss (7.1) | |
 | `answer.py` | 7 answer | adjacent seed done; answers further away come from the LLM detector | |
 | `llm.py` | 8 judge | done: the LLM detector (10) | |
@@ -1584,7 +1609,7 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `qti.py`, `qti_package.py`, `qti_v2.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 and 2.1 packages of a `quiz.json` (12.4) | |
 | `tex.py` | not a stage | done: the ExerPlaza TeX of a `quiz.json` (12.5); the direct export to ExerPlaza is #37 | |
 | `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz`, `qti` and `tex` work ([cli.md](cli.md)); `process --vision --detector llm --quiz` runs every stage and the quiz in one run, tested offline | |
-| `gui/` | not a stage | done: the window and its run launcher (`questxtract gui`, 13.1); it runs the CLI's code and does not review or edit questions (14) | |
+| `gui/` | not a stage | done: the window, its run launcher and the NTNU key window (`questxtract gui`, 13.1); it runs the CLI's code and does not review or edit questions (14) | |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
 running list of what this document describes and the code does not yet do.

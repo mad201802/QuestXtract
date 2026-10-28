@@ -1,14 +1,21 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 ### Added
 
+- The app saves the NTNU key for you: the **NTNU key...** button on the start view opens a window
+  where you paste the key and press Test (NTNU's service is asked once), Save or Remove. The key is
+  saved as plain text in `questxtract/.env` in your user config folder (`%APPDATA%` on Windows,
+  `~/Library/Application Support` on macOS, `~/.config` elsewhere), so every run finds it, from
+  any folder. A key NTNU refuses is not saved; a key that could not be tested (off the NTNU
+  network or VPN) is saved with a note. The CLI reads the same file, after the environment and
+  `.env`. (#189)
 - `questxtract gui` opens a window for people who do not use a terminal: drop or browse a
   recording (`.mp4`, `.mp3`) or a transcript (`.json`), choose questions, transcript, quiz or QTI
   package, set the options (the CLI's own, with its defaults) and press Run. It runs the CLI's code,
   shows progress, Cancel (between stages), the written path and an Open folder button. Install with
-  `pip install "questxtract[gui]"`; drag and drop needs `tkinterdnd2`, and where it cannot start the
+  the `[gui]` extra; drag and drop needs `tkinterdnd2`, and where it cannot start the
   window says so and Browse still works. The start view has only the file, the output and Run;
   the options are behind Advanced settings, except Read the board (vision), which stays on the start view. Without a `questxtract.toml` the window starts with the LLM detector and Read the board on (both need the NTNU key; the CLI's defaults are unchanged); with one, it starts from the file. The judge's model is greyed out with the rules detector. The window is in English, Norsk or Italiano (the
   switch at the top right). Needs a Python with tkinter. (#124)
@@ -143,6 +150,11 @@
 - NTNU's LLM service (the default endpoint) reads its key from `IDUN_API_KEY`, in the environment
   or `.env`. `QUESTXTRACT_NTNU_API_KEY`, its former name, is still read when `IDUN_API_KEY` is not
   set, so nothing has to be renamed. (#124)
+- With vision on, each board state is read with the one before it: its text, LaTeX and
+  description, and where new writing appeared (prompt v2). After an erase, a camera cut or a page
+  flip, when less than 70 % of the earlier ink is left, the state is read on its own as before (prompt v0).
+  The first run after updating reads the board states that follow another one again. The OCR
+  reader is unchanged. (#137)
 - The LLM detector and the quiz send no reasoning setting by default (`reasoning_effort = ""`,
   the same as `--llm-reasoning server`). Only `--llm-reasoning low`, `medium` or `high` now raise
   the request timeout to 10 minutes; `server` keeps 2 minutes, so set `timeout_seconds` for a
@@ -199,6 +211,12 @@
 
 ### Fixed
 
+- The app installs and runs with one command: the `[gui]` extra also installs `openai`, which
+  the app needs since it starts with the LLM detector and reading the board on. The README and
+  docs/cli.md install lines now point at this release
+  (`pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.2.0"`), and a
+  Download button at the top of the README opens the latest GitHub Release, whose wheel installs
+  with `pip install "questxtract-0.2.0-py3-none-any.whl[gui]"`. (#228)
 - The quiz no longer drops an item because two options differ only by a sign (`-2` and `2`) or a
   decimal point (`1.5` and `15`): the sameness check ignores only case, math delimiters, runs of
   spaces and punctuation at the end, and keeps everything inside an option. The quiz prompt (now `v1`) leaves out check-ins on the class, names the

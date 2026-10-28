@@ -59,9 +59,22 @@ _YCBCR = np.array(  # ITU-R BT.601 RGB to Y, Cb and Cr, without offsets: only di
     [[0.299, 0.587, 0.114], [-0.169, -0.331, 0.5], [0.5, -0.419, -0.081]], dtype=np.float32
 )
 
+# The previous board state goes with each reading (architecture.md 6.5, #137). Ink is #133's rule,
+# on the small grey copy: a pixel that differs from the mean of the square around it.
+_INK_WINDOW = 15  # px of the small copy: the side of that square
+_INK_CONTRAST = 20  # grey levels from that mean that make a pixel ink
+# Share of the previous keyframe's ink still there, or the board is new: an erase, a camera cut or
+# a page flip. On the #58 frames one board filling up keeps 0.99, different boards 0.14 to 0.46,
+# and two pages under one app toolbar 0.62; a missed previous state only costs the context.
+_INK_KEPT = 0.7
+_NEW_INK_CELL = 8  # px: new ink is boxed by the cells of this side where at least
+_NEW_INK_SHARE = 0.2  # this share of pixels is new ink, so codec noise and a cursor make no box
+
 # The prompt and the schema are module-level, version-tagged, so a prompt change is a reviewable
 # diff. Both are part of every request, so a change to either asks again (endpoint.ask's cache).
-VISION_PROMPT_VERSION = "v0"  # tests/data/vision/prompt_v0.txt, chosen in #52
+# tests/data/vision/prompt_v2.txt: v0 (chosen in #52) with the previous board state. A state
+# without one is sent v0 word for word.
+VISION_PROMPT_VERSION = "v2"
 _SPEECH_CHARS = 1500  # the speech sent with one keyframe: its own view's words, kept short
 _GIVE_UP_AFTER = 3  # failed readings in a row, before any success, that stop the captioning
 
@@ -110,6 +123,28 @@ Answer with one JSON object and nothing else: \
 {"description": ..., "text": ..., "latex": ..., "confidence": ...}\
 """
 
+# Prompt v2 is v0 with these two parts added, so the diff to v0 is only them.
+_PREVIOUS = """\
+The board state before this one, as read from its own frame (context only):
+Description: {previous_description}
+Text:
+{previous_text}
+LaTeX:
+{previous_latex}
+Where new writing appeared since then: {new_ink}
+
+"""
+_PREVIOUS_RULE = """\
+- The previous board state helps you keep names and notation the same and see what is new. It is
+  not this frame: report everything visible in this frame, also what was there before, and never
+  copy anything from the previous state that is no longer visible.
+"""
+_V0_FIRST_RULE = "  copy words, formulas or claims from it that are not on the board.\n"
+_PROMPT_V2 = _PROMPT.replace("Rules:\n", _PREVIOUS + "Rules:\n").replace(
+    _V0_FIRST_RULE, _V0_FIRST_RULE + _PREVIOUS_RULE
+)
+_PLACEHOLDER = re.compile(r"\{([a-z_]+)\}")  # not the JSON example: its braces hold quotes
+
 _SCHEMA: dict[str, Any] = {
     "type": "json_schema",
     "json_schema": {
@@ -130,6 +165,7 @@ _SCHEMA: dict[str, Any] = {
 }
 
 Frame = np.ndarray[Any, np.dtype[np.uint8]]
+Ink = np.ndarray[Any, np.dtype[np.bool_]]  # where a small grey copy has ink (_ink)
 Crop = tuple[float, float, float, float]  # normalised (x0, y0, x1, y1), from the layout probe
 
 _FULL_FRAME: Crop = (0.0, 0.0, 1.0, 1.0)
@@ -307,30 +343,43 @@ def vision(ctx: Context) -> Context:
     ``content_region`` and its ``kind`` goes into the prompt; one answer holds for the whole
     recording. On slides, handwriting and screencasts, a page that comes back with the same
     content reuses its earlier reading in this run, with no model call (:func:`_earlier`),
-    counted in ``stats.vision_reused``. De-occlusion is not built.
+    counted in ``stats.vision_reused``. Each reading gets the view before it, read or reused,
+    as its previous board state, unless the board is new (:func:`_previous`). De-occlusion is
+    not built.
     """
     if not ctx.config.vision_enabled or not has_video(ctx.source):
         return ctx
     config, report = ctx.config, ctx.progress
     views = _cut(ctx)
     reuse = ctx.layout.kind in _REUSE_KINDS
+    carry = config.vision_reader != "ocr"  # the OCR reader has no prompt for a previous state
     readings: list[_Reading] = []
     visual: list[VisualContext] = []
+    before: tuple[Ink, dict[str, Any]] | None = None  # the view just before: its ink, reading
     failed = reused = 0
     usage: Counter[str] = Counter()  # what the readings cost (#123)
     for index, view in enumerate(views):
         if report:
             report("vision", 0.5 + 0.5 * index / len(views))
-        picture = _decoded(view.keyframe) if reuse else None
+        picture = _decoded(view.keyframe) if reuse or carry else None
         small = None if picture is None else _for_comparison(picture)
-        fields = _earlier(picture, small, readings, views)
+        ink = _ink(small) if carry and small is not None else None
+        fields = _earlier(picture, small, readings, views) if reuse else None
         if fields is not None:
             reused += 1
         else:
             speech = _speech(ctx.sentences, view.start, view.end)
-            fields = read_keyframe(config, view.keyframe, speech, kind=ctx.layout.kind, usage=usage)
+            fields = read_keyframe(
+                config,
+                view.keyframe,
+                speech,
+                kind=ctx.layout.kind,
+                usage=usage,
+                previous=_previous(before, ink),
+            )
             if fields is None:
                 failed += 1
+                before = None
                 if not visual and failed >= _GIVE_UP_AFTER:
                     warnings.warn(
                         f"vision: the first {failed} keyframes could not be read, so the rest "
@@ -341,8 +390,9 @@ def vision(ctx: Context) -> Context:
                     )
                     break
                 continue
-            if small is not None:
+            if reuse and small is not None:
                 readings.append(_Reading(small=small, view=index, fields=fields))
+        before = None if ink is None else (ink, fields)
         path = _store(view.keyframe, config, ctx.source_hash)
         visual.append(VisualContext(start=view.start, end=view.end, keyframe_path=path, **fields))
     ctx.visual = tuple(visual)
@@ -448,6 +498,99 @@ def _decoded(png: bytes) -> Frame | None:
     if not frames or not isinstance(frames[0], av.VideoFrame):
         return None
     return np.asarray(frames[0].to_ndarray(format="rgb24"), dtype=np.uint8)  # rgb24 is uint8
+
+
+@dataclass(frozen=True, kw_only=True)
+class PreviousState:
+    """The board state before the one being read, as the captioning prompt gets it (6.5).
+
+    Args:
+        description: Its reading's ``description``.
+        text: Its reading's ``text``.
+        latex: Its reading's ``latex``, or ``None``.
+        new_ink: The box around the ink that is new since, as fractions ``(x0, y0, x1, y1)`` of
+            the keyframe's width and height from its top-left corner; ``None`` when none was
+            found.
+
+    """
+
+    description: str
+    text: str
+    latex: str | None
+    new_ink: Crop | None = None
+
+
+def _previous(before: tuple[Ink, dict[str, Any]] | None, now: Ink | None) -> PreviousState | None:
+    """Return the previous board state to send with a keyframe, or ``None`` when the board is new.
+
+    ``before`` is the view just before: the ink of its small grey copy (:func:`_ink`) and its
+    reading, ``None`` when it was not read; ``now`` is this keyframe's ink. The board is new when
+    less than ``_INK_KEPT`` of the earlier keyframe's ink is still ink in this one
+    (:func:`_ink_kept`): an erase, a camera cut or a page flip. A blank earlier board has nothing
+    to carry over, and copies of different sizes cannot be compared, so neither gives a previous
+    state.
+    """
+    if before is None or now is None:
+        return None
+    was, fields = before
+    if _ink_kept(was, now) < _INK_KEPT:
+        return None
+    return PreviousState(
+        description=fields["description"],
+        text=fields["text"],
+        latex=fields["latex"],
+        new_ink=_new_ink(now & ~was),
+    )
+
+
+def _ink_kept(was: Ink, now: Ink) -> float:
+    """Return the share of the earlier ink ``was`` that is still ink ``now``.
+
+    0 for a blank earlier board, and for copies of different sizes, which cannot be compared.
+    """
+    if was.shape != now.shape or not was.any():
+        return 0.0
+    return float((was & now).sum() / was.sum())
+
+
+def _ink(small: Frame) -> Ink:
+    """Where a small grey copy has ink: pixels more than ``_INK_CONTRAST`` from their local mean.
+
+    The mean is over the ``_INK_WINDOW`` square around each pixel, the edges repeated, from
+    summed areas, so the window costs the same at any size.
+    """
+    side, height, width = _INK_WINDOW, small.shape[0], small.shape[1]
+    gray = small.astype(np.float64)
+    sums = np.pad(np.pad(gray, side // 2, mode="edge").cumsum(0).cumsum(1), ((1, 0), (1, 0)))
+    window = (
+        sums[side : side + height, side : side + width]
+        - sums[:height, side : side + width]
+        - sums[side : side + height, :width]
+        + sums[:height, :width]
+    )
+    ink: Ink = np.abs(gray - window / side**2) > _INK_CONTRAST
+    return ink
+
+
+def _new_ink(new: Ink) -> Crop | None:
+    """Return the box around the cells mostly of new ink, as fractions, or ``None`` when none.
+
+    The cells are ``_NEW_INK_CELL`` px squares; one counts when at least ``_NEW_INK_SHARE`` of
+    its pixels are new ink, so scattered codec noise draws no box. Rounded to two decimals, so
+    the request, and with it the cache key, does not move with noise.
+    """
+    cell = _NEW_INK_CELL
+    height, width = new.shape[0] // cell * cell, new.shape[1] // cell * cell
+    share = new[:height, :width].reshape(height // cell, cell, width // cell, cell).mean((1, 3))
+    rows, columns = np.nonzero(share >= _NEW_INK_SHARE)
+    if not len(rows):
+        return None
+    return (
+        round(int(columns.min()) * cell / new.shape[1], 2),
+        round(int(rows.min()) * cell / new.shape[0], 2),
+        round((int(columns.max()) + 1) * cell / new.shape[1], 2),
+        round((int(rows.max()) + 1) * cell / new.shape[0], 2),
+    )
 
 
 def _cut(ctx: Context) -> list[_View]:
@@ -842,6 +985,7 @@ def read_keyframe(
     *,
     kind: str = "unknown",
     usage: Counter[str] | None = None,
+    previous: PreviousState | None = None,
 ) -> dict[str, Any] | None:
     """Read one keyframe with the vision model (architecture.md 6.5).
 
@@ -849,7 +993,9 @@ def read_keyframe(
     (architecture.md 4.4) both call it, so what eval scores is what a run sends. ``png`` is the
     keyframe as :class:`_View` holds it; ``speech`` is what was said while its view was on
     screen; ``kind`` is what the layout probe says the frame shows; ``usage`` collects what the
-    call cost (:func:`endpoint.ask`). Returns the
+    call cost (:func:`endpoint.ask`). ``previous`` is the board state before this one: with it,
+    the prompt is v2, which carries its reading and where new ink appeared; without it, v0. The
+    OCR model has no prompt, so it gets none. Returns the
     :class:`VisualContext` fields the model reads, or ``None`` with a warning when the call
     fails or a field is malformed: a board description only enriches questions the pipeline
     already found, so unlike the judge, vision never ends the run. Cached on the request,
@@ -867,7 +1013,21 @@ def read_keyframe(
         return _read_ocr(config, image, usage)
     # As prompt v0 was measured in #52: the prompt, with its kind and speech filled in, as the
     # system message, and the image alone as the user message.
-    prompt = _PROMPT.replace("{kind}", kind).replace("{speech}", speech.strip() or "-")
+    values = {"kind": kind, "speech": speech.strip() or "-"}
+    if previous is not None:
+        box = previous.new_ink
+        values |= {
+            "previous_description": previous.description.strip() or "-",
+            "previous_text": previous.text.strip() or "-",
+            "previous_latex": (previous.latex or "").strip() or "-",
+            "new_ink": "not found"
+            if box is None
+            else f"[{', '.join(f'{v:.2f}' for v in box)}] (x0, y0, x1, y1: fractions of this "
+            "frame's width and height from its top-left corner)",
+        }
+    template = _PROMPT if previous is None else _PROMPT_V2
+    # One pass, so a placeholder inside the speech or a reading is never filled in.
+    prompt = _PLACEHOLDER.sub(lambda m: values.get(m[1], m[0]), template)
     request: dict[str, Any] = {
         "model": config.vision_model,
         "messages": [

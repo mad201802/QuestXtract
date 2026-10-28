@@ -11,8 +11,10 @@ from questxtract import Config, Context, Sentence, Transcript, Word, endpoint
 
 
 @pytest.fixture(autouse=True)
-def _isolated_from_the_developer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Keep the developer's API keys, .env and questxtract.toml out of every test.
+def _isolated_from_the_developer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """Keep the developer's API keys, .env, key file and questxtract.toml out of every test.
 
     Each test runs in its own empty ``tmp_path`` with no key in the environment, so the
     cwd-relative reads (``.env``, ``questxtract.toml``, the ``.questxtract`` cache) see
@@ -21,6 +23,13 @@ def _isolated_from_the_developer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("QUESTXTRACT_VISION_API_KEY", raising=False)
     monkeypatch.delenv("IDUN_API_KEY", raising=False)
+    monkeypatch.delenv("QUESTXTRACT_NTNU_API_KEY", raising=False)
+    # The key file the app saves (config.user_env_path) lives under the home folder.
+    home = tmp_path_factory.mktemp("home")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setenv("APPDATA", str(home / "AppData" / "Roaming"))
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.chdir(tmp_path)
 
 

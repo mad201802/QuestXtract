@@ -26,6 +26,7 @@ from ..pipeline import Cancelled
 from . import i18n, state
 from . import run as gui_run
 from .i18n import tr
+from .key_dialog import KeyDialog
 from .options import OPTIONS, OUTPUTS, Option
 
 __all__ = ["run_app"]
@@ -211,8 +212,11 @@ class QuestXtractWindow:
         self._text(self.open_button, "button.open_folder")
         self.open_button.grid(row=0, column=2, padx=(6, 0))
         actions.columnconfigure(3, weight=1)
+        key_button = ttk.Button(actions, command=self._open_key_dialog)
+        self._text(key_button, "button.ntnu_key")
+        key_button.grid(row=0, column=4, sticky="e", padx=(0, 6))
         self.advanced_button = ttk.Button(actions, command=self._toggle_advanced)
-        self.advanced_button.grid(row=0, column=3, sticky="e")
+        self.advanced_button.grid(row=0, column=5, sticky="e")
 
         self.progress_var = tk.DoubleVar(master=self.root, value=0.0)
         ttk.Progressbar(frame, maximum=100, variable=self.progress_var).grid(
@@ -291,6 +295,10 @@ class QuestXtractWindow:
         if not state.output_offered(self.output.get(), path):
             self.output.set("questions")
         self._refresh()
+
+    def _open_key_dialog(self) -> None:
+        """Open the NTNU key window; a saved or removed key is part of the next check."""
+        KeyDialog(self.root, on_change=self._refresh)
 
     def _toggle_advanced(self) -> None:
         """Show or hide the options form; the window grows or shrinks to fit."""

@@ -7,6 +7,8 @@
 Feed it a lecture video, get back every question that was actually asked in it, with timestamps,
 confidence scores and a clean JSON export.
 
+[![Download](https://img.shields.io/github/v/release/mad201802/QuestXtract?label=Download&logo=github&style=for-the-badge&color=2ea44f)](https://github.com/mad201802/QuestXtract/releases/latest)
+
 [![CI](https://github.com/mad201802/QuestXtract/actions/workflows/ci.yml/badge.svg)](https://github.com/mad201802/QuestXtract/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12%20|%203.13-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -46,18 +48,22 @@ What is built today:
 ## Install
 
 ```bash
-# with uv (recommended)
-uv add git+https://github.com/mad201802/QuestXtract@v0.1.0
+# with pip, the graphical app included
+pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.2.0"
 
-# or with pip
-pip install git+https://github.com/mad201802/QuestXtract@v0.1.0
+# or with uv
+uv add "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.2.0"
 ```
 
-Drop the `@v0.1.0` for the latest `main`. Releases: [GitHub Releases](https://github.com/mad201802/QuestXtract/releases).
+Or click **Download** at the top, take the `.whl` file from the release, and install it from the
+folder you saved it in: `pip install "questxtract-0.2.0-py3-none-any.whl[gui]"`.
+
+The extras: `[gui]` is the graphical app, with what the LLM detector and reading the board need;
+`[llm]` is only those, for the command line. Without an extra you get the command line with the
+offline rules. Drop the `@v0.2.0` for the latest `main`. Releases:
+[GitHub Releases](https://github.com/mad201802/QuestXtract/releases).
 
 Requires Python 3.10+ on Linux, macOS or Windows.
-Extras: `[llm]` for the LLM detector, reading the board and quizzes, `[gui]` for the graphical
-app, e.g. `pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`.
 
 ## Quickstart
 
@@ -72,8 +78,8 @@ questxtract filter lecture.questions.json --text eigenvalue   # the questions ab
 An `.mp4` or `.mp3` goes through every stage; a `.json` transcript, from QuestXtract or
 [any other ASR engine](docs/cli.md#what-decides-how-much-runs), skips transcription.
 
-**Graphical app.** `pip install "questxtract[gui]"`, then `questxtract gui`: drop a recording or
-transcript on the window and press Run ([details](docs/cli.md#graphical-app)).
+**Graphical app.** Install with the `[gui]` extra ([Install](#install)), then `questxtract gui`:
+drop a recording or transcript on the window and press Run ([details](docs/cli.md#graphical-app)).
 
 ### With an LLM and the board
 
@@ -88,8 +94,8 @@ questxtract tex lecture.quiz.json -o lecture.tex --content-unit "Sorting"   # Te
 ```
 
 By default both run on NTNU's LLM service: they need `IDUN_API_KEY` and the NTNU network or VPN.
-OpenAI or a local Ollama work through `--llm-url`. Store the key safely:
-[Setting up the API key](docs/cli.md#setting-up-the-api-key).
+OpenAI or a local Ollama work through `--llm-url`. The app's **NTNU key...** button saves the key;
+to store it safely instead: [Setting up the API key](docs/cli.md#setting-up-the-api-key).
 
 ## Documentation
 

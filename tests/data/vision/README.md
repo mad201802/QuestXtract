@@ -26,6 +26,7 @@ tests/data/vision/
   <recording-name>_<seconds>.png     the frames, named by the second they were taken at
   <recording-name>.links.jsonl       questions labelled with the board state on screen
   prompt_v0.txt, prompt_v1.txt       the captioning prompts of #52
+  prompt_v2.txt                      v0 with the previous board state (#137)
   prompt_v0.schema.json              the JSON the model must return
   results/<run>/results.jsonl        raw answers of the #52 comparison
 ```
@@ -180,6 +181,7 @@ has the standard YouTube licence.
 |---|---|
 | `prompt_v0.txt` | Captioning prompt v0. `{kind}` is the frame kind from the layout probe (slides, blackboard, whiteboard, handwriting, screencast, unknown); `{speech}` is the transcript overlapping the frame, as context only. |
 | `prompt_v1.txt` | Prompt v0 with a stricter `latex` instruction (every equation, even a short one). It did not change how often the models fill `latex`, so v0 stays. |
+| `prompt_v2.txt` | Prompt v0 with the previous board state (#137): its `{previous_description}`, `{previous_text}` and `{previous_latex}`, `{new_ink}` (the box around the new writing, or "not found"), and a rule never to copy what is no longer visible. Sent when a state follows another without an erase; otherwise v0 is sent. `scripts/compare_previous_state.py` reads the frames both ways, for #137. |
 | `prompt_v0.schema.json` | The JSON the model must return: `description`, `text`, `latex` (or `null`), `confidence`, matching `VisualContext` in `models.py`. |
 
 Raw answers of the model comparison, one line per call: `results/<run>/results.jsonl`, written by
