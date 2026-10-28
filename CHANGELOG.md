@@ -150,6 +150,11 @@
 - NTNU's LLM service (the default endpoint) reads its key from `IDUN_API_KEY`, in the environment
   or `.env`. `QUESTXTRACT_NTNU_API_KEY`, its former name, is still read when `IDUN_API_KEY` is not
   set, so nothing has to be renamed. (#124)
+- With vision on, each board state is read with the one before it: its text, LaTeX and
+  description, and where new writing appeared (prompt v2). After an erase, a camera cut or a page
+  flip, when less than 70 % of the earlier ink is left, the state is read on its own as before (prompt v0).
+  The first run after updating reads the board states that follow another one again. The OCR
+  reader is unchanged. (#137)
 - The LLM detector and the quiz send no reasoning setting by default (`reasoning_effort = ""`,
   the same as `--llm-reasoning server`). Only `--llm-reasoning low`, `medium` or `high` now raise
   the request timeout to 10 minutes; `server` keeps 2 minutes, so set `timeout_seconds` for a

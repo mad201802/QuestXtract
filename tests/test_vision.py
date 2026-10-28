@@ -1,6 +1,7 @@
 import base64
 import dataclasses
 import inspect
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -19,12 +20,17 @@ from questxtract.sentences import sentences as sentences_stage
 from questxtract.vision import (
     _LAYOUT_PROMPT,
     _PROMPT,
+    _PROMPT_V2,
     VISION_PROMPT_VERSION,
+    PreviousState,
     _changed,
     _decoded,
     _for_comparison,
+    _ink,
+    _ink_kept,
     _merge_shortest,
     _png,
+    _previous,
     _Reading,
     _same_page,
     _sample_frames,
@@ -362,11 +368,12 @@ def test_a_cache_entry_that_is_not_text_is_asked_again(fake_llm, tmp_path):
     assert entry.read_text(encoding="utf-8").startswith("{")  # replaced by the new answer
 
 
-def test_the_prompt_is_prompt_v0():
-    """The prompt chosen in #52, word for word; a change needs a new version and file."""
-    assert VISION_PROMPT_VERSION == "v0"
-    v0 = Path(__file__).parent / "data" / "vision" / "prompt_v0.txt"
-    assert _PROMPT == v0.read_text(encoding="utf-8").rstrip("\n")
+def test_the_prompts_are_v0_and_v2():
+    """v0 as chosen in #52 and v2 (#137), word for word; a change needs a new version and file."""
+    assert VISION_PROMPT_VERSION == "v2"
+    prompts = Path(__file__).parent / "data" / "vision"
+    assert _PROMPT == (prompts / "prompt_v0.txt").read_text(encoding="utf-8").rstrip("\n")
+    assert _PROMPT_V2 == (prompts / "prompt_v2.txt").read_text(encoding="utf-8").rstrip("\n")
 
 
 # --- the vision stage (#59) ---
@@ -1279,3 +1286,170 @@ def test_the_stage_keeps_as_many_states_as_the_length_allows(
     assert len(ctx.visual) == kept
     assert ctx.visual[0].start == 0.0 and ctx.visual[-1].end == pytest.approx(12.0, abs=0.1)
     assert [v.end for v in ctx.visual[:-1]] == [v.start for v in ctx.visual[1:]]
+
+
+# --- the previous board state (#137) ---
+
+PREVIOUS = PreviousState(
+    description="A limit problem.",
+    text="warm up problem",
+    latex="\\lim_{x \\to -2} f(x)",
+    new_ink=(0.08, 0.36, 0.86, 0.76),
+)
+
+
+def _written_on(page=None):
+    """``_page`` with four more lines written below: one board filling up, a view of its own."""
+    page = _page() if page is None else page.copy()
+    for row in range(4):
+        page[290 + 16 * row : 297 + 16 * row, 330:630] = 40
+    return page
+
+
+def test_the_prompt_carries_the_previous_reading_and_the_new_ink(fake_llm, tmp_path):
+    """#137 AC: with a previous state, the request is prompt v2 with its reading and the box."""
+    client = fake_llm(_board())
+    read_keyframe(Config(cache_dir=str(tmp_path)), PNG, "so", kind="handwriting", previous=PREVIOUS)
+    prompt = client.requests[0]["messages"][0]["content"]
+    assert prompt == _PROMPT_V2.replace("{kind}", "handwriting").replace("{speech}", "so").replace(
+        "{previous_description}", "A limit problem."
+    ).replace("{previous_text}", "warm up problem").replace(
+        "{previous_latex}", "\\lim_{x \\to -2} f(x)"
+    ).replace(
+        "{new_ink}",
+        "[0.08, 0.36, 0.86, 0.76] (x0, y0, x1, y1: fractions of this frame's width and height "
+        "from its top-left corner)",
+    )
+
+
+def test_a_previous_state_without_new_ink_or_formulas_says_so(fake_llm, tmp_path):
+    client = fake_llm(_board())
+    previous = PreviousState(description="", text="", latex=None)
+    read_keyframe(Config(cache_dir=str(tmp_path)), PNG, "", previous=previous)
+    prompt = client.requests[0]["messages"][0]["content"]
+    assert "Text:\n-\nLaTeX:\n-\nWhere new writing appeared since then: not found" in prompt
+
+
+def test_a_placeholder_in_the_speech_is_not_filled_in(fake_llm, tmp_path):
+    client = fake_llm(_board())
+    read_keyframe(Config(cache_dir=str(tmp_path)), PNG, "say {previous_text}", previous=PREVIOUS)
+    assert "say {previous_text}" in client.requests[0]["messages"][0]["content"]
+
+
+def test_a_changed_previous_reading_asks_again(fake_llm, tmp_path):
+    """#137 AC: the previous reading is in the request, so it is in the cache key."""
+    client = fake_llm(_board())
+    config = Config(cache_dir=str(tmp_path))
+    read_keyframe(config, PNG, "", previous=PREVIOUS)
+    read_keyframe(config, PNG, "", previous=PREVIOUS)
+    assert len(client.requests) == 1
+    read_keyframe(config, PNG, "", previous=dataclasses.replace(PREVIOUS, text="warm-up problem"))
+    read_keyframe(config, PNG, "")
+    assert len(client.requests) == 3
+
+
+def test_the_ocr_reader_gets_no_previous_state(fake_llm, tmp_path):
+    client = fake_llm("plain text")
+    config = Config(cache_dir=str(tmp_path), vision_reader="ocr")
+    read_keyframe(config, PNG, "", previous=PREVIOUS)
+    assert "previous" not in json.dumps(client.requests[0])
+
+
+def _small(page):
+    return _for_comparison(page)
+
+
+def _ink_of(page):
+    return _ink(_small(page))
+
+
+def test_a_board_filling_up_has_a_previous_state_with_a_box_around_the_new_lines():
+    fields = {"description": "d", "text": "t", "latex": None}
+    previous = _previous((_ink_of(_page()), fields), _ink_of(_written_on()))
+    assert previous is not None
+    assert (previous.description, previous.text, previous.latex) == ("d", "t", None)
+    lines = (330 / 640, 290 / 360, 630 / 640, 345 / 360)  # the new lines, as fractions
+    assert previous.new_ink is not None
+    x0, y0, x1, y1 = previous.new_ink
+    # around the new lines, at most a cell and the ink's halo wider
+    assert lines[0] - 0.03 <= x0 <= lines[0] and lines[1] - 0.03 <= y0 <= lines[1]
+    assert lines[2] <= x1 <= lines[2] + 0.03 and lines[3] <= y1 <= lines[3] + 0.03
+
+
+def test_the_same_board_has_a_previous_state_but_no_new_ink():
+    fields = {"description": "d", "text": "t", "latex": None}
+    previous = _previous((_ink_of(_page()), fields), _ink_of(_page()))
+    assert previous is not None and previous.new_ink is None
+
+
+@pytest.mark.parametrize(
+    ("earlier", "now"),
+    [
+        pytest.param(_page(), _other_page(), id="erased"),
+        pytest.param(np.full((360, 640, 3), 240, np.uint8), _page(), id="blank-before"),
+        pytest.param(_page(), _page()[:200], id="other-size"),
+    ],
+)
+def test_a_new_board_has_no_previous_state(earlier, now):
+    fields = {"description": "d", "text": "t", "latex": None}
+    assert _previous((_ink_of(earlier), fields), _ink_of(now)) is None
+    assert _previous(None, _ink_of(now)) is None
+    assert _previous((_ink_of(earlier), fields), None) is None
+
+
+def test_ink_kept_is_the_share_of_the_earlier_ink_still_there():
+    assert _ink_kept(_ink_of(_page()), _ink_of(_page())) == 1.0
+    assert _ink_kept(_ink_of(_page()), _ink_of(_written_on())) > 0.7
+    assert _ink_kept(_ink_of(np.full((360, 640, 3), 240, np.uint8)), _ink_of(_page())) == 0.0
+    assert _ink_kept(_ink_of(_page()), _ink_of(_page()[:200])) == 0.0
+
+
+def _prompts(client):
+    return [r["messages"][0]["content"] for r in client.requests]
+
+
+@pytest.mark.parametrize("kind", ["handwriting", "blackboard"])
+def test_a_state_after_another_gets_its_reading_and_one_after_an_erase_none(
+    context, fake_llm, tmp_path, kind
+):
+    """#137 AC: page, the same page written on, then an erase: the second reading carries the
+    first, the third is prompt v0 with no previous state."""
+    _changed_share = _changed(_small(_page()), _small(_written_on()))
+    assert _changed_share > 0.02  # a view of its own
+    client = fake_llm(_board(text="page A"), _board(text="page A and more"), _board(text="B"))
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _written_on(), _other_page()])
+    ctx = run(_paged_lecture(context, video, tmp_path / "cache", kind), VISION_STAGES)
+
+    assert [s.text for s in ctx.visual] == ["page A", "page A and more", "B"]
+    first, second, third = _prompts(client)
+    assert "board state before this one" not in first
+    assert "Text:\npage A\nLaTeX:\n-\nWhere new writing appeared since then: [" in second
+    assert "board state before this one" not in third
+    assert third.startswith(_PROMPT.split("{kind}")[0])
+
+
+def test_a_reused_reading_is_the_next_states_previous_one(context, fake_llm, tmp_path):
+    """A page that comes back is copied (#138), and its copy is what the next state follows."""
+    client = fake_llm(_board(text="page A"), _board(text="B"), _board(text="page A and more"))
+    pages = [_page(), _other_page(), _page(), _written_on()]
+    video = _pages(tmp_path / "lecture.mp4", pages)
+    ctx = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert ctx.stats["vision_reused"] == 1
+    assert "Text:\npage A\n" in _prompts(client)[2]
+
+
+def test_a_changed_previous_reading_captions_the_state_again(context, fake_llm, tmp_path):
+    """#137 AC: the first reading fails, so the second state is read with no previous one; on
+    the next run the first is read, and the second is asked again, now with it."""
+    client = fake_llm(openai.OpenAIError("Connection error."), _board(text="page A and more"))
+    video = _pages(tmp_path / "lecture.mp4", [_page(), _written_on()])
+    with pytest.warns(UserWarning, match="keyframe left out"):
+        run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert len(client.requests) == 2
+    assert "board state before this one" not in _prompts(client)[1]
+
+    client = fake_llm(_board(text="page A"), _board(text="page A and more"))
+    ctx = run(_paged_lecture(context, video, tmp_path / "cache"), VISION_STAGES)
+    assert len(client.requests) == 2  # the first state, and the second asked again
+    assert "Text:\npage A\n" in _prompts(client)[1]
+    assert [s.text for s in ctx.visual] == ["page A", "page A and more"]

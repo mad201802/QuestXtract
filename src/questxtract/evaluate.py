@@ -29,7 +29,7 @@ from .config import Config
 from .llm import JUDGE_PROMPT_VERSION
 from .models import Context, Transcript, VisualContext, Word
 from .pipeline import STAGES, run
-from .vision import VISION_PROMPT_VERSION, read_keyframe
+from .vision import read_keyframe
 
 _MIN_OVERLAP = 0.5
 _AFTER_TRANSCRIBE = 2  # stages 1 and 2 are skipped: the transcript is committed
@@ -399,7 +399,7 @@ def evaluate_vision(paths: Sequence[str | Path], config: Config | None = None) -
         raise ValueError(f"no labelled frame in a *.frames.jsonl under {paths}")
     return {
         "model": config.reading_model,
-        "prompt": VISION_PROMPT_VERSION,
+        "prompt": "v0",  # what read_keyframe sends without a previous state (6.5)
         "kinds": {
             kind: _vision_metrics([f for f in frames if f["kind"] == kind])
             for kind in KINDS
