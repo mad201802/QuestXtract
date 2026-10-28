@@ -769,6 +769,13 @@ cover (GHSA-v4x8-3wr5-3wq8 high, GHSA-9vhv-jxww-xfm5 and GHSA-567q-5qvw-pf92 low
 file planted beside the lock. The pip-audit job in `ci.yml` ignores these three ids and no
 others. The risk ends when Python 3.10 support is dropped (#239).
 
+*Key storage:* the NTNU key the app saves stays a plain-text `.env` in the user config folder,
+not the system keyring (#199). The threat is another local user reading it: the file is 0600 and
+its `questxtract` folder 0700 on Linux and macOS, and on Windows the user profile's ACL keeps
+other users out (`chmod` changes nothing there). Malware running as the user can read either
+store. A keyring would add a dependency whose Linux backends are often missing. People who want
+it use the manual keyring route in docs/cli.md.
+
 Suggested exercise for the report: play Microsoft EoP over the figure in §2 with the
 information-flow arrows — the compendium asks for an architecture sketch with flows first.
 

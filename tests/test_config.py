@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -396,6 +397,21 @@ def test_the_key_file_is_private_and_leaves_no_temporary_file():
     assert [p.name for p in path.parent.iterdir()] == [".env"]
     if sys.platform != "win32":
         assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+        assert stat.S_IMODE(os.stat(path.parent).st_mode) == 0o700
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="chmod sets no folder permissions on Windows")
+def test_saving_makes_a_folder_created_earlier_private():
+    import os
+    import stat
+
+    from questxtract.config import save_user_key, user_env_path
+
+    user_env_path().parent.mkdir(mode=0o755, parents=True)
+
+    path = save_user_key("secret")
+
+    assert stat.S_IMODE(os.stat(path.parent).st_mode) == 0o700
 
 
 @pytest.mark.parametrize(

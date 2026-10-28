@@ -404,8 +404,13 @@ def _env_lines(path: Path) -> list[str]:
 
 
 def _write_env(path: Path, lines: list[str]) -> None:
-    """Write ``lines`` to ``path`` through a temporary file in its folder, private to the user."""
+    """Write ``lines`` to ``path`` through a temporary file in its folder, private to the user.
+
+    The folder is made private too, also one created before. On Windows ``chmod`` changes
+    neither: the user's profile folder already keeps other users out.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(path.parent, 0o700)
     handle, name = tempfile.mkstemp(dir=path.parent, prefix=".env.", suffix=".tmp")
     try:
         with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as out:
