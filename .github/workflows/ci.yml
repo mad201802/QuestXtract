@@ -22,7 +22,9 @@ jobs:
           path: .cache/qti-xsd
           key: qti-xsd-${{ hashFiles('scripts/fetch_qti_xsd.py') }}
       - run: uv run python scripts/fetch_qti_xsd.py
-      - run: uv run pytest
+      # A virtual display, so tests/test_gui_window.py runs instead of being skipped.
+      - run: command -v xvfb-run || (sudo apt-get update && sudo apt-get install -y xvfb)
+      - run: xvfb-run -a uv run pytest
         env:
           QUESTXTRACT_REQUIRE_QTI_XSD: "1"
 

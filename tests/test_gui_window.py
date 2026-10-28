@@ -1,6 +1,6 @@
 """The graphical app's window on a real display (issue #124).
 
-Skipped where there is no display: CI on Linux is headless, so there the window is only imported.
+Skipped where there is no display. CI runs them under a virtual display (``xvfb-run -a``).
 The logic the window drives is tested headless in ``test_gui_state.py`` and ``test_gui_run.py``.
 Run these locally with a display (or ``xvfb-run -a pytest tests/test_gui_window.py``).
 """
@@ -39,7 +39,7 @@ def _has_display() -> bool:
 
 pytestmark = pytest.mark.skipif(
     not _has_display(),
-    reason="no display here (headless CI): the window is checked where a display exists",
+    reason="no display here: the window is checked where a display exists",
 )
 
 
