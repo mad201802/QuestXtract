@@ -24,7 +24,7 @@ jobs:
       # Fails the release before anything is built if the tag, pyproject.toml and CHANGELOG.md
       # disagree.
       - run: python3 scripts/release_notes.py "${{ github.ref_name }}" -o release-notes.md
-      - run: uv sync --all-extras --dev
+      - run: uv sync --locked --all-extras --dev
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy
