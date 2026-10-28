@@ -612,7 +612,10 @@ one asks again rather than hitting the cache. The OCR reader has no prompt and g
 > filling up keeps nearly all its ink and different boards keep less than half; two pages under
 > the same app toolbar keep about 60 %, so the limit sits above that. A previous state missed
 > costs only the context, while a wrong one invites the model to copy an erased board, so the
-> limit errs high.
+> limit errs high. It does not catch a partial erase: on consecutive views of one handwritten
+> board (`tests/data/vision/sequence/`) wiping one formula or half the board keeps as much ink as
+> the board filling up, so the next view gets the erased text in its previous state, and the
+> prompt's rule not to copy is what keeps it out.
 
 **A page that comes back is not read again.** Lecturers return to earlier slides and pages, and
 each return is a view of its own. The request cache cannot catch it: two captures of one page
