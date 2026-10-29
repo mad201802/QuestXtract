@@ -776,6 +776,18 @@ other users out (`chmod` changes nothing there). Malware running as the user can
 store. A keyring would add a dependency whose Linux backends are often missing. People who want
 it use the manual keyring route in docs/cli.md.
 
+*TeX export texts:* `questxtract tex` (D24) writes question, option and solution texts
+verbatim, so spoken and LLM-written text reaches ExerPlaza unchanged, HTML and TeX commands
+such as `\input{...}` included (#200). Checked against ExerPlaza `main` 0a2f7fa7: its parser
+reads the file with regular expressions and compiles nothing, so `\input` opens no file, and
+images come only from the uploaded zip. Its upload preview (`static/js/upload_questions.js`)
+puts the question and solution body into `innerHTML` unescaped, so a tag such as
+`<img onerror=...>` runs in the browser of the teacher who previews the file. Other ExerPlaza
+views were not traced. Escaping here does not fix it: LaTeX escaping breaks MathJax, and HTML
+escaping is stored as parsed, so an escaping page shows `&lt;`. The fix is escaping in
+ExerPlaza's preview. Accepted as a residual risk until ExerPlaza escapes it: the preview runs
+only in the browser of the teacher uploading their own file, and a test pins the verbatim output.
+
 Suggested exercise for the report: play Microsoft EoP over the figure in §2 with the
 information-flow arrows — the compendium asks for an architecture sketch with flows first.
 

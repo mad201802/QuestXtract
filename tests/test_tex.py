@@ -209,6 +209,24 @@ def test_the_prompt_is_verbatim_with_lf_line_endings(tmp_path: Path, make_quiz: 
     assert "\\QuestionBody{Is $\\{1,2\\}$  50% countable?\nAnd\nwhy?}\n" in tex
 
 
+@pytest.mark.parametrize(
+    "text", ["See \\input{/etc/passwd} here", "See <img src=x onerror=alert(1)> <script>x</script>"]
+)
+def test_tex_commands_and_html_are_written_verbatim(
+    tmp_path: Path, make_quiz: MakeQuiz, text: str
+) -> None:
+    # A decided residual risk (#200, design_decisions.md 6): ExerPlaza must escape them.
+    quiz = make_quiz("q_aaa")
+    item = quiz["questions"][0]
+    item["prompt"]["text"] = text
+    item["options"][1]["text"]["text"] = text
+    item["solution"]["explanation"]["text"] = text
+    tex = _export(tmp_path, quiz)
+    assert f"\\QuestionBody{{{text}}}\n" in tex
+    assert f"\\answer {text}\n" in tex
+    assert f"\\SolutionBody{{{text}\n\n" in tex
+
+
 def _set_text(quiz: dict[str, Any], location: str, text: str) -> None:
     item = quiz["questions"][1]
     target = {
