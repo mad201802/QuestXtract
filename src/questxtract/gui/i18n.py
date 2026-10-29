@@ -1,22 +1,13 @@
-"""The graphical app's words in English, Norsk (bokmål) and Italiano (issue #124).
-
-One table, every key in every language: ``tests/test_gui_i18n.py`` fails when one is missing or
-when a ``{placeholder}`` differs between languages. Messages from the CLI itself (the one-line
-errors of ``process`` and ``transcribe``) are not here: the CLI owns them and they stay English.
-
-Nothing here imports tkinter, so it is tested headless.
-"""
+"""The graphical app's words in English, Norsk (bokmål) and Italiano (issue #124)."""
 
 from __future__ import annotations
 
 __all__ = ["DEFAULT_LANGUAGE", "LANGUAGES", "has", "language", "set_language", "tr"]
 
-#: The languages the app can show, by code, with each one's own name for the switch.
 LANGUAGES: dict[str, str] = {"en": "English", "nb": "Norsk", "it": "Italiano"}
 DEFAULT_LANGUAGE = "en"
 
 _MESSAGES: dict[str, dict[str, str]] = {
-    # --- the window's groups, buttons and labels ---
     "drop.help": {
         "en": "Drop an .mp4, .mp3 or .json file here",
         "nb": "Slipp en .mp4-, .mp3- eller .json-fil her",
@@ -81,7 +72,6 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "tristate.default": {"en": "Default", "nb": "Standard", "it": "Predefinito"},
     "tristate.on": {"en": "On", "nb": "På", "it": "Sì"},
     "tristate.off": {"en": "Off", "nb": "Av", "it": "No"},
-    # --- the options' own labels (the CLI's flags are not translated) ---
     "opt.config": {"en": "Settings file", "nb": "Innstillingsfil", "it": "File delle impostazioni"},
     "opt.output": {"en": "Output file", "nb": "Utdatafil", "it": "File di output"},
     "opt.model": {"en": "Whisper model", "nb": "Whisper-modell", "it": "Modello Whisper"},
@@ -113,7 +103,6 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "it": "Opzioni per domanda del quiz (da 3 a 5)",
     },
     "opt.quiz_model": {"en": "Quiz model", "nb": "Quiz-modell", "it": "Modello del quiz"},
-    # --- drop, dialogs and messages ---
     "drop.unavailable": {
         "en": "Drag and drop is not available on this system: use Browse.",
         "nb": "Dra og slipp er ikke tilgjengelig på dette systemet: bruk Bla gjennom.",
@@ -124,7 +113,6 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "nb": "Én fil om gangen: den første brukes.",
         "it": "Un file alla volta: viene usato il primo.",
     },
-    # --- the NTNU key window (issue #189) ---
     "button.ntnu_key": {"en": "NTNU key...", "nb": "NTNU-nøkkel...", "it": "Chiave NTNU..."},
     "key.title": {"en": "NTNU key", "nb": "NTNU-nøkkel", "it": "Chiave NTNU"},
     "key.explain": {
@@ -278,7 +266,6 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "nb": "kjøringen mislyktes",
         "it": "l'esecuzione non è riuscita",
     },
-    # --- progress: the pipeline's stage names, then the three ends of a run ---
     "stage.ingest": {
         "en": "Checking recording",
         "nb": "Sjekker opptaket",
@@ -345,12 +332,7 @@ def language() -> str:
 
 
 def set_language(code: str) -> None:
-    """Show the app in the language ``code`` (a key of :data:`LANGUAGES`).
-
-    Raises:
-        ValueError: If the language is not one the app has.
-
-    """
+    """Show the app in the language ``code`` (a key of :data:`LANGUAGES`)."""
     global _language
     if code not in LANGUAGES:
         raise ValueError(f"no such language: {code!r}")
@@ -363,11 +345,6 @@ def has(key: str) -> bool:
 
 
 def tr(key: str, **values: object) -> str:
-    """Return the message ``key`` in the current language, with its placeholders filled in.
-
-    Raises:
-        KeyError: If there is no message under ``key``.
-
-    """
+    """Return the message ``key`` in the current language, with its placeholders filled in."""
     translations = _MESSAGES[key]
     return translations.get(_language, translations[DEFAULT_LANGUAGE]).format(**values)

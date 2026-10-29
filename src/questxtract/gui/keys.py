@@ -1,11 +1,4 @@
-"""The NTNU key window's logic without widgets (issue #189): test, save, remove and show.
-
-The key lives in the per-user file of :func:`questxtract.config.user_env_path`, in plain text,
-as in any ``.env``. It is never printed, logged or put in an argument list: the functions here
-return short codes, and the window turns them into words (``key.*`` in :mod:`.i18n`).
-
-Nothing here imports tkinter, so it is tested headless (``tests/test_gui_keys.py``).
-"""
+"""The NTNU key window's logic without widgets (issue #189): test, save, remove and show."""
 
 from __future__ import annotations
 
@@ -30,14 +23,7 @@ _TIMEOUT_SECONDS = 10.0
 
 
 def check_key(key: str) -> str:
-    """Ask NTNU's service whether it accepts ``key``: one request that lists its models.
-
-    Returns:
-        ``accepted``; ``refused`` (the service answered 401 or 403); ``unreachable`` (no
-        answer, or any other answer: the NTNU network or VPN is the usual cause); or
-        ``no_llm_extra`` when ``questxtract[llm]`` is not installed.
-
-    """
+    """Ask NTNU's service whether it accepts ``key``: one request that lists its models."""
     try:
         import openai  # noqa: PLC0415 - the optional questxtract[llm] extra
     except ImportError:
@@ -55,25 +41,11 @@ def check_key(key: str) -> str:
 
 
 def save_key(key: str, check: Callable[[str], str] | None = None) -> str:
-    """Test ``key``, then save it unless the service refused it.
-
-    ``check`` replaces :func:`check_key` (the tests give it a fake).
-    A key that cannot be tested (no network, no ``llm`` extra) is saved anyway: a teacher off
-    the NTNU network can still set it up.
-
-    Returns:
-        ``saved`` when the service accepted it, ``saved_unchecked`` when it could not be
-        tested, or ``refused`` when it was not saved.
-
-    Raises:
-        ValueError: If the key is empty or holds a character the ``.env`` reader refuses.
-        OSError: If the file cannot be written.
-
-    """
-    key = valid_key(key)  # a key the file cannot hold fails here, before any request
+    """Test ``key``, then save it unless the service refused it."""
+    key = valid_key(key)
     outcome = (check or check_key)(key)
     if outcome == "refused":
-        return "refused"  # an earlier saved key stays as it was
+        return "refused"
     save_user_key(key)
     return "saved" if outcome == "accepted" else "saved_unchecked"
 
@@ -84,13 +56,7 @@ def remove_key() -> bool:
 
 
 def key_source() -> str | None:
-    """Say where a run would read the NTNU key from, without returning it.
-
-    Returns:
-        ``environment``, ``dotenv`` (``.env`` in the working directory), ``file`` (the app's
-        key file), or ``None`` for no key. The order is the one a run uses.
-
-    """
+    """Say where a run would read the NTNU key from, without returning it."""
     names = (NTNU_KEY_ENV, OLD_NTNU_KEY_ENV)
     for name in names:
         if name in os.environ:

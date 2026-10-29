@@ -1,24 +1,4 @@
-"""Issue #9: the flat internal Question schema.
-
-This defines ``Question``: a flat, validated, serialisable shape for "one question."
-
-**Not produced by the pipeline.** Nothing in the package builds a ``Question`` today; the
-pipeline's output is ``questions.json``, owned by ``export.py``, whose ``review`` block is
-where people edit. That format needs provenance (``id``, ``sentence_id``,
-``answer_sentence_ids``) that this type deliberately omits. ``Question`` is a lighter internal
-shape: useful anywhere in the pipeline that wants "a question with a timestamp and a
-confidence" without the full export record's edit-tracking fields. If a use for it as a
-public/API shape shows up later, build it *from* the export record rather than growing this
-type to duplicate it.
-
-Acceptance criteria this satisfies:
-    1. schema is defined                -> the ``Question`` dataclass below
-    2. schema supports timestamps       -> ``start`` / ``end``, validated ``end > start``
-    3. schema supports confidence       -> ``confidence``, validated to ``[0, 1]``
-    4. schema can be serialised to JSON -> ``to_dict`` / ``from_dict``
-    5. schema is documented             -> this module's and the class's docstrings
-    6. tests validate valid/invalid     -> see ``test_schema.py``
-"""
+"""A flat Question shape that the pipeline does not produce."""
 
 from __future__ import annotations
 
@@ -27,8 +7,6 @@ from typing import Any
 
 from .models import SchemaError
 
-#: Where a question was detected from. "combined" when the board on screen raised its
-#: score; "visual" is reserved for questions read from the board alone.
 _VALID_SOURCES = frozenset({"audio", "visual", "combined"})
 
 

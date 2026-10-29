@@ -1,11 +1,4 @@
-"""Reading and checking ``quiz.json`` (architecture.md 12.3).
-
-``quiz.schema.json`` describes the shape and ships in the package; the tests enforce it with
-``jsonschema``. JSON Schema cannot compare one field with another, so :func:`validate_quiz`
-checks those rules in plain Python, which keeps ``jsonschema`` out of the runtime
-dependencies. Any shape it needs for a rule and does not find is reported, never raised as a
-``KeyError``: whatever JSON comes in, the only error is :class:`SchemaError`.
-"""
+"""Reading and checking ``quiz.json`` (architecture.md 12.3)."""
 
 from __future__ import annotations
 
@@ -118,7 +111,6 @@ def read_quiz(path: str | Path, questions: Mapping[str, Any] | None = None) -> d
 
 
 def _check_options(path: str, item: Mapping[str, Any], errors: list[str]) -> None:
-    """Rules 1 to 3: the correct option exists, one explanation per option, unique ids."""
     options = item.get("options")
     if not isinstance(options, list):
         errors.append(f"{path}.options: expected a list")
@@ -161,7 +153,6 @@ def _check_options(path: str, item: Mapping[str, Any], errors: list[str]) -> Non
 
 
 def _check_provenance(path: str, item: Mapping[str, Any], errors: list[str]) -> str | None:
-    """Rule 6, and the source question id for rules 4, 5 and 7, or ``None`` if unusable."""
     provenance = item.get("provenance")
     if not isinstance(provenance, Mapping):
         errors.append(f"{path}.provenance: expected an object")
@@ -187,7 +178,6 @@ def _check_source(
     spoken: dict[str, str],
     errors: list[str],
 ) -> None:
-    """Rules 5 and 7: the source question exists, and a ``spoken`` stem is what was said."""
     if source_id not in spoken:
         errors.append(
             f"{path}.provenance.source_question_id: {source_id!r} is not in questions.json"
@@ -205,11 +195,6 @@ def _check_source(
 
 
 def _spoken_texts(questions: Mapping[str, Any], errors: list[str]) -> dict[str, str] | None:
-    """Each question id in a ``questions.json``, mapped to the question as it was said.
-
-    That is ``original_text`` when the LLM judge reworded the question (verdict ``revise``),
-    else ``text``. ``None``, with an error, if the document has no ``questions`` list.
-    """
     entries = questions.get("questions") if isinstance(questions, Mapping) else None
     if not isinstance(entries, list):
         errors.append("questions.json: expected a 'questions' list")

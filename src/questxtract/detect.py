@@ -1,13 +1,4 @@
-"""Stage 6: find the sentences that are questions.
-
-Purely lexical and orthographic. No classifier, no prosody. Every decision leaves a reason
-code, which is what makes both the review workflow and the LLM judge's job possible
-(architecture.md 7).
-
-Sentences are only extracted, never invented: every candidate's text is a span of the
-transcript. Board states, when vision ran, only add to the score of a candidate the rules
-already found (architecture.md 7.3); they never make one.
-"""
+"""Stage 6: find the sentences that are questions."""
 
 from __future__ import annotations
 
@@ -17,7 +8,6 @@ from collections.abc import Sequence
 from .models import Context, QuestionCandidate, Sentence, VisualContext, overlapping, stage
 
 _WH_WORDS = frozenset({"who", "what", "when", "where", "why", "how", "which", "whose", "whom"})
-# A wh-word with a contracted verb is still that wh-word: "What's ...?", "Who'd ...?".
 _WH_CONTRACTIONS = frozenset({"s", "re", "d", "ll", "ve"})
 _AUX_WORDS = frozenset(
     {
@@ -57,14 +47,9 @@ _AUX_WORDS = frozenset(
         "hasn't",
     }
 )
-# Openers that sit in front of a question without being part of it: "So what ...?",
-# "And then how ...?".
 _DISCOURSE_MARKERS = frozenset(
     {"so", "and", "but", "or", "now", "then", "well", "okay", "ok", "alright", "also", "anyway"}
 )
-# Multi-word openers that announce a question without being part of it: "My question is
-# that doesn't ...?". Only phrases that are preambles by construction, longest first so an
-# optional trailing "that"/"if" is taken with its phrase.
 _PREAMBLES = tuple(
     sorted(
         (
@@ -88,8 +73,6 @@ _PREAMBLES = tuple(
     )
 )
 
-# A wh-word can follow a preposition that belongs to the question: "For which age ...?",
-# "In what sense ...?". Skipped only right before a wh-word, so "In the limit ..." is untouched.
 _PREPOSITIONS = frozenset(
     "about after against among as at before between by during for from in into like of on "
     "over per since than through to toward towards under until upon via with within without".split()
@@ -107,19 +90,8 @@ _TYPES = {
     "whom": "what",
 }
 
-# A sentence, or its closing clause, made only of these is a confirmation tag: "Okay?",
-# "True, you see?", "..., right?". Labelled rhetorical (annotation_guidelines.md 2).
 _TAG_WORDS = frozenset({"okay", "ok", "right", "true", "yes", "yeah", "correct", "you", "see"})
 
-# Classroom management, not content: labelled check_in or procedural. Matched as whole words
-# of the lower-cased sentence, trailing vocatives allowed ("How much are we together, people,
-# on this?"). The comprehension checks do not count when content follows them: "Does that
-# make sense?" is a check-in, "Why does it make sense to sort first?" is a question, and
-# "Do you see it?" is one while "Do you see why ...?" and "What do you see?" are not. A bare
-# vocative ("Everyone?") is a check-in; a trailing one is not ("What do I get, people?" is
-# content).
-# English, grown from the labelled recordings: the LLM detector (#88) is the real content
-# filter, this only keeps the obvious ones out.
 _CHECK_INS = re.compile(
     r"\bmakes? sense\b(?! to (?!everyone\b|everybody\b|you\b)| of\b| for\b| in\b| here\b)"
     r"|\b(?:is|are) (?:that|it|this|they|these|those|the question|everything) clear\b"
@@ -135,9 +107,6 @@ _CHECK_INS = re.compile(
     r"|want to tell me|your name)\b"
 )
 
-# Only function words: ordinary verbs, negation and numbers remain content signals.
-# In particular, "be", "one" and "much" stay out: "Can it be?", "This one, what
-# is it?" and "How much?" are content questions in the reference recordings.
 _FRAMING_STOPWORDS = (
     _WH_WORDS
     | frozenset(word for word in _AUX_WORDS if "'" not in word)
@@ -150,10 +119,6 @@ _FRAMING_STOPWORDS = (
     )
 )
 
-# A head word without a '?' stays under the 0.45 gate: on the reference recordings every such
-# sentence was a statement ("What I mean is ...", "So when we ...").
-# Recovering a question the ASR left unpunctuated needs a second, independent gate (a local
-# answer slot, architecture.md 7.1); add it when a labelled question is lost to it.
 _SCORES = {
     "mark": 0.6,
     "wh": 0.4,
@@ -165,12 +130,7 @@ _SCORES = {
 
 
 def score_sentence(sentence: str) -> tuple[float, tuple[str, ...]]:
-    """Score how likely a sentence is a question.
-
-    Returns:
-        The score in ``[0, 1]`` and the names of the heuristics that fired.
-
-    """
+    """Score how likely a sentence is a question."""
     reasons: list[str] = []
     if sentence.rstrip().endswith("?"):
         reasons.append("mark")
@@ -191,7 +151,6 @@ def score_sentence(sentence: str) -> tuple[float, tuple[str, ...]]:
         and all(_uncontract(word) in _FRAMING_STOPWORDS for word in _words(sentence))
     ):
         reasons.append("framing")
-        # Penalise the bounded score even when both wh and aux signals fired.
         score = max(0.0, score + _SCORES["framing"])
     return round(score, 2), tuple(reasons)
 
@@ -207,16 +166,10 @@ def question_type(sentence: str) -> str:
 
 
 def _words(text: str) -> list[str]:
-    """Lower-cased words, contractions kept whole so "don't" is one token."""
     return re.findall(r"\w+(?:'\w+)?", text.casefold().replace("\u2019", "'"))
 
 
 def _is_tag(sentence: str) -> bool:
-    """Whether ``sentence`` is, or ends in, a confirmation tag rather than a question.
-
-    A tag after a real question ("Why is it not a field, right?") does not count: the
-    question's own head wins.
-    """
     if not sentence.rstrip().endswith("?"):
         return False
     tail = _words(sentence.rsplit(",", 1)[-1])
@@ -226,17 +179,6 @@ def _is_tag(sentence: str) -> bool:
 
 
 def _heads(sentence: str) -> tuple[str, ...]:
-    """Return the words a question in ``sentence`` can open with, past discourse markers.
-
-    For a sentence ending in ``?`` whose opener is not interrogative, later comma clauses
-    count too, since ASR runs a preamble into the question: "If you have the data, does
-    that mean ...?", "This area here, is it finite, infinite, or you do not know?". The last
-    clause counts with any head; an earlier one only with an auxiliary, because a wh-word
-    there usually opens a relative clause (", what would you ..., people?"). Without the
-    ``?`` none of them count, or every ", which is ..." would read as a wh-question; nor after
-    an interrogative opener, where the clauses are part of the question: "Is it a function
-    from X to Y, where X is compact?" is yes/no.
-    """
     heads: list[str] = []
     opener = _opener(sentence)
     if opener:
@@ -251,10 +193,6 @@ def _heads(sentence: str) -> tuple[str, ...]:
 
 
 def _opener(clause: str) -> str:
-    """Return the first word of ``clause`` past discourse markers and preambles, or ``""``.
-
-    A preposition right before a wh-word is skipped too: "For which age ...?" opens on "which".
-    """
     words = _words(clause)
     while words:
         if words[0] in _DISCOURSE_MARKERS:
@@ -270,13 +208,11 @@ def _opener(clause: str) -> str:
 
 
 def _uncontract(word: str) -> str:
-    """Return the wh-word in a contraction ("what's" -> "what"), or ``word`` unchanged."""
     base, _, suffix = word.partition("'")
     return base if base in _WH_WORDS and suffix in _WH_CONTRACTIONS else word
 
 
 def _content_words(text: str) -> frozenset[str]:
-    """Return the words of ``text`` that carry content: lower-cased, minus framing stopwords."""
     return frozenset(_uncontract(word) for word in _words(text)) - _FRAMING_STOPWORDS
 
 
@@ -288,21 +224,7 @@ def detect_questions(
     visual: Sequence[VisualContext] = (),
     board_delta: float = 0.0,
 ) -> tuple[QuestionCandidate, ...]:
-    """Find the question candidates among ``sentences``.
-
-    Args:
-        sentences: The transcript's sentences, in recording order.
-        threshold: Minimum score for a sentence to be reported.
-        max_chars: A sentence longer than this is rejected outright (architecture.md 7.3).
-        visual: Board states, empty when vision is off.
-        board_delta: Added to a candidate's score, with the reason ``board_overlap``, when it
-            shares a content word with the ``text`` of a board state on screen while it was
-            asked. Applied after the gate, so it never makes a candidate.
-
-    Returns:
-        The candidates, in recording order.
-
-    """
+    """Find the question candidates among ``sentences``."""
     out: list[QuestionCandidate] = []
     for sentence in sentences:
         text = sentence.text.strip()
@@ -328,7 +250,6 @@ def detect_questions(
 
 
 def _on_the_board(text: str, states: Sequence[VisualContext]) -> bool:
-    """Whether ``text`` shares a content word with the text of any of ``states``."""
     words = _content_words(text)
     return any(words & _content_words(state.text) for state in states)
 

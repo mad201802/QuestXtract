@@ -1,13 +1,4 @@
-"""QTI assessment model and the ``quiz.json`` mapping.
-
-This module holds no XML and no package code. The writers, :mod:`questxtract.qti_v2` and
-:mod:`questxtract.qti_v3`, serialize the model, and :mod:`questxtract.qti_package` writes the
-ZIP; they import this module, never the other way round.
-
-:func:`quiz_to_qti` takes a ``quiz.json`` that :func:`questxtract.quiz_schema.read_quiz` has
-read. That checks the rules across fields, not the structure (the JSON Schema is enforced in
-the tests only), so every field the mapping uses is checked here and reported with its path.
-"""
+"""QTI assessment model and the ``quiz.json`` mapping."""
 
 from __future__ import annotations
 
@@ -20,11 +11,9 @@ from typing import Any, TypeGuard
 from .models import SchemaError
 
 _XML_ID = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]*$")
-# xs:language, the type of xml:lang.
 _LANGUAGE = re.compile(r"^[A-Za-z]{1,8}(-[A-Za-z0-9]{1,8})*$")
 # Characters XML 1.0 does not allow, even escaped; ElementTree writes them unchecked.
 _XML_ILLEGAL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f￾￿\ud800-\udfff]")
-# The package's JSON sidecar: every writer's manifest lists it, and qti_package writes it.
 METADATA_PATH = "metadata/questxtract.json"
 
 
@@ -52,11 +41,7 @@ class Provenance:
 
 @dataclass(frozen=True, kw_only=True)
 class AssessmentItem:
-    """One single-choice QTI assessment item.
-
-    ``correct_option`` is the identifier of the one correct option. ``explanation`` is shown
-    after every option's own feedback. ``metadata`` goes to the package's JSON sidecar as it is.
-    """
+    """One single-choice QTI assessment item."""
 
     identifier: str
     title: str
@@ -73,10 +58,7 @@ class AssessmentItem:
 
 @dataclass(frozen=True, kw_only=True)
 class AssessmentTest:
-    """An ordered QTI assessment test.
-
-    ``metadata`` goes to the package's JSON sidecar as it is.
-    """
+    """An ordered QTI assessment test."""
 
     identifier: str
     title: str
@@ -88,18 +70,7 @@ class AssessmentTest:
 
 
 def quiz_to_qti(document: Mapping[str, Any]) -> AssessmentTest:
-    """Convert a ``quiz.json`` document to an assessment test of single-choice items.
-
-    Items a reviewer marked ``rejected`` are left out; ``pending`` and ``accepted`` are kept.
-
-    Raises:
-        QtiExportError: Naming the field, if one the mapping uses is missing, has the wrong
-            type, is not a valid XML identifier or language, or holds a character XML does not
-            allow, or if an item's ``interaction_type`` is not ``choice_single``. A newer 1.x
-            ``quiz.json`` may add interaction types; they fail here instead of being exported
-            as single choice.
-
-    """
+    """Convert a ``quiz.json`` document to an assessment test of single-choice items."""
     if not isinstance(document, Mapping) or not isinstance(document.get("questions"), list):
         raise QtiExportError("expected an object with a 'questions' list")
     identifier = _identifier(document.get("id"), "id")
@@ -143,7 +114,6 @@ def quiz_to_qti(document: Mapping[str, Any]) -> AssessmentTest:
 def _item(
     item: Mapping[str, Any], path: str, language: str, shuffle_options: bool
 ) -> AssessmentItem:
-    """Build one single-choice item from a ``quiz.json`` item."""
     interaction_type = item.get("interaction_type")
     if interaction_type != "choice_single":
         raise QtiExportError(
@@ -236,7 +206,6 @@ def _string(value: object, path: str) -> str:
 
 
 def _text(value: object, path: str) -> tuple[str, str]:
-    """Return the text and the origin of a ``{text, origin}`` object."""
     text = _object(value, path)
     origin = text.get("origin")
     if origin not in {"spoken", "generated"}:
@@ -258,10 +227,6 @@ def _flag(container: Mapping[str, Any], key: str, path: str) -> bool:
 
 
 def _is_number(value: object) -> TypeGuard[float]:
-    """Whether ``value`` is an int or float that XML can carry: not a bool, NaN or infinity.
-
-    ``json.loads`` reads ``NaN`` and ``Infinity``; written as ``nan`` they are no ``xs:double``.
-    """
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 

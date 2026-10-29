@@ -1,9 +1,4 @@
-"""The window's logic, without widgets (issue #124): form values in, the CLI's own run out.
-
-The app never runs a pipeline of its own. It builds the arguments a user would type on the
-command line (:func:`to_argv`) and hands them to :func:`questxtract.cli.execute`, so parsing,
-defaults, checks and output are the CLI's. Tested headless in ``tests/test_gui_run.py``.
-"""
+"""The window's logic, without widgets (issue #124): form values in, the CLI's own run out."""
 
 from __future__ import annotations
 
@@ -26,11 +21,7 @@ from .options import OPTIONS, OUTPUTS, TRANSCRIBE_DESTS, Option
 
 
 def inputs_for(output: str) -> tuple[str, ...]:
-    """Return the file suffixes an output takes: recordings for a transcript, a quiz.json for QTI.
-
-    A transcript output only takes recordings; the QTI output takes a quiz.json, checked by
-    name in :func:`source_problem`.
-    """
+    """Return the file suffixes an output takes."""
     command = OUTPUTS[output]
     if command == "qti":
         return (".json",)
@@ -55,10 +46,7 @@ def source_problem(path: Path, output: str) -> str | None:
 
 
 def applies(option: Option, output: str) -> bool:
-    """Whether a control is shown for ``output``: by its command, then by its own outputs.
-
-    The QTI output takes no options: it only exports a quiz.json that already exists.
-    """
+    """Whether a control is shown for ``output``: by its command, then by its own outputs."""
     if OUTPUTS[output] == "qti":
         return False
     if OUTPUTS[output] == "transcribe" and option.dest not in TRANSCRIBE_DESTS:
@@ -72,16 +60,7 @@ def to_argv(
     values: Mapping[str, Any],
     output_path: Path | None = None,
 ) -> list[str]:
-    """Return the command line a user would type for this run (``questxtract process ...``).
-
-    ``values`` is keyed by the option's destination; a value left as ``None`` (or an empty
-    text field) is not passed, so the settings file and the defaults apply exactly as on the
-    command line. ``output_path`` is ``-o``: the questions file, or the transcript.
-
-    Raises:
-        ValueError: If the form asks for an LLM detector without a model.
-
-    """
+    """Return the command line a user would type for this run (``questxtract process ...``)."""
     if output not in OUTPUTS:
         raise ValueError(f"unknown output {output!r}")
     if values.get("detector") == "llm" and values.get("llm_model") == "":
@@ -103,7 +82,7 @@ def to_argv(
         if option.kind == "implicit" or option.dest == "output" or not applies(option, output):
             continue
         if option.dest == "llm_model" and not judging:
-            continue  # the judge's model is not used without the LLM detector
+            continue
         value = values.get(option.dest)
         if value is None or value == "":
             continue
@@ -124,13 +103,7 @@ def check(
     values: Mapping[str, Any],
     output_path: Path | None = None,
 ) -> None:
-    """Raise the CLI's own error for a run that would be refused, before any work starts.
-
-    Raises:
-        ValueError: If the values are not usable (a threshold out of range, for example).
-        OSError: If the settings file named in ``config`` cannot be read.
-
-    """
+    """Raise the CLI's own error for a run that would be refused, before any work starts."""
     check_arguments(to_argv(source, output, values, output_path))
 
 
@@ -143,12 +116,6 @@ def run(
     progress: Progress | None = None,
     stop: Callable[[], bool] | None = None,
 ) -> RunResult:
-    """Run the CLI's own ``process`` or ``transcribe`` for the form's values.
-
-    Raises:
-        ValueError, OSError: with the CLI's own one-line message; the window shows it as is.
-        questxtract.pipeline.Cancelled: if ``stop`` asked for it between stages.
-
-    """
+    """Run the CLI's own ``process`` or ``transcribe`` for the form's values."""
     argv = to_argv(source, output, values, output_path)
     return execute(argv, progress=progress, stop=stop)

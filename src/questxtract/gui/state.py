@@ -1,11 +1,4 @@
-"""The window's state without widgets (issue #124): what the form holds and what Run needs.
-
-Nothing here imports tkinter, so every function is tested headless (``tests/test_gui_state.py``).
-The window reads its widgets into plain values and asks this module what they mean.
-
-A setting left at its ``Config`` default is not passed to the CLI, so a ``questxtract.toml``
-still applies. Choosing the default again in the form does not override the file.
-"""
+"""The window's state without widgets (issue #124): what the form holds and what Run needs."""
 
 from __future__ import annotations
 
@@ -40,17 +33,14 @@ __all__ = [
     "stage_label",
 ]
 
-#: The radio buttons, in order. Each one writes a file named after its command (docs/cli.md).
 OUTPUT_LABELS: dict[str, str] = {
     "questions": "Questions",
     "transcript": "Transcript",
     "quiz": "Quiz",
     "qti": "QTI package",
 }
-#: The choices of an option that is a tri-state: the CLI's flag pair, or no flag at all.
 TRISTATE_LABELS: tuple[str, ...] = ("Default", "On", "Off")
 _TRISTATE_VALUES: dict[str, bool | None] = {"Default": None, "On": True, "Off": False}
-# The order the pipeline runs its stages in, then the quiz (which runs after them).
 _STAGE_ORDER: tuple[str, ...] = tuple(stage_info(stage).name for stage in STAGES) + ("quiz",)
 
 
@@ -62,29 +52,23 @@ def default_text(option: Option) -> str:
     return "" if value is None else str(value)
 
 
-#: What the window starts with where it differs from the CLI's default (set in config.py). A
-#: control left at its start value is passed as a flag, so the run is the command line it shows.
 START_VALUES: dict[str, str] = {
     "detector": GUI_START_DETECTOR,
     "vision": "On" if GUI_START_VISION else "Off",
 }
 
 
-_SETTINGS_FILE = Path("questxtract.toml")  # the one the CLI reads when --config is not given
+_SETTINGS_FILE = Path("questxtract.toml")
 
 
 def start_text(option: Option) -> str:
-    """Return the text a control starts with.
-
-    With a ``questxtract.toml`` here, the file's value (or the default it leaves), so an
-    untouched form runs what the file says. Without one, the window's start values.
-    """
+    """Return the text a control starts with."""
     if option.field is None:
         return ""
     if _SETTINGS_FILE.is_file():
         try:
             value = getattr(load_config(), option.field)
-        except (OSError, ValueError):  # the run check reports the file's problem
+        except (OSError, ValueError):
             return default_text(option)
         return "" if value is None else str(value)
     return START_VALUES.get(option.dest, default_text(option))
@@ -107,16 +91,12 @@ def hint(option: Option) -> str:
         return tr("hint.on") if default_text(option) == "True" else tr("hint.off")
     text = start_text(option)
     if option.dest == "llm_reasoning" and not text:
-        return "server"  # "" sends no setting; the CLI spells that server
+        return "server"
     return text or tr("hint.unset")
 
 
 def form_values(raw: Mapping[str, Any]) -> dict[str, Any]:
-    """Turn what the controls hold into the values :func:`questxtract.gui.run.to_argv` takes.
-
-    A control at its default becomes ``None`` (not passed). A text control that is empty is
-    passed as ``""``, so an empty LLM model is refused rather than replaced by the default.
-    """
+    """Turn what the controls hold into the values :func:`questxtract.gui.run.to_argv` takes."""
     values: dict[str, Any] = {}
     for option in OPTIONS:
         if option.kind == "implicit" or option.dest not in raw:
@@ -141,10 +121,7 @@ def output_offered(output: str, source: Path | None) -> bool:
 
 
 def default_output(source: Path | None, output: str) -> Path | None:
-    """Return the file a run writes when the output field is empty; ``None`` lets the CLI choose.
-
-    Only the QTI output needs a name chosen here: its CLI command requires ``-o``.
-    """
+    """Return the file a run writes when the output field is empty; ``None`` lets the CLI choose."""
     if source is None or OUTPUTS[output] != "qti":
         return None
     return source.with_name(f"{source.stem.removesuffix('.quiz')}.qti.zip")
@@ -156,11 +133,7 @@ def run_problem(
     values: Mapping[str, Any],
     output_path: Path | None,
 ) -> str | None:
-    """Why Run is disabled, in the CLI's own words; ``None`` when the run can start.
-
-    Checks the file for the output, then the values the CLI would refuse, so a bad value shows
-    before anything runs.
-    """
+    """Why Run is disabled, in the CLI's own words; ``None`` when the run can start."""
     if source is None:
         return tr("hint.drop_first")
     problem = source_problem(source, output)
@@ -180,12 +153,7 @@ def one_line(text: str) -> str:
 
 
 def overall_fraction(stage: str, fraction: float, *, quiz_follows: bool = False) -> float:
-    """Where the whole run is, 0 to 1, from the pipeline's stage name and its fraction.
-
-    The stage names are the pipeline's own progress names (architecture.md 11.3); a name this
-    module does not know counts as the start of the run. The pipeline reports ``done`` when its
-    stages end; with the Quiz output the quiz still follows, so that is where the quiz starts.
-    """
+    """Where the whole run is, 0 to 1, from the pipeline's stage name and its fraction."""
     if stage == "done":
         return _STAGE_ORDER.index("quiz") / len(_STAGE_ORDER) if quiz_follows else 1.0
     if stage not in _STAGE_ORDER:
@@ -202,24 +170,12 @@ def stage_label(stage: str) -> str:
 
 
 def dropped_paths(data: str, splitlist: Callable[[str], Sequence[str]]) -> list[Path]:
-    """Return the paths in a drop. Tk braces a path that has spaces, so Tk splits the text.
-
-    Args:
-        data: The text tkinterdnd2 gives in its drop event.
-        splitlist: The interpreter's ``splitlist`` (``root.tk.splitlist``), which understands
-            the braces; splitting on spaces would break ``/Users/Ana Lu/lecture.mp4``.
-
-    """
+    """Return the paths in a drop."""
     return [Path(item) for item in splitlist(data) if item]
 
 
 def open_folder(folder: Path) -> None:
-    """Open ``folder`` in the system's file manager.
-
-    Raises:
-        OSError: If the opener is not there, for example ``xdg-open`` on a bare Linux system.
-
-    """
+    """Open ``folder`` in the system's file manager."""
     if sys.platform == "win32":
         os.startfile(folder)  # noqa: S606 - the OS opens a folder the app wrote
     elif sys.platform == "darwin":

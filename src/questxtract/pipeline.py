@@ -1,16 +1,4 @@
-"""Orchestration: the stage contract, the stage list, the cache and progress.
-
-Everything in the pipeline is one function with the same ``Context -> Context`` signature.
-That sameness is the whole extension mechanism: a caller who wants a different ASR engine,
-a custom detector or an extra enrichment step passes a different list to ``run()``.
-
-Four rules hold the contract up (architecture.md 11.1):
-
-1. Stages never import each other; they communicate only through ``Context``.
-2. Stages read config only through ``ctx.config``.
-3. Optional stages no-op themselves rather than being filtered out by the runner.
-4. A cached stage produces exactly one ``Context`` field of JSON-serialisable dataclasses.
-"""
+"""Orchestration: the stage contract, the stage list, the cache and progress."""
 
 from __future__ import annotations
 
@@ -47,11 +35,7 @@ __all__ = [
 ]
 
 
-# --- cache (architecture.md 11.2) -------------------------------------------------
-
-
 def _encode(value: Any) -> Any:
-    """Turn dataclasses and tuples into JSON-ready values."""
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return dataclasses.asdict(value)
     if isinstance(value, (tuple, list)):
@@ -60,7 +44,6 @@ def _encode(value: Any) -> Any:
 
 
 def _decode(value: Any, annotation: Any) -> Any:
-    """Rebuild dataclasses from JSON, driven by the ``Context`` field's annotation."""
     origin = typing.get_origin(annotation)
     if origin in (typing.Union, types.UnionType):
         inner = [a for a in typing.get_args(annotation) if a is not type(None)]
@@ -79,11 +62,7 @@ def _decode(value: Any, annotation: Any) -> Any:
 
 
 def cached_transcript(config: Config, source_hash: str) -> Transcript | None:
-    """Return the transcript cached for a recording, or ``None`` when there is none.
-
-    Whatever settings made it: a caller that needs the transcript of a finished run (the quiz)
-    only has the recording's hash from ``questions.json``. A damaged entry counts as none.
-    """
+    """Return the transcript cached for a recording, or ``None`` when there is none."""
     path = Path(config.cache_dir) / source_hash / "transcribe.json"
     try:
         stored = json.loads(path.read_text(encoding="utf-8"))
@@ -94,22 +73,17 @@ def cached_transcript(config: Config, source_hash: str) -> Transcript | None:
 
 
 def _cache_path(ctx: Context, info: StageInfo) -> Path:
-    """Where this stage's cache entry lives for this source."""
     return Path(ctx.config.cache_dir) / ctx.source_hash / f"{info.name}.json"
 
 
 def _header(config: Config, info: StageInfo) -> dict[str, Any]:
-    """Return the config values this stage's cache entry is keyed on."""
     return {name: getattr(config, name) for name in info.uses}
 
 
 def _cached(fn: Stage, ctx: Context) -> Context:
-    """Run ``fn``, reusing its cache entry when the header still matches."""
     info = stage_info(fn)
     assert info.cache is not None  # noqa: S101 - only called for caching stages
     if not ctx.source_hash:
-        # No content hash, no cache key. Sharing one bucket across sources would replay
-        # one recording's results into another's.
         return fn(ctx)
     path = _cache_path(ctx, info)
     header = _header(ctx.config, info)
@@ -131,9 +105,6 @@ def _cached(fn: Stage, ctx: Context) -> Context:
     return ctx
 
 
-# --- the pipeline (architecture.md 1.3) -------------------------------------------
-
-#: Reading this list is reading the diagram in architecture.md 1.3.
 STAGES: tuple[Stage, ...] = (
     ingest,
     transcribe,
@@ -150,10 +121,7 @@ STAGES: tuple[Stage, ...] = (
 
 
 class Cancelled(Exception):
-    """A run was stopped between two stages, on request (the graphical app's Cancel, #124).
-
-    A stage that is running is not interrupted: the stop takes effect before the next one.
-    """
+    """A run was stopped between two stages, on request (the graphical app's Cancel, #124)."""
 
 
 def run(
@@ -174,10 +142,6 @@ def run(
 
     """
     progress = progress or ctx.progress
-    # A stage that reports its own intra-stage progress (transcribe.py) reads ctx.progress
-    # directly, not this function's local parameter - keep them in sync so a caller who
-    # passes progress= straight to run() (rather than through process(), which already sets
-    # both) still gets intra-stage updates, not just the stage-boundary 0.0/1.0 calls below.
     ctx.progress = progress
     for fn in stages:
         info = stage_info(fn)

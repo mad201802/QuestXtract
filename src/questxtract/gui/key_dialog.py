@@ -1,9 +1,4 @@
-"""The NTNU key window (issue #189): paste a key, test it, save it or remove it.
-
-The logic is :mod:`.keys`; this module only draws it. The key is read from the field when a button
-is pressed and is never shown, logged or put in a message. The test asks NTNU's service on a
-worker thread; the main thread reads its answer with ``after()``, as the main window does.
-"""
+"""The NTNU key window (issue #189): paste a key, test it, save it or remove it."""
 
 from __future__ import annotations
 
@@ -34,7 +29,7 @@ class KeyDialog:
         self.top.title(tr("key.title"))
         self.top.transient(parent)  # type: ignore[call-overload]
         self.top.protocol("WM_DELETE_WINDOW", self.close)
-        self.top.grab_set()  # modal: the main window waits until this one is closed
+        self.top.grab_set()
         frame = ttk.Frame(self.top, padding=8)
         frame.grid(sticky="nsew")
         ttk.Label(frame, text=tr("key.explain"), wraplength=420).grid(
@@ -64,8 +59,6 @@ class KeyDialog:
         self.entry.focus_set()
         self.top.after(_POLL_MS, self._poll)
 
-    # --- actions -----------------------------------------------------------------------
-
     def test(self) -> None:
         """Ask NTNU whether the typed key works; save nothing."""
         self._ask(keys.check_key)
@@ -89,15 +82,12 @@ class KeyDialog:
         self.alive = False
         self.top.destroy()
 
-    # --- helpers -----------------------------------------------------------------------
-
     def _ask(self, work: Callable[[str], str]) -> None:
-        """Run ``work(key)`` on a worker thread and show the code it returns as words."""
         if self.busy:
             return
         text = self.key.get()
         try:
-            text = keys.valid_key(text)  # an empty or unusable key is told at once, no request
+            text = keys.valid_key(text)
         except ValueError as exc:
             self._say(str(exc))
             return
@@ -111,13 +101,12 @@ class KeyDialog:
                 self.answers.put(work(text))
             except (OSError, ValueError) as exc:
                 self.answers.put(f"!{exc}")
-            except Exception:  # an answer must come; the text may hold the key, so it is not shown
+            except Exception:
                 self.answers.put("unreachable")
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _poll(self) -> None:
-        """Show an answer from the worker, then look again."""
         if not self.alive:
             return
         try:
@@ -133,7 +122,7 @@ class KeyDialog:
         else:
             self._say(tr(f"key.{code}"))
             if code in ("saved", "saved_unchecked"):
-                self.key.set("")  # the key is not kept in the window once it is saved
+                self.key.set("")
                 self._changed()
         self.top.after(_POLL_MS, self._poll)
 
@@ -143,7 +132,6 @@ class KeyDialog:
             self.on_change()
 
     def _show_source(self) -> None:
-        """Say where a run would find the key now."""
         try:
             where = keys.key_source() or "none"
         except (OSError, ValueError) as exc:
