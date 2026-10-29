@@ -87,12 +87,17 @@ jobs:
       - run: >-
           uv export --locked --all-extras --no-emit-project --format requirements.txt
           -o "$RUNNER_TEMP/requirements.txt"
-      # Ignored: the filelock advisories with no fix on Python 3.10 (#239).
+      # Ignored: the filelock advisories with no fix on Python 3.10 (#239, #246).
       - run: >-
           uvx --python ${{ matrix.python }} pip-audit==2.10.1 --require-hashes --disable-pip
           -r "$RUNNER_TEMP/requirements.txt"
           --ignore-vuln GHSA-v4x8-3wr5-3wq8 --ignore-vuln GHSA-9vhv-jxww-xfm5
-          --ignore-vuln GHSA-567q-5qvw-pf92
+          --ignore-vuln GHSA-567q-5qvw-pf92 --ignore-vuln GHSA-m462-7rxw-wvpg
+          --ignore-vuln GHSA-j8f7-rjxc-mr56 --ignore-vuln GHSA-8mx5-7m5m-r77g
+          --ignore-vuln GHSA-69hj-f68j-2879 --ignore-vuln GHSA-9c4x-gm8v-wgc4
+          --ignore-vuln GHSA-rfpc-qcw5-3pc4 --ignore-vuln GHSA-cwqr-hh33-gh44
+          --ignore-vuln GHSA-fq56-3cx3-fjxp --ignore-vuln GHSA-9j6q-wvj5-jgjg
+          --ignore-vuln GHSA-6627-m3xw-93mp
 
   ci:
     if: always()
