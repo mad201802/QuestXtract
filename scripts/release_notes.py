@@ -30,7 +30,7 @@ class ReleaseError(Exception):
 
 
 def tag_version(tag: str) -> str:
-    """Return the version a `vX.Y.Z` tag names, e.g. `v0.2.0` -> `0.2.0`."""
+    """Return the version a `vX.Y.Z` tag names, e.g."""
     match = _TAG.match(tag.strip())
     if match is None:
         raise ReleaseError(f"tag {tag!r} is not of the form vX.Y.Z")

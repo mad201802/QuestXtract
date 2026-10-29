@@ -42,8 +42,8 @@ from questxtract.vision import (
     read_keyframe,
 )
 
-_COPY_MAX_ERROR = 1 / 3  # a line closer than this to a label line is on the board
-_COPY_MIN_CHARS = 8  # shorter lines ("a", "x = 0") are on many boards by chance
+_COPY_MAX_ERROR = 1 / 3
+_COPY_MIN_CHARS = 8
 _ARMS = ("v0", "v2")
 
 
@@ -52,7 +52,6 @@ def _plain(text: str) -> str:
 
 
 def _seconds(label: dict[str, Any]) -> float:
-    """Return when a frame was taken, from its name: ``<slug>_<seconds>.png``."""
     return float(str(label["frame"]).rsplit("_", 1)[1].removesuffix(".png"))
 
 
@@ -71,17 +70,12 @@ def copied_lines(answer: str, previous: str, label: str) -> list[str]:
 
 
 def compare(directory: Path, config: Config) -> list[dict[str, Any]]:
-    """Read every labelled frame that has an earlier one in its recording, both ways.
-
-    Returns one row per frame: its label, the stage's decision (``kept``: the share of the
-    earlier frame's ink still there; ``sent``: whether the stage would send the previous
-    state), and per arm the answer (``None`` when the reading failed) and its copied lines.
-    """
+    """Read every labelled frame that has an earlier one in its recording, both ways."""
     rows: list[dict[str, Any]] = []
     for labels_path in sorted(directory.glob("*.frames.jsonl")):
         lines = labels_path.read_text(encoding="utf-8").splitlines()
         labels = sorted((json.loads(line) for line in lines if line.strip()), key=_seconds)
-        before: tuple[str, Any, dict[str, Any] | None] | None = None  # name, ink, reading
+        before: tuple[str, Any, dict[str, Any] | None] | None = None
         for label in labels:
             png = labels_path.with_name(label["frame"]).read_bytes()
             picture = _decoded(png)

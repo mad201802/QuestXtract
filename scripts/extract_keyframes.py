@@ -25,7 +25,6 @@ from questxtract.vision import Crop, _sample_frames, _views
 
 
 def _crop(text: str) -> Crop:
-    """Parse ``x0,y0,x1,y1`` as fractions of the frame."""
     try:
         x0, y0, x1, y1 = (float(part) for part in text.split(","))
     except ValueError as exc:

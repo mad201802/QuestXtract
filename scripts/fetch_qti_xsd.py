@@ -32,14 +32,13 @@ from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
 _QTI = "https://purl.imsglobal.org/spec/qti/v3p0/schema/xsd/"
-ASI_XSD = _QTI + "imsqti_asiv3p0p1_v1p0.xsd"  # items and tests, QTI 3.0.1
-CP_XSD = _QTI + "imsqtiv3p0_imscpv1p2_v1p0.xsd"  # imsmanifest.xml
+ASI_XSD = _QTI + "imsqti_asiv3p0p1_v1p0.xsd"
+CP_XSD = _QTI + "imsqtiv3p0_imscpv1p2_v1p0.xsd"
 _QTI_V2P1 = "http://www.imsglobal.org/xsd/qti/qtiv2p1/"
-ASI_XSD_V2P1 = _QTI_V2P1 + "imsqti_v2p1p2.xsd"  # items and tests, QTI 2.1.2
-CP_XSD_V2P1 = _QTI_V2P1 + "qtiv2p1_imscpv1p2_v1p0.xsd"  # imsmanifest.xml, the QTI 2.1 profile
+ASI_XSD_V2P1 = _QTI_V2P1 + "imsqti_v2p1p2.xsd"
+CP_XSD_V2P1 = _QTI_V2P1 + "qtiv2p1_imscpv1p2_v1p0.xsd"
 _MATHML2 = "http://www.w3.org/Math/XMLSchema/mathml2/"
 
-# Every file the four schemas import, directly or not, with the SHA-256 of its bytes as served.
 PINNED = {
     ASI_XSD: "bd82f6df3c7acec951fffc78548325a01e9e9bc91d5768d7415bdcbdc018341d",
     CP_XSD: "30be3dad4fe0ee103295268317ee0ff2b1826b8b55023db974a993edf3ce9101",
@@ -214,11 +213,7 @@ def missing(root: Path) -> list[str]:
 
 
 def uri_mapper(root: Path) -> Callable[[str], str]:
-    """Return a function that maps each pinned URL to its file under `root`, as a file URI.
-
-    Any other URI is returned unchanged, so a schema that imports something unpinned fails
-    when it is compiled with network access off, instead of downloading it.
-    """
+    """Return a function that maps each pinned URL to its file under `root`, as a file URI."""
 
     def mapper(uri: str) -> str:
         return local_path(uri, root).resolve().as_uri() if uri in PINNED else uri
@@ -227,12 +222,7 @@ def uri_mapper(root: Path) -> Callable[[str], str]:
 
 
 def fetch(root: Path) -> None:
-    """Download every pinned file missing under `root` and check its hash.
-
-    Raises:
-        OSError: If a download fails or a file has another hash than the pinned one.
-
-    """
+    """Download every pinned file missing under `root` and check its hash."""
     for url in missing(root):
         with urllib.request.urlopen(_https(url), timeout=60) as response:  # noqa: S310 - pinned
             data = response.read()
@@ -260,7 +250,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def _https(url: str) -> str:
-    """Return the address `url` is downloaded from: always https, which serves the same bytes."""
     return "https://" + url.removeprefix("http://") if url.startswith("http://") else url
 
 
