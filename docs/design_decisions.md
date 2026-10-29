@@ -645,16 +645,17 @@ its own. The ink rule is #133's, whose curve was not built. The erase check exis
 risk is copying from an erased board, which the comparison on #137 measured.
 
 *Cost:* one more full reading in every request, so longer prompts. A previous state that changes
-asks the next state again, as the cache key holds it. The 70 % limit rests on very little data:
-of the 30 labelled keyframes, only `math231_2020_r2` 180 s to 306 s is one board filling up, so
-its 0.99 is a single pair, and two different pages under one app toolbar keep 0.62, a margin of
-0.08. A partial erase (a quarter of the board wiped and written again) still keeps 70 % or more,
-so the next view is sent with erased content in its previous state. That is the copying risk,
-and no labelled pair covers it (#230). `scripts/compare_previous_state.py` pairs labelled
-frames that are far apart rather than consecutive views, and chains from v0 readings rather
-than v2 ones, so it tests copying across boards more than a lecture as the stage reads it. The
-model also takes over the previous reading's notation (`x²` for `x^2`), which character error
-rate counts as errors, and sometimes its layout, joining several board lines into one.
+asks the next state again, as the cache key holds it. The 70 % limit does not catch a partial
+erase. On consecutive views of one handwritten board (`tests/data/vision/sequence/`, #230), the
+board filling up keeps 0.94 to 0.97 of its ink, wiping one formula 0.94 and wiping half the
+board 0.79, so every view after an erase is sent with the erased text in its previous state.
+Moving the limit cannot separate them, so it stays where the #58 frames put it, above two pages
+under one app toolbar (0.62). What keeps erased text out is the prompt's rule not to copy: after
+half the board was wiped the model copied none of it, but after the one-formula erase it once
+kept the formula in its LaTeX. It also carries a misreading forward (`FR (now)` for
+`Y_FR(now)`), takes over the previous reading's notation (`x²` for `x^2`), which character error
+rate counts as errors, and sometimes its layout, joining several board lines into one. The
+measurement is one six-view sequence of one lecture, mostly diagram, with little text.
 
 ## 4. Requirements traceability (→ report ch. 6)
 

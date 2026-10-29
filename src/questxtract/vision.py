@@ -65,7 +65,9 @@ _INK_WINDOW = 15  # px of the small copy: the side of that square
 _INK_CONTRAST = 20  # grey levels from that mean that make a pixel ink
 # Share of the previous keyframe's ink still there, or the board is new: an erase, a camera cut or
 # a page flip. On the #58 frames one board filling up keeps 0.99, different boards 0.14 to 0.46,
-# and two pages under one app toolbar 0.62; a missed previous state only costs the context.
+# and two pages under one app toolbar 0.62; a missed previous state only costs the context. On
+# consecutive views (tests/data/vision/sequence/, #230) a board filling up keeps 0.94 to 0.97 and
+# a partial erase 0.79 to 0.94, so no limit tells them apart; the prompt's rule not to copy does.
 _INK_KEPT = 0.7
 _NEW_INK_CELL = 8  # px: new ink is boxed by the cells of this side where at least
 _NEW_INK_SHARE = 0.2  # this share of pixels is new ink, so codec noise and a cursor make no box
