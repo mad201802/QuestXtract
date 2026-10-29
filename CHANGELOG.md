@@ -4,9 +4,8 @@
 
 ### Changed
 
-- The folder the app saves the NTNU key in (`questxtract/` in your user config folder) is made
-  readable by you only on Linux and macOS, also when it exists from an earlier version. The key
-  file itself already was. (#199)
+- On Linux and macOS, the folder the app saves the NTNU key in (`questxtract/` in your user config
+  folder) is now readable by you only, also when an earlier version created it. (#199)
 
 ## 0.3.0
 

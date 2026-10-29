@@ -62,21 +62,21 @@ flowchart LR
 
 Solid arrows are stages that run on every invocation; dashed ones are optional or M2+.
 `models.py` is not a stage: it is the typed contract every stage reads and writes, and
-`Context` is the single value threaded along the whole line. Export is not a stage either —
+`Context` is the single value threaded along the whole line. Export is not a stage either:
 it runs on the finished `Context` (architecture.md 1.3).
 
 ## 3. Decisions and alternatives (→ report ch. 7)
 
 Each entry: what we chose, what else we considered, why, and the cost we accepted.
 
-### D1 — One module per stage, and a stage contract that is the real seam
+### D1: One module per stage, and a stage contract that is the real seam
 
-*Chose (revised):* a flat module per stage — `media.py transcribe.py sentences.py segments.py
-vision.py detect.py answer.py score.py llm.py` — each exposing exactly one `@stage`-decorated
+*Chose (revised):* a flat module per stage (`media.py transcribe.py sentences.py segments.py
+vision.py detect.py answer.py score.py llm.py`), each exposing exactly one `@stage`-decorated
 `Context -> Context` function, with `pipeline.py` holding the `STAGES` list, the cache and the
 progress plumbing.
 
-*Alternatives:* (a) **package per stage** (`video/ audio/ detection/ models/ output/`) — what
+*Alternatives:* (a) **package per stage** (`video/ audio/ detection/ models/ output/`), what
 M1 actually shipped, and what this reverses; (b) the original flat M0 layout with no stage
 contract at all; (c) split by *feature* (`quiz/`, `transcript/`) rather than by stage.
 
@@ -84,7 +84,7 @@ contract at all; (c) split by *feature* (`quiz/`, `transcript/`) rather than by 
 directory but a *function*: a different ASR engine, a trained detector, a local OCR pass are
 each one entry in `STAGES`, and a caller who wants one passes `stages=` a different list. Once
 the contract carries that weight, a package per stage is a second, weaker boundary around the
-same thing — five directories, five `__init__.py` files that are only docstrings, and an
+same thing: five directories, five `__init__.py` files that are only docstrings, and an
 `audio/transcripts.py` whose whole job (persisting the transcript) the runner's cache does
 generically for every stage at once. The ownership argument for (a) survives intact and is
 served just as well by one file per stage: issue owners still edit disjoint files.
@@ -95,23 +95,23 @@ lives in exactly one place; `models.py` is a contract, not a stage.
 *Cost:* a flat `src/questxtract/` with sixteen modules, which will want grouping if the
 package doubles. The `@stage` decorator also has to live in `models.py` rather than
 `pipeline.py`, because `pipeline.py` imports every stage module to build `STAGES` and the
-stage modules need the decorator — an import cycle otherwise (architecture.md 11.1).
+stage modules need the decorator, which would otherwise be an import cycle otherwise (architecture.md 11.1).
 
-### D2 — ~~`video/` is not `audio/`~~ (superseded by D1)
+### D2: ~~`video/` is not `audio/`~~ (superseded by D1)
 
 *Was:* container decoding (mp4 → audio track, later → frames) lives in `video/`; `audio/` is
 speech-to-text only.
 
 *Now:* moot. There are no `video/` and `audio/` packages. `media.py` owns decoding and the
 source hash; `transcribe.py` owns ASR; `vision.py` owns frames. The underlying finding still
-holds and is still honoured — **frame extraction must not sit under the ASR module**, because
+holds and is still honoured: **frame extraction must not sit under the ASR module**, because
 M2/M3 read frames from the same container and would otherwise import the ASR module for it.
 
 *Worth keeping in the report:* this was a review finding against the first draft (§5), and it
 survived a later restructure that discarded the packaging it was expressed in. That is the
 difference between a finding about *dependencies* and one about *directories*.
 
-### D3 — Frozen, keyword-only dataclasses as the inter-stage contract
+### D3: Frozen, keyword-only dataclasses as the inter-stage contract
 
 *Chose:* `Word`, `AsrSegment`, `Transcript`, `Sentence`, `Segment`, `VisualContext`,
 `QuestionCandidate`, `QAPair` in `models.py`, `frozen=True, kw_only=True`, with `from_dict` and
@@ -133,10 +133,10 @@ architecture.md calls a run of sentences a `Segment` while the ASR engine calls 
 chunks segments too. We kept `Segment` for the former and named the latter `AsrSegment`,
 because the sentence-run meaning is the one every downstream consumer uses.
 
-### D4 — A fixed-key export envelope and stable ids
+### D4: A fixed-key export envelope and stable ids
 
-*Chose:* the export unit is one recording — `{"schema_version", "source", "config", "stats",
-"questions": [...]}` (architecture.md 12.1) — every key always present, `null` included. Each
+*Chose:* the export unit is one recording, `{"schema_version", "source", "config", "stats",
+"questions": [...]}` (architecture.md 12.1), with every key always present, `null` included. Each
 question carries an `id` derived from the `sentence_id` it was spoken in, and cites the
 content-hash `sentence_id`s it came from.
 
@@ -154,7 +154,7 @@ the text, the id moved with every rewording, so #94 derived it from the spoken s
 *Cost:* an ASR re-run that shifts timestamps or words changes ids. We accept this: ids are
 stable per *transcript*, and the transcript is cached (D8) precisely so it is not re-run.
 
-### D5 — Forward-compatible schema: provenance, words, and the fields M2 fills
+### D5: Forward-compatible schema: provenance, words, and the fields M2 fills
 
 *Chose:* per-word timestamps on `Word` from day one; `reasons` on every candidate and pair;
 `VisualContext` and the `QAPair` answer span as real types rather than reserved keys.
@@ -162,8 +162,8 @@ stable per *transcript*, and the transcript is cached (D8) precisely so it is no
 *Why:* every one of these is an *additive* change today and a *breaking* change once the
 review UI and exerplaza mapping depend on the JSON. `words` in particular is what
 sentence-accurate timestamps (FR7) need, and asking the ASR stage (#8) for them from day one
-is free; retrofitting is not. We explicitly framed M2 as enrichment — visual understanding
-fills board context on existing questions rather than emitting a second set — because the
+is free; retrofitting is not. We explicitly framed M2 as enrichment (visual understanding
+fills board context on existing questions rather than emitting a second set), because the
 roadmap and the brief say so, and because a second detector would need a merge step nobody
 owns.
 
@@ -176,11 +176,11 @@ was already there.
 string. This is what makes review possible, what makes a wrong result debuggable without a
 debugger, and what the judge reads as input.
 
-### D6 — Where the package ends
+### D6: Where the package ends
 
-*Chose:* inside — everything from decoding to quiz items on disk, *including* the planned
+*Chose:* inside: everything from decoding to quiz items on disk, *including* the planned
 solution extraction (`answer.py`) and the quiz builder (a separate `questxtract quiz` command).
-Outside — the review UI, exerplaza upload, and the evaluation *dataset*. See architecture.md 14 for
+Outside: the review UI, exerplaza upload, and the evaluation *dataset*. See architecture.md 14 for
 the boundary as stated to readers of the code.
 
 *Why:* solution extraction needs the sentences *after* each question; if it lived in the UI, the
@@ -197,7 +197,7 @@ questions on its own, only extract from questions asked", while the brief asks f
 producing MCQ/numeric items. Our reading: the builder *formats* an asked question (adds
 distractors, normalises notation); it never invents a question. Confirm with the customer.
 
-### D7 — Heuristic detector first, pluggable later
+### D7: Heuristic detector first, pluggable later
 
 *Chose:* keep the M0 keyword heuristic (`?`, wh-word, auxiliary-verb start) as `detect.py`,
 behind the one `Context -> Context` stage entry a classifier can replace.
@@ -208,10 +208,10 @@ heuristic gives the rest of the pipeline something real to run on and gives #11/
 baseline to beat. The literature we collected points the same way: the hard part of
 video-based question generation is context selection on noisy ASR text, not the classifier.
 
-### D8 — Persist the transcript; never recompute ASR for an edit
+### D8: Persist the transcript; never recompute ASR for an edit
 
 *Chose (revised):* one cache, written by the runner, keyed on the recording's content hash and
-on the config values each stage declares in `uses=(...)` — `.questxtract/<hash>/transcribe.json`
+on the config values each stage declares in `uses=(...)`: `.questxtract/<hash>/transcribe.json`
 and friends (architecture.md 11.2). The transcript is one entry in it, not a bespoke module.
 
 *Why:* ASR is the expensive step (minutes per lecture, GPU if available). Edits, re-detection
@@ -226,15 +226,15 @@ skip the cache rather than share an `unknown/` bucket (one recording's results w
 into another's), and the judge cannot key on config alone, because its input is the *candidate
 set* (architecture.md 10.4).
 
-### D9 — Errors at the boundary, readable at the CLI
+### D9: Errors at the boundary, readable at the CLI
 
 *Chose:* `SchemaError` raised by `from_dict`/`read_*`; the CLI catches it (and `OSError`) and
 prints one line, exit code 1.
 
 *Why:* issue #17 requires readable errors and the first real users are lecturers, not
-developers. Internally we still fail fast — no silent defaults.
+developers. Internally we still fail fast, with no silent defaults.
 
-### D10 — Quality gates are part of the architecture
+### D10: Quality gates are part of the architecture
 
 *Chose:* uv for builds, ruff (lint + format), mypy `--strict`, pytest with a 70 % coverage
 gate and `--import-mode=importlib`, CI on Linux, Python 3.10. Planned
@@ -656,6 +656,141 @@ than v2 ones, so it tests copying across boards more than a lecture as the stage
 model also takes over the previous reading's notation (`x²` for `x^2`), which character error
 rate counts as errors, and sometimes its layout, joining several board lines into one.
 
+### D28: Word timestamps, no forced alignment, no diarization
+
+*Chose:* Whisper word timestamps as the only timing; no alignment stage, no diarization. The
+source hash reads the first and last 8 MiB plus the size.
+
+*Alternative:* WhisperX wav2vec2 forced alignment; pyannote diarization; hashing the whole file.
+
+*Why:* timings exist to join speech to board states, and the video side is the coarse one:
+
+| Side | Precision |
+|---|---|
+| Video, sampled at 1 fps | ±500 to 1000 ms, and a line takes about 20 s to write |
+| Speech, Whisper word timestamps (cross-attention DTW) | about ±100 to 200 ms |
+| Speech, WhisperX forced alignment | about ±30 to 50 ms |
+
+Tightening the audio side buys nothing; if the join measures badly, sample video at 2 to 4 fps.
+Segment timestamps drift by seconds and hallucinated segments invent time ranges, so the pipeline
+uses word timestamps with VAD on. WhisperX pulls torch and CUDA; faster-whisper runs on
+CTranslate2. In a classroom the students are often off-mic, so there is often no second voice to
+diarize: the lecturer repeating the question is the signal, a lexical problem. Hashing a 2 GB file
+on every run is wasted I/O.
+
+*Cost:* no speaker labels; a file changed only in its middle keeps its hash.
+
+### D29: Sentences from punctuation, with a suppression list and a run-on cap
+
+*Chose:* split on terminal punctuation, hold back abbreviations, single capital initials and
+ellipses with a short list, and split run-ons at pauses, then halve until they fit
+`max_sentence_words`.
+
+*Alternative:* a boundary classifier; splitting at every pause; a neural splitter
+(`wtpsplit-lite`).
+
+*Why:* `turbo` punctuates well. The two error directions differ: a missed boundary merges two
+sentences, which detection still reads, while a false boundary leaves two fragments that read as
+neither, so a list that only suppresses splits errs the safe way. Lecturers pause mid-sentence at
+the board, so silence alone must not split a punctuated sentence. The cap matters because a
+gapless 200-word run would be vetoed on `max_question_chars` and every question in it lost with no
+reason code.
+
+*Cost:* the stage bets on Whisper emitting question marks (`question_mark_rate`, 0.99 on the
+labelled set). If that drops, the fixes in order of cost are a better `initial_prompt`, a larger
+model, then `wtpsplit-lite`: no new dependency, but 428 MB of weights for `sat-3l-sm` against a
+stage that takes about 20 ms.
+
+### D30: Structural segments with measured thresholds
+
+*Chose:* segments close on a silence over 2.0 s, 90 s of duration or 800 characters.
+
+*Alternative:* topic segmentation; looser gaps.
+
+*Why:* measured on the three reference recordings (MIT / TTK 09-14 / TTK 09-15, #41):
+
+| `segment_max_gap_seconds` | 2 s | 3 s | 4 s | 6 s | 8 s |
+|---|---|---|---|---|---|
+| segments closed by a pause (%) | 96 / 98 / 95 | 81 / 91 / 75 | 74 / 81 / 64 | 48 / 66 / 45 | 36 / 50 / 35 |
+| median segment (s) | 22 / 15 / 16 | 28 / 24 / 38 | 40 / 29 / 46 | 65 / 49 / 59 | 75 / 64 / 61 |
+
+At 2.0 s the length caps stay rare backstops; a looser gap hands the cutting to the caps, which cut
+mid-thought. The only consumer, the board-state join, wants time intervals. Detection never reads
+segments, so better boundaries cannot move recall.
+
+*Cost:* no topics for the FR11 topic filter. If topics are needed, add a coarser layer over these
+(lexical cohesion first, TextTiling-style, stdlib only) instead of loosening the thresholds.
+
+### D31: Rules find interrogatives, the LLM makes the content call
+
+*Chose:* lexical rules with reason codes for "is this a question", short tag and check-in lists
+grown from the labelled recordings, and tags as a penalty rather than a veto. Whether a question is
+about the content is the LLM detector's call. The rules' confidence is one number with a verdict.
+
+*Alternative:* a trained classifier; prosody; long cue lists; a separate quality score.
+
+*Why:* interrogative detection is lexical: in meeting speech, lexico-syntactic features carry
+question detection and pitch only adds to them (Boakye, Favre, Hakkani-Tür, ASRU 2009). The
+content call is hard for trained models too: a teacher-question detector on classroom ASR reaches
+weighted F1 0.59 (Blanchard et al., SIGDIAL 2016), and rhetorical questions reach F1 0.54 only
+with the neighbouring utterances as features (Bhattasali et al., ACL 2015). With a few hundred
+labels there is nothing to train on. The judge sees the context those papers found necessary.
+The annotation guidelines label tags `rhetorical`, so they get a penalty with a reason code. With
+the LLM detector, the confidence has no answer weighting: the model saw the answer when it
+labelled the question. FR10 asks for a number the user can reason about.
+
+*Cost:* the rules let rhetorical questions with ordinary verbs through (*"What does it mean?"*),
+and the check-in list comes from one lecturer's recordings, so it is re-checked on another (#92).
+
+### D32: The layout from a VLM probe, and vision never required
+
+*Chose:* one VLM request on three frames gives the content region and the lecture kind; a failed
+probe, layout or reading leaves the full frame or that keyframe out with a warning, and the run
+goes on. A VLM reads the board; OCR is an optional second reader.
+
+*Alternative:* a layout classifier; OCR as the reader; failing the run like the judge does.
+
+*Why:* recordings mix single camera, speaker plus screenshare, blackboard only and
+picture-in-picture, and a classifier would need a case per layout. VLMs are loose at box
+regression (GPT-4o and Claude fall well behind detection models on COCO boxes, arXiv 2507.01955),
+so the box is padded and a tiny box keeps its kind but not its crop. OCR cannot describe a
+diagram, does not tell the board from the room or the app, and does not say what it could not
+read. A board description only enriches questions the pipeline already found, while the user
+asked for the judge, so the judge fails the run and vision does not. A setting that cannot be used
+(an unreadable `.env`) would fail every call the same way, so it stops the run.
+
+*Cost:* one layout answer holds for the whole recording.
+
+### D33: One stage cache keyed on `uses`, LLM requests cached per request
+
+*Chose:* the runner caches a stage's one output field under a header of its `uses` config fields;
+the judge, the layout probe, vision and the quiz cache each request instead, keyed on the whole
+request, storing only valid answers. Progress is a `Callable[[str, float], None]`.
+
+*Alternative:* caching every stage; a per-stage cache for LLM stages; a progress framework or a
+logging handler.
+
+*Why:* caching a 20 ms stage buys nothing and costs an invalidation bug. The LLM stages' input is
+the transcript, which a config-only header cannot key, and a stage-level entry would replay a stale
+or failed reading. Per-request caching makes a re-run resume where a failed run stopped. One
+callable from the runner gives every stage progress for free.
+
+*Cost:* a stage that reads a config field missing from `uses` serves stale results.
+
+### D34: Quiz requests carry the speech, and the model may decline
+
+*Chose:* each quiz request holds the sentences around the question and the linked board states,
+and the model's first field, `quiz_material`, can turn a question down.
+
+*Alternative:* the question and answer alone; an item for every question.
+
+*Why:* the speech makes a pointing question ("this area here, is it finite?") usable and lets the
+model tell a misheard word from what was meant. Without a way out, a model writes an item for every
+question it is given and invents a topic for a vague one.
+
+*Cost:* `quiz` needs the transcript (`--transcript` or the cache); without it, items are fewer and
+weaker.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |
@@ -666,7 +801,7 @@ rate counts as errors, and sometimes its layout, joining several board lines int
 | FR4 extract drawing/animation from video | `vision.py` with `--vision`: the layout probe finds the board, stable views get one keyframe each, a vision model or OCR reads text, LaTeX and a description, and questions link to the board state on screen (`visual_ids`). What changed between states is #137; Manim animations are not planned (#185, D21) | static views done; changes over time open |
 | FR5 teacher can edit after extraction | `questions.json` is the edit surface: each question's `review` block (status, text, note) belongs to people and the pipeline never writes into it (architecture.md 12.2). The editor is a separate app (D6); the graphical app runs the pipeline but does not edit; keeping edits across a re-run is not planned (#15) | partial: the format, not an editor |
 | FR6 identify question sentences | `detect.py` rules by default (#10), or per run the LLM detector in `llm.py` (#88), Qwen on NTNU's service by default (D25) | done |
-| FR7 start timestamp per question | `QAPair.start`, a slice of the word list — word-accurate by construction, never interpolated (architecture.md 2.5) | done |
+| FR7 start timestamp per question | `QAPair.start`, a slice of the word list, word-accurate by construction, never interpolated (architecture.md 2.5) | done |
 | FR8 export JSON | `export.py`, architecture.md 12.1 (#13) | done |
 | FR9 progress for long recordings | `Progress = Callable[[str, float], None]` from the runner per stage, and within transcription as the audio is decoded and the words arrive; the CLI draws a bar, the graphical app a progress bar | done |
 | FR10 show detection confidence | `QAPair.confidence` + `confidence_label` + `reasons` | done |
@@ -698,10 +833,10 @@ What it changed, in order of consequence:
 | Malformed transcripts produced tracebacks | `SchemaError` + one-line CLI errors | D9 |
 | Nested test dirs would collide on same-named files | `--import-mode=importlib` | D10 |
 | Transcript I/O lived in `output/`; no way to persist transcripts | the runner's one cache | D8 |
-| Progress reporting (#14) unplaced | `Progress` callable, emitted by the runner per stage | — |
-| Status table said "done" for open issues; README contradicted the non-goals; rename unflagged | doc/README/CHANGELOG corrections | — |
+| Progress reporting (#14) unplaced | `Progress` callable, emitted by the runner per stage | - |
+| Status table said "done" for open issues; README contradicted the non-goals; rename unflagged | doc/README/CHANGELOG corrections | - |
 | Non-ASCII first word skipped by the tokeniser; int confidence at threshold 0 | `\w+` + `casefold()`, float seed | D7 |
-| `output/json.py` shadowed the stdlib module | renamed, then folded into `export.py` | — |
+| `output/json.py` shadowed the stdlib module | renamed, then folded into `export.py` | - |
 
 Two more surfaced while moving the code onto the stage contract, both of which the packaging
 had hidden rather than caused:
@@ -715,8 +850,8 @@ The one refuted candidate ("the empty `audio/` package contradicts the no-scaffo
 is worth mentioning in the report as an example of why verification matters: the rule is about
 planned *modules*; package boundaries are deliberately created early.
 
-**Reflection for the AI section.** The review's value was not bug-finding — the diff was a
-reorganisation with almost no logic — but *fit-checking the design against documents the code
+**Reflection for the AI section.** The review's value was not bug-finding (the diff was a
+reorganisation with almost no logic) but *fit-checking the design against documents the code
 cannot see*: the customer brief, the open issues, the roadmap. That is the part of a review a
 student team most often skips under time pressure. Two responsible-use points: every finding was
 verified against a concrete line, issue or requirement before we acted on it, and the decisions
@@ -726,24 +861,24 @@ asserted a `--model` CLI flag that does not exist), which the verification step 
 
 ## 6. Security at the design level (→ report ch. 9; compendium touchpoints 2, 5, 6)
 
-*Assets:* lecture recordings and transcripts (may contain names and voices of students —
+*Assets:* lecture recordings and transcripts (may contain names and voices of students,
 personal data under GDPR if real lectures are used); the extracted question bank; later, the
 exerplaza credentials used by the uploader.
 
 *Threats (STRIDE, the relevant ones):*
-- **Tampering** — an edited or hand-crafted results/transcript JSON is re-imported. Mitigated
+- **Tampering**: an edited or hand-crafted results/transcript JSON is re-imported. Mitigated
   by schema validation (`SchemaError`); *not* mitigated: integrity or provenance of edits. Fine
   for a local tool; revisit if files travel between users.
-- **Information disclosure** — transcripts leaving the machine. Design choice: ASR runs
+- **Information disclosure**: transcripts leaving the machine. Design choice: ASR runs
   offline (customer brief: "offline speech-to-text, e.g. Whisper") and never over a hosted
   transcribe endpoint. The optional LLM layer (architecture.md 6 and 10) is the one component that
   *can* leave the machine, and only when the caller configures an endpoint: the default
   `Config` makes zero outbound calls, and every result the pipeline produces is reachable
   without one. Pointing `base_url` at a local OpenAI-compatible server keeps even that on the
   device. The uploader (outside the package) is the only component that always talks out.
-- **Denial of service / resource exhaustion** — hour-long inputs, temp files from decoding.
+- **Denial of service / resource exhaustion**: hour-long inputs, temp files from decoding.
   #7 owns temp-file cleanup; #14 progress reporting is also the cancellation point.
-- **Elevation of privilege / spoofing** — none inside the package: no accounts, no privileges.
+- **Elevation of privilege / spoofing**: none inside the package: no accounts, no privileges.
   Both reappear at the exerplaza boundary and should be threat-modelled with that module.
 
 *Abuse cases to write up:* (1) a malicious transcript file (deeply nested JSON, huge strings)
@@ -751,15 +886,15 @@ fed to the CLI; (2) a lecturer uploading someone else's lecture; (3) a review UI
 LaTeX/HTML into a question that exerplaza renders.
 
 *Security requirements to state:* **S1 no network access unless the caller configures an
-endpoint** — the default `Config` makes zero outbound calls, the pipeline produces a complete
+endpoint**: the default `Config` makes zero outbound calls, the pipeline produces a complete
 result without one, and ASR is local always (this is the narrowed form; the original blanket
 "no network access in `questxtract` itself" was incompatible with the optional LLM layer the
 design needs for handwriting and board diagrams, and a blanket rule nobody can keep is worse
 than a precise one that holds); S2 all external JSON validated before use; S3 credentials never
-stored in the package or the result files — the API key is read from the environment at call
+stored in the package or the result files; the API key is read from the environment at call
 time and is not a `Config` field; S4 temporary media deleted after extraction; S5 test material
 is public or mock lectures only (the brief already promises "no student data"); **S6 when an
-endpoint is configured, the user must be able to tell** — the exported `config` block names the
+endpoint is configured, the user must be able to tell**: the exported `config` block names the
 models used, so a result carries whether it went out.
 
 *Accepted risks:* `filelock` on Python 3.10. The lock pins 3.32.7 there, which three advisories
@@ -795,7 +930,7 @@ ExerPlaza's preview. Accepted as a residual risk until ExerPlaza escapes it: the
 only in the browser of the teacher uploading their own file, and a test pins the verbatim output.
 
 Suggested exercise for the report: play Microsoft EoP over the figure in §2 with the
-information-flow arrows — the compendium asks for an architecture sketch with flows first.
+information-flow arrows; the compendium asks for an architecture sketch with flows first.
 
 ## 7. Sustainability and diversity hooks (→ report ch. 12, ch. 13-style reflections)
 
@@ -824,7 +959,7 @@ information-flow arrows — the compendium asks for an architecture sketch with 
 Collected in the team's research notes; check every entry on Google Scholar before it goes
 in the bibliography (some came via an AI-generated literature survey).
 
-- Context selection and rewriting for video-based educational question generation —
+- Context selection and rewriting for video-based educational question generation,
   AAAI 2025 (arXiv:2504.19406). *Supports D7: the bottleneck is context on noisy ASR text.*
 - Chapter-Llama: efficient chaptering in hour-long videos with LLMs (arXiv:2504.00072).
   *Supports the text-first pipeline over end-to-end vision-language models.*

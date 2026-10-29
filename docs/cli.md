@@ -1,8 +1,8 @@
 # Command line
 
-How to run QuestXtract from a terminal: every command, every option, and recipes for the common
-jobs. For the library API see [architecture.md 15](architecture.md#15-python-api); for how the pipeline works
-inside, [architecture.md](architecture.md).
+Every command and option, and recipes for common jobs. Library API:
+[architecture.md 15](architecture.md#15-python-api); pipeline internals:
+[architecture.md](architecture.md).
 
 ## Quick start
 
@@ -13,21 +13,21 @@ questxtract process lecture.transcript.json    # questions from an existing tran
 questxtract filter lecture.questions.json --text eigenvalue   # the questions about a word
 ```
 
-Run `questxtract --help`, or `questxtract <command> --help`, for the same information in the
-terminal. From a source checkout, put `uv run` in front: `uv run questxtract process lecture.mp4`.
+`questxtract --help` and `questxtract <command> --help` show the same in the terminal. From a
+source checkout, prefix `uv run`.
 
 ## What decides how much runs
 
-The file you pass in. There are no flags for picking stages.
+The input file. There are no flags for picking stages.
 
 | You pass | What runs |
 |---|---|
-| an `.mp4` or `.mp3` recording | everything: check the recording, transcribe it, then find the questions; a recording without a video track (any `.mp3`, or an audio-only `.mp4`) has no board to read |
-| a `.json` transcript | everything after transcription (much faster: no speech recognition) |
+| an `.mp4` or `.mp3` recording | everything: check the recording, transcribe it, find the questions; without a video track (any `.mp3`, or an audio-only `.mp4`) there is no board to read |
+| a `.json` transcript | everything after transcription |
 | anything else | nothing: `error: ...: expected an .mp4 recording or an .mp3 recording or a .json transcript` |
 
-`process` also takes a transcript made by any other ASR engine: a list of segments, or an object
-with a `segments` key, which is what most engines emit:
+`process` also takes a transcript from another ASR engine: a list of segments, or an object with
+a `segments` key:
 
 ```json
 {
@@ -40,139 +40,125 @@ with a `segments` key, which is what most engines emit:
 
 ## Commands
 
-The defaults below apply when neither a config file nor an explicit flag supplies a value.
+Defaults apply when neither a config file nor a flag sets a value.
 
 ### `questxtract process <input>`
 
-Finds the questions asked in a recording or a transcript and writes them to a questions file.
+Finds the questions in a recording or transcript and writes a questions file.
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|
-| `-o`, `--output` | a path | next to the input | Where to write the questions. `-o -` prints them to the terminal instead. A folder in the path that doesn't exist yet is created. |
-| `-t`, `--threshold` | a number, 0 to 1 | `0.4` | Keeps only questions with at least this confidence. Lower gives more questions, including more false ones; higher gives fewer. |
-| `-m`, `--model` | a model name | `turbo` | The Whisper model used to transcribe. Only matters for `.mp4` or `.mp3` input. See [Choosing a model](#choosing-a-model). |
-| `--from-scratch` | nothing | off | Ignores cached results and recomputes everything, transcription included. |
-| `--detector` | `rules` or `llm` | `rules` | How questions are found: fast offline rules, or a language model that reads the transcript. See [Finding questions with an LLM](#finding-questions-with-an-llm). |
-| `--llm-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
-| `--llm-url` | a URL | NTNU's LLM service | An OpenAI-compatible endpoint for `--detector llm`, the quiz and vision, e.g. `https://api.openai.com/v1` for OpenAI or `http://localhost:11434/v1` for Ollama. The key goes with the endpoint: NTNU's service (`https://llm.hpc.ntnu.no/v1`, NTNU network or VPN) reads `IDUN_API_KEY`, every other endpoint `OPENAI_API_KEY`. Vision goes there too unless `vision_base_url` is set in `questxtract.toml`. |
-| `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `server` | How long a thinking model may think before it answers: the judge and the quiz. By default they send no setting (`server`), since Qwen rejects `none`. `server` also suits a model that has no setting (`gpt-4o`); a DeepSeek judge needs `none`. Vision is not set here: `vision_reasoning_effort` in the settings file, `"none"` by default, switches DeepSeek's thinking off, which makes it far faster at reading the board for nearly the same result. Small models such as `qwen3.5:9b` judge much better with `low`. `low`, `medium` and `high` allow each request 10 minutes instead of 2; for a server that thinks on its own with `server`, raise `timeout_seconds` in the settings file. |
-| `--vision`, `--no-vision` | nothing | off | Also reads the slides or the board with a vision model: by default DeepSeek on NTNU's LLM service with the key from `IDUN_API_KEY` (NTNU network or VPN), or at `vision_base_url`, or at `--llm-url`. Needs the `questxtract[llm]` extra. `--no-vision` turns off `vision_enabled` from the settings file for one run. A recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript has no board, so the board is not read (a note says so). See [Reading the board](#reading-the-board). |
-| `--vision-model` | a model name | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | The model that reads the board, as the endpoint names it. It must take images. |
-| `--vision-reader` | `vlm` or `ocr` | `vlm` | How keyframes are read: `vlm`, the vision model (text, formulas and a description), or `ocr`, `vision_ocr_model` (GLM-OCR: text and formulas only, faster). The layout probe always asks `--vision-model`. |
-| `--quiz` | nothing | off | Also writes a multiple-choice quiz next to the questions file (`lecture.quiz.json`), as [`questxtract quiz`](#questxtract-quiz-questionsjson) does. Needs a file output, so not `-o -`. If the quiz fails, the questions file is kept and the exit code is 1. |
-| `--quiz-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The model that writes the quiz. Only with `--quiz`. |
+| `-o`, `--output` | a path | next to the input | Where to write. `-o -` prints instead. Missing folders are created. |
+| `-t`, `--threshold` | a number, 0 to 1 | `0.4` | Keeps questions with at least this confidence. |
+| `-m`, `--model` | a model name | `turbo` | The Whisper model. Only for `.mp4` or `.mp3` input. See [Choosing a model](#choosing-a-model). |
+| `--from-scratch` | nothing | off | Ignores cached results, transcription included. |
+| `--detector` | `rules` or `llm` | `rules` | Offline rules, or a language model. See [Finding questions with an LLM](#finding-questions-with-an-llm). |
+| `--llm-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The model for `--detector llm`, as the endpoint names it (`qwen3.5:9b` in Ollama). |
+| `--llm-url` | a URL | NTNU's LLM service | OpenAI-compatible endpoint for the LLM detector, the quiz and vision: `https://api.openai.com/v1`, `http://localhost:11434/v1`. NTNU's service (`https://llm.hpc.ntnu.no/v1`, NTNU network or VPN) reads `IDUN_API_KEY`, any other `OPENAI_API_KEY`. Vision goes there too unless `vision_base_url` is set. |
+| `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `server` | How long the judge and the quiz model may think. `server` sends no setting (Qwen rejects `none`; `gpt-4o` has no setting); DeepSeek needs `none`; `qwen3.5:9b` judges better with `low`. A level allows each request 10 minutes instead of 2. Vision uses `vision_reasoning_effort` from the settings file (default `"none"`). |
+| `--vision`, `--no-vision` | nothing | off | Also reads the slides or board with a vision model (default DeepSeek on NTNU's service). Needs `questxtract[llm]`. `--no-vision` overrides `vision_enabled` for one run. Without video there is no board (a note says so). See [Reading the board](#reading-the-board). |
+| `--vision-model` | a model name | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | The model that reads the board. It must take images. |
+| `--vision-reader` | `vlm` or `ocr` | `vlm` | `vlm`: the vision model (text, formulas, description). `ocr`: `vision_ocr_model` (GLM-OCR: text and formulas, faster). The layout probe always uses `--vision-model`. |
+| `--quiz` | nothing | off | Also writes a quiz next to the questions file (`lecture.quiz.json`), as [`questxtract quiz`](#questxtract-quiz-questionsjson). Not with `-o -`. If the quiz fails, the questions file is kept and the exit code is 1. |
+| `--quiz-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The quiz model. Only with `--quiz`. |
 | `--strictness`, `--options` | | | As for `questxtract quiz`. Only with `--quiz`. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
-The vision options may still change while the vision work continues in M3 (#133). The other vision settings (`vision_fps`, `vision_states_per_minute`, `vision_min_states`, `vision_change_fraction`,
-`vision_change_hold`) are set in the TOML file only.
+`vision_fps`, `vision_states_per_minute`, `vision_min_states`, `vision_change_fraction` and
+`vision_change_hold` are set in the TOML file only.
 
-One thing to know about `-t` with the rules: a question with no answer scores at most `0.55`, so
-a threshold above `0.55` keeps only questions the next sentence answers. With `--detector llm`
-the confidence is the model's own, answered or not.
+With the rules, an unanswered question scores at most `0.55`, so `-t` above `0.55` keeps only
+answered questions. With `--detector llm` the confidence is the model's own.
 
 ### `questxtract quiz <questions.json>`
 
-Writes multiple-choice quiz items for the questions in a questions file: per question a stem,
-options with one correct, an explanation, and why each option is right or wrong. It is the only
-command that writes text that was not spoken: every text carries `origin` (`spoken` only when it
-is the question as it was asked), and every item starts as pending review.
+Writes multiple-choice items for the questions in a questions file: a stem, options with one
+correct, an explanation, and why each option is right or wrong. It is the only command that
+writes text that was not spoken: every text carries `origin` (`spoken` only for the question as
+asked), and every item starts as pending review.
 
-The model sees the question, the lecture's answer when there is one, what was said in the few
-sentences around it, and the text, LaTeX and description of the board states on screen when the
-lecture was processed with vision. The speech comes from `--transcript`, else from the cached
-transcript of the recording (when `process` ran on this machine); without either, a `note:`
-says so and the quiz is written from the question, answer and board alone, which gives fewer and
-weaker items. `process --quiz` always has the speech. Rejected
-questions (`review.status` `deleted` or `false_positive`) and classroom check-ins are left out,
-and so is a question the model judges not to be quiz material: addressed to the room,
-rhetorical, or too vague to answer on its own.
-A question the model fails on is left out with a `warning:` line, and the rest are written; an
-unreachable endpoint or a bad key ends the run. Answers are cached, so a re-run sends nothing,
-and the same input gives the same file. The last line gives the model requests, tokens and time
-the quiz cost; a transcript that does not contain the questions' sentences gets a `note:` and is
-not used.
+The model sees the question, the lecture's answer, the sentences around it, and the board states
+on screen when vision ran. The speech comes from `--transcript`, else from the cached transcript
+of the recording; without either, a `note:` says so and items are fewer and weaker.
+`process --quiz` always has the speech. Rejected questions (`review.status` `deleted` or
+`false_positive`), check-ins, and questions the model declines (addressed to the room,
+rhetorical, too vague) are left out. A question the model fails on is skipped with a `warning:`;
+an unreachable endpoint or a bad key ends the run. Answers are cached, so a re-run sends nothing
+and gives the same file. The last line gives requests, tokens and time.
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|
-| `-o`, `--output` | a path | next to the input | Where to write the quiz: `lecture.questions.json` gives `lecture.quiz.json`. `-o -` prints it instead. |
-| `--strictness` | `strict` or `lenient` | `lenient` | `lenient` also uses questions the lecture did not answer, whose correct answer the model writes from what was said around them; `strict` uses only questions the lecture answered. |
-| `--options` | a number, 3 to 5 | `3` | Options per item, one of them correct. |
-| `--transcript` | a path | the cached transcript | The lecture's transcript, for what was said around each question. |
-| `--quiz-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The model that writes the quiz (`quiz_model`). |
-| `--llm-url` | a URL | NTNU's LLM service | An OpenAI-compatible endpoint, as for `process`. |
+| `-o`, `--output` | a path | next to the input | `lecture.questions.json` gives `lecture.quiz.json`. `-o -` prints it. |
+| `--strictness` | `strict` or `lenient` | `lenient` | `lenient` also uses unanswered questions, whose answer the model writes from what was said around them; `strict` only answered ones. |
+| `--options` | a number, 3 to 5 | `3` | Options per item, one correct. |
+| `--transcript` | a path | the cached transcript | The lecture's transcript. |
+| `--quiz-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The quiz model (`quiz_model`). |
+| `--llm-url` | a URL | NTNU's LLM service | As for `process`. |
 | `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `server` | As for `process`. |
-| `--config` | a path | `questxtract.toml` | The settings file. `quiz_model`, `quiz_strictness` and `quiz_options` can be set there. |
+| `--config` | a path | `questxtract.toml` | The settings file; `quiz_model`, `quiz_strictness`, `quiz_options` can be set there. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
 ### `questxtract transcribe <recording>`
 
-Transcribes an `.mp4` or `.mp3` recording into a transcript file, without looking for questions. The file
-it writes is exactly what `process` accepts as input, and what `scripts/dropped_questions.py`
-reads.
+Transcribes an `.mp4` or `.mp3` into a transcript file, which `process` and
+`scripts/dropped_questions.py` accept.
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|
-| `-o`, `--output` | a path | next to the recording | Where to write the transcript. `-o -` prints it instead. |
-| `-m`, `--model` | a model name | `turbo` | The Whisper model used to transcribe. |
+| `-o`, `--output` | a path | next to the recording | Where to write. `-o -` prints it. |
+| `-m`, `--model` | a model name | `turbo` | The Whisper model. |
 | `--from-scratch` | nothing | off | Transcribes again even if a cached transcript exists. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
 ### `questxtract filter <questions.json>`
 
-Keeps the questions of a questions file that mention some words or fall in a time range, without
-running the pipeline again. It prints the result unless `-o` is given. The result is a questions
-file like the input, with only the matching questions.
+Keeps the questions that mention some words or fall in a time range, without re-running the
+pipeline. Prints the result unless `-o` is given; the result is a questions file.
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|
-| `--text` | words | | Keeps questions where every word appears, as a whole word and ignoring case, somewhere in the question, the sentence it was spoken in, its answer, its `review` text, or the text, LaTeX or description of a board state on screen while it was asked. The words may come from different places: `--text "eigenvalue zero"` finds "what if this is zero?" asked under a board that says "eigenvalue". `eigenvalue` does not find `eigenvalues`. |
-| `--from` | a time | start | Keeps questions asked at or after this time: seconds (`300`), `M:SS` (`5:00`) or `H:MM:SS` (`1:05:00`). |
-| `--to` | a time | end | Keeps questions asked before this time, in the same forms. |
-| `-o`, `--output` | a path | the terminal | Where to write the result. Keyframe paths are rewritten so the images are still found from there. |
+| `--text` | words | | Keeps questions where every word appears, whole and ignoring case, in the question, its sentence, its answer, its `review` text, or a board state on screen while it was asked. The words may come from different places. `eigenvalue` does not find `eigenvalues`. |
+| `--from` | a time | start | Questions at or after this time: `300`, `5:00` or `1:05:00`. |
+| `--to` | a time | end | Questions before this time, same forms. |
+| `-o`, `--output` | a path | the terminal | Where to write. Keyframe paths are rewritten to still resolve. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
 
-Give at least one of `--text`, `--from` and `--to`; together, a question must match all of them.
+Give at least one of `--text`, `--from` and `--to`; a question must match all given.
 
 ### `questxtract qti <quiz.json>`
 
-Exports a quiz file as a QTI ZIP package for an LMS: QTI 3.0 by default, or QTI 2.1 for an LMS
-that does not import 3.0. Every item becomes a single-choice item scored against its correct
-option, with each option's explanation as feedback; the quiz's instructions set shuffling and
-whether feedback is shown. Items a reviewer marked `rejected` are left out. The same quiz file
-and version always give the same ZIP, byte for byte.
+Exports a quiz as a QTI ZIP package: QTI 3.0 by default, or 2.1 for an LMS that does not import
+3.0. Each item is single choice, scored against its correct option, with each option's
+explanation as feedback; the quiz's instructions set shuffling and feedback. Items marked
+`rejected` are left out. The same quiz and version always give the same bytes.
 
-**QTI 2.1 has not been tried in a real LMS yet.** It is the version for Canvas New Quizzes, NTNU's
-LMS, which imports 2.x but not 3.0; other LMS that import 2.1 only, such as Blackboard, take it
-too. No package has been imported into a real LMS yet. Each 2.1 item scores with its own rules
-and also names the standard `match_correct` template, which an LMS that supports only templates
-can use instead: there an item scores 1 and shows no feedback per option, so `qti` warns when an
-item is worth other than 1 point. Some LMS skip questions whose response processing they do not
-support. After an import, check that every question arrived.
+QTI 2.1 is for Canvas New Quizzes (NTNU's LMS) and Blackboard, which import 2.x but not 3.0. No
+package has been imported into a real LMS yet. Each 2.1 item has its own scoring rules and also
+names the `match_correct` template; an LMS that supports only templates scores every item 1 and
+shows no per-option feedback, so `qti` warns about items worth other than 1 point. Some LMS skip
+questions whose response processing they do not support, so check that every question arrived.
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|
 | `-o`, `--output` | a path | required | Where to write the ZIP. Its folder must exist. |
-| `--qti-version` | `2.1` or `3.0` | `3.0` | The QTI version of the package: 2.1 for an LMS that does not import 3.0, with the caveat above. |
+| `--qti-version` | `2.1` or `3.0` | `3.0` | The QTI version. |
 | `-h`, `--help` | nothing | | Shows the options. |
 
 ### `questxtract tex <quiz.json>`
 
-Exports a quiz file as TeX for ExerPlaza's upload page, `/questions/upload/tex`. Every item
-becomes one `IndexedQuestion` block with its options, the correct one marked, a solution holding
-the explanation and why each option is right or wrong, and notes for the teachers saying where in
-the lecture the question was asked and which model wrote the text. Pending items are visible only
-to you in ExerPlaza, accepted ones to everybody; rejected ones are left out. The quiz must be in
-English or Italian, the two languages ExerPlaza's parser accepts. Texts are written as they are,
-not LaTeX-escaped, because ExerPlaza shows them with MathJax. A text with unbalanced braces or a
-command of the format (such as `\answer`) fails, naming that text, and nothing is written; so does a quiz with no item left after the rejected ones. The
-same quiz file always gives the same file, byte for byte. You upload the file yourself: `tex`
-does not connect to ExerPlaza.
+Exports a quiz as TeX for ExerPlaza's upload page, `/questions/upload/tex`. Each item becomes an
+`IndexedQuestion` block with its options, the correct one marked, a solution with the
+explanations, and teacher notes on where the question was asked and which model wrote the text.
+Pending items are visible only to you in ExerPlaza, accepted ones to everybody; rejected ones are
+left out. The quiz must be in English or Italian. Texts are not LaTeX-escaped (ExerPlaza uses
+MathJax). A text with unbalanced braces or a format command (such as `\answer`) fails, naming the
+text, and nothing is written; so does a quiz with no items left. The same quiz always gives the
+same bytes. You upload the file yourself.
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|
 | `-o`, `--output` | a path | required | Where to write the `.tex` file. Its folder must exist. |
-| `--content-unit` | a name | required | An ExerPlaza content unit for every question. Repeat it for more than one. Spell it exactly as in ExerPlaza: any other spelling creates a new, unlinked unit. No braces, one line. |
+| `--content-unit` | a name | required | An ExerPlaza content unit for every question; repeat for more. Spell it exactly as in ExerPlaza, or a new unlinked unit is created. No braces, one line. |
 | `-h`, `--help` | nothing | | Shows the options. |
 
 ### Everywhere
@@ -180,75 +166,61 @@ does not connect to ExerPlaza.
 | Option | What it does |
 |---|---|
 | `--version` | Prints the installed version. |
-| `-h`, `--help` | Without a command, lists the commands; after one, lists that command's options. |
+| `-h`, `--help` | Without a command, lists the commands; after one, that command's options. |
 
-`questxtract eval <files|dirs> [--json] [--board]` scores the pipeline against the labelled set: recall,
-precision, false positives by kind, a threshold sweep, and every miss
-([tests/data/README.md](../tests/data/README.md)). `--board` adds the board states committed
-beside each transcript (`<name>.visual.json`), as if `--vision` had read them, and names the
-recordings that had them on the report's first line. It takes `--detector`, `--llm-model` and
-`--llm-url` too, so the rules and a model can be compared on the same recordings; the report's
-first line names the detector, the model and the prompt version. With `--score-vision`, it
-scores the vision model instead (`--vision-model`, or with `--vision-reader ocr` the OCR model, at vision's endpoint, as for `--vision`) on the labelled
-keyframes in `tests/data/vision/`: character error rate, blank boards read as blank and formula
-recall per lecture type, then every frame, worst first ([tests/data/vision/README.md](../tests/data/vision/README.md)). It calls
-the model once per frame and caches the answers.
+`questxtract eval <files|dirs> [--json] [--board]` scores the pipeline against the labelled set:
+recall, precision, false positives by kind, a threshold sweep, and every miss
+([tests/data/README.md](../tests/data/README.md)). `--board` adds the board states committed beside
+each transcript (`<name>.visual.json`). It takes `--detector`, `--llm-model` and `--llm-url` to
+compare rules and models; the first line names the detector, model and prompt version.
+`--score-vision` scores the vision model (`--vision-model`, or the OCR model with
+`--vision-reader ocr`) on the labelled keyframes in `tests/data/vision/`: character error rate,
+blank boards read as blank and formula recall per lecture type, then every frame, worst first
+([tests/data/vision/README.md](../tests/data/vision/README.md)). One cached call per frame.
 
 ## Graphical app
 
-`questxtract gui` opens a window over the same commands. It is a launcher: it runs the CLI's own
-code, so a run from the window writes the same file as the command with the same options. Install
-it with the extra, `pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.3.0"`;
-the extra includes what the LLM detector and reading the board need, since the window starts with
-both on.
+`questxtract gui` opens a window that runs the CLI's own code, so a run writes the same file as the
+command with the same options. Install with the extra:
+`pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.3.0"`; it
+includes what the LLM detector and reading the board need, since the window starts with both on.
 
-- **The file.** Drop an `.mp4`, `.mp3` or `.json` on the box, or click Browse. One file at a time.
-  A `.json` transcript skips transcription, so the Transcript output is not offered for it.
-- **The output.** Questions (`process`), Transcript (`transcribe`), Quiz (`process --quiz`, the
-  quiz beside the questions) or QTI package (`qti`, from a `quiz.json`). The files are named as
-  the commands name them: `<name>.questions.json`, `<name>.transcript.json`, `<name>.quiz.json`
-  and `<name>.qti.zip`, next to the input unless an output file is given.
-- **The options** are behind the Advanced settings button; the start view has only the file, the
-  output, Run and the language. Each control is one option of `process` or `transcribe` above,
-  with the value it starts from in the label. Without a `questxtract.toml` (see
-  [Configuration files](#configuration-files)) the window starts with the LLM detector and
-  reading the board on; with one, it starts from the file. A control left at the CLI's default
-  is not passed, so the file still applies. The LLM and quiz controls appear only for the outputs
-  that use them, and the LLM model is greyed out with the rules detector. Each output has its own
-  output file: changing the output clears the field. Run stays disabled, with the reason beside it, while
-  a value is refused (a threshold outside 0 to 1, an LLM detector with an empty model) or the file
-  is the wrong kind.
-- **Run, Cancel, progress.** A run can take as long as the recording, and the bar moves with the
-  pipeline's stages. Cancel stops before the next stage; a stage that has started finishes first,
-  and no partial file is written. Errors show as the CLI's one line, never a traceback.
-- **Open folder** opens the folder of the file the run wrote.
-- **Keys.** The app reads the keys exactly as the CLI does ([API keys](#api-keys-and-env)). The
-  **NTNU key...** button opens a window to paste the NTNU key: **Test** asks NTNU's service once,
-  **Save** tests and then saves it (a key NTNU refuses is not saved; one that could not be tested
-  is saved with a note), **Remove** deletes it. The key is saved as plain text in the file named in
-  the window. The app never shows, logs or passes the key on a command line.
+- The file: drop an `.mp4`, `.mp3` or `.json` on the box, or click Browse. One file at a time.
+  A `.json` transcript does not offer the Transcript output.
+- The output: Questions (`process`), Transcript (`transcribe`), Quiz (`process --quiz`) or QTI
+  package (`qti`, from a `quiz.json`), named `<name>.questions.json`, `<name>.transcript.json`,
+  `<name>.quiz.json` and `<name>.qti.zip`, next to the input unless an output file is given.
+- The options are behind Advanced settings. Each control is one option of `process` or
+  `transcribe`, with its starting value in the label. Without a `questxtract.toml`
+  ([Configuration files](#configuration-files)) the window starts with the LLM detector and
+  reading the board on; with one, it starts from the file. A control left at the CLI's default is
+  not passed, so the file still applies. LLM and quiz controls appear only for outputs that use
+  them. Changing the output clears the output file. Run stays disabled, with the reason beside it,
+  while a value is refused or the file is the wrong kind.
+- Run, Cancel, progress: the bar follows the pipeline's stages. Cancel stops before the next
+  stage, and no partial file is written. Errors show as the CLI's one line.
+- Open folder opens the folder of the file written.
+- Keys: read as the CLI reads them ([API keys](#api-keys-and-env)). The NTNU key... button opens
+  a window: Test asks NTNU's service once, Save tests and saves (a refused key is not saved; an
+  untested one is saved with a note), Remove deletes it. The key is stored as plain text in the
+  file named in the window and is never shown, logged or put on a command line.
 
-**Languages.** The window opens in English; the switch at the top right shows it in Norsk or
-Italiano, and keeps what was entered. Messages from the CLI itself stay in English.
+The window opens in English; the switch at the top right changes to Norsk or Italiano and keeps
+what was entered. CLI messages stay in English.
 
-**Drag and drop** uses `tkinterdnd2`, part of the extra. Where it cannot start, the window says
-drop is not available there and Browse still works.
+Drag and drop uses `tkinterdnd2`, part of the extra; where it cannot start, the window says so and
+Browse still works. The app needs a Python with tkinter (`python3-tk` on Linux); without it, or
+without the extra, `questxtract gui` prints one `error:` line.
 
-**Needs Tk.** The app needs a Python with tkinter. The python.org installers include it; on Linux
-the system package is `python3-tk`. Without tkinter, or without the extra, `questxtract gui` prints
-one `error:` line saying what is missing.
-
-Not in the app: `quiz` and `filter` as their own commands, `eval`, and every flag not listed above.
-They stay on the command line.
+`quiz`, `filter`, `eval` and every flag not listed above stay on the command line.
 
 ## Configuration files
 
-`process`, `transcribe` and `eval` accept `--config PATH`. Without that option, they look for
-`questxtract.toml` in the **current working directory**, not next to the recording. If that file
-does not exist, the commands use their defaults. An explicitly selected missing file is an error.
-When `--config` is given, only that file is read, even if `questxtract.toml` also exists.
+`process`, `transcribe`, `eval` and `quiz` accept `--config PATH`. Without it, they read
+`questxtract.toml` in the current working directory if it exists. A missing `--config` file is an
+error. With `--config`, only that file is read.
 
-The precedence is **explicit command flag > file value > Config default**. For example:
+Precedence: explicit flag > file value > `Config` default.
 
 ```toml
 # questxtract.toml: one flat table, with the names from config.py
@@ -266,102 +238,82 @@ questxtract transcribe lecture.mp4 --config other.toml
 questxtract eval tests/data/ --config other.toml
 ```
 
-Every `Config` field can be set, including those without flags. Names must match exactly:
-`--model` corresponds to `model_size`, `--threshold` to `min_confidence`, `--llm-model` to
-`judge_model`, `--llm-url` to `base_url`, and `--llm-reasoning` to `reasoning_effort`
-(`judge_reasoning_effort` is still read as its old name). `--llm-reasoning` does not set vision:
-`vision_reasoning_effort` does, `"none"` by default for DeepSeek, so the judge (Qwen, `""`) and
-the board (DeepSeek, `"none"`) can differ. `reasoning_effort = ""` is the equivalent of
-`--llm-reasoning server`. A reasoning level (`"low"`, `"medium"` or `"high"`) raises the request
-timeout to at least 600 seconds for `process` and `eval`, including when it comes from the file.
+Every `Config` field can be set. Flag names map to fields: `--model` is `model_size`,
+`--threshold` `min_confidence`, `--llm-model` `judge_model`, `--llm-url` `base_url`,
+`--llm-reasoning` `reasoning_effort` (`judge_reasoning_effort` is also read). `--llm-reasoning`
+does not set vision: `vision_reasoning_effort` does, `"none"` by default. `reasoning_effort = ""`
+equals `--llm-reasoning server`. A level (`"low"`, `"medium"`, `"high"`) raises the request
+timeout to at least 600 seconds for `process` and `eval`.
 
-The file must be UTF-8; a leading BOM from a Windows editor is accepted. No nested sections or
-`[tool.questxtract]` table are read. Integer fields require integers, not `5.5` or `true`;
-float fields also accept integers. TOML has no null: leave an optional key out to retain its
-default. Typos and wrong types are errors. A threshold must be between 0 and 1, and the
-detector must be `rules` or `llm`. Relative `cache_dir` paths are resolved from the **working
-directory**, even when the selected config file lives elsewhere. Changing a setting used by
-a cached stage makes that stage recompute as usual.
+The file must be UTF-8; a leading BOM is accepted. No nested sections or `[tool.questxtract]`.
+Integer fields need integers; float fields also take integers. Leave a key out to keep its
+default. Typos and wrong types are errors. The threshold must be between 0 and 1 and the detector
+`rules` or `llm`. A relative `cache_dir` is resolved from the working directory.
 
 ### API keys and .env
 
-TOML files must never hold secrets. A key containing `key`, `token`, `secret` or `password`
-(case-insensitive) is rejected without echoing its value. For a hosted LLM, the optional
-`questxtract[llm]` dependency and an API key are still required.
+A TOML key containing `key`, `token`, `secret` or `password` (any case) is rejected without
+echoing its value. A hosted LLM needs `questxtract[llm]` and a key.
 
-The key goes with the endpoint. NTNU's LLM service, the default, reads
-`IDUN_API_KEY`; a `vision_base_url` on another host than NTNU's or OpenAI's reads
-`QUESTXTRACT_VISION_API_KEY`; every other endpoint reads `OPENAI_API_KEY`. So the OpenAI key is
-never sent to NTNU, the NTNU key never leaves NTNU, and neither goes to a host set up for vision
-alone. `QUESTXTRACT_NTNU_API_KEY`, the NTNU key's former name, is still read when `IDUN_API_KEY`
-is not set. Each name comes from the environment if set; otherwise it is read from `.env` in the
-working directory (Git ignores this file); otherwise, for the NTNU key, from the key file the app
-saves (below). The supported format is `NAME=VALUE`, with optional single or double quotes, blank
-lines and `#` comments. Other variables are ignored; parent directories are not searched. The key
-is never stored in Config, logs, cache entries or `questions.json`.
+The key goes with the endpoint. NTNU's LLM service, the default, reads `IDUN_API_KEY` (also
+`QUESTXTRACT_NTNU_API_KEY`); a `vision_base_url` on another host than NTNU's or OpenAI's reads
+`QUESTXTRACT_VISION_API_KEY`; every other endpoint reads `OPENAI_API_KEY`. No key is sent to
+another service. Each name is read from the environment, else from `.env` in the working
+directory, else, for the NTNU key, from the app's key file (below). `.env` takes `NAME=VALUE`
+lines with optional quotes, blank lines and `#` comments; other variables are ignored and parent
+directories are not searched. The key is never stored in `Config`, logs, cache entries or
+`questions.json`.
 
-**The key file.** The app's **NTNU key...** button writes `IDUN_API_KEY="..."` to `questxtract/.env`
-in your user config folder: `%APPDATA%` on Windows, `~/Library/Application Support` on macOS,
-`$XDG_CONFIG_HOME` or `~/.config` elsewhere. Every other line of that file is kept. On Linux and
-macOS the file and its `questxtract` folder are readable by you only; on Windows they are as
-private as your user profile folder, which other users cannot open by default. The key sits there as plain text, like in any `.env`;
-for a safer store, keep it in your password store and load it into the environment as in the
-[Setting up the API key](#setting-up-the-api-key). Only the NTNU key is read from this file.
+The key file: the app's NTNU key... button writes `IDUN_API_KEY="..."` to `questxtract/.env` in
+your user config folder (`%APPDATA%` on Windows, `~/Library/Application Support` on macOS,
+`$XDG_CONFIG_HOME` or `~/.config` elsewhere), keeping its other lines. On Linux and macOS the file
+and its folder are readable by you only; on Windows they are as private as your profile folder.
+The key is plain text there; for a safer store, use [Setting up the API key](#setting-up-the-api-key).
 
-This reader does not run shell commands or expand variables. If your setup uses a password
-store and a shell script to retrieve the key, load it into the environment before running
-QuestXtract. That environment value wins, so the `.env` reader is not used in that case.
+The `.env` reader does not run commands or expand variables. Load a key from a password store
+into the environment before running QuestXtract; the environment wins.
 
 ### Setting up the API key
 
-A hosted model needs a key; a local server (`--llm-url`) does not. The key goes with the
-endpoint: NTNU's LLM service, the default, reads `IDUN_API_KEY`; OpenAI and any other
-endpoint read `OPENAI_API_KEY`, so neither key is ever sent to the other service. NTNU's service
-needs the NTNU network or VPN, and NTNU asks that heavy use wait until after 18:00 or the
-weekend. There is no `--api-key` flag and TOML files reject secrets, so a key never sits in the
-repository or in your shell history. The steps below use the NTNU key; for an OpenAI key, use
-`openai` and `OPENAI_API_KEY` in its place. The setup keeps it in your system's password store
-(the Keychain on macOS, Credential Manager on Windows) and lets a git-ignored `.env` file
-*refer* to it, so no file anywhere holds the key itself. The environment wins over `.env`, which
-is why step 4 loads it into the shell. It is the same on macOS and Windows: run it in Terminal on
-macOS, in **Git Bash** on Windows (it comes with Git for Windows), from the repository folder.
+A hosted model needs a key; a local server does not. NTNU's service reads `IDUN_API_KEY`, OpenAI
+and other endpoints `OPENAI_API_KEY`. NTNU's service needs the NTNU network or VPN, and NTNU asks
+that heavy use wait until after 18:00 or the weekend. There is no `--api-key` flag. These steps
+keep the NTNU key in the system password store (Keychain on macOS, Credential Manager on Windows)
+and let a git-ignored `.env` refer to it; for an OpenAI key, use `openai` and `OPENAI_API_KEY`.
+Run them in Terminal on macOS or Git Bash on Windows, from the repository folder.
 
-1. **Save the key.** Copy the whole key, then store it from the clipboard:
+1. Save the key. Copy it, then store it from the clipboard:
 
    ```bash
    pbpaste | tr -d '[:space:]' | uvx keyring set questxtract-llm ntnu             # macOS
    cat /dev/clipboard | tr -d '[:space:]' | uvx keyring set questxtract-llm ntnu  # Windows
    ```
 
-   Then empty the clipboard (`pbcopy < /dev/null` on macOS, copy any other text on Windows).
-   Piping the key in avoids typing it into a hidden prompt: macOS's own
-   `security add-generic-password -w` prompt silently cuts a key at 128 characters, and keys
-   can be longer.
+   Then empty the clipboard (`pbcopy < /dev/null` on macOS, copy other text on Windows). macOS's
+   `security add-generic-password -w` prompt cuts a key at 128 characters, so pipe it in.
 
-2. **Check it.** This prints only the last three characters; they must match your key's:
+2. Check it. This prints the last three characters:
 
    ```bash
    uvx keyring get questxtract-llm ntnu | tail -c 4
    ```
 
-3. **Point `.env` at it.** One line per key, written once; `.env` is in `.gitignore` and holds
-   no key:
+3. Point `.env` at it, once:
 
    ```bash
    echo 'export IDUN_API_KEY="$(uvx keyring get questxtract-llm ntnu)"' >> .env
    ```
 
-4. **Load it in every new terminal**, before running `questxtract`:
+4. Load it in every new terminal:
 
    ```bash
    source .env
    ```
 
-   On macOS the first read may ask whether Python may use the Keychain item: choose *Always
-   Allow*. In PowerShell instead of Git Bash, step 4 is
+   On macOS, choose *Always Allow* if Python asks for the Keychain item. In PowerShell:
    `$env:IDUN_API_KEY = (uvx keyring get questxtract-llm ntnu)`.
 
-5. **Test it.** Listing the models costs nothing:
+5. Test it (listing models costs nothing):
 
    ```bash
    uv run python -c "import os, openai; print(len(openai.OpenAI(base_url='https://llm.hpc.ntnu.no/v1', api_key=os.environ['IDUN_API_KEY']).models.list().data), 'models visible - the key works')"
@@ -371,96 +323,89 @@ macOS, in **Git Bash** on Windows (it comes with Git for Windows), from the repo
 |---|---|---|
 | `--detector llm goes to NTNU's LLM service ..., so it needs IDUN_API_KEY` | The key is not loaded in this terminal | `source .env` |
 | `... Connection error` with NTNU's service | Not on the NTNU network | Connect the NTNU VPN |
-| `401 ... invalid_api_key` | The stored key is incomplete, or was revoked | Compare its end with the original (step 2) and save it again (step 1); if they match, ask for a new key |
-| `400 ... reasoning_effort` | The judge or the quiz model rejects `none` (Qwen) or takes no setting (`gpt-4o`); the vision model has no setting (`gpt-4o`, `qwen3-vl`) but vision sends `none` by default, which DeepSeek needs | Judge: pass `--llm-reasoning server`. Vision: set `vision_reasoning_effort = ""` in `questxtract.toml` |
+| `401 ... invalid_api_key` | The stored key is incomplete or revoked | Compare its end with the original (step 2), save it again (step 1), or ask for a new key |
+| `400 ... reasoning_effort` | The judge or quiz model rejects `none` (Qwen) or has no setting (`gpt-4o`); or the vision model has no setting but vision sends `none` | Judge: `--llm-reasoning server`. Vision: `vision_reasoning_effort = ""` in `questxtract.toml` |
 
 ## Where files go
 
-Without `-o`, output lands next to the input, named after it:
+Without `-o`, output lands next to the input:
 
 | Input | `process` writes | `transcribe` writes |
 |---|---|---|
 | `lecture.mp4` | `lecture.questions.json` | `lecture.transcript.json` |
 | `lecture.transcript.json` | `lecture.questions.json` | (needs an `.mp4` or `.mp3`) |
 
-`filter` prints to the terminal unless `-o` names a file.
+`filter` prints unless `-o` names a file.
 
-When vision has read the board, the keyframe images are copied into a folder next to the
-questions file and named after it (`lecture.keyframes/` for `lecture.questions.json`); the file
-refers to them by relative path, so move or share the two together. With `-o -` nothing is
-copied and the file points into the cache instead.
+With vision, keyframe images are copied next to the questions file (`lecture.keyframes/` for
+`lecture.questions.json`) and referenced by relative path, so move the two together. With `-o -`
+nothing is copied and the file points into the cache.
 
-A second run overwrites the file. Pass `-o` to keep several versions side by side. The
-questions file format is described in
-[architecture.md 12.1](architecture.md#121-questionsjson).
+A second run overwrites the file. Format: [architecture.md 12.1](architecture.md#121-questionsjson).
 
 ## Recipes
 
-**Get the questions from a lecture video**
+Get the questions from a lecture video:
 
 ```bash
 questxtract process lecture.mp4
 ```
 
-**Do a quick test run on a laptop.** A small model transcribes several times faster, less
-accurately:
+Quick test run on a laptop (smaller model, faster, less accurate):
 
 ```bash
 questxtract process lecture.mp4 -m base
 ```
 
-**Try another threshold without transcribing again.** The transcript is cached after the first
-run, so the second command takes seconds:
+Another threshold without transcribing again (the transcript is cached):
 
 ```bash
 questxtract process lecture.mp4 -t 0.4
 questxtract process lecture.mp4 -t 0.3 -o lecture.questions-0.3.json
 ```
 
-**Keep the transcript, to read it, share it or reuse it**
+Keep the transcript:
 
 ```bash
 questxtract transcribe lecture.mp4                 # writes lecture.transcript.json
 questxtract process lecture.transcript.json        # writes lecture.questions.json
 ```
 
-If you already ran `process lecture.mp4`, `transcribe` reuses its cached transcript and finishes
-almost instantly. It works the other way round too.
+`transcribe` reuses the transcript cached by `process`, and the other way round.
 
-**Print the result instead of writing a file**
+Print the result instead of writing a file:
 
 ```bash
 questxtract process lecture.transcript.json -o -
 ```
 
-**Everything in one run: the board, the LLM detector and a quiz.** All three run at NTNU's
-service with `IDUN_API_KEY`: DeepSeek reads the board, Qwen judges and writes the quiz. It writes `lecture.questions.json`, the keyframes in `lecture.keyframes/` and
-`lecture.quiz.json`; `qti` then packs the quiz for an LMS.
+Everything in one run: the board, the LLM detector and a quiz, all on NTNU's service with
+`IDUN_API_KEY`. Writes `lecture.questions.json`, `lecture.keyframes/` and `lecture.quiz.json`;
+`qti` then packs the quiz:
 
 ```bash
 questxtract process lecture.mp4 --vision --detector llm --quiz
 questxtract qti lecture.quiz.json -o lecture.qti.zip
 ```
 
-**Export for an LMS (QTI 3.0 or 2.1)**
+Export for an LMS:
 
 ```bash
 questxtract qti lecture.quiz.json -o lecture.qti.zip   # QTI 3.0, every item but the rejected ones
 questxtract qti lecture.quiz.json -o lecture.qti21.zip --qti-version 2.1   # QTI 2.1, see the caveat
 ```
 
-**Export for ExerPlaza**
+Export for ExerPlaza:
 
 ```bash
 questxtract tex lecture.quiz.json -o lecture.tex --content-unit "Improper integrals"
 ```
 
-Upload `lecture.tex` at `/questions/upload/tex` in ExerPlaza, check the preview and save. On a
-re-upload, ExerPlaza asks about every question whose text it already has: choose Cancel, because
-Overwrite deletes the existing question and the students' answers to it.
+Upload `lecture.tex` at `/questions/upload/tex`, check the preview and save. On a re-upload,
+ExerPlaza asks about every question it already has: choose Cancel, because Overwrite deletes the
+question and the students' answers to it.
 
-**See which questions the threshold threw away.** This is a development tool, not a CLI
-command:
+See which questions the threshold dropped (a development script):
 
 ```bash
 questxtract transcribe lecture.mp4
@@ -468,14 +413,14 @@ uv run python scripts/dropped_questions.py lecture.transcript.json -o lecture.qu
 # writes lecture.questions.json (kept) and lecture.questions.dropped.json (dropped)
 ```
 
-**Find the questions about a word, said or on the board**
+Find the questions about a word, said or on the board:
 
 ```bash
 questxtract filter lecture.questions.json --text eigenvalue
 questxtract filter lecture.questions.json --text "transfer function" --from 5:00 --to 20:00 -o tf.json
 ```
 
-**Start over** after changing the code or when you suspect a stale result:
+Start over after changing the code or on a suspected stale result:
 
 ```bash
 questxtract process lecture.mp4 --from-scratch
@@ -483,26 +428,25 @@ questxtract process lecture.mp4 --from-scratch
 
 ## Finding questions with an LLM
 
-`--detector llm` hands the decision to a language model. Every sentence ending in `?`, and every
-question the rules found, goes to the model with the lecture around it; it decides which are real
-questions, finds the sentences that answer them, and rewrites a messy question into a clean one.
-The spoken version stays in the file as `original_text`, and the model can never add a question
-that was not spoken: it only judges the sentences it was given, by id. The rules still run first;
-their `reasons` stay on the questions the model keeps, and those gain `llm`.
+`--detector llm` sends every sentence ending in `?`, and every question the rules found, to a
+language model with the lecture around it. It decides which are real questions, finds the
+sentences that answer them, and may reword a messy question; the spoken version stays as
+`original_text`. It judges only the sentences it was given, by id, so it cannot add a question.
+The rules run first; their `reasons` stay on the questions the model keeps, plus `llm`.
 
-It needs the `llm` extra: `pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`.
+Needs the `llm` extra: `pip install "questxtract[llm] @ git+https://github.com/mad201802/QuestXtract"`.
 
-**NTNU's LLM service (the default).** `Qwen/Qwen3.8-27B-FP8`, free, on the NTNU network or
-VPN. To judge with DeepSeek instead, pass `--llm-model deepseek-ai/DeepSeek-V4.1-Flash-1017 --llm-reasoning none`. Put the key in `IDUN_API_KEY`, the safe way described in
-[Setting up the API key](#setting-up-the-api-key), never typed into a command.
+NTNU's LLM service (the default): `Qwen/Qwen3.8-27B-FP8`, free, on the NTNU network or VPN, with
+the key in `IDUN_API_KEY` ([Setting up the API key](#setting-up-the-api-key)). To judge with
+DeepSeek: `--llm-model deepseek-ai/DeepSeek-V4.1-Flash-1017 --llm-reasoning none`.
 
 ```bash
 questxtract process lecture.mp4 --detector llm
 ```
 
-**OpenAI.** Put the key in `OPENAI_API_KEY` and point `--llm-url` at OpenAI. `gpt-4o` takes no
-reasoning setting, so pass `server`; a thinking model such as `gpt-5.6-terra` takes a level.
-OpenAI shuts the gpt-4o snapshots down on 14 January 2027.
+OpenAI: key in `OPENAI_API_KEY`, `--llm-url` pointing at OpenAI. `gpt-4o` takes no reasoning
+setting (`server`); a thinking model such as `gpt-5.6-terra` takes a level. OpenAI shuts the
+gpt-4o snapshots down on 14 January 2027.
 
 ```bash
 questxtract process lecture.mp4 --detector llm --llm-url https://api.openai.com/v1 \
@@ -511,8 +455,8 @@ questxtract process lecture.mp4 --detector llm --llm-url https://api.openai.com/
     --llm-model gpt-5.6-terra --llm-reasoning low
 ```
 
-**Another hosted provider (OpenRouter and the like).** Anything that speaks the OpenAI API works:
-put that provider's key in `OPENAI_API_KEY` (stored the same way) and pass its URL and model name.
+Another hosted provider (OpenRouter and similar): its key in `OPENAI_API_KEY`, its URL and model
+name. DeepSeek needs `--llm-reasoning none`.
 
 ```bash
 questxtract process lecture.mp4 --detector llm \
@@ -520,11 +464,9 @@ questxtract process lecture.mp4 --detector llm \
     --llm-reasoning none
 ```
 
-DeepSeek thinks unless told not to, so it needs `--llm-reasoning none`; Qwen and gpt-4o take no setting, which is the default.
-
-**Local (Ollama).** Any OpenAI-compatible server works (Ollama, llama.cpp's `llama-server`,
-vLLM, LM Studio); pass its URL. With [Ollama](https://ollama.com), give it an 8k context first:
-below 24 GB of graphics memory it defaults to 4k and silently cuts longer prompts.
+Local: any OpenAI-compatible server (Ollama, llama.cpp's `llama-server`, vLLM, LM Studio). Give
+[Ollama](https://ollama.com) an 8k context: below 24 GB of graphics memory it defaults to 4k and
+cuts longer prompts.
 
 ```bash
 OLLAMA_CONTEXT_LENGTH=8192 ollama serve        # in one terminal
@@ -533,43 +475,38 @@ questxtract process lecture.mp4 --detector llm \
     --llm-url http://localhost:11434/v1 --llm-model qwen3.6:35b
 ```
 
-On a smaller machine, `qwen3.5:9b` needs to think first, which makes it slow but good:
+On a smaller machine, `qwen3.5:9b` with thinking is slow but good:
 
 ```bash
 questxtract process lecture.mp4 --detector llm --llm-reasoning low \
     --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
 ```
 
-Speed depends on the machine: without thinking, a request takes seconds; with it, minutes, and a
-lecture makes 15 to 25 of them. Which model finds the questions best is measured with `eval`:
+Without thinking a request takes seconds, with it minutes; a lecture makes 15 to 25. Compare
+models with `eval`:
 
 ```bash
 questxtract eval tests/data/ --detector llm --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b
 ```
 
-**Caching.** Every request to the model is cached in `.questxtract/judge/`, keyed on what was sent.
-Another `-t` or a second `eval` makes no calls; a different model, endpoint, transcript or
-prompt asks again (a new questxtract version may change the prompt). `--from-scratch` ignores the cache.
+Caching: every request is cached in `.questxtract/judge/`, keyed on what was sent. Another `-t` or
+a second `eval` makes no calls; a different model, endpoint, transcript or prompt asks again.
+`--from-scratch` ignores the cache.
 
-**What it cost.** The `stats` block of `questions.json` counts the model calls of the run:
-`judge_requests`, `judge_input_tokens`, `judge_output_tokens` and `judge_ms`, and the same with
-`layout_` and `vision_` when vision is on. Tokens are what the endpoint reports (0 from a server
-that reports none); a run answered from the cache shows 0. Multiply by your provider's prices
-for the cost of a lecture.
+Cost: the `stats` block of `questions.json` has `judge_requests`, `judge_input_tokens`,
+`judge_output_tokens` and `judge_ms`, and the same with `layout_` and `vision_` when vision is on.
+Tokens are as the endpoint reports them (0 when it reports none); a cached run shows 0.
 
-**When the endpoint fails.** You asked for the model, so there is no quiet fallback to the rules:
-the run stops with one `error:` line (see [When something goes wrong](#when-something-goes-wrong)).
-Parts already answered stay cached, so running the same command again picks up where it stopped.
+When the endpoint fails, the run stops with one `error:` line
+([When something goes wrong](#when-something-goes-wrong)); there is no fallback to the rules.
+Answered requests stay cached, so the same command resumes.
 
 ## Reading the board
 
-A vision model can also read the slides or the board. Each stable view of the recording becomes a
-board state: its text, its formulas as LaTeX, a short description and a confidence, linked to the
-questions asked while it was on screen. It needs the `llm` extra and a model that takes images.
-By default it is DeepSeek-V4.1-Flash on NTNU's LLM service, with the same key as the LLM detector
-(`IDUN_API_KEY`, see [Setting up the API key](#setting-up-the-api-key)) and its thinking off:
-with it on, DeepSeek reads a frame far slower for nearly the same reading. Switch vision on for
-one run with `--vision`:
+A vision model reads the slides or board. Each stable view becomes a board state with its text,
+formulas as LaTeX, a short description and a confidence, linked to the questions asked while it
+was on screen. Needs the `llm` extra and a model that takes images. Default: DeepSeek-V4.1-Flash
+on NTNU's service, with the LLM detector's key (`IDUN_API_KEY`) and its thinking off. One run:
 
 ```bash
 questxtract process lecture.mp4 --vision        # DeepSeek on NTNU
@@ -577,7 +514,7 @@ questxtract process lecture.mp4 --vision --llm-url http://localhost:11434/v1 \
     --vision-model qwen3-vl:2b-instruct   # a local model in Ollama; see vision_reasoning_effort below
 ```
 
-or for every run in `questxtract.toml` (`--no-vision` turns it off again for one run):
+Every run, in `questxtract.toml` (`--no-vision` turns it off for one run):
 
 ```toml
 vision_enabled = true
@@ -586,15 +523,12 @@ vision_model = "deepseek-ai/DeepSeek-V4.1-Flash-1017"   # the default, on NTNU's
 # vision_reasoning_effort = ""                         # for a vision model with no setting, such as qwen3-vl
 ```
 
-Without `vision_base_url`, vision goes where `base_url` (`--llm-url`) points, NTNU's service by
-default, with that endpoint's key.
+Without `vision_base_url`, vision goes to `base_url` (`--llm-url`) with that endpoint's key.
 
-`--vision-reader ocr` (or `vision_reader = "ocr"`) reads the keyframes with GLM-OCR instead,
-through the same endpoint: faster and lighter, with the text and formulas but no description.
-The vision model still finds the board first, once per lecture, so the room and the app around
-it are cropped away before OCR reads the frame. GLM-OCR also runs on an 8 GB laptop through
-Ollama. Give it a small vision model for finding the board too, or every run warns that it reads
-the full frame, room included:
+`--vision-reader ocr` (`vision_reader = "ocr"`) reads keyframes with GLM-OCR through the same
+endpoint: faster, text and formulas, no description. The vision model still finds the board once
+per lecture, so OCR reads only the board. GLM-OCR runs on an 8 GB laptop through Ollama; give it a
+small vision model for finding the board, or every run warns that it reads the full frame:
 
 ```bash
 ollama pull glm-ocr:q8_0
@@ -610,55 +544,48 @@ vision_model = "qwen3-vl:2b-instruct"   # finds the board; leave it out to read 
 vision_reasoning_effort = ""            # send no reasoning setting to the local models
 ```
 
-A server that does not return token probabilities still works; its readings get confidence 0.5,
-which means "not measured".
+A server that returns no token probabilities still works; its readings get confidence 0.5 ("not
+measured").
 
-A lecture costs one model call to find the slides or board and at most 3 per minute to read
-them, at least 80 allowed, so up to 270 for a 90-minute lecture (`vision_states_per_minute`,
-`vision_min_states`), plus a resend when a call fails. A slide or page that comes back later in the
-lecture with nothing changed is not read again: its earlier reading is copied. Readings and
-keyframe images are cached, so running it again sends nothing. A reading that fails leaves its
-view out with a warning, and the run goes on. Example output:
-[demo/](demo/mit_18_100b_l1.questions.json), four questions from MIT 18.100B Lecture 1
-(MIT OpenCourseWare, CC BY-NC-SA) with the boards they were asked about; `stats` there still
-count the whole lecture. How it works:
+A lecture costs one call to find the board and at most 3 per minute to read it, at least 80, so up
+to 270 for 90 minutes (`vision_states_per_minute`, `vision_min_states`), plus resends. A slide or
+page that comes back unchanged is not read again. Readings and keyframes are cached. A failed
+reading leaves its view out with a warning. Example output:
+[demo/](demo/mit_18_100b_l1.questions.json), four questions from MIT 18.100B Lecture 1 (MIT
+OpenCourseWare, CC BY-NC-SA) with their boards; its `stats` count the whole lecture. Internals:
 [architecture.md 6](architecture.md#6-vision).
 
 ## Choosing a model
 
-`-m` picks the Whisper model size. Smaller is faster, larger is more accurate.
+`-m` picks the Whisper model size.
 
 | Name | Download | When to use it |
 |---|---|---|
-| `tiny`, `base` | ~140 MB for `base` | quick test runs, CI, checking that everything works |
-| `small`, `medium` | in between | when `turbo` is too slow or too big for the machine |
-| `turbo` (default) | ~1.5 GB | real lectures: close to `large-v2` quality, roughly 8x faster than `large-v3` |
-| `large-v3` | largest | the most accurate, and the slowest |
+| `tiny`, `base` | ~140 MB for `base` | quick test runs, CI |
+| `small`, `medium` | in between | when `turbo` is too slow or too big |
+| `turbo` (default) | ~1.5 GB | real lectures: close to `large-v2` quality, about 8x faster than `large-v3` |
+| `large-v3` | largest | most accurate, slowest |
 
-Any other name faster-whisper knows also works, such as `small.en`. An unknown name fails with
-the list of valid ones. The first run with a model downloads it once into
-`~/.cache/huggingface`. While that happens, the progress bar sits at `Transcribing 0%`, and the
-download may print its own progress bar.
+Any other faster-whisper name works, such as `small.en`; an unknown name fails with the valid
+list. The first run downloads the model into `~/.cache/huggingface`; meanwhile the bar sits at
+`Transcribing 0%`.
 
 ## The cache
 
-Results are cached in a `.questxtract/` folder **in the folder you run the command from**. Run
-from the same folder every time to benefit from it.
+Results are cached in `.questxtract/` in the folder you run the command from.
 
 | Changing this... | ...transcribes again? |
 |---|---|
 | `-t`, `-o`, `--detector`, `--llm-model`, `--llm-url`, `--llm-reasoning` | no |
-| `-m` | yes: a different model gives a different transcript |
-| `--vision-model`, `--vision-reader`, a `vision_*` setting, or `--llm-url` / `base_url` with vision on | no, but the board is read again; keyframes already read with the same model are not sent twice |
-| `--from-scratch` | yes, and it recomputes everything else too |
+| `-m` | yes |
+| `--vision-model`, `--vision-reader`, a `vision_*` setting, or `--llm-url` / `base_url` with vision on | no, but the board is read again; keyframes already read with the same model are not resent |
+| `--from-scratch` | yes, and everything else is recomputed |
 | the video file itself | yes: the cache is keyed on the file's content |
 
-A `.json` transcript input has no transcription to save. Only the requests to the model are
-cached, with `--detector llm` (see [Finding questions with an LLM](#finding-questions-with-an-llm)).
+A `.json` transcript input caches only the model requests.
 
-Within one run, a slide or page that comes back with nothing changed is not read again: its
-earlier reading is copied, also with `--from-scratch`, and counted in `stats.vision_reused`. This
-is not the cache, so it works on a first run too ([architecture.md 6.5](architecture.md#65-captioning)).
+Within one run, a slide or page that comes back unchanged is copied, also with `--from-scratch`,
+and counted in `stats.vision_reused` ([architecture.md 6.5](architecture.md#65-captioning)).
 
 ## When something goes wrong
 
@@ -673,40 +600,37 @@ is not the cache, so it works on a first run too ([architecture.md 6.5](architec
 |---|---|
 | `...: no such file` | Check the path. |
 | `...: expected an .mp4 recording or an .mp3 recording or a .json transcript` | Convert the recording to MP4 or MP3 first, e.g. with ffmpeg. |
-| `...: recording contains no audio track` | The file has video only; there is nothing to transcribe. |
+| `...: recording contains no audio track` | The file has video only. |
 | `...: invalid or unreadable recording` | The file is damaged, or not really an MP4 or MP3. |
-| `Invalid model size '...', expected one of: ...` | Use one of the names listed in the message. |
+| `Invalid model size '...', expected one of: ...` | Use a listed name. |
 | `...: not valid JSON` / `expected a list of segments...` | The `.json` file is not a transcript. |
-| `--detector llm goes to NTNU's LLM service (...), so it needs IDUN_API_KEY ...` | Make the NTNU key available in the environment or local `.env`, or pass `--llm-url` for OpenAI or a local server. |
+| `--detector llm goes to NTNU's LLM service (...), so it needs IDUN_API_KEY ...` | Make the NTNU key available, or pass `--llm-url` for OpenAI or a local server. |
 | `--detector llm goes to OpenAI, so it needs OPENAI_API_KEY ...` | Make the OpenAI key available, or pass `--llm-url` for another endpoint. |
-| `<file>: invalid TOML at line N` | Correct the TOML syntax at the reported line. |
-| `<file>: <key>: expected float, got string` | Use the expected type; numbers must not be quoted. |
-| `<file>: unknown config field(s): ...` | Correct the name to match a field in `config.py`. |
-| `<file>: <key>: secrets belong in IDUN_API_KEY or OPENAI_API_KEY, not TOML` | Remove the secret from TOML and use the environment or `.env`. |
-| `min_confidence / --threshold must be between 0 and 1` | Correct the effective threshold in the file or command. |
-| `detector must be rules or llm` | Correct the detector name. |
-| `.env: line N: expansion is not supported; ...` | Load the key into the environment using your shell or password store before running the command. |
+| `<file>: invalid TOML at line N` | Fix the TOML at that line. |
+| `<file>: <key>: expected float, got string` | Use the expected type; do not quote numbers. |
+| `<file>: unknown config field(s): ...` | Use a field name from `config.py`. |
+| `<file>: <key>: secrets belong in IDUN_API_KEY or OPENAI_API_KEY, not TOML` | Move the secret to the environment or `.env`. |
+| `min_confidence / --threshold must be between 0 and 1` | Fix the threshold in the file or command. |
+| `detector must be rules or llm` | Fix the detector name. |
+| `.env: line N: expansion is not supported; ...` | Load the key into the environment from your shell or password store. |
 | `--detector llm needs the LLM extra: ...` | Install `questxtract[llm]`. |
-| `--vision / vision_enabled goes to NTNU's LLM service (...), so it needs IDUN_API_KEY ...` | Make the NTNU key available in the environment or local `.env`, set `vision_base_url` or pass `--llm-url` for another endpoint, or turn vision off with `--no-vision`. |
-| `...: <model> is not a model on NTNU's LLM service ...` / `...: <model> is not an OpenAI model ...` | The model name belongs to the other service (NTNU's are named `organisation/model`, OpenAI's have no `/`). Pass the flag the message names with a model of that endpoint, or move the endpoint as it says. |
-| `--vision / vision_enabled needs the LLM extra: ...` | Install `questxtract[llm]`, or turn vision off with `--no-vision`. |
-| `note: <file> has no video, so the board is not read` | Not an error: a recording without video, or a transcript, has no board to read. The questions are written as usual. |
-| `judge: <endpoint>: ...` | The model endpoint failed: it is not running, the key is wrong, or the model name is unknown to it. The message after the endpoint says which. |
-| `judge: <endpoint>: ... reasoning_effort` (HTTP 400) | The model has no reasoning setting (`gpt-4o`) or rejects `none` (Qwen), and `--llm-reasoning none` or the settings file sends it. Pass `--llm-reasoning server`. |
-| `judge: <endpoint>: no answer within 120 s, twice` | The model did not answer one request in time, and not on a second try either. DeepSeek thinks unless told not to: pass `--llm-reasoning none`. With another thinking model, pass a `--llm-reasoning` level, which allows 10 minutes; otherwise the provider is overloaded, try again later. |
-| `judge: <model> did not return the expected JSON, twice` | The model could not follow the output format. Try a larger model; rerun to try again. |
-| `judge: <model> judged none of the N candidates; ...` | The endpoint answered, but in a shape other than the one asked for, so no candidate was judged. Check that the server supports structured output (`response_format`); try another model or server. |
+| `--vision / vision_enabled goes to NTNU's LLM service (...), so it needs IDUN_API_KEY ...` | Make the NTNU key available, set `vision_base_url` or `--llm-url`, or use `--no-vision`. |
+| `...: <model> is not a model on NTNU's LLM service ...` / `...: <model> is not an OpenAI model ...` | The model belongs to the other service (NTNU's are `organisation/model`, OpenAI's have no `/`). Change the model or the endpoint as the message says. |
+| `--vision / vision_enabled needs the LLM extra: ...` | Install `questxtract[llm]`, or use `--no-vision`. |
+| `note: <file> has no video, so the board is not read` | Not an error: no video means no board. |
+| `judge: <endpoint>: ...` | The endpoint failed: not running, wrong key, or unknown model; the rest of the message says which. |
+| `judge: <endpoint>: ... reasoning_effort` (HTTP 400) | The model has no reasoning setting (`gpt-4o`) or rejects `none` (Qwen). Pass `--llm-reasoning server`. |
+| `judge: <endpoint>: no answer within 120 s, twice` | The model did not answer in time, twice. DeepSeek: pass `--llm-reasoning none`. Another thinking model: pass a level, which allows 10 minutes. Otherwise the provider is overloaded. |
+| `judge: <model> did not return the expected JSON, twice` | Try a larger model, or rerun. |
+| `judge: <model> judged none of the N candidates; ...` | The endpoint answered in another shape. Check that the server supports `response_format`; try another model or server. |
 
-A missing file or wrong file type is caught before anything runs, and so is `--detector llm`
-without a key or without the extra. A damaged recording or one
-without audio is caught by the first stage. Either way, a bad input never costs you a
-transcription.
+A missing file, a wrong file type, and `--detector llm` without a key or the extra are caught
+before anything runs; a damaged recording or one without audio by the first stage. A bad input
+never costs a transcription.
 
 ## Not available yet
 
-- **`--language`**: every lecture is transcribed as English. Transcribing another language would
-  work, but question detection matches English words: the question words (what, why, how) and
-  auxiliary verbs (is, can, does). It would find almost nothing beyond sentences ending in `?`.
-  Requirement 4.2 assumes English lectures, so no flag is planned. The Python API accepts
-  `Config(language=...)` or `language` in the TOML file for experiments.
-- **YouTube URLs**: the CLI takes a local file. Download the video first.
+- `--language`: every lecture is transcribed as English, and detection matches English words
+  (requirement 4.2), so no flag is planned. `Config(language=...)` or `language` in the TOML file
+  exists for experiments.
+- YouTube URLs: download the video first.
