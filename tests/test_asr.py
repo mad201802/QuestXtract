@@ -1,12 +1,3 @@
-"""Tests for the model-independent ASR interface.
-
-Deliberately never loads a real Whisper model: CI runs on three OSes with no GPU, so
-every test here exercises the *interface* (registry, resolution, wiring into the
-`transcribe` stage) using a fake backend. `FasterWhisperBackend` itself is checked for
-correct *registration*, plus its own progress-fraction math against a stubbed model and
-stubbed audio extraction - never against a real Whisper model or real audio.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -24,15 +15,13 @@ from questxtract.transcribe import transcribe
 
 
 class _FakeBackend:
-    """A minimal `AsrBackend` for tests: no model, no network, no GPU."""
-
     def transcribe(
         self,
         source: Path,
         config: Config,
         on_progress: Callable[[float], None] | None = None,
     ) -> list[dict[str, Any]]:
-        del source, config  # unused - the fake ignores both, which the interface permits
+        del source, config
         if on_progress:
             on_progress(0.5)
         return [{"text": "What is a stable sort?", "start": 0.0, "end": 2.0}]
@@ -40,14 +29,10 @@ class _FakeBackend:
 
 @pytest.fixture(autouse=True)
 def _clean_registry() -> Any:
-    """Snapshot/restore the backend registry so tests can't leak into each other."""
     before = dict(asr._REGISTRY)
     yield
     asr._REGISTRY.clear()
     asr._REGISTRY.update(before)
-
-
-# --- the interface and registry -----------------------------------------------
 
 
 def test_fake_backend_satisfies_the_protocol_at_runtime() -> None:
@@ -67,7 +52,6 @@ def test_resolve_unknown_backend_raises_with_available_list() -> None:
 
 
 def test_faster_whisper_backend_is_registered_by_default() -> None:
-    """Acceptance criterion 4: the default engine is swappable, not hardcoded elsewhere."""
     backend = resolve_backend("faster_whisper")
     assert isinstance(backend, FasterWhisperBackend)
 
@@ -86,16 +70,12 @@ class _FakeSegment:
 def test_faster_whisper_backend_reports_word_end_over_duration(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Issue #14: the real progress math on the real backend, not the fake. The first tenth of
-    the bar is decoding the recording, then 0.1 + 0.9 * word.end / info.duration, capped at 0.99
-    (the caller decides when a stage is truly finished), and falling back to the segment's own
-    end when faster-whisper gave it no words."""
     source = tmp_path / "lecture.mp4"
     source.touch()
     hi, there = _FakeWord("Hi", 0.0, 1.0), _FakeWord("there", 1.0, 2.0)
     segments = [
         _FakeSegment("Hi there", 0.0, 2.0, [hi, there]),
-        _FakeSegment("(silence)", 2.0, 10.0, words=None),  # no words -> falls back to segment.end
+        _FakeSegment("(silence)", 2.0, 10.0, words=None),
     ]
     info = type("Info", (), {"duration": 10.0})()
 
@@ -107,7 +87,7 @@ def test_faster_whisper_backend_reports_word_end_over_duration(
 
     @contextmanager
     def _fake_extract_audio(path: Path, progress: Any = None) -> Any:
-        progress(0.5)  # decoding half the recording is half of the first tenth of the bar
+        progress(0.5)
         yield path
 
     monkeypatch.setattr(asr, "extract_audio", _fake_extract_audio)
@@ -119,12 +99,7 @@ def test_faster_whisper_backend_reports_word_end_over_duration(
     assert len(result) == 2
 
 
-# --- wiring into the transcribe stage -------------------------------------------
-
-
 def test_transcribe_stage_uses_the_configured_backend(tmp_path: Path) -> None:
-    """Acceptance criteria 1-3: called through the interface, timestamps present,
-    backend selection comes from config, not a hardcoded import."""
     register_backend("fake")(_FakeBackend)
     source = tmp_path / "lecture.mp4"
     source.touch()
@@ -141,8 +116,6 @@ def test_transcribe_stage_uses_the_configured_backend(tmp_path: Path) -> None:
 
 
 def test_transcribe_stage_forwards_backend_progress_to_ctx_progress(tmp_path: Path) -> None:
-    """Issue #14 AC1/AC4: a slow backend's intra-stage progress reaches ctx.progress,
-    tagged with this stage's name, as real fractions arrive - not just start/done."""
     register_backend("fake")(_FakeBackend)
     source = tmp_path / "lecture.mp4"
     source.touch()
@@ -158,12 +131,11 @@ def test_transcribe_stage_forwards_backend_progress_to_ctx_progress(tmp_path: Pa
 
 
 def test_transcribe_stage_works_without_a_progress_callback(tmp_path: Path) -> None:
-    """Issue #14 AC2: progress reporting is optional and must not break plain calls."""
     register_backend("fake")(_FakeBackend)
     source = tmp_path / "lecture.mp4"
     source.touch()
     config = Config().replace(asr_backend="fake")
-    ctx = Context(source=source, config=config)  # no progress callback
+    ctx = Context(source=source, config=config)
 
     result = transcribe(ctx)
 
@@ -180,11 +152,10 @@ def test_transcribe_stage_rejects_an_unconfigured_backend(tmp_path: Path) -> Non
 
 
 def test_config_asr_backend_defaults_to_faster_whisper() -> None:
-    """Acceptance criterion 3: configuration, not a hardcoded engine name in code."""
     assert Config().asr_backend == "faster_whisper"
 
 
 def test_config_replace_can_swap_the_backend() -> None:
     config = Config().replace(asr_backend="fake")
     assert config.asr_backend == "fake"
-    assert Config().asr_backend == "faster_whisper"  # original untouched (frozen)
+    assert Config().asr_backend == "faster_whisper"

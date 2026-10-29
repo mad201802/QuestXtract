@@ -1,5 +1,3 @@
-"""The NTNU key window's logic (issue #189), headless: test, save, remove, where it is read from."""
-
 from __future__ import annotations
 
 import sys
@@ -15,7 +13,6 @@ MARKER = "sk-marker-4f9c1e"
 
 
 def _fake_openai(monkeypatch: pytest.MonkeyPatch, raises: type[Exception] | None = None) -> list:
-    """Install an ``openai`` that records its calls and raises ``raises`` on listing models."""
     calls: list[dict[str, object]] = []
 
     class APIError(Exception):
@@ -69,7 +66,7 @@ def test_the_check_tells_accepted_refused_and_unreachable(monkeypatch, raises, e
 
 
 def test_the_check_says_when_the_llm_extra_is_missing(monkeypatch):
-    monkeypatch.setitem(sys.modules, "openai", None)  # makes `import openai` fail
+    monkeypatch.setitem(sys.modules, "openai", None)
 
     assert keys.check_key(MARKER) == "no_llm_extra"
 
@@ -122,7 +119,7 @@ def test_the_source_follows_the_order_a_run_uses(monkeypatch):
     Path(".env").write_text("IDUN_API_KEY=d\n", encoding="utf-8")
     assert keys.key_source() == "dotenv"
     monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "old-name")
-    assert keys.key_source() == "dotenv"  # IDUN_API_KEY in .env wins over the old name
+    assert keys.key_source() == "dotenv"
     monkeypatch.setenv("IDUN_API_KEY", "e")
     assert keys.key_source() == "environment"
 
@@ -134,5 +131,5 @@ def test_the_saved_key_is_in_no_argument_the_app_builds_and_not_in_the_config(tm
     source = tmp_path / "lecture.json"
     argv = gui_run.to_argv(source, "quiz", {"detector": "llm"}, tmp_path / "out.json")
 
-    assert Config().api_key == MARKER  # a run does read it ...
-    assert MARKER not in " ".join(argv) + repr(Config())  # ... and it goes nowhere else
+    assert Config().api_key == MARKER
+    assert MARKER not in " ".join(argv) + repr(Config())

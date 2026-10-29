@@ -1,5 +1,3 @@
-"""Tests for the ExerPlaza TeX export (issue #178)."""
-
 from __future__ import annotations
 
 import json
@@ -81,7 +79,6 @@ _ANSWERS = re.compile(r"\\QuestionPotentialAnswers\{\n(.*?)\n\}\n", re.DOTALL)
 
 
 def _quiz(make_quiz: MakeQuiz) -> dict[str, Any]:
-    """A pending, an accepted and a rejected item."""
     quiz = make_quiz("q_aaa", "q_bbb", "q_ccc")
     quiz["questions"][1]["review"]["status"] = "accepted"
     quiz["questions"][2]["review"]["status"] = "rejected"
@@ -96,7 +93,6 @@ def _export(tmp_path: Path, quiz: dict[str, Any], *units: str, name: str = "quiz
 
 
 def _fails(tmp_path: Path, quiz: dict[str, Any], message: str, *units: str) -> str:
-    """Export, expect a TexExportError matching ``message``, and check nothing was written."""
     with pytest.raises(TexExportError, match=message) as caught:
         _export(tmp_path, quiz, *units)
     assert not (tmp_path / "quiz.tex").exists()
@@ -115,7 +111,7 @@ def test_rejected_items_get_no_block_and_the_rest_keep_document_order(
     tmp_path: Path, make_quiz: MakeQuiz
 ) -> None:
     quiz = _quiz(make_quiz)
-    quiz["questions"].reverse()  # rejected, accepted, pending
+    quiz["questions"].reverse()
     references = re.findall(r"^% questxtract: (\S+)$", _export(tmp_path, quiz), re.MULTILINE)
     assert references == ["quiz_lecture/quiz_q_bbb", "quiz_lecture/quiz_q_aaa"]
 
@@ -252,7 +248,7 @@ def test_unbalanced_braces_fail_naming_the_text(
     tmp_path: Path, make_quiz: MakeQuiz, location: str, text: str
 ) -> None:
     quiz = make_quiz("q_rejected", "q_aaa")
-    quiz["questions"][0]["review"]["status"] = "rejected"  # the path is the document's index
+    quiz["questions"][0]["review"]["status"] = "rejected"
     _set_text(quiz, location, text)
     _fails(tmp_path, quiz, rf"^{_PATHS[location]}: unbalanced braces ")
 

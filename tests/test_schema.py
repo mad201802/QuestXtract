@@ -1,9 +1,3 @@
-"""Tests for the issue #7 Question schema.
-
-Covers: base-schema construction, extended-field round-tripping, JSON
-serialisation, and rejection of every invalid shape the schema documents.
-"""
-
 from __future__ import annotations
 
 import json
@@ -12,8 +6,6 @@ import pytest
 
 from questxtract.models import SchemaError
 from questxtract.schema import Question
-
-# --- valid objects -----------------------------------------------------------
 
 
 def test_base_schema_round_trips_through_dict() -> None:
@@ -34,7 +26,6 @@ def test_base_schema_round_trips_through_dict() -> None:
 
 
 def test_base_schema_survives_actual_json_encode_decode() -> None:
-    """Acceptance criterion 4: schema can be serialised to JSON (not just dicts)."""
     q = Question(question="Why does entropy increase?", start=10.0, end=12.5, confidence=0.6)
     blob = json.dumps(q.to_dict())
     restored = Question.from_dict(json.loads(blob))
@@ -61,16 +52,12 @@ def test_extended_fields_round_trip() -> None:
 
 
 def test_from_dict_accepts_base_fields_only() -> None:
-    """Backward compatibility: old producers sending only the base schema still work."""
     minimal = {"question": "Does anyone know why?", "start": 1.0, "end": 2.0, "confidence": 0.5}
     q = Question.from_dict(minimal)
     assert q.source == "audio"
     assert q.visual_context == ()
     assert q.topic is None
     assert q.answer is None
-
-
-# --- invalid objects -----------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -119,7 +106,7 @@ def test_from_dict_rejects_non_dict_input() -> None:
 
 def test_from_dict_missing_required_field_raises() -> None:
     with pytest.raises(SchemaError, match="missing required field"):
-        Question.from_dict({"question": "x", "start": 1.0, "end": 2.0})  # no confidence
+        Question.from_dict({"question": "x", "start": 1.0, "end": 2.0})
 
 
 def test_from_dict_wrong_type_raises() -> None:
@@ -130,7 +117,6 @@ def test_from_dict_wrong_type_raises() -> None:
 
 
 def test_question_is_immutable() -> None:
-    """Frozen, matching every other type in models.py (architecture.md 5, D3)."""
     q = Question(question="x?", start=0.0, end=1.0, confidence=0.5)
     with pytest.raises(AttributeError):
         q.confidence = 0.9  # type: ignore[misc]

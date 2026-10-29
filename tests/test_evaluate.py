@@ -1,5 +1,3 @@
-"""Tests for the evaluation harness (issue #12)."""
-
 from __future__ import annotations
 
 import json
@@ -29,17 +27,14 @@ from questxtract.sentences import split_sentences
 
 
 def test_overlap_is_measured_against_the_shorter_span() -> None:
-    # A 3 s question inside a 30 s run-on sentence is fully covered.
     assert overlap_ratio((0.0, 30.0), (26.0, 29.0)) == 1.0
-    assert overlaps((0.0, 2.0), (1.0, 5.0))  # 1 s of the shorter 2 s
+    assert overlaps((0.0, 2.0), (1.0, 5.0))
     assert not overlaps((0.0, 2.0), (1.5, 5.0))
-    assert not overlaps((0.0, 1.0), (1.0, 2.0))  # touching is not overlapping
+    assert not overlaps((0.0, 1.0), (1.0, 2.0))
 
 
 def test_match_is_one_to_one_best_overlap_first() -> None:
-    # One long prediction covers two labels: only the better-covered one is matched.
     assert match([(0.0, 10.0)], [(1.0, 3.0), (8.0, 12.0)]) == {0: 0}
-    # Two predictions on one label: the one covering more of it wins.
     assert match([(0.0, 1.5), (1.0, 3.0)], [(1.0, 3.0)]) == {1: 0}
 
 
@@ -94,7 +89,7 @@ def test_evaluate_scores_content_and_breaks_down_false_positives(tmp_path: Path)
     assert (total["tp"], total["fp"], total["fn"]) == (1, 1, 1)
     assert total["recall"] == 0.5 and total["precision"] == 0.5
     assert total["false_positive_breakdown"] == {"rhetorical": 1}
-    assert total["question_mark_rate"] == 0.5  # the unpunctuated one has no '?'
+    assert total["question_mark_rate"] == 0.5
     assert total["blind_slice_recall"] == 1.0
     assert [x["text"] for x in total["false_negatives"]] == ["Is it closed under division"]
     assert report["recordings"]["lec"]["recall"] == 0.5
@@ -130,8 +125,6 @@ def _write_board(folder: Path, text: str) -> None:
 
 
 def test_evaluate_reads_the_board_states_only_with_board(tmp_path: Path) -> None:
-    # Under a 0.30 gate the unmarked "Is it closed under division" is a candidate at 0.40,
-    # unanswered (0.22); "division" on the board lifts it to 0.50 (0.28), over 0.25.
     labels = [{"start": 7.0, "end": 9.0, "text": "Is it closed under division", "kind": "content"}]
     folder = _write(tmp_path, labels)
     _write_board(folder, "a = b / c (division)")
@@ -174,12 +167,10 @@ def test_eval_scores_the_llm_detector_and_names_it(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """#88: `eval --detector llm` runs the same harness over what the model picked."""
-    monkeypatch.chdir(tmp_path)  # the LLM cache is cwd-relative
+    monkeypatch.chdir(tmp_path)
     labels = [{"start": 0.0, "end": 1.5, "text": "What is a field?", "kind": "content"}]
     transcript = Transcript.from_file(_write(tmp_path, labels) / "lec.transcript.json")
     question = split_sentences(transcript)[0]
-    # The model calls the labelled question rhetorical, so recall drops to 0.
     verdict = {"reason": "", "kind": "rhetorical", "question": "", "answer_sentence_ids": []}
     client = fake_llm({question.id: {**verdict, "confidence": 0.9}})
 
@@ -193,8 +184,6 @@ def test_eval_scores_the_llm_detector_and_names_it(
 
 
 def test_nfr2_recall_on_the_reference_recordings() -> None:
-    # NFR2: question detection recall >= 50% on the team's labelled set, at the default
-    # emission threshold. Runs on the committed transcripts, so no ASR and no network.
     report = evaluate([Path(__file__).parent / "data"])
     assert set(report["recordings"]) == {
         "mit_18_100b_l1",
@@ -205,8 +194,6 @@ def test_nfr2_recall_on_the_reference_recordings() -> None:
 
 
 def test_nfr2_recall_on_the_held_out_recordings() -> None:
-    # #92: the same gate on lecturers the rules were never written from. Reported, never tuned
-    # on (tests/data/README.md).
     report = evaluate([Path(__file__).parent / "data" / "held_out"])
     assert set(report["recordings"]) == {"mit_6_003_l8"}
     assert report["total"]["recall"] >= 0.5
@@ -219,10 +206,10 @@ VISION = Path(__file__).parent / "data" / "vision"
     ("predicted", "reference", "rate"),
     [
         ("Stable sort", "Stable sort", 0.0),
-        ("stable   SORT\n", "Stable sort", 0.0),  # case and spacing are not misreadings
+        ("stable   SORT\n", "Stable sort", 0.0),
         ("Stable sart", "Stable sort", 1 / 11),
         ("", "Stable sort", 1.0),
-        ("Stable sort, and much more invented text", "Stable sort", 1.0),  # capped at 1
+        ("Stable sort, and much more invented text", "Stable sort", 1.0),
         ("", "", 0.0),
         ("x", "", 1.0),
     ],
@@ -236,15 +223,14 @@ def test_character_error_rate(predicted: str, reference: str, rate: float) -> No
     [
         (r"\frac{1}{1+t^2}", r"\left( \dfrac{1}{1 + t^2} \right)", True),
         (r"\int_0^1 f \, dx", r"$\int_0^1 f\,dx$", True),
-        (r"y = \sum w_i x_i", "a = b\ny = \\sum w_i x_i\nc = d", True),  # among others
-        (r"y = \sum w_i x_i", r"y = \sum w_i x_{i}", True),  # a brace more is not a misreading
+        (r"y = \sum w_i x_i", "a = b\ny = \\sum w_i x_i\nc = d", True),
+        (r"y = \sum w_i x_i", r"y = \sum w_i x_{i}", True),
         (r"y = \sum w_i x_i", r"y = \prod v_j z_j", False),
         (r"x(t) = \sin(t)", None, False),
-        (r"\leftarrow", r"\rightarrow", False),  # \left inside a command name is not spacing
-        (r"\quad", None, True),  # nothing left to find once spacing is removed
-        # #58 review: a short formula is matched exactly and never inside a longer token.
+        (r"\leftarrow", r"\rightarrow", False),
+        (r"\quad", None, True),
         ("x", r"\max_{i} a_i", False),
-        ("n", r"x \in Q", False),  # the space after \in keeps it one token, apart from Q
+        ("n", r"x \in Q", False),
         ("0", "100", False),
         ("x", r"a = x + 1", True),
         ("x^2", "x^3", False),
@@ -275,8 +261,7 @@ def _board(text: str, latex: str | None) -> dict[str, Any]:
 def test_vision_accuracy_is_reported_per_lecture_type(
     tmp_path: Path, fake_llm: Callable[..., Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """AC #58: scored against a model, the labelled set gives accuracy per lecture type."""
-    monkeypatch.chdir(tmp_path)  # the vision cache is cwd-relative
+    monkeypatch.chdir(tmp_path)
     _frames(
         tmp_path / "set",
         "lec",
@@ -284,7 +269,7 @@ def test_vision_accuracy_is_reported_per_lecture_type(
             _frame("lec_1.png", "slides", "Stable sort", ["x^2"]),
             _frame("lec_2.png", "blackboard", "f(c) = 0", ["f(c) = 0", "a < c < b"]),
             _frame("lec_3.png", "blackboard", "Not cont.", []),
-            _frame("lec_4.png", "blackboard", "", []),  # blank boards
+            _frame("lec_4.png", "blackboard", "", []),
             _frame("lec_5.png", "blackboard", "", []),
             _frame("lec_6.png", "blackboard", "", []),
         ],
@@ -292,11 +277,11 @@ def test_vision_accuracy_is_reported_per_lecture_type(
     client = fake_llm(
         _board("Stable sort", "x^2"),
         _board("f(c) = O", "f(c) = 0"),
-        TimeoutError("no answer"),  # the third frame cannot be read: an empty answer
         TimeoutError("no answer"),
-        _board(" [unreadable] ", None),  # read as blank: unsure, but no invented text
-        _board("Q.E.D.", None),  # not read as blank
-        TimeoutError("no answer"),  # a failed reading is not a blank one
+        TimeoutError("no answer"),
+        _board(" [unreadable] ", None),
+        _board("Q.E.D.", None),
+        TimeoutError("no answer"),
         TimeoutError("no answer"),
     )
 
@@ -304,7 +289,7 @@ def test_vision_accuracy_is_reported_per_lecture_type(
         report = evaluate_vision([tmp_path / "set"], Config(vision_model="qwen3-vl"))
 
     assert report["model"] == "qwen3-vl" and report["prompt"] == "v0"
-    assert list(report["kinds"]) == ["slides", "blackboard"]  # in KINDS order
+    assert list(report["kinds"]) == ["slides", "blackboard"]
     assert report["kinds"]["slides"] == {
         "frames": 1,
         "failed": 0,
@@ -317,15 +302,12 @@ def test_vision_accuracy_is_reported_per_lecture_type(
     }
     board = report["kinds"]["blackboard"]
     assert board["frames"] == 5 and board["failed"] == 2
-    # Blank boards are out of the CER mean, and counted on their own.
     assert board["cer"] == pytest.approx((0.125 + 1.0) / 2, abs=1e-3)
     assert (board["blank"], board["blank_read"]) == (3, 1)
     assert (board["formulas"], board["formulas_found"], board["formula_recall"]) == (2, 1, 0.5)
     assert report["total"]["frames"] == 6 and report["total"]["formula_recall"] == 0.667
     assert report["frames"][1]["missed"] == ["a < c < b"]
     assert report["frames"][3]["cer"] is None and report["frames"][3]["read_blank"] is True
-    # The frame went to the model as the vision stage sends a keyframe when the layout probe
-    # got its kind right: the label's kind in the prompt, no speech.
     system, user = client.requests[0]["messages"]
     assert "Frame kind: slides" in system["content"] and "-" in system["content"]
     assert "Frame kind: blackboard" in client.requests[1]["messages"][0]["content"]
@@ -334,8 +316,8 @@ def test_vision_accuracy_is_reported_per_lecture_type(
     table = format_vision_report(report)
     assert "slides" in table and "blackboard" in table and "TOTAL" in table
     assert "FAILED" in table and "missed: a < c < b" in table
-    assert "1/3" in table  # blank boards read as blank
-    assert table.index("NOT blank") < table.index("lec_3.png")  # an invented reading first
+    assert "1/3" in table
+    assert table.index("NOT blank") < table.index("lec_3.png")
 
 
 def test_vision_eval_reads_each_frame_once(
@@ -346,7 +328,7 @@ def test_vision_eval_reads_each_frame_once(
     client = fake_llm(_board("h(t)", None))
     first = evaluate_vision([tmp_path])
     assert evaluate_vision([tmp_path / "lec.frames.jsonl"]) == first
-    assert len(client.requests) == 1  # the second run is answered from the cache
+    assert len(client.requests) == 1
 
 
 @pytest.mark.parametrize(
@@ -393,7 +375,6 @@ def test_cli_eval_score_vision_prints_the_table_and_json(
     assert "whiteboard" in out and "vision model qwen3-vl" in out
     assert main(["eval", "--score-vision", str(tmp_path), *flags, "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["kinds"]["whiteboard"]["cer"] == 0.0
-    # #58 review: --vision-model picks the model scored, not --llm-model (the judge's).
     assert client.requests[0]["model"] == "qwen3-vl"
 
 
@@ -405,7 +386,6 @@ def test_cli_eval_score_vision_needs_a_model_to_ask(
 
 
 def test_eval_keeps_vision_enabled_from_the_settings_file(tmp_path: Path) -> None:
-    """#58 review: the eval flag must not reach _config's mapping of --vision."""
     settings = tmp_path / "questxtract.toml"
     settings.write_text("vision_enabled = true\n", encoding="utf-8")
     for extra in ([], ["--score-vision"]):
@@ -414,7 +394,6 @@ def test_eval_keeps_vision_enabled_from_the_settings_file(tmp_path: Path) -> Non
 
 
 def test_the_labelled_keyframes_cover_every_lecture_type() -> None:
-    """AC #58: every keyframe is tagged, and every lecture type has at least 5 frames."""
     counts = dict.fromkeys(KINDS, 0)
     for path in sorted(VISION.glob("*.frames.jsonl")):
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -428,7 +407,6 @@ def test_the_labelled_keyframes_cover_every_lecture_type() -> None:
 
 
 def test_every_labelled_recording_has_its_source_in_the_readme() -> None:
-    """AC #58: only shareable recordings, each listed with its source and licence."""
     readme = (VISION / "README.md").read_text(encoding="utf-8")
     for path in VISION.glob("*.frames.jsonl"):
         assert f"`{path.name.removesuffix('.frames.jsonl')}`" in readme, path.name
@@ -440,7 +418,6 @@ def test_cli_eval_score_vision_scores_the_ocr_reader(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """#144 AC: --vision-reader ocr scores GLM-OCR; a second run makes no calls."""
     monkeypatch.chdir(tmp_path)
     _frames(tmp_path, "lec", [_frame("lec_1.png", "whiteboard", "MLPs", [])])
     client = fake_llm("MLPs")

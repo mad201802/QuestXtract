@@ -14,17 +14,10 @@ from questxtract import Config, Context, Sentence, Transcript, Word, endpoint
 def _isolated_from_the_developer(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
-    """Keep the developer's API keys, .env, key file and questxtract.toml out of every test.
-
-    Each test runs in its own empty ``tmp_path`` with no key in the environment, so the
-    cwd-relative reads (``.env``, ``questxtract.toml``, the ``.questxtract`` cache) see
-    nothing of the checkout. Build paths to test files from ``__file__``, never the cwd.
-    """
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("QUESTXTRACT_VISION_API_KEY", raising=False)
     monkeypatch.delenv("IDUN_API_KEY", raising=False)
     monkeypatch.delenv("QUESTXTRACT_NTNU_API_KEY", raising=False)
-    # The key file the app saves (config.user_env_path) lives under the home folder.
     home = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
@@ -34,10 +27,6 @@ def _isolated_from_the_developer(
 
 
 def _make_mp4(path: Path, *, audio: bool = True, video: bool = False) -> Path:
-    """Write a tiny real MP4: a tenth of a second of silence, a single video frame, or both.
-
-    ``audio=False`` gives the frame only; ``video=True`` adds the frame to the silence.
-    """
     with av.open(str(path), mode="w", format="mp4") as container:
         # Every stream is declared and configured before the first packet writes the header.
         sound = container.add_stream("aac", rate=8000) if audio else None
@@ -67,7 +56,6 @@ def make_mp4() -> Callable[..., Path]:
 
 
 def _make_mp3(path: Path) -> Path:
-    """Write a tiny real MP3: a tenth of a second of silence."""
     with av.open(str(path), mode="w", format="mp3") as container:
         stream = container.add_stream("libmp3lame", rate=16000)
         stream.layout = "mono"
@@ -92,13 +80,6 @@ def _words(spec: list[tuple[str, float, float]]) -> tuple[Word, ...]:
 
 @pytest.fixture
 def transcript() -> Transcript:
-    """Three sentences over two ASR chunks, with real word timings.
-
-    The silence between "sort?" (ends 4.0) and "It" (starts 6.0) is exactly
-    ``Config.segment_max_gap_seconds``, and the gap rule is strict, so this fixture is one
-    segment by a hair. Every test that leans on that - here and in test_export, test_detect,
-    test_vision and test_pipeline - would flip if the timings moved. Leave them alone.
-    """
     return Transcript(
         words=_words(
             [
@@ -137,14 +118,10 @@ def context(transcript: Transcript) -> Context:
 
 
 class FakeLLM:
-    """Stands in for the OpenAI client: replays canned replies in order, repeating the last
-    one, and records every request. A reply is a JSON-able object, a raw string, or an
-    exception to raise."""
-
     def __init__(self, replies: tuple[Any, ...]) -> None:
         self.replies = list(replies)
         self.requests: list[dict[str, Any]] = []
-        self.usage: Any = None  # set to SimpleNamespace(prompt_tokens=..., completion_tokens=...)
+        self.usage: Any = None
         self.chat = self.completions = self
 
     def create(self, **request: Any) -> Any:
@@ -159,7 +136,6 @@ class FakeLLM:
 
 @pytest.fixture
 def fake_llm(monkeypatch: pytest.MonkeyPatch) -> Callable[..., FakeLLM]:
-    """Install a :class:`FakeLLM` as the endpoint's client: the judge and vision, no network."""
 
     def install(*replies: Any) -> FakeLLM:
         client = FakeLLM(replies)
@@ -170,11 +146,6 @@ def fake_llm(monkeypatch: pytest.MonkeyPatch) -> Callable[..., FakeLLM]:
 
 
 def _make_quiz(*source_ids: str, **overrides: Any) -> dict[str, Any]:
-    """Build a schema-valid ``quiz.json``: one single-choice item per source question id.
-
-    Each item has options ``a`` (correct), ``b`` and ``c``. ``overrides`` replace top-level
-    keys; change nested values on the returned dict.
-    """
 
     def text(value: str, origin: str = "generated") -> dict[str, str]:
         return {"text": value, "origin": origin}

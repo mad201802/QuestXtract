@@ -1,9 +1,3 @@
-"""The graphical app's option table stays in step with the CLI (issue #124, AC parity).
-
-Headless: no tkinter here, so this runs in CI on every platform. A new CLI option fails the
-test until the app shows it (OPTIONS) or leaves it out with a reason (EXCLUDED).
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -18,7 +12,6 @@ from questxtract.gui.options import EXCLUDED, OPTIONS
 
 
 def _commands() -> dict[str, dict[str, argparse.Action]]:
-    """Map each subcommand to its options by destination, help excluded."""
     parser = build_parser()
     (subs,) = [a for a in parser._actions if isinstance(a, argparse._SubParsersAction)]
     return {
@@ -36,7 +29,6 @@ def _cli_dests() -> set[str]:
 
 
 def test_every_cli_option_is_shown_or_excluded_with_a_reason():
-    """AC: a new CLI option fails here until the app shows it or lists it as excluded."""
     shown = {option.dest for option in OPTIONS}
     assert not shown & set(EXCLUDED), "an option is both shown and excluded"
     assert all(reason.strip() for reason in EXCLUDED.values()), "every exclusion needs a reason"
@@ -47,13 +39,11 @@ def test_every_cli_option_is_shown_or_excluded_with_a_reason():
 
 
 def test_every_shown_option_is_a_real_cli_option():
-    """AC: the table names no option the CLI does not have (a rename or removal shows here)."""
     unknown = {option.dest for option in OPTIONS} - _cli_dests()
     assert not unknown, f"gui/options.py names options the CLI lacks: {sorted(unknown)}"
 
 
 def test_each_option_matches_its_cli_flag_and_choices():
-    """AC: the same flag strings and the same choices as the CLI, so the form cannot drift."""
     commands = _commands()
     for option in OPTIONS:
         actions = [cmd[option.dest] for cmd in commands.values() if option.dest in cmd]
@@ -70,7 +60,6 @@ def test_each_option_matches_its_cli_flag_and_choices():
 
 
 def test_each_setting_is_a_config_field_and_keeps_its_default():
-    """AC: defaults come from Config; the form has no numbers of its own to drift from it."""
     fields = {field.name for field in dataclasses.fields(Config)}
     for option in OPTIONS:
         if option.field is None:
@@ -83,14 +72,12 @@ def test_each_setting_is_a_config_field_and_keeps_its_default():
 
 
 def test_the_flag_mapping_lives_in_the_cli_only():
-    """The app has no second copy of the CLI's flag mapping: it runs the CLI, which applies it."""
     from questxtract.gui import options
 
     assert not hasattr(options, "FLAG_FIELDS")
 
 
 def test_a_new_cli_option_fails_the_parity_check(monkeypatch):
-    """The guard itself: an option added to the CLI with nothing in the app fails the test."""
     real = build_parser
 
     def with_a_new_option() -> argparse.ArgumentParser:

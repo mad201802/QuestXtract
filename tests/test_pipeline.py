@@ -12,7 +12,6 @@ from questxtract.pipeline import cached_transcript, stage_info
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "questxtract"
 
-# architecture.md 1.3, rows 1 to 9, with vision split into layout, vision and attach_visual (11.1).
 DOC_ORDER = [
     "ingest",
     "transcribe",
@@ -33,7 +32,6 @@ def test_stages_match_the_documented_order():
 
 
 def test_grep_at_stage_returns_the_contents_of_stages():
-    """architecture.md 13.1 makes this claim about the code; assert it rather than trust it."""
     names = [
         m
         for path in sorted(SRC.glob("*.py"))
@@ -44,15 +42,13 @@ def test_grep_at_stage_returns_the_contents_of_stages():
 
 
 def _imported_modules(tree: ast.AST) -> set[str]:
-    """The package module every import in ``tree`` reaches, whatever its form: relative or
-    absolute, aliased, and inside a function as well as at the top."""
     found: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
             parts = (node.module or "").split(".")
-            if node.level:  # from .x import y, from . import x
+            if node.level:
                 found |= {parts[0]} if node.module else {a.name for a in node.names}
-            elif parts[0] == "questxtract":  # absolute: questxtract.x, or questxtract import x
+            elif parts[0] == "questxtract":
                 found |= {parts[1]} if len(parts) > 1 else {a.name for a in node.names}
         elif isinstance(node, ast.Import):
             found |= {a.name.split(".")[1] for a in node.names if a.name.startswith("questxtract.")}
@@ -77,8 +73,6 @@ def test_the_import_check_sees_every_form_of_import(code):
 
 
 def test_stages_never_import_each_other():
-    """Contract rule 1 (architecture.md 11.1): code both stages need lives in a non-stage
-    module, as the judge and vision share endpoint.py (#53)."""
     sources = {
         path.stem: text
         for path in SRC.glob("*.py")
@@ -91,7 +85,6 @@ def test_stages_never_import_each_other():
 
 
 def test_run_accepts_a_custom_stage_list(context):
-    """The `stages=` keyword is the entire plugin system (architecture.md 11.1)."""
 
     @stage("shout")
     def shout(ctx: Context) -> Context:
@@ -119,7 +112,6 @@ def test_undecorated_functions_are_rejected(context):
 
 
 def test_optional_stages_no_op_themselves(context):
-    """architecture.md 11.1 rule 3: the runner stays dumb."""
     from questxtract.llm import judge
     from questxtract.vision import vision
 

@@ -42,8 +42,6 @@ def _item(source_id, prompt, start, end):
     }
 
 
-# What validate_quiz reads from a questions.json: ids, text and original_text. q_bbbbbb was
-# reworded by the LLM judge (verdict "revise"), so only original_text is what was said.
 QUESTIONS = {
     "schema_version": "2.1",
     "questions": [
@@ -83,7 +81,6 @@ def _quiz():
 
 
 def _mutate(document, path, value):
-    """Set (or with ``DROP`` delete) the value at a dotted path such as ``questions.0.id``."""
     *parents, last = path.split(".")
     target = document
     for key in parents:
@@ -303,11 +300,11 @@ def _spoken_stem_from_revised_text(quiz):
 def test_validate_quiz_names_the_item_and_field(validator, breaks, message, needs_questions):
     quiz = _quiz()
     breaks(quiz)
-    assert validator.is_valid(quiz)  # each rule is one JSON Schema cannot express
+    assert validator.is_valid(quiz)
     with pytest.raises(SchemaError, match=re.escape(message)):
         validate_quiz(quiz, QUESTIONS)
     if needs_questions:
-        validate_quiz(quiz)  # rules 5 and 7 are skipped without questions.json
+        validate_quiz(quiz)
     else:
         with pytest.raises(SchemaError, match=re.escape(message)):
             validate_quiz(quiz)

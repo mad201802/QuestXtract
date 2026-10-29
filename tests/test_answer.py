@@ -21,11 +21,10 @@ def test_the_socratic_answer_is_seeded():
     assert pair.answer_text == "One that keeps equal elements in order."
     assert pair.answer_sentence_ids == (sentences[2].id,)
     assert pair.reasons == ("intra_sentence_qa",)
-    assert (pair.start, pair.end) == (2.2, 4.0)  # the question's timestamps, not the answer's
+    assert (pair.start, pair.end) == (2.2, 4.0)
 
 
 def test_a_long_silence_is_not_a_seed(sentences):
-    # The shared fixture pauses 2 s after its question.
     (pair,) = pair_answers(detect_questions(sentences), sentences)
     assert pair.answer_text == "" and pair.reasons == ("no_answer_found",)
     assert pair_answers(detect_questions(sentences), sentences, max_seed_gap=2.0)[0].answer_text

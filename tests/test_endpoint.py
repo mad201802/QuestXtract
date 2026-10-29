@@ -1,6 +1,3 @@
-"""Tests for the shared endpoint (#53). Its request loop is tested through its two callers:
-the judge in tests/test_llm.py and the vision call in tests/test_vision.py."""
-
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -14,15 +11,12 @@ from questxtract.config import NTNU_LLM_URL, OPENAI_URL
 
 
 def test_the_client_points_at_the_configured_endpoint():
-    """Building the client makes no request; the endpoint and timeout come from Config."""
     client = endpoint.client(Config(base_url="http://localhost:11434/v1", timeout_seconds=30))
     assert str(client.base_url).rstrip("/") == "http://localhost:11434/v1"
     assert client.timeout == 30
 
 
 class _Recorder:
-    """Stands in for ``openai.OpenAI``: records each client's endpoint and key, answers ``{}``."""
-
     def __init__(self) -> None:
         self.clients: list[dict[str, Any]] = []
         self.requests: list[dict[str, Any]] = []
@@ -55,12 +49,11 @@ def _ask(config: Config, *, vision: bool) -> None:
 def test_by_default_every_request_goes_to_ntnu_with_its_key(
     recorder: _Recorder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#173 AC1: the judge and vision on NTNU's service, one key."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
     monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
 
     _ask(Config(), vision=False)
-    _ask(Config(from_scratch=True), vision=True)  # the same request, so past the cache
+    _ask(Config(from_scratch=True), vision=True)
 
     assert [(c["base_url"], c["api_key"]) for c in recorder.clients] == 2 * [
         (NTNU_LLM_URL, "ntnu-key")
@@ -70,7 +63,6 @@ def test_by_default_every_request_goes_to_ntnu_with_its_key(
 def test_openai_gets_the_openai_key_and_no_reasoning_setting_with_server(
     recorder: _Recorder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#173 AC2: the fallback; the NTNU key never leaves for another endpoint."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
     monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
     config = Config(base_url=OPENAI_URL, reasoning_effort="")
@@ -87,7 +79,6 @@ def test_openai_gets_the_openai_key_and_no_reasoning_setting_with_server(
 def test_only_base_url_still_sends_vision_there_with_the_judges_key(
     recorder: _Recorder, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#162 AC: a config from before vision had its own endpoint keeps working."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-local")
     monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
 

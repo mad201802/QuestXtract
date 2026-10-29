@@ -1,5 +1,3 @@
-"""Tests for the QTI model and its ``quiz.json`` mapping (issue #67)."""
-
 from __future__ import annotations
 
 import json
@@ -82,7 +80,7 @@ def test_rejected_items_are_left_out(make_quiz: MakeQuiz) -> None:
     quiz = make_quiz("q_pending", "q_accepted", "q_rejected")
     quiz["questions"][1]["review"]["status"] = "accepted"
     quiz["questions"][2]["review"]["status"] = "rejected"
-    quiz["questions"][2]["prompt"] = None  # a rejected item is not read further
+    quiz["questions"][2]["prompt"] = None
     quiz["questions"][2]["interaction_type"] = "choice_multiple"
     assert _ids(quiz) == ["quiz_q_pending", "quiz_q_accepted"]
 

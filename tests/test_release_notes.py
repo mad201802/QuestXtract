@@ -1,5 +1,3 @@
-"""Tests for scripts/release_notes.py (issue #45)."""
-
 from pathlib import Path
 
 import pytest
@@ -100,7 +98,7 @@ def test_main_writes_notes_file(tmp_path: Path) -> None:
 
 
 def test_main_prints_notes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["v0.1.0", "--root", str(_repo(tmp_path))]) == 1  # pyproject says 0.2.0
+    assert main(["v0.1.0", "--root", str(_repo(tmp_path))]) == 1
     assert "does not match" in capsys.readouterr().err
     assert main(["v0.2.0", "--root", str(_repo(tmp_path))]) == 0
     assert "Automatic PyPI releases." in capsys.readouterr().out

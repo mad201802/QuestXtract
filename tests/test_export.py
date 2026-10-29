@@ -67,7 +67,6 @@ def test_export_emits_a_fixed_key_set_with_nulls_kept(finished):
         "questions",
     }
     assert data["config"]["min_confidence"] == finished.config.min_confidence
-    # the rules detect and vision is off by default, so no model is named as if it ran
     assert data["config"]["judge_model"] is None and data["config"]["vision_model"] is None
     judged = dataclasses.replace(finished, config=finished.config.replace(detector="llm"))
     assert result_to_dict(judged)["config"]["judge_model"] == finished.config.judge_model
@@ -104,7 +103,6 @@ def test_the_config_block_names_the_detector_and_nothing_that_did_not_run(finish
 
 
 def test_the_config_block_names_visions_reasoning_without_the_judge(finished):
-    """#173 review: vision's requests carry a reasoning setting of their own."""
     config = finished.config.replace(vision_enabled=True, vision_reasoning_effort="low")
     exported = result_to_dict(dataclasses.replace(finished, config=config))["config"]
     assert (exported["judge_reasoning_effort"], exported["vision_reasoning_effort"]) == (
@@ -152,7 +150,6 @@ def test_board_states_are_listed_once_and_referenced_by_id(context):
     assert [v["id"] for v in data["visuals"]] == ids
     assert data["visuals"][1]["latex"] == r"O(n \log n)"
     assert data["segments"][0]["visual_ids"] == ids
-    # The question (2.2-4.0 s) was asked while only the first board was up.
     assert data["questions"][0]["visual_ids"] == [BOARDS[0].id]
 
 
@@ -178,8 +175,6 @@ def _jsonl(path):
 
 
 def test_questions_link_to_the_board_state_on_screen():
-    # #135: questions of a real lecture, each with the board state on screen when it was asked
-    # (tests/data/vision/README.md), against the committed board states: no video, no network.
     name = "ttk4225_2026_09_14"
     visual = json.loads((DATA / f"{name}.visual.json").read_text(encoding="utf-8"))
     states = tuple(VisualContext(**state) for state in visual["board_states"])
@@ -209,12 +204,11 @@ def test_questions_link_to_the_board_state_on_screen():
         f"{name}: {len(pairs)} of {len(links)} labelled questions detected; of those, "
         f"right state {right} (only that one {only}), also a later state {later}, none {none}"
     )
-    assert len(pairs) >= 18  # of the 22 linked questions; fewer means detection or matching broke
+    assert len(pairs) >= 18
     assert right == len(pairs)
 
 
 def _answered_by_last_sentence(ctx):
-    """Give the first question an answer spanning the transcript's last sentence."""
     later = ctx.sentences[-1]
     ctx.pairs = (
         dataclasses.replace(ctx.pairs[0], answer_text=later.text, answer_sentence_ids=(later.id,)),
@@ -231,7 +225,6 @@ def test_an_answer_carries_the_span_of_its_own_sentences(finished):
 
 
 def test_a_recording_with_no_questions_still_exports_the_full_envelope(context, tmp_path):
-    """#13 AC5: no questions is a valid result, not an error or an empty file."""
     context.transcript = Transcript.from_dict(
         {
             "segments": [
@@ -243,7 +236,7 @@ def test_a_recording_with_no_questions_still_exports_the_full_envelope(context, 
     write_questions(run(context, STAGES[2:]), out)
     data = read_questions(out)
     assert data["questions"] == [] and data["stats"]["emitted"] == 0
-    assert data["segments"]  # the lecture is still described
+    assert data["segments"]
 
 
 @pytest.fixture
@@ -254,7 +247,6 @@ def validator():
 
 
 def test_every_export_shape_matches_the_published_schema(finished, validator):
-    """#13 AC2 as a CI check: plain, with an answer and board states, and empty."""
     validator.validate(result_to_dict(finished))
     finished.visual = BOARDS
     finished = attach_visual(finished)
@@ -296,10 +288,6 @@ def test_write_and_read_questions(tmp_path, finished):
 
 
 def _boards_in_cache(finished):
-    """Give ``finished`` the two BOARDS, with real keyframe files in the cache under the cwd.
-
-    Their ``keyframe_path`` is relative to the cache directory, as the vision stage stores it.
-    """
     cache = Path(finished.config.cache_dir)
     boards = []
     for board in BOARDS:
@@ -312,7 +300,6 @@ def _boards_in_cache(finished):
 
 
 def test_write_questions_copies_keyframes_next_to_the_file(tmp_path, finished, monkeypatch):
-    """#64 AC: every keyframe is under out/, and its relative path opens from another cwd."""
     monkeypatch.chdir(tmp_path)
     finished = _boards_in_cache(finished)
     out = tmp_path / "out" / "questions.json"
@@ -325,14 +312,12 @@ def test_write_questions_copies_keyframes_next_to_the_file(tmp_path, finished, m
         assert (out.parent / written["keyframe_path"]).read_bytes() == (
             tmp_path / ".questxtract" / state.keyframe_path
         ).read_bytes()
-    # the ids stay the states' own, so segments and questions still point at them
     assert [v["id"] for v in data["visuals"]] == data["segments"][0]["visual_ids"]
 
 
 def test_keyframes_are_found_through_the_cache_from_any_working_directory(
     tmp_path, finished, monkeypatch
 ):
-    """#59: keyframe_path is relative to the cache, so a run reused from elsewhere still copies."""
     finished.config = finished.config.replace(cache_dir=str(tmp_path / "cache"))
     monkeypatch.chdir(tmp_path)
     finished = _boards_in_cache(finished)
@@ -345,7 +330,6 @@ def test_keyframes_are_found_through_the_cache_from_any_working_directory(
 
 
 def test_two_lectures_in_one_folder_keep_their_keyframes_apart(tmp_path, finished, monkeypatch):
-    """Each output gets its own keyframe folder, so equal image names never overwrite."""
     monkeypatch.chdir(tmp_path)
     finished = _boards_in_cache(finished)
     write_questions(finished, tmp_path / "monday.questions.json")
@@ -357,7 +341,6 @@ def test_two_lectures_in_one_folder_keep_their_keyframes_apart(tmp_path, finishe
 
 
 def test_board_states_survive_a_read_edit_write_round_trip(tmp_path, finished, monkeypatch):
-    """#64 AC: editing a question's text and writing the file again leaves `visuals` alone."""
     monkeypatch.chdir(tmp_path)
     out = tmp_path / "questions.json"
     write_questions(_boards_in_cache(finished), out)
@@ -378,7 +361,6 @@ def test_written_board_states_match_the_schema(tmp_path, finished, monkeypatch, 
 
 
 def test_without_vision_the_written_file_is_the_plain_export(tmp_path, finished):
-    """#64 AC: with vision off nothing is copied and the file is today's export."""
     out = tmp_path / "questions.json"
     write_questions(finished, out)
     assert out.read_text(encoding="utf-8") == result_to_json(finished)
@@ -386,7 +368,6 @@ def test_without_vision_the_written_file_is_the_plain_export(tmp_path, finished)
 
 
 def test_printing_keeps_cache_paths_and_copies_nothing(tmp_path, finished, monkeypatch):
-    """#64 AC: `-o -` has no folder for keyframes, so they keep their cache paths."""
     monkeypatch.chdir(tmp_path)
     finished = _boards_in_cache(finished)
     data = json.loads(result_to_json(finished))
@@ -465,8 +446,6 @@ def test_cli_roundtrip(tmp_path):
     assert main(["process", str(_transcript_file(tmp_path)), "-o", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
     assert data["schema_version"] == "2.4"
-    # An aux head without a '?' scores 0.4, under the 0.45 detection gate, so it is never a
-    # candidate (architecture.md 7.3).
     assert [q["text"] for q in data["questions"]] == ["What is a stable sort?"]
     assert data["stats"]["candidates"] == 1
     assert data["stats"]["sentences"] == 4
@@ -480,7 +459,6 @@ def test_cli_writes_to_stdout_with_a_dash_output(tmp_path, capsys):
 def test_cli_threshold_filters(tmp_path, capsys):
     assert main(["process", str(_transcript_file(tmp_path)), "-t", "0.2", "-o", "-"]) == 0
     assert len(json.loads(capsys.readouterr().out)["questions"]) == 1
-    # Answered with no pause, so the full question score carries: 1.0.
     assert main(["process", str(_transcript_file(tmp_path)), "-t", "0.9", "-o", "-"]) == 0
     assert len(json.loads(capsys.readouterr().out)["questions"]) == 1
 
@@ -507,7 +485,6 @@ def test_unimplemented_subcommands_fail_readably(tmp_path, capsys):
 
 @pytest.mark.parametrize("threshold", ["1.1", "-0.1", "nan"])
 def test_cli_rejects_a_threshold_outside_0_to_1(tmp_path, capsys, threshold):
-    """#85 AC1: exit 1, one line naming the range, no file written."""
     out = tmp_path / "out" / "q.json"
     args = ["process", str(_transcript_file(tmp_path)), "-t", threshold, "-o", str(out)]
     assert main(args) == 1
@@ -518,7 +495,6 @@ def test_cli_rejects_a_threshold_outside_0_to_1(tmp_path, capsys, threshold):
 
 @pytest.mark.parametrize("threshold", ["0", "1"])
 def test_cli_accepts_the_threshold_bounds(tmp_path, validator, threshold):
-    """#85 AC2."""
     out = tmp_path / "q.json"
     assert main(["process", str(_transcript_file(tmp_path)), "-t", threshold, "-o", str(out)]) == 0
     validator.validate(read_questions(out))

@@ -17,7 +17,6 @@ def test_hash_is_stable_and_content_sensitive(tmp_path):
 
 
 def test_hash_reads_both_ends_of_a_large_file(tmp_path):
-    """Only the first and last 8 MiB are read, so a tail-only change must still register."""
     head = b"\x01" * _HASH_BYTES
     tail = b"\x02" * _HASH_BYTES
     big = tmp_path / "big.bin"
@@ -49,14 +48,12 @@ def test_ingest_rejects_a_non_mp4(tmp_path, context):
 
 
 def test_ingest_records_duration_for_an_mp3(tmp_path, context, make_mp3):
-    """#117 AC: an MP3 lecture is a recording like any other."""
     context.source = make_mp3(tmp_path / "lecture.mp3")
     assert ingest(context) is context
     assert context.duration > 0 and context.source_hash
 
 
 def test_ingest_rejects_an_mp3_that_is_not_one(tmp_path, context):
-    """#117 AC: not a media file at all -> a one-line error."""
     context.source = tmp_path / "lecture.mp3"
     context.source.write_bytes(b"not really an mp3")
     with pytest.raises(MediaError, match="invalid or unreadable recording"):
@@ -181,7 +178,6 @@ def test_extract_audio_creates_a_wav_and_cleans_it_up(tmp_path, make_mp4):
 
 
 def test_extract_audio_reads_an_mp3(tmp_path, make_mp3):
-    """#117 AC: transcription gets its WAV from an MP3 too."""
     with extract_audio(make_mp3(tmp_path / "lecture.mp3")) as wav, wave.open(str(wav)) as f:
         assert f.getframerate() == 16_000 and f.getnframes() > 0
 
@@ -195,7 +191,6 @@ def test_extract_audio_rejects_a_video_without_audio(tmp_path, make_mp4):
 
 
 def test_extract_audio_reports_the_fraction_decoded(tmp_path, make_mp4):
-    """The first tenth of the transcribe bar is this decode: fractions rise and stay in [0, 1]."""
     seen: list[float] = []
 
     with extract_audio(make_mp4(tmp_path / "lecture.mp4"), progress=seen.append):

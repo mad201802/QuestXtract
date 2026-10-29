@@ -28,7 +28,7 @@ def test_an_answered_pair_keeps_the_question_score():
 
 def test_an_unanswered_pair_is_weighed_down_but_still_emitted():
     (pair,) = score_pairs([_pair(0.9)])
-    assert pair.confidence == 0.5  # round(0.9 * 0.55, 2)
+    assert pair.confidence == 0.5
     assert pair.answer_sentence_ids == ()
 
 

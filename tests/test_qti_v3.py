@@ -1,10 +1,3 @@
-"""Tests for the QTI 3.0 package writer (issue #67).
-
-Every package written here is validated against the official 1EdTech XSDs, from the local
-mirror `scripts/fetch_qti_xsd.py` downloads; the tests never reach the network. Without the
-mirror they skip, unless QUESTXTRACT_REQUIRE_QTI_XSD is set, as in CI, where they fail.
-"""
-
 from __future__ import annotations
 
 import io
@@ -39,7 +32,6 @@ Schemas = tuple[xmlschema.XMLSchema, xmlschema.XMLSchema]
 
 @pytest.fixture(scope="session")
 def schemas() -> Schemas:
-    """The item-and-test schema and the content-package schema, compiled once, offline."""
     root = xsd_dir()
     if missing(root):
         message = f"QTI 3.0 XSDs not in {root}: run `uv run python scripts/fetch_qti_xsd.py`"
@@ -63,7 +55,6 @@ def _export(tmp_path: Path, quiz: dict[str, Any], name: str = "out.zip") -> dict
 
 
 def _assert_conformant(package: dict[str, bytes], schemas: Schemas) -> None:
-    """Validate every XML entry against its XSD, then check what an XSD cannot express."""
     asi, cp = schemas
     for name, data in package.items():
         if name.endswith(".xml"):
@@ -144,12 +135,6 @@ def test_every_instruction_still_gives_a_conformant_package(
 def test_a_quiz_on_a_real_export_gives_a_conformant_package(
     tmp_path: Path, make_quiz: MakeQuiz, schemas: Schemas
 ) -> None:
-    """process on a committed transcript, a quiz on its questions, then qti, all through the CLI.
-
-    The quiz is what the quiz command (#79) is meant to write: one item per question, the stem
-    spoken as it was said, the question's own times. It passes the schema and read_quiz with
-    the questions file, so the rules on source questions and spoken stems run too.
-    """
     transcript = _DATA / "ttk4225_2026_09_14.transcript.json"
     assert main(["process", str(transcript), "-o", "lecture.questions.json"]) == 0
     questions = read_questions(tmp_path / "lecture.questions.json")
