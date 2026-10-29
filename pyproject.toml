@@ -69,8 +69,9 @@ dev = [
 [tool.uv]
 # numpy 2.2's stubs break mypy with python_version = "3.10" (#32). A dev-environment constraint
 # only: it applies to uv.lock, not to users installing the package.
-# filelock 4.0 to 4.2.0 add CVEs that 3.x lacks (#182). Three advisories cover 3.x too, fixed only
-# in 4.2.1, which needs Python >= 3.11: an accepted risk on 3.10 (#239, design_decisions.md 6).
+# filelock 4.0 to 4.2.0 add CVEs that 3.x lacks (#182). Thirteen advisories cover 3.x too, fixed
+# only in 4.x, which needs Python >= 3.11: an accepted risk on 3.10 (#239, #246,
+# design_decisions.md 6).
 constraint-dependencies = ["numpy<2.2", "filelock<4; python_full_version < '3.11'"]
 
 [tool.pytest.ini_options]

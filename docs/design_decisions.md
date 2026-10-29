@@ -766,7 +766,13 @@ models used, so a result carries whether it went out.
 cover (GHSA-v4x8-3wr5-3wq8 high, GHSA-9vhv-jxww-xfm5 and GHSA-567q-5qvw-pf92 low); their fix,
 4.2.1, needs Python 3.11, where the lock has 4.2.4. `filelock` arrives only through
 `huggingface-hub` for the Whisper download, and each advisory needs another local user or a
-file planted beside the lock. The pip-audit job in `ci.yml` ignores these three ids and no
+file planted beside the lock. Ten more followed (#246), fixed in 4.0.9 or 4.2.1: five in the
+`FileLock` and `SoftFileLock` that `huggingface-hub` uses (GHSA-69hj-f68j-2879,
+GHSA-8mx5-7m5m-r77g, GHSA-rfpc-qcw5-3pc4, GHSA-fq56-3cx3-fjxp, GHSA-9j6q-wvj5-jgjg), five in
+`StrictSoftFileLock` and `ReadWriteLock`, which it does not use (GHSA-m462-7rxw-wvpg,
+GHSA-j8f7-rjxc-mr56, GHSA-9c4x-gm8v-wgc4, GHSA-cwqr-hh33-gh44, GHSA-6627-m3xw-93mp). Its locks
+live in the `.locks` folder of the user's own Hugging Face cache, so a planted file there needs
+write access to that cache. The pip-audit job in `ci.yml` ignores these thirteen ids and no
 others. The risk ends when Python 3.10 support is dropped (#239).
 
 *Key storage:* the NTNU key the app saves stays a plain-text `.env` in the user config folder,
