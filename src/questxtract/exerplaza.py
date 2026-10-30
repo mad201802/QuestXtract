@@ -53,7 +53,8 @@ class ExerPlazaItem:
     ExerPlaza: for a skipped item, the question ExerPlaza already had. ``outcome`` is ``created``,
     ``updated`` or ``skipped``, though ExerPlaza never updates a question today; ``reason`` says
     why an item was skipped (``a question with the same text already exists``), else it is
-    ``None``.
+    ``None``. ``ref`` and ``reason`` are as ExerPlaza sent them, with control characters and line
+    breaks replaced by ``?``.
     """
 
     ref: str
@@ -127,12 +128,12 @@ def export_exerplaza(
 
 def _base_url(url: str) -> str:
     """Return ``url`` without a trailing slash, after the checks that keep the password safe."""
-    parts = urllib.parse.urlsplit(url.strip())
     try:
+        parts = urllib.parse.urlsplit(url.strip())  # raises ValueError for an unclosed "[::1"
         host = (parts.hostname or "").lower()
         parts.port  # noqa: B018 - raises ValueError for a port that is not a number
     except ValueError:
-        host = ""
+        parts, host = urllib.parse.urlsplit(""), ""
     if parts.scheme not in {"http", "https"} or not host:
         raise ExerPlazaExportError(
             "url: expected ExerPlaza's address, such as https://exerplaza.example.org"
@@ -344,7 +345,8 @@ def _parse_import(data: object) -> ExerPlazaImport:
         if reason is not None and not isinstance(reason, str):
             raise ValueError(f"{path}.reason: expected a string or null")
         uid = _uid(entry.get("uid"), f"{path}.uid")
-        items.append(ExerPlazaItem(ref=ref, uid=uid, outcome=outcome, reason=reason))
+        reason = None if reason is None else _printable(reason)
+        items.append(ExerPlazaItem(ref=_printable(ref), uid=uid, outcome=outcome, reason=reason))
     return ExerPlazaImport(quiz_uid=quiz_uid, quiz_outcome=quiz_outcome, items=tuple(items))
 
 
@@ -386,21 +388,25 @@ def _said(reply: _Reply) -> str:
         if reply.status == 404:
             return f"{status}, not a JSON answer: is this ExerPlaza, with the import endpoint?"
         return status
-    head = [data[key] for key in ("title", "detail") if isinstance(data.get(key), str)]
+    head = [_printable(data[key]) for key in ("title", "detail") if isinstance(data.get(key), str)]
     if not head:  # ExerPlaza's rate limiter and older routes answer {"error": ...}
-        head = [data[key] for key in ("error", "message") if isinstance(data.get(key), str)][:1]
+        head = [
+            _printable(data[key]) for key in ("error", "message") if isinstance(data.get(key), str)
+        ][:1]
     errors = data.get("errors")
     lines = [
-        f"\n  {entry['path']}: {entry['detail']}"
+        f"\n  {_printable(entry['path'])}: {_printable(entry['detail'])}"
         for entry in (errors if isinstance(errors, list) else [])
         if isinstance(entry, Mapping)
         and isinstance(entry.get("path"), str)
         and isinstance(entry.get("detail"), str)
     ]
-    said = " ".join([status, ": ".join(head)]).strip() + "".join(lines)
-    return _printable(said)
+    return " ".join([status, ": ".join(head)]).strip() + "".join(lines)
 
 
 def _printable(text: str) -> str:
-    """Keep the server's text from steering the terminal: control characters become ``?``."""
-    return "".join(char if char.isprintable() or char == "\n" else "?" for char in text)
+    """Keep the server's text from steering the terminal: control characters become ``?``.
+
+    Line breaks too, so that a text cannot start a line that looks like this command's own.
+    """
+    return "".join(char if char.isprintable() else "?" for char in text)
