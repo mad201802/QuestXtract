@@ -54,7 +54,10 @@ def endpoint_name(url: str | None = NTNU_LLM_URL) -> str:
 
 
 def check_key(key: str, url: str | None = NTNU_LLM_URL) -> str:
-    """Ask the endpoint at ``url`` whether it accepts ``key``: one request that lists its models.
+    """Ask the endpoint at ``url`` whether it accepts ``key``: one request that needs the key.
+
+    That is the model list, except on OpenRouter, which lists its models to anyone; there it is
+    ``GET /key``, the key's own limits (https://openrouter.ai/docs/api-reference/limits).
 
     Returns:
         ``accepted``; ``refused`` (the service answered 401 or 403); ``unreachable`` (no
@@ -70,7 +73,10 @@ def check_key(key: str, url: str | None = NTNU_LLM_URL) -> str:
         api_key=key.strip(), base_url=url, timeout=_TIMEOUT_SECONDS, max_retries=0
     )
     try:
-        client.models.list()
+        if is_openrouter(url):
+            client.get("/key", cast_to=object)
+        else:
+            client.models.list()
     except (openai.AuthenticationError, openai.PermissionDeniedError):
         return "refused"
     except openai.APIError:

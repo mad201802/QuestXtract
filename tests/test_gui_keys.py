@@ -33,9 +33,13 @@ def _fake_openai(monkeypatch: pytest.MonkeyPatch, raises: type[Exception] | None
     class OpenAI:
         def __init__(self, **kwargs: object) -> None:
             calls.append(kwargs)
-            self.models = types.SimpleNamespace(list=self._list)
+            self.models = types.SimpleNamespace(list=lambda: self._list("models"))
 
-        def _list(self) -> list:
+        def get(self, path: str, *, cast_to: object) -> list:
+            return self._list(path)
+
+        def _list(self, path: str) -> list:
+            calls.append({"asked": path})
             if raises is not None:
                 raise {"auth": Auth, "denied": Denied, "connection": Connection}[raises]("x")
             return []
@@ -64,7 +68,8 @@ def test_the_check_tells_accepted_refused_and_unreachable(monkeypatch, raises, e
             "base_url": "https://llm.hpc.ntnu.no/v1",
             "timeout": 10.0,
             "max_retries": 0,
-        }
+        },
+        {"asked": "models"},
     ]
 
 
@@ -138,13 +143,23 @@ def test_the_saved_key_is_in_no_argument_the_app_builds_and_not_in_the_config(tm
     assert MARKER not in " ".join(argv) + repr(Config())  # ... and it goes nowhere else
 
 
-def test_the_check_asks_the_endpoint_it_is_given(monkeypatch):
-    """#250: the key of OpenRouter is tested against OpenRouter."""
-    calls = _fake_openai(monkeypatch)
+@pytest.mark.parametrize(("raises", "expected"), [(None, "accepted"), ("auth", "refused")])
+def test_openrouter_is_asked_for_the_key_not_the_model_list(monkeypatch, raises, expected):
+    """#250, found live: OpenRouter lists its models to any key, so the check asks GET /key."""
+    calls = _fake_openai(monkeypatch, raises)  # type: ignore[arg-type]
 
-    assert keys.check_key(MARKER, "https://openrouter.ai/api/v1") == "accepted"
+    assert keys.check_key(MARKER, "https://openrouter.ai/api/v1") == expected
 
     assert calls[0]["base_url"] == "https://openrouter.ai/api/v1"
+    assert calls[1] == {"asked": "/key"}
+
+
+def test_another_endpoint_is_asked_for_its_model_list(monkeypatch):
+    calls = _fake_openai(monkeypatch)
+
+    assert keys.check_key(MARKER, "http://localhost:8000/v1") == "accepted"
+
+    assert calls[1:] == [{"asked": "models"}]
 
 
 def test_each_endpoints_key_is_saved_under_its_own_name_and_the_others_kept(monkeypatch):
