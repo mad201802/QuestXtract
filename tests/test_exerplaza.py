@@ -110,7 +110,8 @@ CONTRACT_REQUEST = """{
 CONTRACT_RESPONSE = """{
   "quiz": {"uid": 7, "outcome": "created"},
   "questions": [
-    {"ref": "quiz_lecture/quiz_q_aaa", "uid": 123, "outcome": "created", "reason": null},
+    {"ref": "quiz_lecture/quiz_q_aaa", "uid": 123, "outcome": "created",
+     "reason": "pending: not added to the quiz"},
     {"ref": "quiz_lecture/quiz_q_bbb", "uid": 123, "outcome": "skipped",
      "reason": "same text as questions[0]"}
   ]
@@ -120,6 +121,7 @@ CONTRACT_PROBLEM = """{
   "errors": [{"path": "questions[1].options[2].text.text",
               "detail": "String should have at least 1 character"}]
 }"""
+NOT_IN_QUIZ = "pending: not added to the quiz"  # ExerPlaza's note on a pending item
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -142,7 +144,8 @@ class FakeExerPlaza(ThreadingHTTPServer):
     A session is a cookie, as in Flask: ``GET /login`` sets one holding the form's CSRF token,
     and a login with that token, the email and the password replaces it with a logged-in one.
     The import works as ExerPlaza's: the quiz is the course session's quiz with the title, and an
-    item whose text ExerPlaza already has, or an earlier item has, is skipped, never changed.
+    item whose text ExerPlaza already has, or an earlier item has, is skipped, never changed. A
+    pending item's question stays out of the quiz, with a note, until an import sends it accepted.
     """
 
     daemon_threads = False  # so server_close() waits for every request handler
@@ -157,6 +160,7 @@ class FakeExerPlaza(ThreadingHTTPServer):
         self.course_sessions = {42}
         self.quizzes: dict[tuple[int, str], int] = {}  # (course session, title) -> uid
         self.questions: dict[str, int] = {}  # text -> uid
+        self.in_quiz: dict[int, set[int]] = {}  # quiz uid -> the uids of its questions
         self.login_reply: tuple[int, dict[str, str], str] | None = None  # a canned answer
         self.import_reply: tuple[int, dict[str, str], str] | None = None  # a canned answer
         self.delay = 0.0
@@ -247,6 +251,7 @@ class _Handler(BaseHTTPRequestHandler):
         key = (int(course), document["title"])
         quiz_outcome = "updated" if key in fake.quizzes else "created"
         quiz_uid = fake.quizzes.setdefault(key, 7 + len(fake.quizzes))
+        in_quiz = fake.in_quiz.setdefault(quiz_uid, set())
         answer: list[dict[str, Any]] = []
         first_with_text: dict[str, int] = {}
         for index, item in enumerate(document["questions"]):
@@ -259,11 +264,16 @@ class _Handler(BaseHTTPRequestHandler):
             else:
                 fake.questions[text] = 123 + len(fake.questions)
             first_with_text.setdefault(text, index)
+            outcome, uid = "created" if reason is None else "skipped", fake.questions[text]
+            if uid not in in_quiz and item["review"]["status"] == "pending":
+                reason = NOT_IN_QUIZ if reason is None else f"{reason}; {NOT_IN_QUIZ}"
+            else:
+                in_quiz.add(uid)
             answer.append(
                 {
                     "ref": f"{document['id']}/{item['id']}",
-                    "uid": fake.questions[text],
-                    "outcome": "created" if reason is None else "skipped",
+                    "uid": uid,
+                    "outcome": outcome,
                     "reason": reason,
                 }
             )
@@ -393,7 +403,9 @@ def test_the_contract_answer_is_read_item_by_item(
         quiz_uid=7,
         quiz_outcome="created",
         items=(
-            ExerPlazaItem(ref="quiz_lecture/quiz_q_aaa", uid=123, outcome="created", reason=None),
+            ExerPlazaItem(
+                ref="quiz_lecture/quiz_q_aaa", uid=123, outcome="created", reason=NOT_IN_QUIZ
+            ),
             ExerPlazaItem(
                 ref="quiz_lecture/quiz_q_bbb",
                 uid=123,
@@ -826,6 +838,25 @@ def test_an_answer_out_of_shape_fails_naming_the_field(
         ExerPlazaExportError, match="unexpected answer from ExerPlaza: " + re.escape(message)
     ):
         _export(exerplaza.url, _file(tmp_path, _quiz(make_quiz)))
+
+
+def test_a_pending_item_out_of_the_quiz_is_noted_only_when_it_is_skipped(
+    tmp_path: Path,
+    make_quiz: MakeQuiz,
+    exerplaza: FakeExerPlaza,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    argv = _args(exerplaza.url, _file(tmp_path, make_quiz("q_aaa")))
+
+    first, again = _cli(capsys, argv), _cli(capsys, argv)
+
+    assert first == (0, "ExerPlaza quiz 7 (created): 1 created, 0 updated, 0 skipped\n")
+    assert again == (
+        0,
+        "ExerPlaza quiz 7 (updated): 0 created, 0 updated, 1 skipped\n"
+        "  skipped quiz_lecture/quiz_q_aaa: a question with the same text already exists; "
+        f"{NOT_IN_QUIZ}\n",
+    )
 
 
 def test_control_characters_from_the_server_are_not_printed(

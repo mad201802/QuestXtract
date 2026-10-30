@@ -695,8 +695,10 @@ request and answer.
 is the course session's quiz with the `quiz.json`'s `title`, or a new one; two such quizzes are a
 409. An item whose stem, in the quiz's language, is the text of a question of that quiz, of a
 question the teacher is an author of, or of an earlier item, is skipped with a reason, and that
-question joins the quiz unchanged. Nothing is ever updated or deleted. The contract keeps its
-shape, `updated` included, so `exerplaza` did not change.
+question joins the quiz unchanged. A pending item's question stays out of the quiz, with the
+reason `pending: not added to the quiz`, until an import sends the item accepted. Nothing is ever
+updated or deleted. The contract keeps its shape, `updated` included, so `exerplaza` did not
+change.
 
 *Alternative:* an `external_ref` column on ExerPlaza's `quiz` and `quiz_question`, holding the
 quiz id and `<quiz id>/<item id>`, so that a re-import updates every question nobody has
@@ -709,14 +711,20 @@ database. Text is how ExerPlaza already finds a duplicate (`QuizQuestion.check_d
 by the TeX upload), and its unique constraint on the text does not hold for a question without
 an image, since Postgres never finds two NULLs equal. The search stays among the teacher's own
 questions and the quiz's, so a colleague's question never stops an import or joins a quiz, and
-a colleague who teaches the same course session adds to the same quiz without duplicates.
+a colleague who teaches the same course session adds to the same quiz without duplicating its
+questions. ExerPlaza shows every question of a quiz to whoever opens the quiz, whatever its
+disclosability, so a pending question in the quiz would reach the students before anyone
+reviewed it.
 
-*Cost:* a re-import never updates. An item edited after its import, a pending item accepted
-later or a changed option stays as it was in ExerPlaza and has to be changed there; a stem
-changed by a comma is a new question beside the old one, and two items with one stem, as the
-contract's example has, become one question. A quiz renamed in ExerPlaza makes the next import
-a new quiz. If ExerPlaza later accepts a schema change, `external_ref` brings the updates back
-without changing the contract.
+*Cost:* a re-import never updates. An item edited after its import or a changed option stays as
+it was in ExerPlaza and has to be changed there, and a pending item accepted later joins the quiz
+but keeps the disclosability "only me". A pending item counts as created in the summary
+`exerplaza` prints, which shows ExerPlaza's reasons for skipped items only. Being out of the
+quiz, a pending item becomes a private copy for each teacher who sends it. A stem changed by a
+comma is a new question beside the old one, and two items with one stem, as the contract's
+example has, become one question. A quiz renamed in ExerPlaza makes the next import a new quiz.
+If ExerPlaza later accepts a schema change, `external_ref` brings the updates back without
+changing the contract.
 
 ## 4. Requirements traceability (→ report ch. 6)
 

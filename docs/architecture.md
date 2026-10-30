@@ -1534,15 +1534,19 @@ are those of `quiz_to_qti` (12.4), so `qti`, `tex` and `exerplaza` send the same
 saves the quiz in one transaction, with no change to its database schema: one multiple-choice
 question per item, with the disclosability, solution and notes for the teachers that `tex` writes
 (12.5) and `created_by_llm` set when any text of the item is `generated`, in the course session's
-quiz with the quiz's `title`, or in a new one (two such quizzes are a 409). It recognises a
-re-import by text, as its TeX upload does: an item whose stem, in the quiz's language, is already
-the text of a question of that quiz, of a question the teacher is an author of, or of an earlier
-item, is `skipped` with a reason, and that question is in the quiz unchanged. It answers
-`created` or `skipped` per item, with `<quiz id>/<item id>` as the item's `ref`; the contract
-keeps `updated` for an import that updates, which this one never does. Nothing is updated or
-deleted, so students' answers never change, and an item edited after its import is changed in
-ExerPlaza, not by sending it again. An error is an RFC 9457 problem whose `errors` list names
-each item's path, printed as ExerPlaza sent it.
+quiz with the quiz's `title`, or in a new one (two such quizzes are a 409). A pending item's
+question, visible only to the teacher, stays out of the quiz, since ExerPlaza shows every
+question of a quiz to whoever opens it; an import that sends the item accepted adds it. It
+recognises a re-import by text, as its TeX upload does: an item whose stem, in the quiz's
+language, is already the text of a question of that quiz, of a question the teacher is an author
+of, or of an earlier item, is `skipped` with a reason, and that question is in the quiz unchanged
+unless the item is pending. It answers `created` or `skipped` per item, with `<quiz id>/<item id>`
+as the item's `ref` and a `reason` for a skipped item or a pending one left out of the quiz
+(`pending: not added to the quiz`); `exerplaza` prints the reasons of skipped items only. The
+contract keeps `updated` for an import that updates, which this one never does. Nothing is
+updated or deleted, so students' answers never change, and an item edited after its import is
+changed in ExerPlaza, not by sending it again. An error is an RFC 9457 problem whose `errors`
+list names each item's path, printed as ExerPlaza sent it.
 
 **Safety.** Every check that needs no network comes first: the URL, the course session, the
 content units, `read_quiz` and `quiz_to_qti`, then the credentials. Plain `http` is refused except

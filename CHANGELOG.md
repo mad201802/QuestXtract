@@ -2,11 +2,6 @@
 
 ## Unreleased
 
-### Changed
-
-- The folder the app saves the NTNU key in (`questxtract/` in your user config folder) is made
-  readable by you only on Linux and macOS, also when it exists from an earlier version. The key
-  file itself already was. (#199)
 ### Added
 
 - `questxtract exerplaza quiz.json --url URL --course-session ID --content-unit NAME` (and
@@ -14,11 +9,17 @@
   and password from `QUESTXTRACT_EXERPLAZA_EMAIL` and `QUESTXTRACT_EXERPLAZA_PASSWORD`
   (environment or `.env`), and ExerPlaza saves, in one go, a quiz in the course session with one
   multiple-choice question per item, marked as generated. Rejected items are not sent; pending
-  ones are visible only to you. Sending the same quiz again adds its new items to the same quiz
-  and skips, unchanged, those whose text ExerPlaza already has: ExerPlaza's database schema does
-  not change. The address must be `https` (plain `http` for `localhost`
-  only), and the password is never shown. Needs ExerPlaza's import endpoint on the server.
-  (#37)
+  ones become questions only you can see, outside the quiz until you send them again accepted.
+  Sending the same quiz again adds its new items to the same quiz and skips, unchanged, those
+  whose text ExerPlaza already has: ExerPlaza's database schema does not change. The address
+  must be `https` (plain `http` for `localhost` only), and the password is never shown. Needs
+  ExerPlaza's import endpoint on the server. (#37)
+
+### Changed
+
+- The folder the app saves the NTNU key in (`questxtract/` in your user config folder) is made
+  readable by you only on Linux and macOS, also when it exists from an earlier version. The key
+  file itself already was. (#199)
 
 ## 0.3.0
 
@@ -34,16 +35,6 @@
 
 ### Added
 
-- `questxtract exerplaza quiz.json --url URL --course-session ID --content-unit NAME` (and
-  `export_exerplaza()`) sends a quiz straight to ExerPlaza: it logs in with your ExerPlaza email
-  and password from `QUESTXTRACT_EXERPLAZA_EMAIL` and `QUESTXTRACT_EXERPLAZA_PASSWORD`
-  (environment or `.env`), and ExerPlaza saves, in one go, a quiz in the course session with one
-  multiple-choice question per item, marked as generated. Rejected items are not sent; pending
-  ones are visible only to you. Sending the same quiz again adds its new items to the same quiz
-  and skips, unchanged, those whose text ExerPlaza already has: ExerPlaza's database schema does
-  not change. The address must be `https` (plain `http` for `localhost`
-  only), and the password is never shown. Needs ExerPlaza's import endpoint on the server.
-  (#37)
 - The app saves the NTNU key for you: the **NTNU key...** button on the start view opens a window
   where you paste the key and press Test (NTNU's service is asked once), Save or Remove. The key is
   saved as plain text in `questxtract/.env` in your user config folder (`%APPDATA%` on Windows,

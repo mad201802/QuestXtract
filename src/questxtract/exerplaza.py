@@ -52,9 +52,10 @@ class ExerPlazaItem:
     ``ref`` is ``<quiz id>/<item id>``, naming the item, and ``uid`` the id of its question in
     ExerPlaza: for a skipped item, the question ExerPlaza already had. ``outcome`` is ``created``,
     ``updated`` or ``skipped``, though ExerPlaza never updates a question today; ``reason`` says
-    why an item was skipped (``a question with the same text already exists``), else it is
-    ``None``. ``ref`` and ``reason`` are as ExerPlaza sent them, with control characters and line
-    breaks replaced by ``?``.
+    why an item was skipped (``a question with the same text already exists``) and, whatever the
+    outcome, that a pending item's question is not in the quiz
+    (``pending: not added to the quiz``), else it is ``None``. ``ref`` and ``reason`` are as
+    ExerPlaza sent them, with control characters and line breaks replaced by ``?``.
     """
 
     ref: str
@@ -86,9 +87,11 @@ def export_exerplaza(
 
     ExerPlaza adds one multiple-choice question per item to the course session's quiz with the
     quiz's title, creating that quiz if there is none. Items a reviewer marked ``rejected`` are
-    not sent; ``pending`` items are visible only to their author in ExerPlaza, ``accepted`` ones
-    to everybody. An item whose text ExerPlaza already has, in that quiz or among the teacher's
-    questions, is not saved again: it is reported ``skipped`` and its question is left as it is.
+    not sent. An ``accepted`` item's question is visible to everybody; a ``pending`` one's is
+    visible only to its author and stays out of the quiz, since ExerPlaza shows every question of
+    a quiz to whoever opens it, until the item is sent again ``accepted``. An item whose text
+    ExerPlaza already has, in that quiz or among the teacher's questions, is not saved again: it
+    is reported ``skipped`` and its question is left as it is.
     Every check that needs no network runs before the first request.
 
     The login is ExerPlaza's own form, with the email and password from

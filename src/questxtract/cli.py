@@ -1221,7 +1221,8 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         help="send quiz.json to ExerPlaza, as a quiz in a course session",
         description="Send a quiz to ExerPlaza's import endpoint, logged in with your ExerPlaza "
         f"email and password from {EXERPLAZA_EMAIL_ENV} and {EXERPLAZA_PASSWORD_ENV}. "
-        "Rejected items are not sent; pending ones are visible only to you in ExerPlaza. "
+        "Rejected items are not sent; pending ones become questions only you can see, outside "
+        "the quiz until you send them again accepted. "
         "Sending the same quiz again adds its new items to the same quiz; items whose text "
         "ExerPlaza already has are skipped and left as they are.",
         epilog=_EXERPLAZA_EXAMPLES,
