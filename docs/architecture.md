@@ -1511,6 +1511,55 @@ quiz exports the same items in both formats. Its errors are re-raised as `TexExp
 review status, the stem's origin and `generation` come from the model's untyped `metadata`, and
 `tex.py` checks each value it reads. The XML writers are not used.
 
+### 12.6 Direct export to ExerPlaza
+
+`questxtract exerplaza quiz.json --url URL --course-session ID --content-unit NAME` sends a quiz
+(section 12.3) to ExerPlaza's import endpoint, so it arrives as a quiz in a course session with no
+file in between. `tex` (12.5) stays the route that needs no change on ExerPlaza's side.
+`exerplaza.py` is the only module that talks to ExerPlaza.
+
+**Login.** ExerPlaza authenticates with Flask sessions only, so `exerplaza` logs in through its
+web form as a browser does. `GET /login` gives the form's `csrf_token` and the session cookie it
+belongs to; `POST /login` sends them with the email and password from
+`QUESTXTRACT_EXERPLAZA_EMAIL` and `QUESTXTRACT_EXERPLAZA_PASSWORD`, read from the environment or
+`.env` by `config.py`, like the API keys. A redirect anywhere but `/login` means logged in, back to
+`/login` means refused, and the form again means the form was refused. ExerPlaza checks CSRF per
+form, not for the whole site, so the import needs only the session cookie, which lives in memory
+for that one call. The login depends on the form's field names (`email`, `password`,
+`csrf_token`); `tests/test_exerplaza.py` holds a copy of the form as ExerPlaza sends it.
+
+**Import.** One `POST /api/v1/quizzes/import?course_session=<id>&content_unit=<name>...`, whose
+body is the `quiz.json` without its rejected items and is still a valid `quiz.json`. The items
+are those of `quiz_to_qti` (12.4), so `qti`, `tex` and `exerplaza` send the same ones. ExerPlaza
+saves the quiz in one transaction, with no change to its database schema: one multiple-choice
+question per item, with the disclosability, solution and notes for the teachers that `tex` writes
+(12.5) and `created_by_llm` set when any text of the item is `generated`, in the course session's
+quiz with the quiz's `title`, or in a new one (two such quizzes are a 409). A pending item's
+question, visible only to the teacher, stays out of the quiz, since ExerPlaza shows every
+question of a quiz to whoever opens it; an import that sends the item accepted adds it. It
+recognises a re-import by text, as its TeX upload does: an item whose stem, in the quiz's
+language, is already the text of a question of that quiz, of a question the teacher is an author
+of, or of an earlier item, is `skipped` with a reason, and that question is in the quiz unchanged
+unless the item is pending. It answers `created` or `skipped` per item, with `<quiz id>/<item id>`
+as the item's `ref` and a `reason` for a skipped item or a pending one left out of the quiz
+(`pending: not added to the quiz`); `exerplaza` prints the reasons of skipped items only. The
+contract keeps `updated` for an import that updates, which this one never does. Nothing is
+updated or deleted, so students' answers never change, and an item edited after its import is
+changed in ExerPlaza, not by sending it again. An error is an RFC 9457 problem whose `errors`
+list names each item's path, printed as ExerPlaza sent it.
+
+**Safety.** Every check that needs no network comes first: the URL, the course session, the
+content units, `read_quiz` and `quiz_to_qti`, then the credentials. Plain `http` is refused except
+for `localhost`, `127.0.0.1` and `::1`, because the password goes with the login, and an address
+with credentials, a query or a fragment is refused. Redirects are never followed. Each request
+times out after 30 s. The password is never printed, logged or stored, and the server's text is
+printed with its control characters replaced.
+
+The contract (requests, answer, errors, mapping) is in
+[issue #37](https://github.com/mad201802/QuestXtract/issues/37). `tests/test_exerplaza.py` holds
+the example request and answer, and ExerPlaza's tests hold a copy. The endpoint is ExerPlaza's;
+until a server has it, `exerplaza` fails with HTTP 404 there and `tex` is the way in.
+
 ---
 
 ## 13. Module layout and dependencies
@@ -1520,7 +1569,7 @@ review status, the stem's origin and `generation` come from the model's untyped 
 ```
 src/questxtract/
   __init__.py      public API: process(), run(), STAGES, read/write, filters,
-                   export_qti() for QTI 2.1 and 3.0, export_tex()
+                   export_qti() for QTI 2.1 and 3.0, export_tex(), export_exerplaza()
   models.py        Word, AsrSegment, Transcript, Sentence, Segment, VisualContext,
                    QuestionCandidate, QAPair, Context, SchemaError, the @stage decorator
   config.py        one flat frozen Config dataclass, every default
@@ -1542,12 +1591,13 @@ src/questxtract/
   qti_v2.py        QTI 2.1 XML
   qti_v3.py        QTI 3.0 XML
   tex.py           ExerPlaza TeX from the QTI model
+  exerplaza.py     export_exerplaza(): ExerPlaza's login form, then quiz.json to its import
   filtering.py     time and text filters, experimental topic filter
   evaluate.py      labelled-set metrics
   schema.py        Question, a standalone shape the pipeline does not produce
   pipeline.py      STAGES, run(), process(), cache, progress
   quiz.py          quiz.json from questions.json: selection, one request per question
-  cli.py           process / transcribe / filter / eval / quiz / qti / tex / gui
+  cli.py           process / transcribe / filter / eval / quiz / qti / tex / exerplaza / gui
   gui/             the graphical app, a run launcher over cli.execute (14):
     options.py     one table of the CLI options the app shows, checked against the CLI
     run.py         form values -> the CLI's argv -> cli.execute; no pipeline of its own
@@ -1576,7 +1626,8 @@ faster-whisper.
 **Extras:** `[llm]` -> `openai` (the LLM detector, vision and the quiz: one dependency; vision has
 its own endpoint and key, 10.1). `[gui]` -> `tkinterdnd2` (drag and drop for the window, 13.1; the
 window itself is tkinter from the standard library and works without it). The CLI's
-progress bar is a few lines of `print`, not `tqdm`.
+progress bar is a few lines of `print`, not `tqdm`, and the ExerPlaza export speaks HTTP with
+`urllib` from the standard library.
 
 **No system binaries** (no ffmpeg) and **no torch** (so no CUDA wheels, transformers or pyannote).
 The install is a couple of hundred MB, which keeps NFR1's Windows leg easy.
@@ -1610,8 +1661,9 @@ name, its signature and its `@stage` registration are real; only the algorithm i
 | `filtering.py` | not a stage | time and text filters done; `topic=` is experimental, no stage produces topics | |
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --score-vision` (4.4) | |
 | `qti.py`, `qti_package.py`, `qti_v2.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 and 2.1 packages of a `quiz.json` (12.4) | |
-| `tex.py` | not a stage | done: the ExerPlaza TeX of a `quiz.json` (12.5); the direct export to ExerPlaza is #37 | |
-| `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz`, `qti` and `tex` work ([cli.md](cli.md)); `process --vision --detector llm --quiz` runs every stage and the quiz in one run, tested offline | |
+| `tex.py` | not a stage | done: the ExerPlaza TeX of a `quiz.json` (12.5) | |
+| `exerplaza.py` | not a stage | done: a `quiz.json` sent to ExerPlaza's import endpoint (12.6); the endpoint itself is ExerPlaza's work | |
+| `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz`, `qti`, `tex` and `exerplaza` work ([cli.md](cli.md)); `process --vision --detector llm --quiz` runs every stage and the quiz in one run, tested offline | |
 | `gui/` | not a stage | done: the window, its run launcher and the NTNU key window (`questxtract gui`, 13.1); it runs the CLI's code and does not review or edit questions (14) | |
 
 Every stub carries a `ponytail:` comment naming its issue, so `grep -rn 'ponytail:' src/` is the
@@ -1629,9 +1681,10 @@ Explicit boundaries, so the package does not grow into them by accident.
   is a separate application. This package's part is that its JSON round-trips (section 12.2).
   The graphical app (13.1) is a run launcher, not that UI: it starts a run and shows the file it
   wrote, and never shows or edits a question.
-- **ExerPlaza upload.** `tex` writes a file for ExerPlaza's TeX upload (section 12.5); nothing in
-  `questxtract` talks to ExerPlaza yet. The direct export is planned in
-  [issue #37](https://github.com/mad201802/QuestXtract/issues/37).
+- **ExerPlaza's side.** `tex` writes a file for ExerPlaza's TeX upload (section 12.5) and
+  `exerplaza` sends a quiz to its import endpoint (section 12.6). The endpoint, the questions
+  once saved and their review in ExerPlaza belong to ExerPlaza: `questxtract` deletes nothing
+  there and uses no page of ExerPlaza's but the login form.
 - **No LMS upload**; `qti` only writes a ZIP (section 12.4).
 - **The labelled dataset** is test
   material under `tests/data/`, not an importable subpackage. The *harness* that reads it is

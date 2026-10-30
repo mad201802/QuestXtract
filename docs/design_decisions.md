@@ -657,6 +657,75 @@ kept the formula in its LaTeX. It also carries a misreading forward (`FR (now)` 
 rate counts as errors, and sometimes its layout, joining several board lines into one. The
 measurement is one six-view sequence of one lecture, mostly diagram, with little text.
 
+### D28: Direct ExerPlaza export: quiz.json to an import endpoint, after ExerPlaza's own login
+
+*Chose:* `questxtract exerplaza` (#37, architecture.md 12.6) logs in through ExerPlaza's web form
+at `/login` with the teacher's email and password, then sends the `quiz.json` without its
+rejected items in one `POST` to a new import endpoint in ExerPlaza, `/api/v1/quizzes/import`.
+ExerPlaza saves it in one transaction and links the quiz to a course session given by id; how
+it recognises a re-import is D29. The client uses only the standard library.
+
+*Alternative:* driving the TeX upload page's own endpoints (`/questions/upload/tex`, then
+`/questions/upload/single` per question); a personal API token in ExerPlaza, stored as a hash and
+shown once; a JSON login endpoint in ExerPlaza's API; TeX as the request body; `requests` or
+`httpx` as the HTTP client.
+
+*Why:* the upload page's endpoints save one question per request outside a transaction, create
+no quiz and no course-session link, leave `created_by_llm` false, find duplicates by text only,
+and delete students' answers on "Overwrite". A token would be safer, but ExerPlaza
+authenticates with sessions only and its maintainers want no change there; its login form
+already works for a program, as a run against ExerPlaza's own production image showed (the
+token in the page, the cookie across both uwsgi workers, a JSON `POST` with the cookie and no
+CSRF token, every refusal). A JSON login would change ExerPlaza's authentication for no gain the
+form does not give. `quiz.json` keeps what TeX drops (origins, provenance, points) and ExerPlaza
+can validate it with the schema that ships with the package. Three requests with a cookie jar do
+not need a dependency.
+
+*Cost:* the teacher's ExerPlaza password sits in the environment or a `.env`, and it opens the
+whole account, where a token could be scoped and revoked. The login depends on the form's field
+names and on the redirect back to `/login` on a failure; a copy of the form in the tests pins
+them, and a change on ExerPlaza's side fails the login with a clear message. If ExerPlaza turns
+on CSRF protection for the whole site, the import route needs an exemption. The endpoint is
+ExerPlaza's code, so the contract lives in two repositories, each with a copy of the example
+request and answer.
+
+### D29: ExerPlaza recognises a re-import by text, with no change to its database
+
+*Chose:* the import endpoint uses ExerPlaza's tables as they are (architecture.md 12.6). The quiz
+is the course session's quiz with the `quiz.json`'s `title`, or a new one; two such quizzes are a
+409. An item whose stem, in the quiz's language, is the text of a question of that quiz, of a
+question the teacher is an author of, or of an earlier item, is skipped with a reason, and that
+question joins the quiz unchanged. A pending item's question stays out of the quiz, with the
+reason `pending: not added to the quiz`, until an import sends the item accepted. Nothing is ever
+updated or deleted. The contract keeps its shape, `updated` included, so `exerplaza` did not
+change.
+
+*Alternative:* an `external_ref` column on ExerPlaza's `quiz` and `quiz_question`, holding the
+quiz id and `<quiz id>/<item id>`, so that a re-import updates every question nobody has
+answered (the first version of D28); the reference in the notes for the teachers, which a
+teacher can edit; the uids of the last import kept beside the `quiz.json` on the client; or a
+new quiz and new questions on every import.
+
+*Why:* ExerPlaza's maintainers want as little change in ExerPlaza as possible, and none to its
+database. Text is how ExerPlaza already finds a duplicate (`QuizQuestion.check_duplicate`, used
+by the TeX upload), and its unique constraint on the text does not hold for a question without
+an image, since Postgres never finds two NULLs equal. The search stays among the teacher's own
+questions and the quiz's, so a colleague's question never stops an import or joins a quiz, and
+a colleague who teaches the same course session adds to the same quiz without duplicating its
+questions. ExerPlaza shows every question of a quiz to whoever opens the quiz, whatever its
+disclosability, so a pending question in the quiz would reach the students before anyone
+reviewed it.
+
+*Cost:* a re-import never updates. An item edited after its import or a changed option stays as
+it was in ExerPlaza and has to be changed there, and a pending item accepted later joins the quiz
+but keeps the disclosability "only me". A pending item counts as created in the summary
+`exerplaza` prints, which shows ExerPlaza's reasons for skipped items only. Being out of the
+quiz, a pending item becomes a private copy for each teacher who sends it. A stem changed by a
+comma is a new question beside the old one, and two items with one stem, as the contract's
+example has, become one question. A quiz renamed in ExerPlaza makes the next import a new quiz.
+If ExerPlaza later accepts a schema change, `external_ref` brings the updates back without
+changing the contract.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |
@@ -728,8 +797,8 @@ asserted a `--model` CLI flag that does not exist), which the verification step 
 ## 6. Security at the design level (→ report ch. 9; compendium touchpoints 2, 5, 6)
 
 *Assets:* lecture recordings and transcripts (may contain names and voices of students —
-personal data under GDPR if real lectures are used); the extracted question bank; later, the
-exerplaza credentials used by the uploader.
+personal data under GDPR if real lectures are used); the extracted question bank; the teacher's
+ExerPlaza email and password, which `exerplaza` reads from the environment or `.env` (D28).
 
 *Threats (STRIDE, the relevant ones):*
 - **Tampering** — an edited or hand-crafted results/transcript JSON is re-imported. Mitigated
@@ -742,12 +811,16 @@ exerplaza credentials used by the uploader.
   component that sends lecture content out, and only to the OpenAI-compatible endpoint the user
   picks: hosted (NTNU's IDUN service, OpenRouter, OpenAI) or a local server (Ollama, llama.cpp,
   vLLM, LM Studio), which keeps it on the device. The CLI default (rules detector, vision off)
-  makes no LLM call and writes a complete `questions.json`. The uploader (outside the package) is
-  the only component that always talks out.
+  makes no LLM call and writes a complete `questions.json`. The only components that always talk
+  out are the uploader (outside the package) and `exerplaza` (D28), which sends the quiz, its
+  spoken stems included, to the address its `--url` names, over HTTPS unless that is `localhost`.
 - **Denial of service / resource exhaustion** — hour-long inputs, temp files from decoding.
   #7 owns temp-file cleanup; #14 progress reporting is also the cancellation point.
 - **Elevation of privilege / spoofing** — none inside the package: no accounts, no privileges.
-  Both reappear at the exerplaza boundary and should be threat-modelled with that module.
+  At the ExerPlaza boundary, `exerplaza` acts as the teacher whose password it holds: a stolen
+  `.env` is a stolen ExerPlaza account. Mitigated: never a CLI argument, never printed, logged or
+  stored, HTTPS required, no redirect followed, the server's text printed with control
+  characters replaced. ExerPlaza checks that the teacher teaches the course session.
 
 *Abuse cases to write up:* (1) a malicious transcript file (deeply nested JSON, huge strings)
 fed to the CLI; (2) a lecturer uploading someone else's lecture; (3) a review UI user injecting
@@ -766,7 +839,7 @@ diagrams; the next form, "the default `Config` makes zero outbound calls", did n
 Whisper download, the GUI's defaults or its key check. A blanket rule nobody can keep is worse
 than a precise one that holds.) S2 all external JSON validated before use; S3 credentials never
 stored in the package or the result files — the API key is read from the environment at call
-time and is not a `Config` field; S4 temporary media deleted after extraction; S5 test material
+time and is not a `Config` field, and so is the ExerPlaza login; S4 temporary media deleted after extraction; S5 test material
 is public or mock lectures only (the brief already promises "no student data"); **S6 when an
 endpoint is configured, the user must be able to tell** — the exported `config` block names the
 models used, so a result carries whether it went out.

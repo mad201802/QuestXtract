@@ -41,6 +41,7 @@ turns them into study material. It **extracts** questions, it never invents them
 | 🧩 **Quizzes** | Multiple-choice items from the questions asked, with explanations; every generated text is marked and starts as pending review |
 | 🎓 **LMS export** | `questxtract qti` writes a `quiz.json` as a QTI 3.0 or 2.1 package for an LMS to import |
 | 📝 **ExerPlaza TeX** | `questxtract tex` writes a `quiz.json` as a TeX file to upload to ExerPlaza |
+| 🔗 **Straight into ExerPlaza** | `questxtract exerplaza` sends a `quiz.json` to an ExerPlaza course session, logged in as you; sending it again adds only the new items |
 
 What is built today:
 [architecture.md 13.3](docs/architecture.md#133-status).
@@ -94,13 +95,19 @@ questxtract process lecture.mp4 --vision           # also read the slides or the
 
 # everything in one run: board, LLM detector and quiz, then export the quiz
 questxtract process lecture.mp4 --vision --detector llm --quiz
-questxtract qti lecture.quiz.json -o lecture.qti.zip   # QTI 3.0 package for an LMS
-questxtract tex lecture.quiz.json -o lecture.tex --content-unit "Sorting"   # TeX for ExerPlaza
+# -> lecture.questions.json, lecture.keyframes/ and lecture.quiz.json
+questxtract qti lecture.quiz.json -o lecture.qti.zip   # the quiz as a QTI 3.0 package for an LMS
+questxtract tex lecture.quiz.json -o lecture.tex --content-unit "Sorting"   # or as TeX for ExerPlaza
+questxtract exerplaza lecture.quiz.json --url https://exerplaza.example.org \
+    --course-session 42 --content-unit "Sorting"   # or straight into an ExerPlaza course session
 ```
 
 By default both run on NTNU's LLM service: they need `IDUN_API_KEY` and the NTNU network or VPN.
 OpenAI or a local Ollama work through `--llm-url`. The app's **NTNU key...** button saves the key;
 to store it safely instead: [Setting up the API key](docs/cli.md#setting-up-the-api-key).
+
+`exerplaza` logs in with `QUESTXTRACT_EXERPLAZA_EMAIL` and `QUESTXTRACT_EXERPLAZA_PASSWORD` from
+the environment or `.env`; see [docs/cli.md](docs/cli.md#questxtract-exerplaza-quizjson).
 
 ## Documentation
 

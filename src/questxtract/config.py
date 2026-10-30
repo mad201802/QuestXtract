@@ -33,6 +33,10 @@ NTNU_KEY_ENV = "IDUN_API_KEY"  # the key for NTNU's LLM service
 OLD_NTNU_KEY_ENV = "QUESTXTRACT_NTNU_API_KEY"  # its former name, still read when the new is unset
 VISION_KEY_ENV = "QUESTXTRACT_VISION_API_KEY"  # for a vision_base_url of another service
 OPENAI_KEY_ENV = "OPENAI_API_KEY"  # the key for OpenAI and base_url's other endpoints
+EXERPLAZA_EMAIL_ENV = (
+    "QUESTXTRACT_EXERPLAZA_EMAIL"  # the teacher's ExerPlaza login, for `exerplaza`
+)
+EXERPLAZA_PASSWORD_ENV = "QUESTXTRACT_EXERPLAZA_PASSWORD"  # noqa: S105 - a variable name, no secret
 DEEPSEEK = "deepseek-ai/DeepSeek-V4.1-Flash-1017"  # vision's default, on NTNU's service
 # The graphical app opens with the LLM judge and the board reading on (#124). The CLI's own
 # defaults are the ones above; these only set where the window starts.
@@ -295,6 +299,15 @@ def _read_key(name: str) -> str | None:
     if name in os.environ:
         return os.environ[name]
     return _dotenv_api_key(name)
+
+
+def exerplaza_credentials() -> tuple[str | None, str | None]:
+    """Read the ExerPlaza email and password from the environment or cwd's ``.env``.
+
+    Like the API keys: never a command-line argument, never stored in a ``Config``. The app's
+    key file holds the NTNU key only, so it is not read here.
+    """
+    return _read_key(EXERPLAZA_EMAIL_ENV), _read_key(EXERPLAZA_PASSWORD_ENV)
 
 
 def user_env_path() -> Path:
