@@ -295,6 +295,15 @@ def is_openrouter(url: str | None) -> bool:
     return url is not None and _host(url) == _host(OPENROUTER_URL)
 
 
+def sends_key_unencrypted(url: str | None) -> bool:
+    """Whether ``url`` is NTNU's, OpenAI's or OpenRouter's host over plain ``http``.
+
+    Their keys would then travel unencrypted; a local server over ``http`` is fine.
+    """
+    known = is_ntnu(url) or is_openrouter(url) or (url is not None and is_openai(url))
+    return known and urlsplit(str(url).strip()).scheme.lower() != "https"
+
+
 def key_names(url: str | None, *, other: str = LLM_KEY_ENV) -> tuple[str, ...]:
     """Return the variables the key for ``url`` is read from, the first one set winning.
 

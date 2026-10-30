@@ -1429,3 +1429,25 @@ def test_a_short_name_in_the_settings_file_shares_the_cache_with_its_url(
     written = (tmp_path / "t.questions.json").read_text(encoding="utf-8")
     assert json.loads(written)["config"]["judge_model"] == "qwen/qwen3-8b"
     assert "openrouter" not in written.casefold() and "sk-or" not in written
+
+
+@pytest.mark.parametrize(
+    "url", ["http://openrouter.ai/api/v1", "http://llm.hpc.ntnu.no/v1", "http://api.openai.com/v1"]
+)
+def test_a_known_service_over_http_fails_before_transcription(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    url: str,
+) -> None:
+    """Review of #252: its key would travel unencrypted."""
+    for name in ("IDUN_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY"):
+        monkeypatch.setenv(name, "sk-test")
+    video = make_mp4(tmp_path / "lecture.mp4")
+
+    assert main(["process", str(video), "--detector", "llm", "--llm-url", url]) == 1
+
+    err = capsys.readouterr().err
+    assert f"{url} would send the key unencrypted; use https://" in err and fake_asr == []

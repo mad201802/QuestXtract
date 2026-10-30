@@ -199,6 +199,14 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "nb": "{endpoint} svarte ikke. Nøkkelen ble ikke testet.",
         "it": "{endpoint} non risponde. La chiave non è stata provata.",
     },
+    "key.insecure": {
+        "en": "{endpoint} over http would get the key unencrypted. Use https:// in LLM endpoint; "
+        "nothing was sent or saved.",
+        "nb": "{endpoint} over http ville fått nøkkelen ukryptert. Bruk https:// i LLM-endepunkt; "
+        "ingenting ble sendt eller lagret.",
+        "it": "{endpoint} via http riceverebbe la chiave non cifrata. Usa https:// in "
+        "Endpoint LLM; non è stato inviato né salvato nulla.",
+    },
     "key.no_llm_extra": {
         "en": "The key cannot be tested: questxtract[llm] is not installed.",
         "nb": "Nøkkelen kan ikke testes: questxtract[llm] er ikke installert.",

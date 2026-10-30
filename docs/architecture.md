@@ -945,7 +945,8 @@ local server gets none of the hosted ones. Each key is read from its variable, i
 or the working directory's `.env`, then from the user's key file (cli.md "API keys and .env"),
 never from `questxtract.toml`, and hidden in error messages. The CLI checks the key of every
 endpoint a run will use before anything slow starts; NTNU's, OpenAI's and OpenRouter's need one,
-any other may run without. It also refuses a model name from another service: every model on
+any other may run without, and those three are refused over plain `http://`. A request without a
+key carries the placeholder `"local"`, since the SDK would otherwise read `OPENAI_API_KEY` itself. It also refuses a model name from another service: every model on
 NTNU's and on OpenRouter is named `organisation/model`, no OpenAI model has a `/`, and OpenRouter
 names NTNU's default models differently.
 

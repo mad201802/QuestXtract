@@ -199,3 +199,22 @@ def test_a_key_for_another_host_is_saved_as_the_generic_key():
 
     assert 'QUESTXTRACT_LLM_API_KEY="vllm-key"' in user_env_path().read_text(encoding="utf-8")
     assert Config(base_url="http://localhost:8000/v1").api_key == "vllm-key"
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["http://openrouter.ai/api/v1", "HTTP://llm.hpc.ntnu.no/v1", "http://api.openai.com/v1"],
+)
+def test_a_known_service_over_http_is_not_sent_the_key(monkeypatch, url):
+    """Review of #252: the key would travel unencrypted, so nothing is asked or saved."""
+    calls = _fake_openai(monkeypatch)
+
+    assert keys.check_key(MARKER, url) == "insecure"
+    assert keys.save_key(MARKER, url) == "insecure"
+
+    assert calls == [] and not user_env_path().exists()
+
+
+def test_a_local_server_over_http_is_fine(monkeypatch):
+    _fake_openai(monkeypatch)
+    assert keys.check_key(MARKER, "http://localhost:11434/v1") == "accepted"

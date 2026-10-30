@@ -17,9 +17,10 @@
   OpenRouter key out of `OPENAI_API_KEY`, which goes to OpenAI only; a run that is missing it
   stops before transcribing and says so. Any other host, a local server such as Ollama included,
   reads `QUESTXTRACT_LLM_API_KEY` and runs without a key when it is unset, so a local server no
-  longer receives the OpenAI key. On OpenRouter, NTNU's default model names are refused before
-  transcribing: pass OpenRouter's names (`--llm-model`, `--vision-model`). NTNU setups work as
-  before. (#250)
+  longer receives the OpenAI key. NTNU's, OpenAI's and OpenRouter's endpoints are refused over
+  plain `http://`, where the key would travel unencrypted. On OpenRouter, NTNU's default model
+  names are refused before transcribing: pass OpenRouter's names (`--llm-model`,
+  `--vision-model`). NTNU setups work as before. (#250)
 
 ### Changed
 

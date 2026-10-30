@@ -25,6 +25,7 @@ from ..config import (
     key_names,
     remove_user_key,
     save_user_key,
+    sends_key_unencrypted,
     user_env_path,
     valid_key,
 )
@@ -62,9 +63,12 @@ def check_key(key: str, url: str | None = NTNU_LLM_URL) -> str:
     Returns:
         ``accepted``; ``refused`` (the service answered 401 or 403); ``unreachable`` (no
         answer, or any other answer: for NTNU's service, the NTNU network or VPN is the usual
-        cause); or ``no_llm_extra`` when ``questxtract[llm]`` is not installed.
+        cause); ``insecure``, asking nothing, when ``url`` is a known service over plain
+        ``http``; or ``no_llm_extra`` when ``questxtract[llm]`` is not installed.
 
     """
+    if sends_key_unencrypted(url):
+        return "insecure"
     try:
         import openai  # noqa: PLC0415 - the optional questxtract[llm] extra
     except ImportError:
@@ -96,7 +100,7 @@ def save_key(
 
     Returns:
         ``saved`` when the service accepted it, ``saved_unchecked`` when it could not be
-        tested, or ``refused`` when it was not saved.
+        tested, or ``refused`` or ``insecure`` (see :func:`check_key`) when it was not saved.
 
     Raises:
         ValueError: If the key is empty or holds a character the ``.env`` reader refuses.
@@ -105,8 +109,8 @@ def save_key(
     """
     key = valid_key(key)  # a key the file cannot hold fails here, before any request
     outcome = check(key) if check is not None else check_key(key, url)
-    if outcome == "refused":
-        return "refused"  # an earlier saved key stays as it was
+    if outcome in ("refused", "insecure"):
+        return outcome  # an earlier saved key stays as it was
     save_user_key(key, key_names(url)[0])
     return "saved" if outcome == "accepted" else "saved_unchecked"
 

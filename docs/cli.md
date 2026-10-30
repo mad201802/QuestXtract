@@ -302,7 +302,8 @@ The key goes with the endpoint, told by the URL's host:
 | any other host, a local server such as Ollama included | `QUESTXTRACT_LLM_API_KEY`, or none |
 
 So each key goes to its own service only: the OpenAI key never to OpenRouter or a local server,
-the NTNU key never off NTNU. NTNU's, OpenAI's and OpenRouter's endpoints need their key; any other
+the NTNU key never off NTNU. The three known services are refused over plain `http://`, where
+their key would travel unencrypted; a local server over `http://` is fine. NTNU's, OpenAI's and OpenRouter's endpoints need their key; any other
 runs without one when its variable is unset. `QUESTXTRACT_NTNU_API_KEY`, the NTNU key's former
 name, is still read when `IDUN_API_KEY` is not set. Each name comes from the environment if set;
 otherwise it is read from `.env` in the working directory (Git ignores this file); otherwise from
@@ -524,7 +525,8 @@ questxtract process lecture.mp4 --detector llm --llm-url openai \
 
 **OpenRouter.** Put the key in `OPENROUTER_API_KEY` (stored the same way, or saved in the app)
 and pass `--llm-url openrouter` with OpenRouter's model names, which differ from NTNU's
-(`deepseek/deepseek-v4.1-flash`, not `deepseek-ai/DeepSeek-V4.1-Flash-1017`).
+(`deepseek/deepseek-v4.1-flash`, not `deepseek-ai/DeepSeek-V4.1-Flash-1017`). A run needs both:
+it checks the model name first, then the key, so a setup with neither gets two errors in turn.
 
 ```bash
 questxtract process lecture.mp4 --detector llm \
@@ -694,6 +696,7 @@ is not the cache, so it works on a first run too ([architecture.md 6.5](architec
 | `...: not valid JSON` / `expected a list of segments...` | The `.json` file is not a transcript. |
 | `--detector llm goes to NTNU's LLM service (...), so it needs IDUN_API_KEY ...` | Make the NTNU key available in the environment or local `.env`, or pass `--llm-url` for OpenAI or a local server. |
 | `--detector llm goes to OpenAI, so it needs OPENAI_API_KEY ...` | Make the OpenAI key available, or pass `--llm-url` for another endpoint. |
+| `...: http://... would send the key unencrypted; use https://` | Write the URL of NTNU's, OpenAI's or OpenRouter's endpoint with `https://`, or use its short name. |
 | `--detector llm goes to OpenRouter, so it needs OPENROUTER_API_KEY ...` | Put the OpenRouter key in `OPENROUTER_API_KEY` (not `OPENAI_API_KEY`, which goes to OpenAI only), or save it in the app. |
 | `<file>: invalid TOML at line N` | Correct the TOML syntax at the reported line. |
 | `<file>: <key>: expected float, got string` | Use the expected type; numbers must not be quoted. |

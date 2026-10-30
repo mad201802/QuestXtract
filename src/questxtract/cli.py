@@ -29,6 +29,7 @@ from .config import (
     is_openai,
     is_openrouter,
     load_config,
+    sends_key_unencrypted,
 )
 from .evaluate import evaluate, evaluate_vision, format_report, format_vision_report
 from .export import read_questions, result_to_json, write_questions
@@ -336,6 +337,8 @@ def _check_endpoint(config: Config, what: str, *, model_flag: str, vision: bool 
     if importlib.util.find_spec("openai") is None:
         raise ValueError(f"{what} needs the LLM extra: pip install 'questxtract[llm]'")
     url = config.vision_url if vision else config.base_url
+    if sends_key_unencrypted(url):
+        raise ValueError(f"{what}: {url} would send the key unencrypted; use https://")
     if vision and config.vision_base_url is not None:
         mover = "vision_base_url in questxtract.toml"
         to_openai = 'set vision_base_url = "openai" in questxtract.toml and pass'
