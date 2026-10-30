@@ -350,7 +350,9 @@ QuestXtract. That environment value wins, so the `.env` reader is not used in th
 **The ExerPlaza login.** `exerplaza` reads your ExerPlaza email and password from
 `QUESTXTRACT_EXERPLAZA_EMAIL` and `QUESTXTRACT_EXERPLAZA_PASSWORD`, in the environment or in
 `.env` in the working directory, the same way: never from the command line, where the shell
-history would keep it, and never from the app's key file. A password containing `$` or a backtick
+history would keep it, and never from the app's key file. In `.env`, put the password in single
+quotes, `QUESTXTRACT_EXERPLAZA_PASSWORD='...'`: unquoted, a `#` starts a comment and a backslash
+is dropped, so ExerPlaza gets another password. A password containing `$`, a backtick or a `'`
 cannot go in `.env`; set it in the environment.
 
 ### Setting up the API key
@@ -751,7 +753,7 @@ is not the cache, so it works on a first run too ([architecture.md 6.5](architec
 | `judge: <model> did not return the expected JSON, twice` | The model could not follow the output format. Try a larger model; rerun to try again. |
 | `exerplaza: set QUESTXTRACT_EXERPLAZA_EMAIL ...` / `... PASSWORD ...` | Put your ExerPlaza email and password in the environment or `.env` (see [API keys and .env](#api-keys-and-env)). |
 | `exerplaza: url: http://... is not encrypted ...` | Use the `https://` address; plain `http` is for a local ExerPlaza only. |
-| `exerplaza: POST .../login: ExerPlaza refused the login ...` | Wrong email or password, or a disabled account: try them on ExerPlaza's login page. |
+| `exerplaza: POST .../login: ExerPlaza refused the login ...` | Wrong email or password, or a disabled account: try them on ExerPlaza's login page. A password in `.env` with a `#` or a backslash needs single quotes ([API keys and .env](#api-keys-and-env)). |
 | `exerplaza: POST .../api/v1/quizzes/import: ... HTTP 403 ...` / `... HTTP 404 Not Found: course session ...` | You do not teach that course session, or the number is wrong: check it in the page's address. |
 | `exerplaza: ... HTTP 404, not a JSON answer ...` | This ExerPlaza has no import endpoint yet, or `--url` points elsewhere. Use `tex` meanwhile. |
 | `exerplaza: ... HTTP 409 Conflict: course session ... has 2 quizzes named ...` | ExerPlaza cannot tell which quiz to add to: rename all but one in ExerPlaza, or give the quiz another `title`. Nothing was saved. |
