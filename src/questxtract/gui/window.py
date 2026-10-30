@@ -22,7 +22,7 @@ from tkinter import filedialog, ttk
 from typing import Any
 
 from ..cli import RunResult
-from ..config import ENDPOINTS, endpoint_url
+from ..config import ENDPOINTS
 from ..pipeline import Cancelled
 from . import i18n, state
 from . import run as gui_run
@@ -35,7 +35,6 @@ __all__ = ["run_app"]
 _POLL_MS = 100
 _TYPING_PAUSE_MS = 150  # how long the form must be still before its checks run
 _OUTPUT_OPTION = next(option for option in OPTIONS if option.dest == "output")
-_LLM_URL_OPTION = next(option for option in OPTIONS if option.dest == "llm_url")
 
 
 def run_app() -> int:
@@ -303,9 +302,7 @@ class QuestXtractWindow:
 
     def _open_key_dialog(self) -> None:
         """Open the key window for the LLM endpoint field's endpoint; a change is checked next."""
-        typed = str(self.fields["llm_url"].get()).strip()
-        url = typed or state.start_text(_LLM_URL_OPTION) or None
-        KeyDialog(self.root, url=endpoint_url(url), on_change=self._refresh)
+        KeyDialog(self.root, url=state.key_endpoint(self._values()), on_change=self._refresh)
 
     def _toggle_advanced(self) -> None:
         """Show or hide the options form; the window grows or shrinks to fit."""

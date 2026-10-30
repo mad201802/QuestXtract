@@ -580,6 +580,22 @@ def test_the_key_window_is_for_the_endpoint_in_the_llm_endpoint_field(window, mo
     ]
 
 
+def test_with_the_field_at_its_default_the_key_window_follows_the_settings_file(
+    window, monkeypatch, tmp_path
+):
+    """Review of #252: a settings file with base_url = "openrouter" makes the run go there, so
+    the key window opens for OpenRouter, not NTNU."""
+    opened: list[dict[str, Any]] = []
+    monkeypatch.setattr(gui_window, "KeyDialog", lambda root, **kwargs: opened.append(kwargs))
+    chosen = tmp_path / "settings.toml"
+    chosen.write_text('base_url = "openrouter"\n', encoding="utf-8")
+
+    window.fields["config"].set(str(chosen))
+    window._open_key_dialog()
+
+    assert opened[0]["url"] == "https://openrouter.ai/api/v1"
+
+
 def test_the_key_window_saves_openrouters_key_as_its_own(root, monkeypatch):
     """#250 AC8: saved as OPENROUTER_API_KEY, the NTNU key in the file kept."""
     from questxtract.config import Config, save_user_key, user_env_path

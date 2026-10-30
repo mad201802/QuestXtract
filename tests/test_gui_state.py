@@ -240,3 +240,23 @@ def test_a_settings_file_decides_the_start(tmp_path, monkeypatch):
     assert state.start_text(_option("detector")) == "rules"
     assert state.start_tristate(_option("vision")) == "Default"
     assert state.form_values({"detector": "rules"})["detector"] is None  # the file applies
+
+
+def test_the_key_window_follows_the_endpoint_a_run_would_use(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Review of #252: the field when passed, else the chosen settings file, else the default."""
+    monkeypatch.chdir(tmp_path)
+    chosen = tmp_path / "openrouter.toml"
+    chosen.write_text('base_url = "openrouter"\n', encoding="utf-8")
+    ntnu, openrouter = "https://llm.hpc.ntnu.no/v1", "https://openrouter.ai/api/v1"
+
+    assert state.key_endpoint({"llm_url": None, "config": None}) == ntnu
+    assert state.key_endpoint({"llm_url": None, "config": str(chosen)}) == openrouter
+    assert state.key_endpoint({"llm_url": "ollama", "config": str(chosen)}) == (
+        "http://localhost:11434/v1"
+    )
+    Path("questxtract.toml").write_text('base_url = "openai"\n', encoding="utf-8")
+    assert state.key_endpoint({"llm_url": None, "config": None}) == "https://api.openai.com/v1"
+    missing = str(tmp_path / "missing.toml")  # the run check reports it; the window opens anyway
+    assert state.key_endpoint({"llm_url": None, "config": missing}) == ntnu
