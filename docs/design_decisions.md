@@ -657,6 +657,39 @@ kept the formula in its LaTeX. It also carries a misreading forward (`FR (now)` 
 rate counts as errors, and sometimes its layout, joining several board lines into one. The
 measurement is one six-view sequence of one lecture, mostly diagram, with little text.
 
+### D35: Any OpenAI-compatible endpoint, each with its own key
+
+*Chose:* an endpoint is a URL and an optional key, for the judge, the quiz and vision alike
+(#250, architecture.md 10.1). The key is told by the URL's host: NTNU's service reads
+`IDUN_API_KEY`, OpenAI `OPENAI_API_KEY`, OpenRouter `OPENROUTER_API_KEY`, and any other host,
+a local server included, `QUESTXTRACT_LLM_API_KEY` (a `vision_base_url` there:
+`QUESTXTRACT_VISION_API_KEY`), which may be unset. `ntnu`, `openrouter`, `openai` and `ollama`
+are short names for their URLs, turned into the URL in `Config`. The app's key window tests and
+saves the key of the endpoint in its LLM endpoint field, and every variable is read from the key
+file. NTNU's service and its models stay the default (D22, D25).
+
+*Alternatives:*
+
+- Every host but NTNU's reads `OPENAI_API_KEY`, as before: OpenRouter worked through it, but a set
+  OpenAI key went to OpenRouter and to any local server too.
+- One generic variable for every host but NTNU's and OpenAI's: fewer names, but OpenRouter, the
+  hosted service the team evaluates on, would share it with every other host.
+- A settings field naming the variable per endpoint, as
+  [simonw/llm's `api_key_name`](https://llm.datasette.io/en/stable/other-models.html): the most
+  flexible, but a new `Config` field, and the TOML secret check refuses any name holding `key`.
+- Short names that also bring default models per endpoint: each name would need its own model
+  names kept current, and the eval numbers are per model.
+
+*Why:* a key belongs to one service; sending it to another is a disclosure (S3), and a local
+server should never get a hosted key. A variable per provider is the usual pattern
+([aider](https://aider.chat/docs/config/api-keys.html) reads `OPENROUTER_API_KEY`), and simonw/llm
+does not send the OpenAI key to a custom `api_base` either.
+
+*Cost:* breaking for anyone who kept an OpenRouter key in `OPENAI_API_KEY`; the CLI says so
+before transcription, and the CHANGELOG names the move. The host table knows three hosted
+services; another hosted service shares `QUESTXTRACT_LLM_API_KEY`. OpenRouter names NTNU's
+default models differently, so its runs need the model flags.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |
@@ -759,7 +792,7 @@ model on first use is its only network access; transcripts and frames go only to
 OpenAI-compatible endpoint the run is set to, hosted or local; the CLI default makes no LLM call
 and still produces a complete `questions.json`. The GUI starts with the LLM detector and vision
 on NTNU's service, and its key check asks that service once; S6 makes that visible in the
-result. Endpoints other than NTNU's and OpenAI's, keys included, are made first-class in #250.
+result. Any OpenAI-compatible endpoint works, each with its own key (D35, #250).
 (This is the twice-narrowed form, #197. The original blanket "no network access in `questxtract`
 itself" was incompatible with the optional LLM layer the design needs for handwriting and board
 diagrams; the next form, "the default `Config` makes zero outbound calls", did not count the
