@@ -409,8 +409,9 @@ frame. This is prompt v2 (`tests/data/vision/prompt_v2.txt`), D27. Ink is a pixe
 grey levels from the mean of the 15 px square around it, on the small grey copy (6.3). The board
 is new, and v0 is sent, when less than 70 % of the previous keyframe's ink is still ink, for the
 first view, after a failed reading and after a blank board. New ink is boxed by the 8 px cells
-that are at least 20 % new ink. A copied reading (below) counts as a previous state. The OCR
-reader gets no prompt.
+that are at least 20 % new ink. A copied reading (below) counts as a previous state. A partial
+erase keeps over 70 % of the ink (`tests/data/vision/sequence/`), so the erased text goes with
+the next view; the prompt's rule not to copy keeps it out. The OCR reader gets no prompt.
 
 **A page that comes back is not read again** (D18). On `slides`, `handwriting` and `screencast`,
 each keyframe is compared with the keyframes already read in this run; boards, and `unknown`, are

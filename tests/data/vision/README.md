@@ -24,6 +24,7 @@ tests/data/vision/
   prompt_v0.txt, prompt_v1.txt       the captioning prompts of #52
   prompt_v2.txt                      v0 with the previous board state (#137)
   prompt_v0.schema.json              the JSON the model must return
+  sequence/                          consecutive views with partial erases (#230)
   results/<run>/results.jsonl        raw answers of the #52 comparison
 ```
 
@@ -124,6 +125,34 @@ uv run python scripts/extract_keyframes.py lecture.mp4 -o keyframes/ --max-views
 | `uw_machine_intelligence_l13_03811.0` | Two boards: formulas and 3D volume sketches |
 | `uw_machine_intelligence_l13_04659.0` | A pipeline of box sketches with short labels |
 
+## Consecutive views
+
+`sequence/` holds what the previous board state (architecture.md 6.5) is measured on (#230):
+consecutive views of one board as the vision stage cuts them, so each view is read after the one
+before it, as in a run. The #58 frames above are far apart in time and cannot show that.
+`ttk4225_2026_09_14` 1177 s to 1447 s: six views, written by the stage (720p, 1 frame per
+second), of one handwritten page filling up, with three partial erases: a fragment at 1266 s,
+`t ≥ 0` at 1340 s, and the right half of the page (`Y_FR(now)` and `u * h(now)`) at 1408 s.
+Every pair keeps at least 0.79 of the earlier view's ink, so the stage sends the previous state
+across each erase.
+
+The labels follow the schema above, with one more field:
+
+| Field | Type | Notes |
+|---|---|---|
+| `erased` | list of strings | text of the view before, as its `text` writes it, that is no longer on the board; `[]` when nothing was wiped |
+
+```bash
+uv run python scripts/compare_previous_state.py tests/data/vision/sequence/
+```
+
+reads each view alone (v0), after the previous reading on every pair (v2), and as the stage
+sends it, and reports character error rate, formula recall, lines copied from the previous
+reading and erased text still read. **Status.** Labelled by an LLM (Claude) from the frames and
+the transcript; not yet checked by a human. As in the #58 labels, the numbers and arrow labels of
+the diagram (`*h`, `1`, `2`, `3?`) are in `diagram`, not `text`, so a reading that types them
+raises its character error rate.
+
 ## Question links
 
 `<recording-name>.links.jsonl` labels each question with the board state on screen when it was
@@ -163,7 +192,7 @@ recordings whose licence allows redistributing derivatives are used.
 |---|---|
 | `prompt_v0.txt` | Captioning prompt v0. `{kind}` is the layout probe's kind; `{speech}` the transcript overlapping the frame, as context. |
 | `prompt_v1.txt` | v0 with a stricter `latex` instruction. It did not change how often models fill `latex`, so v0 stays. |
-| `prompt_v2.txt` | v0 with the previous board state (#137): `{previous_description}`, `{previous_text}`, `{previous_latex}`, `{new_ink}` (the box around new writing, or "not found"), and a rule never to copy what is no longer visible. Sent when a state follows another without an erase. `scripts/compare_previous_state.py` reads frames both ways. |
+| `prompt_v2.txt` | v0 with the previous board state (#137): `{previous_description}`, `{previous_text}`, `{previous_latex}`, `{new_ink}` (the box around new writing, or "not found"), and a rule never to copy what is no longer visible. Sent when a state follows another without an erase. `scripts/compare_previous_state.py` reads frames with and without it (#137, #230). |
 | `prompt_v0.schema.json` | The JSON the model returns: `description`, `text`, `latex` (or `null`), `confidence`, matching `VisualContext`. |
 
 `results/<run>/results.jsonl` holds one line per call (frame, model, seconds, token counts, answer
