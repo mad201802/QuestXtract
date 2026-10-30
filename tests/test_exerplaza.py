@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import socket
 import sys
 import threading
-import time
+import traceback
 import urllib.parse
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -144,7 +145,7 @@ class FakeExerPlaza(ThreadingHTTPServer):
     item whose text ExerPlaza already has, or an earlier item has, is skipped, never changed.
     """
 
-    daemon_threads = True
+    daemon_threads = False  # so server_close() waits for every request handler
 
     def __init__(self) -> None:
         super().__init__(("127.0.0.1", 0), _Handler)
@@ -156,8 +157,10 @@ class FakeExerPlaza(ThreadingHTTPServer):
         self.course_sessions = {42}
         self.quizzes: dict[tuple[int, str], int] = {}  # (course session, title) -> uid
         self.questions: dict[str, int] = {}  # text -> uid
+        self.login_reply: tuple[int, dict[str, str], str] | None = None  # a canned answer
         self.import_reply: tuple[int, dict[str, str], str] | None = None  # a canned answer
         self.delay = 0.0
+        self.closing = threading.Event()  # ends a delay early, when the test is over
 
     @property
     def url(self) -> str:
@@ -170,11 +173,7 @@ class FakeExerPlaza(ThreadingHTTPServer):
         return next(s for s in reversed(self.seen) if s.path == "/api/v1/quizzes/import")
 
     def handle_error(self, request: Any, client_address: Any) -> None:
-        """Ignore a client that hung up, as the timeout test's does.
-
-        The handler thread outlives that test, so the traceback would land in a later test's
-        captured stderr. Any other error is still printed.
-        """
+        """Ignore a client that hung up, as the timeout test's does; print any other error."""
         if not isinstance(sys.exc_info()[1], ConnectionError):
             super().handle_error(request, client_address)
 
@@ -201,7 +200,7 @@ class _Handler(BaseHTTPRequestHandler):
                 method=self.command, path=split.path, query=split.query, headers=headers, body=body
             )
         )
-        time.sleep(fake.delay)
+        fake.closing.wait(fake.delay)
         cookie = SimpleCookie(self.headers.get("Cookie") or "")
         session_id = cookie["session"].value if "session" in cookie else ""
         session = fake.sessions.get(session_id)
@@ -213,6 +212,8 @@ class _Handler(BaseHTTPRequestHandler):
             token = "forged" if fake.wrong_token else str(session["csrf"])
             page = f"<html><body>{fake.login_page.replace('{token}', token)}</body></html>"
             self._reply(200, {"Content-Type": "text/html; charset=utf-8"}, page, session_id)
+        elif route == "POST /login" and fake.login_reply is not None:
+            self._reply(*fake.login_reply)
         elif route == "POST /login":
             form = dict(urllib.parse.parse_qsl(body.decode("utf-8")))
             if session is None or form.get("csrf_token") != session["csrf"]:
@@ -309,8 +310,11 @@ def exerplaza(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeExerPlaza]:
     monkeypatch.setenv("QUESTXTRACT_EXERPLAZA_EMAIL", EMAIL)
     monkeypatch.setenv("QUESTXTRACT_EXERPLAZA_PASSWORD", PASSWORD)
     yield fake
+    fake.closing.set()
     fake.shutdown()
-    fake.server_close()
+    fake.server_close()  # joins the request handlers
+    handlers = [t for t in threading.enumerate() if t.name.endswith("(process_request_thread)")]
+    assert handlers == [], "a request handler of the fake outlived its test"
 
 
 def _quiz(make_quiz: MakeQuiz) -> dict[str, Any]:
@@ -523,6 +527,7 @@ def test_the_credentials_can_come_from_dotenv(
         ("https://exerplaza.example.org/?next=x", "without credentials, query"),
         ("exerplaza.example.org", "expected ExerPlaza's address"),
         ("https://exerplaza.example.org:port", "expected ExerPlaza's address"),
+        ("https://[::1", "expected ExerPlaza's address"),
     ],
 )
 def test_an_unsafe_or_malformed_url_fails_before_any_request(
@@ -554,6 +559,7 @@ def test_https_or_a_local_http_address_is_accepted(url: str, base: str) -> None:
         (("Sorting", " "), 42, "non-empty"),
         (("Sorting\nHeaps",), 42, "one line"),
         (UNITS, 0, "positive"),
+        (UNITS, True, "expected a number, got True"),
     ],
 )
 def test_bad_arguments_fail_before_any_request(
@@ -574,12 +580,65 @@ def test_bad_arguments_fail_before_any_request(
     assert exerplaza.seen == []
 
 
+def test_a_missing_quiz_file_fails_naming_it_and_sends_nothing(
+    tmp_path: Path, exerplaza: FakeExerPlaza
+) -> None:
+    with pytest.raises(ExerPlazaExportError, match="missing.quiz.json: No such file"):
+        _export(exerplaza.url, tmp_path / "missing.quiz.json")
+    assert exerplaza.seen == []
+
+
+def test_an_unreadable_dotenv_fails_without_its_value_and_sends_nothing(
+    tmp_path: Path, make_quiz: MakeQuiz, exerplaza: FakeExerPlaza, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("QUESTXTRACT_EXERPLAZA_PASSWORD")
+    (tmp_path / ".env").write_text(
+        f'QUESTXTRACT_EXERPLAZA_PASSWORD="{PASSWORD}\n', encoding="utf-8"
+    )
+
+    with pytest.raises(
+        ExerPlazaExportError, match="invalid QUESTXTRACT_EXERPLAZA_PASSWORD quoting"
+    ) as failed:
+        _export(exerplaza.url, _file(tmp_path, _quiz(make_quiz)))
+    assert PASSWORD not in str(failed.value)
+    assert exerplaza.seen == []
+
+
+def test_a_single_quoted_password_in_dotenv_is_sent_as_written(
+    tmp_path: Path, make_quiz: MakeQuiz, exerplaza: FakeExerPlaza, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # docs/cli.md: unquoted, the # would start a comment and the backslash would be dropped.
+    exerplaza.password = "pa#ss\\word"
+    monkeypatch.delenv("QUESTXTRACT_EXERPLAZA_PASSWORD")
+    (tmp_path / ".env").write_text(
+        f"QUESTXTRACT_EXERPLAZA_PASSWORD='{exerplaza.password}'\n", encoding="utf-8"
+    )
+
+    _export(exerplaza.url, _file(tmp_path, _quiz(make_quiz)))
+
+    assert exerplaza.seen[1].form()["password"] == "pa#ss\\word"
+
+
+def test_an_address_without_a_login_page_fails_and_sends_no_password(
+    tmp_path: Path, make_quiz: MakeQuiz, exerplaza: FakeExerPlaza
+) -> None:
+    with pytest.raises(
+        ExerPlazaExportError, match="/elsewhere/login: expected ExerPlaza's login page"
+    ):
+        _export(f"{exerplaza.url}/elsewhere", _file(tmp_path, _quiz(make_quiz)))
+    assert exerplaza.routes() == ["GET /elsewhere/login"]
+
+
 def _wrong_password(fake: FakeExerPlaza) -> None:
     fake.password = "something else"
 
 
 def _form_refused(fake: FakeExerPlaza) -> None:
     fake.wrong_token = True
+
+
+def _login_rate_limited(fake: FakeExerPlaza) -> None:
+    fake.login_reply = (429, {"Content-Type": "application/json"}, '{"error": "Too many attempts"}')
 
 
 def _invalid_quiz(fake: FakeExerPlaza) -> None:
@@ -604,6 +663,10 @@ def _out_of_shape(fake: FakeExerPlaza) -> None:
     fake.import_reply = (200, {"Content-Type": "application/json"}, answer)
 
 
+def _server_error(fake: FakeExerPlaza) -> None:
+    fake.import_reply = (500, {"Content-Type": "text/html"}, "<h1>Internal Server Error</h1>")
+
+
 def _not_json(fake: FakeExerPlaza) -> None:
     fake.import_reply = (200, {"Content-Type": "text/html"}, "<html>ok</html>")
 
@@ -611,6 +674,10 @@ def _not_json(fake: FakeExerPlaza) -> None:
 FAILURES: dict[str, tuple[Callable[[FakeExerPlaza], None], str]] = {
     "refused login": (_wrong_password, "refused the login: wrong email or password"),
     "refused form": (_form_refused, "showed the login form again"),
+    "login rate limited": (
+        _login_rate_limited,
+        "expected a redirect after the login, got HTTP 429 Too many attempts",
+    ),
     "invalid quiz": (
         _invalid_quiz,
         "refused the import: HTTP 422 Invalid quiz: 1 error\n"
@@ -624,6 +691,7 @@ FAILURES: dict[str, tuple[Callable[[FakeExerPlaza], None], str]] = {
         "unexpected answer from ExerPlaza: questions[0].outcome",
     ),
     "answer not json": (_not_json, "expected a JSON answer"),
+    "server error": (_server_error, "refused the import: HTTP 500\n"),
 }
 
 
@@ -661,6 +729,43 @@ def test_an_unreachable_server_exits_with_1(
     assert f"error: exerplaza: GET {url}/login: cannot reach ExerPlaza" in output
 
 
+class _HangUp(threading.Thread):
+    """A server that reads one request and hangs up, after part of an answer or none."""
+
+    def __init__(self, answer: bytes) -> None:
+        super().__init__(daemon=True)
+        self.answer = answer
+        self.listener = socket.create_server(("127.0.0.1", 0))
+
+    def run(self) -> None:
+        connection, _ = self.listener.accept()
+        with connection:
+            connection.recv(65536)
+            connection.sendall(self.answer)
+
+
+@pytest.mark.parametrize("answer", [b"", b"HTTP/1.1 200 OK\r\nContent-Length: 999\r\n\r\n<html>"])
+def test_a_connection_closed_mid_answer_exits_with_1(
+    tmp_path: Path,
+    make_quiz: MakeQuiz,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    answer: bytes,
+) -> None:
+    monkeypatch.setenv("QUESTXTRACT_EXERPLAZA_EMAIL", EMAIL)
+    monkeypatch.setenv("QUESTXTRACT_EXERPLAZA_PASSWORD", PASSWORD)
+    server = _HangUp(answer)
+    server.start()
+    url = f"http://127.0.0.1:{server.listener.getsockname()[1]}"
+
+    code, output = _cli(capsys, _args(url, _file(tmp_path, _quiz(make_quiz))))
+    server.join(5)
+    server.listener.close()
+
+    assert code == 1
+    assert f"error: exerplaza: GET {url}/login: the connection failed (" in output
+
+
 def test_a_server_that_does_not_answer_times_out(
     tmp_path: Path, make_quiz: MakeQuiz, exerplaza: FakeExerPlaza, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -691,15 +796,71 @@ def test_sending_twice_skips_what_exerplaza_already_has(
     assert len(exerplaza.questions) == 1
 
 
+_QUIZ = {"uid": 7, "outcome": "created"}
+_ITEM = {"ref": "quiz_lecture/quiz_q_aaa", "uid": 123, "outcome": "created", "reason": None}
+
+
+@pytest.mark.parametrize(
+    ("answer", "message"),
+    [
+        ([], "expected a JSON object"),
+        ({"quiz": 7}, "quiz: expected an object"),
+        ({"quiz": {**_QUIZ, "uid": True}}, "quiz.uid: expected a positive id, got True"),
+        ({"quiz": {**_QUIZ, "outcome": "merged"}}, "quiz.outcome: expected 'created' or 'updated'"),
+        ({"quiz": _QUIZ}, "questions: expected a list"),
+        ({"quiz": _QUIZ, "questions": [1]}, "questions[0]: expected an object"),
+        ({"quiz": _QUIZ, "questions": [{**_ITEM, "ref": ""}]}, "questions[0].ref: expected a non-"),
+        ({"quiz": _QUIZ, "questions": [{**_ITEM, "reason": 3}]}, "questions[0].reason: expected a"),
+        (
+            {"quiz": _QUIZ, "questions": [{**_ITEM, "uid": 0}]},
+            "questions[0].uid: expected a positive",
+        ),
+    ],
+)
+def test_an_answer_out_of_shape_fails_naming_the_field(
+    tmp_path: Path, make_quiz: MakeQuiz, exerplaza: FakeExerPlaza, answer: object, message: str
+) -> None:
+    exerplaza.import_reply = (200, {"Content-Type": "application/json"}, json.dumps(answer))
+
+    with pytest.raises(
+        ExerPlazaExportError, match="unexpected answer from ExerPlaza: " + re.escape(message)
+    ):
+        _export(exerplaza.url, _file(tmp_path, _quiz(make_quiz)))
+
+
 def test_control_characters_from_the_server_are_not_printed(
     tmp_path: Path, make_quiz: MakeQuiz, exerplaza: FakeExerPlaza
 ) -> None:
-    problem = {"title": "Bad\x1b[31m", "status": 422, "errors": [{"path": "id", "detail": "\x07"}]}
+    problem = {
+        "title": "Bad\x1b[31m",
+        "status": 422,
+        "detail": "two\nlines",
+        "errors": [{"path": "id", "detail": "\x07"}],
+    }
     exerplaza.import_reply = (422, {"Content-Type": "application/json"}, json.dumps(problem))
 
     with pytest.raises(ExerPlazaExportError) as failed:
         _export(exerplaza.url, _file(tmp_path, _quiz(make_quiz)))
-    assert "HTTP 422 Bad?[31m\n  id: ?" in str(failed.value)
+    assert str(failed.value).endswith("HTTP 422 Bad?[31m: two?lines\n  id: ?")
+
+
+def test_control_characters_in_a_skipped_item_are_not_printed(
+    tmp_path: Path,
+    make_quiz: MakeQuiz,
+    exerplaza: FakeExerPlaza,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    item = {"ref": "quiz_lecture/q\x1b[2J", "uid": 123, "outcome": "skipped", "reason": "a\nb\x07"}
+    answer = {"quiz": {"uid": 7, "outcome": "updated"}, "questions": [item]}
+    exerplaza.import_reply = (200, {"Content-Type": "application/json"}, json.dumps(answer))
+
+    code, output = _cli(capsys, _args(exerplaza.url, _file(tmp_path, _quiz(make_quiz))))
+
+    assert code == 0
+    assert output == (
+        "ExerPlaza quiz 7 (updated): 0 created, 0 updated, 1 skipped\n"
+        "  skipped quiz_lecture/q?[2J: a?b?\n"
+    )
 
 
 @pytest.mark.parametrize("failure", ["success", "unreachable", *FAILURES])
@@ -721,6 +882,7 @@ def test_the_password_never_shows(
     try:
         _export(url, quiz_path)
     except ExerPlazaExportError as exc:
+        output += "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
         chain: BaseException | None = exc
         while chain is not None:
             output += f"{chain!s} {chain!r}"
