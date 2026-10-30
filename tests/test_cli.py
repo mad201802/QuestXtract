@@ -1424,3 +1424,8 @@ def test_a_short_name_in_the_settings_file_shares_the_cache_with_its_url(
     url = ["--llm-url", "https://openrouter.ai/api/v1"]
     assert main(["process", str(source), "--detector", "llm", *model, *url]) == 0
     assert again.requests == []
+
+    # questions.json names the model, never the endpoint or its key
+    written = (tmp_path / "t.questions.json").read_text(encoding="utf-8")
+    assert json.loads(written)["config"]["judge_model"] == "qwen/qwen3-8b"
+    assert "openrouter" not in written.casefold() and "sk-or" not in written
