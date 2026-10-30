@@ -1,4 +1,4 @@
-"""The NTNU key window's logic (issue #189), headless: test, save, remove, where it is read from."""
+"""The API key window's logic (#189, #250), headless: test, save, remove, where it is read from."""
 
 from __future__ import annotations
 
@@ -136,3 +136,51 @@ def test_the_saved_key_is_in_no_argument_the_app_builds_and_not_in_the_config(tm
 
     assert Config().api_key == MARKER  # a run does read it ...
     assert MARKER not in " ".join(argv) + repr(Config())  # ... and it goes nowhere else
+
+
+def test_the_check_asks_the_endpoint_it_is_given(monkeypatch):
+    """#250: the key of OpenRouter is tested against OpenRouter."""
+    calls = _fake_openai(monkeypatch)
+
+    assert keys.check_key(MARKER, "https://openrouter.ai/api/v1") == "accepted"
+
+    assert calls[0]["base_url"] == "https://openrouter.ai/api/v1"
+
+
+def test_each_endpoints_key_is_saved_under_its_own_name_and_the_others_kept(monkeypatch):
+    """#250 AC8: OpenRouter's key is saved as OPENROUTER_API_KEY; the NTNU key stays."""
+    tested: list[tuple[str, str | None]] = []
+    monkeypatch.setattr(keys, "check_key", lambda key, url: tested.append((key, url)) or "accepted")
+    openrouter = "https://openrouter.ai/api/v1"
+    keys.save_key("ntnu-key")
+    assert keys.save_key("sk-or", openrouter) == "saved"
+
+    assert tested == [("ntnu-key", "https://llm.hpc.ntnu.no/v1"), ("sk-or", openrouter)]
+    lines = user_env_path().read_text(encoding="utf-8").splitlines()
+    assert lines == ['IDUN_API_KEY="ntnu-key"', 'OPENROUTER_API_KEY="sk-or"']
+    assert (Config().api_key, Config(base_url="openrouter").api_key) == ("ntnu-key", "sk-or")
+    assert keys.key_source(openrouter) == "file"
+
+    assert keys.remove_key(openrouter) is True
+    assert keys.key_source(openrouter) is None and keys.key_source() == "file"
+
+
+@pytest.mark.parametrize(
+    ("url", "name"),
+    [
+        ("https://llm.hpc.ntnu.no/v1", "NTNU"),
+        ("https://api.openai.com/v1", "OpenAI"),
+        ("https://openrouter.ai/api/v1", "OpenRouter"),
+        ("http://localhost:11434/v1", "localhost:11434"),
+        ("https://llm.example.org/v1", "llm.example.org"),
+    ],
+)
+def test_the_window_names_the_endpoint(url, name):
+    assert keys.endpoint_name(url) == name
+
+
+def test_a_key_for_another_host_is_saved_as_the_generic_key():
+    keys.save_key("vllm-key", "http://localhost:8000/v1", check=lambda key: "accepted")
+
+    assert 'QUESTXTRACT_LLM_API_KEY="vllm-key"' in user_env_path().read_text(encoding="utf-8")
+    assert Config(base_url="http://localhost:8000/v1").api_key == "vllm-key"

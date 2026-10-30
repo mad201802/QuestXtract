@@ -22,6 +22,7 @@ from tkinter import filedialog, ttk
 from typing import Any
 
 from ..cli import RunResult
+from ..config import ENDPOINTS, endpoint_url
 from ..pipeline import Cancelled
 from . import i18n, state
 from . import run as gui_run
@@ -34,6 +35,7 @@ __all__ = ["run_app"]
 _POLL_MS = 100
 _TYPING_PAUSE_MS = 150  # how long the form must be still before its checks run
 _OUTPUT_OPTION = next(option for option in OPTIONS if option.dest == "output")
+_LLM_URL_OPTION = next(option for option in OPTIONS if option.dest == "llm_url")
 
 
 def run_app() -> int:
@@ -213,7 +215,7 @@ class QuestXtractWindow:
         self.open_button.grid(row=0, column=2, padx=(6, 0))
         actions.columnconfigure(3, weight=1)
         key_button = ttk.Button(actions, command=self._open_key_dialog)
-        self._text(key_button, "button.ntnu_key")
+        self._text(key_button, "button.api_key")
         key_button.grid(row=0, column=4, sticky="e", padx=(0, 6))
         self.advanced_button = ttk.Button(actions, command=self._toggle_advanced)
         self.advanced_button.grid(row=0, column=5, sticky="e")
@@ -251,6 +253,9 @@ class QuestXtractWindow:
             control = ttk.Combobox(
                 line, textvariable=var, values=option.choices, state="readonly", width=26
             )
+        elif option.kind == "endpoint":  # a short name from the list, or any URL typed in
+            var = tk.StringVar(master=line, value=state.start_text(option))
+            control = ttk.Combobox(line, textvariable=var, values=tuple(ENDPOINTS), width=34)
         else:
             initial = "" if option.kind in ("file", "path") else state.start_text(option)
             var = tk.StringVar(master=line, value=initial)
@@ -297,8 +302,10 @@ class QuestXtractWindow:
         self._refresh()
 
     def _open_key_dialog(self) -> None:
-        """Open the NTNU key window; a saved or removed key is part of the next check."""
-        KeyDialog(self.root, on_change=self._refresh)
+        """Open the key window for the LLM endpoint field's endpoint; a change is checked next."""
+        typed = str(self.fields["llm_url"].get()).strip()
+        url = typed or state.start_text(_LLM_URL_OPTION) or None
+        KeyDialog(self.root, url=endpoint_url(url), on_change=self._refresh)
 
     def _toggle_advanced(self) -> None:
         """Show or hide the options form; the window grows or shrinks to fit."""

@@ -1,7 +1,7 @@
-"""The NTNU key window (issue #189): paste a key, test it, save it or remove it.
+"""The API key window (#189, #250): paste the key of one endpoint, test, save or remove it.
 
 The logic is :mod:`.keys`; this module only draws it. The key is read from the field when a button
-is pressed and is never shown, logged or put in a message. The test asks NTNU's service on a
+is pressed and is never shown, logged or put in a message. The test asks the endpoint on a
 worker thread; the main thread reads its answer with ``after()``, as the main window does.
 """
 
@@ -13,6 +13,7 @@ import tkinter as tk
 from collections.abc import Callable
 from tkinter import ttk
 
+from ..config import NTNU_LLM_URL, is_ntnu, key_names
 from . import keys
 from .i18n import tr
 
@@ -24,20 +25,31 @@ _POLL_MS = 100
 class KeyDialog:
     """A modal window over ``parent``: a masked field, Test, Save, Remove and Close."""
 
-    def __init__(self, parent: tk.Misc, *, on_change: Callable[[], None] | None = None) -> None:
-        """Open the window; ``on_change`` is called after a key was saved or removed."""
+    def __init__(
+        self,
+        parent: tk.Misc,
+        *,
+        url: str | None = NTNU_LLM_URL,
+        on_change: Callable[[], None] | None = None,
+    ) -> None:
+        """Open the window for the key of ``url``; ``on_change`` runs after a save or removal."""
+        self.url = url
+        self.endpoint = keys.endpoint_name(url)
         self.on_change = on_change
         self.answers: queue.Queue[str] = queue.Queue()
         self.busy = False
         self.alive = True
         self.top = tk.Toplevel(parent)
-        self.top.title(tr("key.title"))
+        self.top.title(tr("key.title", endpoint=self.endpoint))
         self.top.transient(parent)  # type: ignore[call-overload]
         self.top.protocol("WM_DELETE_WINDOW", self.close)
         self.top.grab_set()  # modal: the main window waits until this one is closed
         frame = ttk.Frame(self.top, padding=8)
         frame.grid(sticky="nsew")
-        ttk.Label(frame, text=tr("key.explain"), wraplength=420).grid(
+        explain = tr("key.explain", endpoint=self.endpoint, variable=key_names(url)[0])
+        if is_ntnu(url):
+            explain += " " + tr("key.explain_ntnu")
+        ttk.Label(frame, text=explain, wraplength=420).grid(
             row=0, column=0, columnspan=2, sticky="w"
         )
         ttk.Label(frame, text=tr("key.label")).grid(row=1, column=0, sticky="w", pady=(8, 0))
@@ -67,17 +79,17 @@ class KeyDialog:
     # --- actions -----------------------------------------------------------------------
 
     def test(self) -> None:
-        """Ask NTNU whether the typed key works; save nothing."""
-        self._ask(keys.check_key)
+        """Ask the endpoint whether the typed key works; save nothing."""
+        self._ask(lambda key: keys.check_key(key, self.url))
 
     def save(self) -> None:
-        """Test the typed key, then save it unless NTNU refused it."""
-        self._ask(keys.save_key)
+        """Test the typed key, then save it unless the endpoint refused it."""
+        self._ask(lambda key: keys.save_key(key, self.url))
 
     def remove(self) -> None:
         """Remove the saved key."""
         try:
-            removed = keys.remove_key()
+            removed = keys.remove_key(self.url)
         except (OSError, ValueError) as exc:
             self._say(str(exc))
             return
@@ -102,7 +114,7 @@ class KeyDialog:
             self._say(str(exc))
             return
         self.busy = True
-        self._say(tr("key.testing"))
+        self._say(tr("key.testing", endpoint=self.endpoint))
         self.test_button.state(["disabled"])
         self.save_button.state(["disabled"])
 
@@ -131,7 +143,7 @@ class KeyDialog:
         if code.startswith("!"):
             self._say(code[1:])
         else:
-            self._say(tr(f"key.{code}"))
+            self._say(tr(f"key.{code}", endpoint=self.endpoint))
             if code in ("saved", "saved_unchecked"):
                 self.key.set("")  # the key is not kept in the window once it is saved
                 self._changed()
@@ -145,7 +157,7 @@ class KeyDialog:
     def _show_source(self) -> None:
         """Say where a run would find the key now."""
         try:
-            where = keys.key_source() or "none"
+            where = keys.key_source(self.url) or "none"
         except (OSError, ValueError) as exc:
             self.source.configure(text=str(exc))
             return

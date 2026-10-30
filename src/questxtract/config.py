@@ -32,7 +32,18 @@ OPENAI_URL = "https://api.openai.com/v1"  # OpenAI, the documented fallback (als
 NTNU_KEY_ENV = "IDUN_API_KEY"  # the key for NTNU's LLM service
 OLD_NTNU_KEY_ENV = "QUESTXTRACT_NTNU_API_KEY"  # its former name, still read when the new is unset
 VISION_KEY_ENV = "QUESTXTRACT_VISION_API_KEY"  # for a vision_base_url of another service
-OPENAI_KEY_ENV = "OPENAI_API_KEY"  # the key for OpenAI and base_url's other endpoints
+OPENAI_KEY_ENV = "OPENAI_API_KEY"  # the key for OpenAI only
+OPENROUTER_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_KEY_ENV = "OPENROUTER_API_KEY"  # the key for OpenRouter only
+LLM_KEY_ENV = "QUESTXTRACT_LLM_API_KEY"  # for any other endpoint; a local server needs none
+OLLAMA_URL = "http://localhost:11434/v1"  # Ollama's OpenAI-compatible endpoint, on this device
+# Short names for --llm-url, base_url and vision_base_url (any case); Config holds the URL.
+ENDPOINTS = {
+    "ntnu": NTNU_LLM_URL,
+    "openrouter": OPENROUTER_URL,
+    "openai": OPENAI_URL,
+    "ollama": OLLAMA_URL,
+}
 DEEPSEEK = "deepseek-ai/DeepSeek-V4.1-Flash-1017"  # vision's default, on NTNU's service
 # The graphical app opens with the LLM judge and the board reading on (#124). The CLI's own
 # defaults are the ones above; these only set where the window starts.
@@ -111,6 +122,11 @@ class Config:
     cache_dir: str = ".questxtract"
     from_scratch: bool = False
 
+    def __post_init__(self) -> None:
+        """Turn a short endpoint name in ``base_url`` or ``vision_base_url`` into its URL."""
+        object.__setattr__(self, "base_url", endpoint_url(self.base_url))
+        object.__setattr__(self, "vision_base_url", endpoint_url(self.vision_base_url))
+
     @property
     def api_key(self) -> str | None:
         """The key for ``base_url`` (the judge and the quiz), never stored in Config."""
@@ -146,14 +162,13 @@ class Config:
     def vision_api_key(self) -> str | None:
         """The key for :attr:`vision_url`, never stored in Config.
 
-        A ``vision_base_url`` of its own that is neither NTNU's service nor OpenAI (another
-        hosted vision model) reads ``QUESTXTRACT_VISION_API_KEY``, so neither the OpenAI nor
-        the NTNU key is sent to a host set up for vision alone.
+        A ``vision_base_url`` of its own on a host without a key of its own (not NTNU's,
+        OpenAI's or OpenRouter's) reads ``QUESTXTRACT_VISION_API_KEY``, so the judge's key is
+        not sent to a host set up for vision alone.
         """
-        url = self.vision_url
-        if self.vision_base_url is not None and not is_ntnu(url) and not is_openai(url):
-            return _read_key(VISION_KEY_ENV)
-        return endpoint_key(url)
+        if self.vision_base_url is None:
+            return endpoint_key(self.base_url)
+        return endpoint_key(self.vision_base_url, other=VISION_KEY_ENV)
 
     def replace(self, **changes: Any) -> Config:
         """Return a copy with ``changes`` applied.
@@ -209,7 +224,8 @@ def load_config(path: Path | None = None) -> Config:
     for key in values:
         if any(part in key.casefold() for part in ("key", "token", "secret", "password")):
             raise ValueError(
-                f"{source}: {key}: secrets belong in {NTNU_KEY_ENV} or {OPENAI_KEY_ENV}, not TOML"
+                f"{source}: {key}: secrets belong in the endpoint's key variable, such as "
+                f"{NTNU_KEY_ENV} or {OPENROUTER_KEY_ENV}, not TOML"
             )
 
     if "judge_reasoning_effort" in values:  # its old name, from before it covered every request
@@ -257,6 +273,13 @@ def _host(url: str) -> str:
     return host
 
 
+def endpoint_url(url: str | None) -> str | None:
+    """Return the URL of a short endpoint name (:data:`ENDPOINTS`, any case), else ``url``."""
+    if not isinstance(url, str):  # None, or a wrong type load_config reports
+        return url
+    return ENDPOINTS.get(url.strip().lower(), url)
+
+
 def is_ntnu(url: str | None) -> bool:
     """Whether ``url`` is NTNU's LLM service."""
     return url is not None and _host(url) == _host(NTNU_LLM_URL)
@@ -267,23 +290,40 @@ def is_openai(url: str | None) -> bool:
     return url is None or _host(url) == _host(OPENAI_URL)
 
 
-def endpoint_key(url: str | None) -> str | None:
+def is_openrouter(url: str | None) -> bool:
+    """Whether ``url`` is OpenRouter."""
+    return url is not None and _host(url) == _host(OPENROUTER_URL)
+
+
+def key_names(url: str | None, *, other: str = LLM_KEY_ENV) -> tuple[str, ...]:
+    """Return the variables the key for ``url`` is read from, the first one set winning.
+
+    NTNU's service reads ``IDUN_API_KEY`` (or its former name, ``QUESTXTRACT_NTNU_API_KEY``,
+    when that is unset), OpenAI ``OPENAI_API_KEY`` and OpenRouter ``OPENROUTER_API_KEY``. Any
+    other host, a local server included, reads ``other``. So each key goes to its own service
+    only.
+    """
+    if is_ntnu(url):
+        return (NTNU_KEY_ENV, OLD_NTNU_KEY_ENV)
+    if is_openai(url):
+        return (OPENAI_KEY_ENV,)
+    if is_openrouter(url):
+        return (OPENROUTER_KEY_ENV,)
+    return (other,)
+
+
+def endpoint_key(url: str | None, *, other: str = LLM_KEY_ENV) -> str | None:
     """Read the key for ``url`` from the environment, cwd's ``.env`` or the user's key file.
 
-    NTNU's service has a key of its own, ``IDUN_API_KEY`` (or its former name,
-    ``QUESTXTRACT_NTNU_API_KEY``, when that is unset), so the OpenAI key never
-    goes there and the NTNU key never goes anywhere else. Every other endpoint (OpenAI,
-    OpenRouter, a local server) reads ``OPENAI_API_KEY``, which a local server may leave unset.
-    The key is never stored in a ``Config``.
+    The variables are :func:`key_names`; ``other`` is the one for a host without a key of its
+    own. A local server may have none. The key is never stored in a ``Config``.
     """
-    if not is_ntnu(url):
-        return _read_key(OPENAI_KEY_ENV)
-    names = (NTNU_KEY_ENV, OLD_NTNU_KEY_ENV)
+    names = key_names(url, other=other)
     for name in names:
         key = _read_key(name)
         if key is not None:
             return key
-    for name in names:  # the app's key file comes after both names in the environment and .env
+    for name in names:  # the app's key file comes after every name in the environment and .env
         key = _dotenv_api_key(name, user_env_path())
         if key is not None:
             return key
@@ -298,7 +338,7 @@ def _read_key(name: str) -> str | None:
 
 
 def user_env_path() -> Path:
-    """Return the file the app saves the NTNU key in: ``questxtract/.env`` in the config folder.
+    """Return the file the app saves API keys in: ``questxtract/.env`` in the config folder.
 
     The folder is ``%APPDATA%`` on Windows, ``~/Library/Application Support`` on macOS and
     ``$XDG_CONFIG_HOME`` (else ``~/.config``) elsewhere, so a key saved once is found from any
@@ -333,8 +373,8 @@ def valid_key(key: str) -> str:
     return key
 
 
-def save_user_key(key: str) -> Path:
-    """Save the NTNU key in :func:`user_env_path` as ``IDUN_API_KEY``, keeping every other line.
+def save_user_key(key: str, name: str = NTNU_KEY_ENV) -> Path:
+    """Save ``key`` in :func:`user_env_path` as ``name``, keeping every other line.
 
     Replaces an earlier line for the key and writes the file in one step with mode ``0600`` where
     the system has it. The value is written in double quotes.
@@ -350,11 +390,11 @@ def save_user_key(key: str) -> Path:
     key = valid_key(key)
     path = user_env_path()
     lines = _env_lines(path)
-    entry = f'{NTNU_KEY_ENV}="{key}"'
+    entry = f'{name}="{key}"'
     replaced = False
     kept: list[str] = []
     for line in lines:
-        if _variable(line) != NTNU_KEY_ENV:
+        if _variable(line) != name:
             kept.append(line)
         elif not replaced:  # the reader takes the last line, so later copies would win: drop them
             kept.append(entry)
@@ -365,8 +405,8 @@ def save_user_key(key: str) -> Path:
     return path
 
 
-def remove_user_key() -> bool:
-    """Remove ``IDUN_API_KEY`` from :func:`user_env_path`, keeping every other line.
+def remove_user_key(name: str = NTNU_KEY_ENV) -> bool:
+    """Remove ``name`` from :func:`user_env_path`, keeping every other line.
 
     The file is deleted when nothing but blank lines is left.
 
@@ -379,7 +419,7 @@ def remove_user_key() -> bool:
     """
     path = user_env_path()
     lines = _env_lines(path)
-    kept = [line for line in lines if _variable(line) != NTNU_KEY_ENV]
+    kept = [line for line in lines if _variable(line) != name]
     if len(kept) == len(lines):
         return False
     if any(line.strip() for line in kept):

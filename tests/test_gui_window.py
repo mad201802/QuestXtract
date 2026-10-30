@@ -533,14 +533,14 @@ def test_the_judge_model_is_open_only_for_the_llm_detector(window):
     assert "--llm-model" in gui_run.to_argv(TRANSCRIPT, "questions", window._values())
 
 
-# --- the NTNU key window (#189) ------------------------------------------------------------
+# --- the API key window (#189, #250) ------------------------------------------------------
 
 
-def _key_dialog(root: Any, monkeypatch: pytest.MonkeyPatch, answer: str):
+def _key_dialog(root: Any, monkeypatch: pytest.MonkeyPatch, answer: str, **kwargs: Any):
     from questxtract.gui import key_dialog, keys
 
-    monkeypatch.setattr(keys, "check_key", lambda key: answer)
-    return key_dialog.KeyDialog(root)
+    monkeypatch.setattr(keys, "check_key", lambda key, url: answer)
+    return key_dialog.KeyDialog(root, **kwargs)
 
 
 def test_the_window_has_a_key_button_that_opens_the_key_window(window, monkeypatch):
@@ -550,11 +550,52 @@ def test_the_window_has_a_key_button_that_opens_the_key_window(window, monkeypat
     window._open_key_dialog()
 
     assert len(opened) == 1 and opened[0]["on_change"] == window._refresh
+    assert opened[0]["url"] == "https://llm.hpc.ntnu.no/v1"  # the field's start value
     assert any(
-        str(widget.cget("text")) == i18n.tr("button.ntnu_key")
+        str(widget.cget("text")) == i18n.tr("button.api_key")
         for widget, key in window.static_texts
-        if key == "button.ntnu_key"
+        if key == "button.api_key"
     )
+
+
+def test_the_key_window_is_for_the_endpoint_in_the_llm_endpoint_field(window, monkeypatch):
+    """#250 AC8: the field offers the short names, and the key window follows the field."""
+    opened: list[dict[str, Any]] = []
+    monkeypatch.setattr(gui_window, "KeyDialog", lambda root, **kwargs: opened.append(kwargs))
+    assert tuple(window.controls["llm_url"].cget("values")) == (
+        "ntnu",
+        "openrouter",
+        "openai",
+        "ollama",
+    )
+
+    window.fields["llm_url"].set("openrouter")
+    window._open_key_dialog()
+    window.fields["llm_url"].set("http://localhost:8000/v1")
+    window._open_key_dialog()
+
+    assert [o["url"] for o in opened] == [
+        "https://openrouter.ai/api/v1",
+        "http://localhost:8000/v1",
+    ]
+
+
+def test_the_key_window_saves_openrouters_key_as_its_own(root, monkeypatch):
+    """#250 AC8: saved as OPENROUTER_API_KEY, the NTNU key in the file kept."""
+    from questxtract.config import Config, save_user_key, user_env_path
+
+    save_user_key("ntnu-saved")
+    dialog = _key_dialog(root, monkeypatch, "accepted", url="https://openrouter.ai/api/v1")
+    assert dialog.top.title() == "API key: OpenRouter"
+    dialog.key.set("sk-or-typed")
+
+    dialog.save()
+    _pump(root, lambda: not dialog.busy, timeout=5)
+
+    assert dialog.message.cget("text") == "Key saved. OpenRouter accepted it."
+    assert Config(base_url="openrouter").api_key == "sk-or-typed"
+    assert Config().api_key == "ntnu-saved"
+    assert 'OPENROUTER_API_KEY="sk-or-typed"' in user_env_path().read_text(encoding="utf-8")
 
 
 def test_save_in_the_key_window_stores_the_key_and_empties_the_field(root, monkeypatch):
@@ -567,7 +608,7 @@ def test_save_in_the_key_window_stores_the_key_and_empties_the_field(root, monke
     _pump(root, lambda: not dialog.busy, timeout=5)
 
     assert Config().api_key == "ntnu-typed"
-    assert dialog.message.cget("text") == i18n.tr("key.saved")
+    assert dialog.message.cget("text") == i18n.tr("key.saved", endpoint="NTNU")
     assert dialog.key.get() == ""
     assert dialog.source.cget("text") == i18n.tr("key.source.file")
 
@@ -582,7 +623,7 @@ def test_a_refused_key_is_not_saved_and_says_so(root, monkeypatch):
     _pump(root, lambda: not dialog.busy, timeout=5)
 
     assert Config().api_key is None
-    assert dialog.message.cget("text") == i18n.tr("key.refused")
+    assert dialog.message.cget("text") == i18n.tr("key.refused", endpoint="NTNU")
 
 
 def test_test_only_tests_and_an_unusable_key_is_told_at_once(root, monkeypatch):
@@ -597,7 +638,7 @@ def test_test_only_tests_and_an_unusable_key_is_told_at_once(root, monkeypatch):
     dialog.test()
     _pump(root, lambda: not dialog.busy, timeout=5)
 
-    assert dialog.message.cget("text") == i18n.tr("key.unreachable")
+    assert dialog.message.cget("text") == i18n.tr("key.unreachable", endpoint="NTNU")
     assert Config().api_key is None
 
 
