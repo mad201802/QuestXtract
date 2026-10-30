@@ -13,11 +13,32 @@ from questxtract import Config, endpoint
 from questxtract.config import NTNU_LLM_URL, OLLAMA_URL, OPENAI_URL, OPENROUTER_URL
 
 
-def test_the_client_points_at_the_configured_endpoint():
+def test_the_client_points_at_the_configured_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     """Building the client makes no request; the endpoint and timeout come from Config."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")  # the SDK's own fallback must not apply
     client = endpoint.client(Config(base_url="http://localhost:11434/v1", timeout_seconds=30))
     assert str(client.base_url).rstrip("/") == "http://localhost:11434/v1"
     assert client.timeout == 30
+    assert client.api_key == endpoint.NO_KEY
+
+
+def test_an_error_from_a_local_server_keeps_its_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review of #252: the placeholder key is not redacted, so "localhost" stays readable."""
+
+    def down(**kwargs: Any) -> Any:
+        def create(**request: Any) -> Any:
+            raise openai.OpenAIError("Connection error: http://localhost:11434/v1 refused")
+
+        return SimpleNamespace(
+            api_key=kwargs["api_key"],
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create)),
+        )
+
+    monkeypatch.setattr(openai, "OpenAI", down)
+    with pytest.raises(ConnectionError) as error:
+        _ask(Config(base_url="ollama"), vision=False)
+    assert "http://localhost:11434/v1" in str(error.value)
+    assert "[REDACTED]" not in str(error.value)
 
 
 class _Recorder:
