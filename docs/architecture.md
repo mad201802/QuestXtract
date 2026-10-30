@@ -914,34 +914,41 @@ produces a complete result without either job. A second LLM run, a VLM
 that brings the frames on screen into the question/answer pairs, belongs with the vision stage and
 is not built.
 
-### 10.1 One client, two endpoints
+### 10.1 One client, any endpoint
 
 The `openai` SDK with a configurable endpoint, which is what makes the offline story work
 without a second code path:
 
 ```python
 OpenAI(api_key=ntnu_key, base_url="https://llm.hpc.ntnu.no/v1")  # NTNU's LLM service, the default
-OpenAI(api_key=openai_key, base_url="https://api.openai.com/v1")  # OpenAI
-OpenAI(api_key="local", base_url="http://localhost:11434/v1")  # local device
+OpenAI(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1")  # OpenRouter
+OpenAI(api_key="local", base_url="http://localhost:11434/v1")  # a local server: Ollama
 ```
 
 By default the judge, the quiz and vision all go to NTNU's LLM service: Qwen judges and writes
 the quiz, DeepSeek reads the board. Vision
-follows `base_url` unless `vision_base_url` sends it elsewhere (`endpoint.route`). The key goes
-with the endpoint, not with the caller:
+follows `base_url` unless `vision_base_url` sends it elsewhere (`endpoint.route`). Both take a URL
+or a short name, any case, which `Config` turns into the URL (`config.ENDPOINTS`): `ntnu`,
+`openrouter`, `openai`, `ollama` (`http://localhost:11434/v1`). The key goes with the endpoint,
+not with the caller (`config.key_names`):
 
 | Endpoint | Key |
 |---|---|
 | NTNU's LLM service, host `llm.hpc.ntnu.no` (the default `base_url`) | `IDUN_API_KEY` (else its former name `QUESTXTRACT_NTNU_API_KEY`) |
-| a `vision_base_url` on any other host than NTNU's or OpenAI's (a hosted vision model) | `QUESTXTRACT_VISION_API_KEY` |
-| any other: OpenAI (`https://api.openai.com/v1`, or `base_url = None`), OpenRouter, a local server | `OPENAI_API_KEY` (a local server needs none) |
+| OpenAI, host `api.openai.com` (or `base_url = None`) | `OPENAI_API_KEY` |
+| OpenRouter, host `openrouter.ai` | `OPENROUTER_API_KEY` |
+| a `vision_base_url` on any other host | `QUESTXTRACT_VISION_API_KEY` |
+| any other host, a local server included | `QUESTXTRACT_LLM_API_KEY`, which may be unset |
 
-The service is told by the URL's host alone. So the OpenAI key is never sent to NTNU, the NTNU
-key never leaves it, and neither goes to a host set up for vision alone. Each key is read from
-its variable, in the environment or the working directory's `.env` (the NTNU key also from the
-user's key file, cli.md "API keys and .env"), never from `questxtract.toml`, and hidden in error messages. The CLI checks the key of every endpoint a run
-will use before anything slow starts, and refuses a model name from the other service: every
-model on NTNU's is named `organisation/model`, and no OpenAI model has a `/`.
+The service is told by the URL's host alone, so each key goes to its own service only, and a
+local server gets none of the hosted ones. Each key is read from its variable, in the environment
+or the working directory's `.env`, then from the user's key file (cli.md "API keys and .env"),
+never from `questxtract.toml`, and hidden in error messages. The CLI checks the key of every
+endpoint a run will use before anything slow starts; NTNU's, OpenAI's and OpenRouter's need one,
+any other may run without, and those three are refused over plain `http://`. A request without a
+key carries the placeholder `"local"`, since the SDK would otherwise read `OPENAI_API_KEY` itself. It also refuses a model name from another service: every model on
+NTNU's and on OpenRouter is named `organisation/model`, no OpenAI model has a `/`, and OpenRouter
+names NTNU's default models differently.
 
 Any local OpenAI-compatible server (Ollama, llama.cpp's server, vLLM, LM Studio) plugs in with no
 new code. Offline results may be worse, but the path must be *available* on a local device.

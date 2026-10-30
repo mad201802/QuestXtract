@@ -18,14 +18,18 @@ from typing import NoReturn
 
 from . import __version__
 from .config import (
+    DEEPSEEK,
     NTNU_KEY_ENV,
     NTNU_LLM_URL,
     OPENAI_KEY_ENV,
-    OPENAI_URL,
+    OPENROUTER_KEY_ENV,
+    QWEN,
     Config,
     is_ntnu,
     is_openai,
+    is_openrouter,
     load_config,
+    sends_key_unencrypted,
 )
 from .evaluate import evaluate, evaluate_vision, format_report, format_vision_report
 from .export import read_questions, result_to_json, write_questions
@@ -320,23 +324,27 @@ _MODEL_FLAGS = {
 def _check_endpoint(config: Config, what: str, *, model_flag: str, vision: bool = False) -> None:
     """Raise ``ValueError`` if ``what`` cannot reach its model: no extra, no key, wrong service.
 
-    The key goes with the endpoint (:func:`config.endpoint_key`): NTNU's LLM service, the
-    default, needs ``IDUN_API_KEY``; OpenAI needs ``OPENAI_API_KEY``. Any other
-    endpoint may be a local server without a key. Every model on NTNU's service is named
-    ``organisation/model`` and no OpenAI model is, so a name on the wrong service (``gpt-4o``
-    on NTNU's, the default DeepSeek on OpenAI's) is refused here rather than by the service
-    after transcription. ``model_flag`` names the flag that sets the model ``what`` asks, for
-    the hints; vision's endpoint is moved by ``vision_base_url`` when that is set.
+    The key goes with the endpoint (:func:`config.key_names`): NTNU's LLM service, the
+    default, needs ``IDUN_API_KEY``, OpenAI ``OPENAI_API_KEY`` and OpenRouter
+    ``OPENROUTER_API_KEY``. Any other endpoint may be a local server without a key. Every model
+    on NTNU's service and on OpenRouter is named ``organisation/model`` and no OpenAI model is,
+    and OpenRouter names NTNU's default models differently, so a name on the wrong service
+    (``gpt-4o`` on NTNU's, the default DeepSeek on OpenAI's or OpenRouter's) is refused here
+    rather than by the service after transcription. ``model_flag`` names the flag that sets
+    the model ``what`` asks, for the hints; vision's endpoint is moved by ``vision_base_url``
+    when that is set.
     """
     if importlib.util.find_spec("openai") is None:
         raise ValueError(f"{what} needs the LLM extra: pip install 'questxtract[llm]'")
     url = config.vision_url if vision else config.base_url
+    if sends_key_unencrypted(url):
+        raise ValueError(f"{what}: {url} would send the key unencrypted; use https://")
     if vision and config.vision_base_url is not None:
         mover = "vision_base_url in questxtract.toml"
-        to_openai = f'set vision_base_url = "{OPENAI_URL}" in questxtract.toml and pass'
+        to_openai = 'set vision_base_url = "openai" in questxtract.toml and pass'
     else:
         mover = "--llm-url (base_url)"
-        to_openai = f"pass --llm-url {OPENAI_URL}"
+        to_openai = "pass --llm-url openai"
     # vision's reasoning setting lives in the settings file, not on the command line (#179)
     reasoning = (
         ' and vision_reasoning_effort = "" in questxtract.toml'
@@ -356,18 +364,29 @@ def _check_endpoint(config: Config, what: str, *, model_flag: str, vision: bool 
             f"{what}: {model} is not an OpenAI model; pass {model_flag} with one, such as gpt-4o, "
             f"or {mover} for another endpoint"
         )
-    if (is_ntnu(url) or is_openai(url)) and not (
-        config.vision_api_key if vision else config.api_key
-    ):
-        if is_ntnu(url):
-            raise ValueError(
-                f"{what} goes to NTNU's LLM service ({NTNU_LLM_URL}, NTNU network or VPN), so "
-                f"it needs {NTNU_KEY_ENV} in the environment, in .env or saved in the app; "
-                f"{openai_hint}"
-            )
+    if is_openrouter(url) and ("/" not in model or model in (QWEN, DEEPSEEK)):
         raise ValueError(
-            f"{what} goes to OpenAI, so it needs {OPENAI_KEY_ENV} in the environment or .env, "
-            f"or {mover} for another endpoint"
+            f"{what}: {model} is not OpenRouter's name for a model; pass {model_flag} with one "
+            "from https://openrouter.ai/models, such as deepseek/deepseek-v4.1-flash"
+        )
+    if config.vision_api_key if vision else config.api_key:
+        return
+    if is_ntnu(url):
+        raise ValueError(
+            f"{what} goes to NTNU's LLM service ({NTNU_LLM_URL}, NTNU network or VPN), so "
+            f"it needs {NTNU_KEY_ENV} in the environment, in .env or saved in the app; "
+            f"{openai_hint}"
+        )
+    if is_openai(url):
+        raise ValueError(
+            f"{what} goes to OpenAI, so it needs {OPENAI_KEY_ENV} in the environment, in .env "
+            f"or saved in the app, or {mover} for another endpoint"
+        )
+    if is_openrouter(url):
+        raise ValueError(
+            f"{what} goes to OpenRouter, so it needs {OPENROUTER_KEY_ENV} in the environment, "
+            f"in .env or saved in the app ({OPENAI_KEY_ENV} goes to OpenAI only), or {mover} "
+            "for another endpoint"
         )
 
 
@@ -927,9 +946,9 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
     llm.add_argument(
         "--llm-url",
         metavar="URL",
-        help="an OpenAI-compatible endpoint for --detector llm, --vision and the quiz, e.g. "
-        f"{OPENAI_URL} (key from {OPENAI_KEY_ENV}) or http://localhost:11434/v1 for Ollama "
-        f"(default: NTNU's LLM service, key from {NTNU_KEY_ENV})",
+        help="an OpenAI-compatible endpoint for --detector llm, --vision and the quiz: a URL, "
+        f"or ntnu (key from {NTNU_KEY_ENV}), openrouter (key from {OPENROUTER_KEY_ENV}), "
+        f"openai (key from {OPENAI_KEY_ENV}) or ollama (no key) (default: ntnu)",
     )
     llm.add_argument(
         "--llm-reasoning",
@@ -1131,9 +1150,9 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
     quiz.add_argument(
         "--llm-url",
         metavar="URL",
-        help=f"an OpenAI-compatible endpoint, e.g. {OPENAI_URL} (key from {OPENAI_KEY_ENV}) "
-        f"or http://localhost:11434/v1 for Ollama (default: NTNU's LLM service, key from "
-        f"{NTNU_KEY_ENV})",
+        help=f"an OpenAI-compatible endpoint: a URL, or ntnu (key from {NTNU_KEY_ENV}), "
+        f"openrouter (key from {OPENROUTER_KEY_ENV}), openai (key from {OPENAI_KEY_ENV}) or "
+        "ollama (no key) (default: ntnu)",
     )
     quiz.add_argument(
         "--llm-reasoning",

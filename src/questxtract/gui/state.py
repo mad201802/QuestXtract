@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from ..config import GUI_START_DETECTOR, GUI_START_VISION, Config, load_config
+from ..config import GUI_START_DETECTOR, GUI_START_VISION, Config, endpoint_url, load_config
 from ..pipeline import STAGES, stage_info
 from .i18n import has, tr
 from .options import OPTIONS, OUTPUTS, Option
@@ -133,6 +133,21 @@ def form_values(raw: Mapping[str, Any]) -> dict[str, Any]:
             text = str(value).strip()
             values[option.dest] = None if text == default_text(option) else text
     return values
+
+
+def key_endpoint(values: Mapping[str, Any]) -> str | None:
+    """Return the endpoint a run with the form's ``values`` sends the judge to, for the key window.
+
+    The LLM endpoint field when it is passed, else the settings file's ``base_url`` (the one
+    chosen in ``config``, or ``questxtract.toml`` here), else the default: as the CLI decides.
+    """
+    if values.get("llm_url"):
+        return endpoint_url(str(values["llm_url"]))
+    chosen = values.get("config")
+    try:
+        return load_config(Path(chosen) if chosen else None).base_url
+    except (OSError, ValueError):  # the run check reports the file's problem
+        return Config().base_url
 
 
 def output_offered(output: str, source: Path | None) -> bool:

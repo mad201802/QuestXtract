@@ -18,6 +18,9 @@ from typing import Any
 
 from .config import Config
 
+# Sent to an endpoint without a key: with None the SDK would read OPENAI_API_KEY itself.
+NO_KEY = "local"
+
 
 class InvalidAnswer(ValueError):
     """The model answered, twice, with something other than the JSON object asked for.
@@ -74,7 +77,7 @@ def client(config: Config, *, vision: bool = False) -> Any:
         raise RuntimeError("the LLM layer needs `pip install questxtract[llm]`") from exc
     base_url, api_key = route(config, vision=vision)
     return OpenAI(
-        api_key=api_key or "local",
+        api_key=api_key or NO_KEY,
         base_url=base_url,
         timeout=config.timeout_seconds,
     )
@@ -135,6 +138,8 @@ def ask(
 
     endpoint = base_url or "OpenAI"
     api_key = getattr(llm, "api_key", None) or key_for_errors
+    if api_key == NO_KEY:  # the placeholder is no secret, and hiding it mangles "localhost"
+        api_key = None
 
     def failure(detail: str, kind: type[ConnectionError] = ConnectionError) -> ConnectionError:
         # Providers may echo credentials in errors; keep diagnostics but hide the key.

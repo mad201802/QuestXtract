@@ -54,7 +54,7 @@ Finds the questions asked in a recording or a transcript and writes them to a qu
 | `--from-scratch` | nothing | off | Ignores cached results and recomputes everything, transcription included. |
 | `--detector` | `rules` or `llm` | `rules` | How questions are found: fast offline rules, or a language model that reads the transcript. See [Finding questions with an LLM](#finding-questions-with-an-llm). |
 | `--llm-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The model for `--detector llm`, as the endpoint names it, e.g. `qwen3.5:9b` in Ollama. |
-| `--llm-url` | a URL | NTNU's LLM service | An OpenAI-compatible endpoint for `--detector llm`, the quiz and vision, e.g. `https://api.openai.com/v1` for OpenAI or `http://localhost:11434/v1` for Ollama. The key goes with the endpoint: NTNU's service (`https://llm.hpc.ntnu.no/v1`, NTNU network or VPN) reads `IDUN_API_KEY`, every other endpoint `OPENAI_API_KEY`. Vision goes there too unless `vision_base_url` is set in `questxtract.toml`. |
+| `--llm-url` | a URL, or `ntnu`, `openrouter`, `openai`, `ollama` | `ntnu` | An OpenAI-compatible endpoint for `--detector llm`, the quiz and vision: any URL, or a short name for NTNU's LLM service (`https://llm.hpc.ntnu.no/v1`, NTNU network or VPN), OpenRouter (`https://openrouter.ai/api/v1`), OpenAI (`https://api.openai.com/v1`) or Ollama on this computer (`http://localhost:11434/v1`). The key goes with the endpoint ([API keys](#api-keys-and-env)). Vision goes there too unless `vision_base_url` is set in `questxtract.toml`. |
 | `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `server` | How long a thinking model may think before it answers: the judge and the quiz. By default they send no setting (`server`), since Qwen rejects `none`. `server` also suits a model that has no setting (`gpt-4o`); a DeepSeek judge needs `none`. Vision is not set here: `vision_reasoning_effort` in the settings file, `"none"` by default, switches DeepSeek's thinking off, which makes it far faster at reading the board for nearly the same result. Small models such as `qwen3.5:9b` judge much better with `low`. `low`, `medium` and `high` allow each request 10 minutes instead of 2; for a server that thinks on its own with `server`, raise `timeout_seconds` in the settings file. |
 | `--vision`, `--no-vision` | nothing | off | Also reads the slides or the board with a vision model: by default DeepSeek on NTNU's LLM service with the key from `IDUN_API_KEY` (NTNU network or VPN), or at `vision_base_url`, or at `--llm-url`. Needs the `questxtract[llm]` extra. `--no-vision` turns off `vision_enabled` from the settings file for one run. A recording without video (an `.mp3`, an audio-only `.mp4`) or a transcript has no board, so the board is not read (a note says so). See [Reading the board](#reading-the-board). |
 | `--vision-model` | a model name | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | The model that reads the board, as the endpoint names it. It must take images. |
@@ -100,7 +100,7 @@ not used.
 | `--options` | a number, 3 to 5 | `3` | Options per item, one of them correct. |
 | `--transcript` | a path | the cached transcript | The lecture's transcript, for what was said around each question. |
 | `--quiz-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The model that writes the quiz (`quiz_model`). |
-| `--llm-url` | a URL | NTNU's LLM service | An OpenAI-compatible endpoint, as for `process`. |
+| `--llm-url` | a URL, or `ntnu`, `openrouter`, `openai`, `ollama` | `ntnu` | An OpenAI-compatible endpoint, as for `process`. |
 | `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `server` | As for `process`. |
 | `--config` | a path | `questxtract.toml` | The settings file. `quiz_model`, `quiz_strictness` and `quiz_options` can be set there. |
 | `-h`, `--help` | nothing | | Shows the options and examples. |
@@ -223,10 +223,12 @@ both on.
   and no partial file is written. Errors show as the CLI's one line, never a traceback.
 - **Open folder** opens the folder of the file the run wrote.
 - **Keys.** The app reads the keys exactly as the CLI does ([API keys](#api-keys-and-env)). The
-  **NTNU key...** button opens a window to paste the NTNU key: **Test** asks NTNU's service once,
-  **Save** tests and then saves it (a key NTNU refuses is not saved; one that could not be tested
-  is saved with a note), **Remove** deletes it. The key is saved as plain text in the file named in
-  the window. The app never shows, logs or passes the key on a command line.
+  **API key...** button opens a window to paste the key of the endpoint in **LLM endpoint**
+  (Advanced settings; a URL, or `ntnu`, `openrouter`, `openai` or `ollama` from its list): **Test**
+  asks that endpoint once, **Save** tests and then saves it (a key the endpoint refuses is not
+  saved; one that could not be tested is saved with a note), **Remove** deletes it. The key is saved
+  as plain text in the file named in the window, under the endpoint's variable, next to the keys
+  of the other endpoints. The app never shows, logs or passes the key on a command line.
 
 **Languages.** The window opens in English; the switch at the top right shows it in Norsk or
 Italiano, and keeps what was entered. Messages from the CLI itself stay in English.
@@ -289,24 +291,34 @@ TOML files must never hold secrets. A key containing `key`, `token`, `secret` or
 (case-insensitive) is rejected without echoing its value. For a hosted LLM, the optional
 `questxtract[llm]` dependency and an API key are still required.
 
-The key goes with the endpoint. NTNU's LLM service, the default, reads
-`IDUN_API_KEY`; a `vision_base_url` on another host than NTNU's or OpenAI's reads
-`QUESTXTRACT_VISION_API_KEY`; every other endpoint reads `OPENAI_API_KEY`. So the OpenAI key is
-never sent to NTNU, the NTNU key never leaves NTNU, and neither goes to a host set up for vision
-alone. `QUESTXTRACT_NTNU_API_KEY`, the NTNU key's former name, is still read when `IDUN_API_KEY`
-is not set. Each name comes from the environment if set; otherwise it is read from `.env` in the
-working directory (Git ignores this file); otherwise, for the NTNU key, from the key file the app
-saves (below). The supported format is `NAME=VALUE`, with optional single or double quotes, blank
+The key goes with the endpoint, told by the URL's host:
+
+| Endpoint | Key |
+|---|---|
+| NTNU's LLM service (`ntnu`, the default) | `IDUN_API_KEY` |
+| OpenAI (`openai`) | `OPENAI_API_KEY` |
+| OpenRouter (`openrouter`) | `OPENROUTER_API_KEY` |
+| a `vision_base_url` on any other host | `QUESTXTRACT_VISION_API_KEY` |
+| any other host, a local server such as Ollama included | `QUESTXTRACT_LLM_API_KEY`, or none |
+
+So each key goes to its own service only: the OpenAI key never to OpenRouter or a local server,
+the NTNU key never off NTNU. The three known services are refused over plain `http://`, where
+their key would travel unencrypted; a local server over `http://` is fine. NTNU's, OpenAI's and OpenRouter's endpoints need their key; any other
+runs without one when its variable is unset. `QUESTXTRACT_NTNU_API_KEY`, the NTNU key's former
+name, is still read when `IDUN_API_KEY` is not set. Each name comes from the environment if set;
+otherwise it is read from `.env` in the working directory (Git ignores this file); otherwise from
+the key file the app saves (below). The supported format is `NAME=VALUE`, with optional single or double quotes, blank
 lines and `#` comments. Other variables are ignored; parent directories are not searched. The key
 is never stored in Config, logs, cache entries or `questions.json`.
 
-**The key file.** The app's **NTNU key...** button writes `IDUN_API_KEY="..."` to `questxtract/.env`
+**The key file.** The app's **API key...** button writes the endpoint's variable, such as
+`IDUN_API_KEY="..."` or `OPENROUTER_API_KEY="..."`, to `questxtract/.env`
 in your user config folder: `%APPDATA%` on Windows, `~/Library/Application Support` on macOS,
 `$XDG_CONFIG_HOME` or `~/.config` elsewhere. Every other line of that file is kept. On Linux and
 macOS the file and its `questxtract` folder are readable by you only; on Windows they are as
 private as your user profile folder, which other users cannot open by default. The key sits there as plain text, like in any `.env`;
 for a safer store, keep it in your password store and load it into the environment as in the
-[Setting up the API key](#setting-up-the-api-key). Only the NTNU key is read from this file.
+[Setting up the API key](#setting-up-the-api-key). Every key variable above is read from this file.
 
 This reader does not run shell commands or expand variables. If your setup uses a password
 store and a shell script to retrieve the key, load it into the environment before running
@@ -314,13 +326,13 @@ QuestXtract. That environment value wins, so the `.env` reader is not used in th
 
 ### Setting up the API key
 
-A hosted model needs a key; a local server (`--llm-url`) does not. The key goes with the
-endpoint: NTNU's LLM service, the default, reads `IDUN_API_KEY`; OpenAI and any other
-endpoint read `OPENAI_API_KEY`, so neither key is ever sent to the other service. NTNU's service
+A hosted model needs a key; a local server (`--llm-url ollama`) does not. The key goes with the
+endpoint (the table above), so no key is ever sent to another service. NTNU's service
 needs the NTNU network or VPN, and NTNU asks that heavy use wait until after 18:00 or the
 weekend. There is no `--api-key` flag and TOML files reject secrets, so a key never sits in the
-repository or in your shell history. The steps below use the NTNU key; for an OpenAI key, use
-`openai` and `OPENAI_API_KEY` in its place. The setup keeps it in your system's password store
+repository or in your shell history. The steps below use the NTNU key; for another endpoint's
+key, use another name in place of `ntnu` and that endpoint's variable in place of `IDUN_API_KEY`
+(`openrouter` and `OPENROUTER_API_KEY`, say). The setup keeps it in your system's password store
 (the Keychain on macOS, Credential Manager on Windows) and lets a git-ignored `.env` file
 *refer* to it, so no file anywhere holds the key itself. The environment wins over `.env`, which
 is why step 4 loads it into the shell. It is the same on macOS and Windows: run it in Terminal on
@@ -505,32 +517,37 @@ reasoning setting, so pass `server`; a thinking model such as `gpt-5.6-terra` ta
 OpenAI shuts the gpt-4o snapshots down on 14 January 2027.
 
 ```bash
-questxtract process lecture.mp4 --detector llm --llm-url https://api.openai.com/v1 \
+questxtract process lecture.mp4 --detector llm --llm-url openai \
     --llm-model gpt-4o --llm-reasoning server
-questxtract process lecture.mp4 --detector llm --llm-url https://api.openai.com/v1 \
+questxtract process lecture.mp4 --detector llm --llm-url openai \
     --llm-model gpt-5.6-terra --llm-reasoning low
 ```
 
-**Another hosted provider (OpenRouter and the like).** Anything that speaks the OpenAI API works:
-put that provider's key in `OPENAI_API_KEY` (stored the same way) and pass its URL and model name.
+**OpenRouter.** Put the key in `OPENROUTER_API_KEY` (stored the same way, or saved in the app)
+and pass `--llm-url openrouter` with OpenRouter's model names, which differ from NTNU's
+(`deepseek/deepseek-v4.1-flash`, not `deepseek-ai/DeepSeek-V4.1-Flash-1017`). A run needs both:
+it checks the model name first, then the key, so a setup with neither gets two errors in turn.
 
 ```bash
 questxtract process lecture.mp4 --detector llm \
-    --llm-url https://openrouter.ai/api/v1 --llm-model deepseek/deepseek-v4.1-flash \
-    --llm-reasoning none
+    --llm-url openrouter --llm-model deepseek/deepseek-v4.1-flash --llm-reasoning none
 ```
 
 DeepSeek thinks unless told not to, so it needs `--llm-reasoning none`; Qwen and gpt-4o take no setting, which is the default.
 
+**Another hosted provider.** Anything that speaks the OpenAI API works: put its key in
+`QUESTXTRACT_LLM_API_KEY` and pass its URL and model name.
+
 **Local (Ollama).** Any OpenAI-compatible server works (Ollama, llama.cpp's `llama-server`,
-vLLM, LM Studio); pass its URL. With [Ollama](https://ollama.com), give it an 8k context first:
+vLLM, LM Studio); pass its URL, or `ollama` for `http://localhost:11434/v1`. It needs no key, and
+none of the hosted services' keys is sent to it. With [Ollama](https://ollama.com), give it an 8k
+context first:
 below 24 GB of graphics memory it defaults to 4k and silently cuts longer prompts.
 
 ```bash
 OLLAMA_CONTEXT_LENGTH=8192 ollama serve        # in one terminal
 ollama pull qwen3.6:35b                        # once; needs about 24 GB
-questxtract process lecture.mp4 --detector llm \
-    --llm-url http://localhost:11434/v1 --llm-model qwen3.6:35b
+questxtract process lecture.mp4 --detector llm --llm-url ollama --llm-model qwen3.6:35b
 ```
 
 On a smaller machine, `qwen3.5:9b` needs to think first, which makes it slow but good:
@@ -679,16 +696,18 @@ is not the cache, so it works on a first run too ([architecture.md 6.5](architec
 | `...: not valid JSON` / `expected a list of segments...` | The `.json` file is not a transcript. |
 | `--detector llm goes to NTNU's LLM service (...), so it needs IDUN_API_KEY ...` | Make the NTNU key available in the environment or local `.env`, or pass `--llm-url` for OpenAI or a local server. |
 | `--detector llm goes to OpenAI, so it needs OPENAI_API_KEY ...` | Make the OpenAI key available, or pass `--llm-url` for another endpoint. |
+| `...: http://... would send the key unencrypted; use https://` | Write the URL of NTNU's, OpenAI's or OpenRouter's endpoint with `https://`, or use its short name. |
+| `--detector llm goes to OpenRouter, so it needs OPENROUTER_API_KEY ...` | Put the OpenRouter key in `OPENROUTER_API_KEY` (not `OPENAI_API_KEY`, which goes to OpenAI only), or save it in the app. |
 | `<file>: invalid TOML at line N` | Correct the TOML syntax at the reported line. |
 | `<file>: <key>: expected float, got string` | Use the expected type; numbers must not be quoted. |
 | `<file>: unknown config field(s): ...` | Correct the name to match a field in `config.py`. |
-| `<file>: <key>: secrets belong in IDUN_API_KEY or OPENAI_API_KEY, not TOML` | Remove the secret from TOML and use the environment or `.env`. |
+| `<file>: <key>: secrets belong in the endpoint's key variable, ...` | Remove the secret from TOML and use the environment or `.env`. |
 | `min_confidence / --threshold must be between 0 and 1` | Correct the effective threshold in the file or command. |
 | `detector must be rules or llm` | Correct the detector name. |
 | `.env: line N: expansion is not supported; ...` | Load the key into the environment using your shell or password store before running the command. |
 | `--detector llm needs the LLM extra: ...` | Install `questxtract[llm]`. |
 | `--vision / vision_enabled goes to NTNU's LLM service (...), so it needs IDUN_API_KEY ...` | Make the NTNU key available in the environment or local `.env`, set `vision_base_url` or pass `--llm-url` for another endpoint, or turn vision off with `--no-vision`. |
-| `...: <model> is not a model on NTNU's LLM service ...` / `...: <model> is not an OpenAI model ...` | The model name belongs to the other service (NTNU's are named `organisation/model`, OpenAI's have no `/`). Pass the flag the message names with a model of that endpoint, or move the endpoint as it says. |
+| `...: <model> is not a model on NTNU's LLM service ...` / `...: <model> is not an OpenAI model ...` / `...: <model> is not OpenRouter's name for a model ...` | The model name belongs to another service (NTNU's and OpenRouter's are named `organisation/model`, OpenAI's have no `/`, and OpenRouter names NTNU's default models differently). Pass the flag the message names with a model of that endpoint, or move the endpoint as it says. |
 | `--vision / vision_enabled needs the LLM extra: ...` | Install `questxtract[llm]`, or turn vision off with `--no-vision`. |
 | `note: <file> has no video, so the board is not read` | Not an error: a recording without video, or a transcript, has no board to read. The questions are written as usual. |
 | `judge: <endpoint>: ...` | The model endpoint failed: it is not running, the key is wrong, or the model name is unknown to it. The message after the endpoint says which. |

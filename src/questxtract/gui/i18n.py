@@ -124,16 +124,27 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "nb": "Én fil om gangen: den første brukes.",
         "it": "Un file alla volta: viene usato il primo.",
     },
-    # --- the NTNU key window (issue #189) ---
-    "button.ntnu_key": {"en": "NTNU key...", "nb": "NTNU-nøkkel...", "it": "Chiave NTNU..."},
-    "key.title": {"en": "NTNU key", "nb": "NTNU-nøkkel", "it": "Chiave NTNU"},
+    # --- the API key window (#189, #250) ---
+    "button.api_key": {"en": "API key...", "nb": "API-nøkkel...", "it": "Chiave API..."},
+    "key.title": {
+        "en": "API key: {endpoint}",
+        "nb": "API-nøkkel: {endpoint}",
+        "it": "Chiave API: {endpoint}",
+    },
     "key.explain": {
-        "en": "Paste the key for NTNU's LLM service. It is saved on this computer, as plain text, "
-        "and used for every run. The service needs the NTNU network or VPN.",
-        "nb": "Lim inn nøkkelen til NTNUs LLM-tjeneste. Den lagres på denne datamaskinen, som "
-        "ren tekst, og brukes i hver kjøring. Tjenesten krever NTNU-nettverket eller VPN.",
-        "it": "Incolla la chiave del servizio LLM di NTNU. Viene salvata su questo computer, come "
-        "testo semplice, e usata a ogni esecuzione. Il servizio richiede la rete NTNU o la VPN.",
+        "en": "Paste the key for {endpoint}, the endpoint in LLM endpoint. It is saved on this "
+        "computer, as plain text, as {variable}, and used for every run with this endpoint.",
+        "nb": "Lim inn nøkkelen til {endpoint}, endepunktet i LLM-endepunkt. Den lagres på denne "
+        "datamaskinen, som ren tekst, som {variable}, og brukes i hver kjøring med dette "
+        "endepunktet.",
+        "it": "Incolla la chiave di {endpoint}, l'endpoint in Endpoint LLM. Viene salvata su "
+        "questo computer, come testo semplice, come {variable}, e usata a ogni esecuzione con "
+        "questo endpoint.",
+    },
+    "key.explain_ntnu": {
+        "en": "NTNU's service needs the NTNU network or VPN.",
+        "nb": "NTNUs tjeneste krever NTNU-nettverket eller VPN.",
+        "it": "Il servizio NTNU richiede la rete NTNU o la VPN.",
     },
     "key.label": {"en": "Key:", "nb": "Nøkkel:", "it": "Chiave:"},
     "key.file": {
@@ -168,23 +179,33 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "button.key_save": {"en": "Save", "nb": "Lagre", "it": "Salva"},
     "button.key_remove": {"en": "Remove", "nb": "Fjern", "it": "Rimuovi"},
     "button.key_close": {"en": "Close", "nb": "Lukk", "it": "Chiudi"},
-    "key.testing": {"en": "Asking NTNU...", "nb": "Spør NTNU...", "it": "Chiedo a NTNU..."},
+    "key.testing": {
+        "en": "Asking {endpoint}...",
+        "nb": "Spør {endpoint}...",
+        "it": "Chiedo a {endpoint}...",
+    },
     "key.accepted": {
-        "en": "NTNU accepted the key.",
-        "nb": "NTNU godtok nøkkelen.",
-        "it": "NTNU ha accettato la chiave.",
+        "en": "{endpoint} accepted the key.",
+        "nb": "{endpoint} godtok nøkkelen.",
+        "it": "{endpoint} ha accettato la chiave.",
     },
     "key.refused": {
-        "en": "NTNU refused the key. Copy it again; nothing was saved.",
-        "nb": "NTNU avviste nøkkelen. Kopier den på nytt; ingenting ble lagret.",
-        "it": "NTNU ha rifiutato la chiave. Copiala di nuovo; non è stato salvato nulla.",
+        "en": "{endpoint} refused the key. Copy it again; nothing was saved.",
+        "nb": "{endpoint} avviste nøkkelen. Kopier den på nytt; ingenting ble lagret.",
+        "it": "{endpoint} ha rifiutato la chiave. Copiala di nuovo; non è stato salvato nulla.",
     },
     "key.unreachable": {
-        "en": "NTNU's service did not answer. Use the NTNU network or VPN. The key was not tested.",
-        "nb": "NTNUs tjeneste svarte ikke. Bruk NTNU-nettverket eller VPN. "
-        "Nøkkelen ble ikke testet.",
-        "it": "Il servizio NTNU non risponde. Usa la rete NTNU o la VPN. "
-        "La chiave non è stata provata.",
+        "en": "{endpoint} did not answer. The key was not tested.",
+        "nb": "{endpoint} svarte ikke. Nøkkelen ble ikke testet.",
+        "it": "{endpoint} non risponde. La chiave non è stata provata.",
+    },
+    "key.insecure": {
+        "en": "{endpoint} over http would get the key unencrypted. Use https:// in LLM endpoint; "
+        "nothing was sent or saved.",
+        "nb": "{endpoint} over http ville fått nøkkelen ukryptert. Bruk https:// i LLM-endepunkt; "
+        "ingenting ble sendt eller lagret.",
+        "it": "{endpoint} via http riceverebbe la chiave non cifrata. Usa https:// in "
+        "Endpoint LLM; non è stato inviato né salvato nulla.",
     },
     "key.no_llm_extra": {
         "en": "The key cannot be tested: questxtract[llm] is not installed.",
@@ -192,16 +213,16 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "it": "La chiave non può essere provata: questxtract[llm] non è installato.",
     },
     "key.saved": {
-        "en": "Key saved. NTNU accepted it.",
-        "nb": "Nøkkelen er lagret. NTNU godtok den.",
-        "it": "Chiave salvata. NTNU l'ha accettata.",
+        "en": "Key saved. {endpoint} accepted it.",
+        "nb": "Nøkkelen er lagret. {endpoint} godtok den.",
+        "it": "Chiave salvata. {endpoint} l'ha accettata.",
     },
     "key.saved_unchecked": {
-        "en": "Key saved, but not tested: NTNU's service did not answer, or questxtract[llm] is "
+        "en": "Key saved, but not tested: {endpoint} did not answer, or questxtract[llm] is "
         "missing.",
-        "nb": "Nøkkelen er lagret, men ikke testet: NTNUs tjeneste svarte ikke, eller "
+        "nb": "Nøkkelen er lagret, men ikke testet: {endpoint} svarte ikke, eller "
         "questxtract[llm] mangler.",
-        "it": "Chiave salvata, ma non provata: il servizio NTNU non risponde, oppure manca "
+        "it": "Chiave salvata, ma non provata: {endpoint} non risponde, oppure manca "
         "questxtract[llm].",
     },
     "key.removed": {"en": "Key removed.", "nb": "Nøkkelen er fjernet.", "it": "Chiave rimossa."},
