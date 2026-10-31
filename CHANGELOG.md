@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Added
+
+- `--llm-url`, `base_url` and `vision_base_url` take the short names `ntnu`, `openrouter`,
+  `openai` and `ollama`; any URL still works. The app's LLM endpoint field lists them. (#250)
+- The app's NTNU key... button is now API key...: it tests and saves the key of the endpoint in
+  the LLM endpoint field under that endpoint's variable, keeping the other endpoints' keys. Every
+  key is read from the app's key file, not only the NTNU key. (#250)
+
+### Changed (breaking)
+
+- Each API key goes to its own service only. OpenRouter reads `OPENROUTER_API_KEY`: move an
+  OpenRouter key out of `OPENAI_API_KEY`, which goes to OpenAI only; a run missing it stops before
+  transcribing. Any other host, a local server included, reads `QUESTXTRACT_LLM_API_KEY` and runs
+  without a key when it is unset, so a local server no longer gets the OpenAI key. NTNU's,
+  OpenAI's and OpenRouter's endpoints are refused over plain `http://`. On OpenRouter, NTNU's
+  default model names are refused before transcribing: pass OpenRouter's (`--llm-model`,
+  `--vision-model`). NTNU setups work as before. (#250)
+
 ### Changed
 
 - On Linux and macOS, the folder the app saves the NTNU key in (`questxtract/` in your user config

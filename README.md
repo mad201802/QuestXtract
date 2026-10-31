@@ -95,8 +95,9 @@ questxtract tex lecture.quiz.json -o lecture.tex --content-unit "Sorting"   # Te
 ```
 
 Both run on NTNU's LLM service by default and need `IDUN_API_KEY` and the NTNU network or VPN.
-OpenAI or a local Ollama work through `--llm-url`. The app's NTNU key... button saves the key; a
-safer setup: [Setting up the API key](docs/cli.md#setting-up-the-api-key).
+Any OpenAI-compatible endpoint works through `--llm-url`: `openrouter`, `openai`, `ollama` (local,
+no key) or a URL, each with its own key. The app's API key... button saves the key; a safer setup:
+[Setting up the API key](docs/cli.md#setting-up-the-api-key).
 
 ## Documentation
 

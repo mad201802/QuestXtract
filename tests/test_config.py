@@ -90,7 +90,7 @@ def test_secrets_are_rejected_without_echoing_values(tmp_path, key):
     with pytest.raises(ValueError) as error:
         load_config(path)
     message = str(error.value)
-    assert str(path) in message and key in message and "OPENAI_API_KEY" in message
+    assert str(path) in message and key in message and "OPENROUTER_API_KEY" in message
     assert "do-not-echo" not in message
 
 
@@ -196,9 +196,12 @@ def test_each_key_goes_to_one_service_only(monkeypatch):
     monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "vision-key")
     assert Config().api_key is None and Config().vision_api_key is None
 
-    third_party = Config(vision_base_url="https://openrouter.ai/api/v1")
+    third_party = Config(vision_base_url="https://vision.example/v1")
     monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
     assert (third_party.api_key, third_party.vision_api_key) == ("ntnu-key", "vision-key")
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or")
+    assert Config(vision_base_url="openrouter").vision_api_key == "sk-or"
 
 
 def test_openai_takes_the_openai_key_and_never_the_ntnu_one(monkeypatch):
@@ -265,7 +268,8 @@ def test_vision_reasoning_follows_reasoning_effort_unless_set():
 
 
 def test_vision_follows_base_url_unless_it_has_its_own(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-local")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    monkeypatch.setenv("QUESTXTRACT_LLM_API_KEY", "sk-local")
     monkeypatch.setenv("QUESTXTRACT_VISION_API_KEY", "vision-key")
 
     local = Config(base_url="http://localhost:11434/v1")
@@ -458,14 +462,72 @@ def test_the_former_name_in_the_environment_or_dotenv_beats_the_saved_key(monkey
     assert Config().api_key == "environment-old"
 
 
-def test_only_the_ntnu_key_is_read_from_the_key_file():
+def test_every_endpoints_key_is_read_from_the_key_file():
     from questxtract.config import save_user_key
 
-    path = save_user_key("ntnu-saved")
+    save_user_key("ntnu-saved")
+    save_user_key("sk-or-saved", "OPENROUTER_API_KEY")
+    path = save_user_key("sk-file", "OPENAI_API_KEY")
     path.write_text(
-        path.read_text(encoding="utf-8") + "OPENAI_API_KEY=sk-file\nQUESTXTRACT_VISION_API_KEY=v\n",
-        encoding="utf-8",
+        path.read_text(encoding="utf-8") + "QUESTXTRACT_VISION_API_KEY=v\n", encoding="utf-8"
     )
 
-    assert Config(base_url="https://api.openai.com/v1").api_key is None
-    assert Config(vision_base_url="https://vision.example/v1").vision_api_key is None
+    assert Config().api_key == "ntnu-saved"
+    assert Config(base_url="openrouter").api_key == "sk-or-saved"
+    assert Config(base_url="https://api.openai.com/v1").api_key == "sk-file"
+    assert Config(vision_base_url="https://vision.example/v1").vision_api_key == "v"
+    assert Config(base_url="http://localhost:11434/v1").api_key is None
+
+
+@pytest.mark.parametrize(
+    ("name", "url"),
+    [
+        ("ntnu", "https://llm.hpc.ntnu.no/v1"),
+        ("OpenRouter", "https://openrouter.ai/api/v1"),
+        (" openai ", "https://api.openai.com/v1"),
+        ("OLLAMA", "http://localhost:11434/v1"),
+        ("http://my-server:8000/v1", "http://my-server:8000/v1"),
+    ],
+)
+def test_a_short_endpoint_name_becomes_its_url(name, url):
+    config = Config(base_url=name, vision_base_url=name)
+    assert (config.base_url, config.vision_base_url, config.vision_url) == (url, url, url)
+    assert Config().replace(base_url=name).base_url == url
+
+
+def test_the_settings_file_takes_a_short_endpoint_name(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    Path("questxtract.toml").write_text(
+        'base_url = "OpenRouter"\nvision_base_url = "ollama"\n', encoding="utf-8"
+    )
+    config = load_config()
+    assert (config.base_url, config.vision_base_url) == (
+        "https://openrouter.ai/api/v1",
+        "http://localhost:11434/v1",
+    )
+
+
+@pytest.mark.parametrize(
+    ("url", "names"),
+    [
+        ("https://llm.hpc.ntnu.no/v1", ("IDUN_API_KEY", "QUESTXTRACT_NTNU_API_KEY")),
+        ("https://api.openai.com/v1", ("OPENAI_API_KEY",)),
+        (None, ("OPENAI_API_KEY",)),
+        ("https://openrouter.ai/api/v1", ("OPENROUTER_API_KEY",)),
+        ("https://OpenRouter.ai:443/api/v1/", ("OPENROUTER_API_KEY",)),
+        ("http://localhost:11434/v1", ("QUESTXTRACT_LLM_API_KEY",)),
+        ("https://openrouter.ai.example.org/v1", ("QUESTXTRACT_LLM_API_KEY",)),
+    ],
+)
+def test_each_host_reads_its_own_key_variable(url, names):
+    from questxtract.config import key_names
+
+    assert key_names(url) == names
+
+
+def test_the_openai_key_goes_to_openai_only(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-key")
+    for url in ("openrouter", "ollama", "https://llm.example.org/v1"):
+        config = Config(base_url=url)
+        assert config.api_key is None and config.vision_api_key is None, url

@@ -583,29 +583,36 @@ with a deadline on the whole call, one resend after a stall or invalid JSON, the
 of 10.4, and the key hidden in every error. The `openai` SDK is in the optional extra
 `questxtract[llm]` and imported inside functions.
 
-### 10.1 One client, two endpoints
+### 10.1 One client, any endpoint
 
 ```python
 OpenAI(api_key=ntnu_key, base_url="https://llm.hpc.ntnu.no/v1")  # NTNU's LLM service, the default
-OpenAI(api_key=openai_key, base_url="https://api.openai.com/v1")  # OpenAI
-OpenAI(api_key="local", base_url="http://localhost:11434/v1")  # local device
+OpenAI(api_key=openrouter_key, base_url="https://openrouter.ai/api/v1")  # OpenRouter
+OpenAI(api_key="local", base_url="http://localhost:11434/v1")  # a local server: Ollama
 ```
 
 By default all three jobs go to NTNU's LLM service: Qwen judges and writes the quiz, DeepSeek
 reads the board (D25). Vision follows `base_url` unless `vision_base_url` is set
-(`endpoint.route`). The key goes with the endpoint:
+(`endpoint.route`). Both take a URL or a short name, any case, which `Config` turns into the URL
+(`config.ENDPOINTS`): `ntnu`, `openrouter`, `openai`, `ollama` (`http://localhost:11434/v1`). The
+key goes with the endpoint (`config.key_names`, D35):
 
 | Endpoint | Key |
 |---|---|
 | NTNU's LLM service, host `llm.hpc.ntnu.no` (the default `base_url`) | `IDUN_API_KEY` (also read: `QUESTXTRACT_NTNU_API_KEY`) |
-| a `vision_base_url` on any other host than NTNU's or OpenAI's | `QUESTXTRACT_VISION_API_KEY` |
-| any other: OpenAI (`https://api.openai.com/v1`, or `base_url = None`), OpenRouter, a local server | `OPENAI_API_KEY` (a local server needs none) |
+| OpenAI, host `api.openai.com` (or `base_url = None`) | `OPENAI_API_KEY` |
+| OpenRouter, host `openrouter.ai` | `OPENROUTER_API_KEY` |
+| a `vision_base_url` on any other host | `QUESTXTRACT_VISION_API_KEY` |
+| any other host, a local server included | `QUESTXTRACT_LLM_API_KEY`, which may be unset |
 
-The service is told by the URL's host. Each key is read from the environment, then the working
-directory's `.env`, and the NTNU key also from the user's key file (cli.md "API keys and .env");
-never from `questxtract.toml`. The CLI checks the key of every endpoint a run will use before
-anything slow starts, and refuses a model name from the other service: NTNU's models are named
-`organisation/model`, OpenAI's have no `/`.
+The service is told by the URL's host, so each key goes to its own service only. Each key is read
+from the environment, then the working directory's `.env`, then the user's key file (cli.md "API
+keys and .env"); never from `questxtract.toml`. The CLI checks the key of every endpoint a run will
+use before anything slow starts; NTNU's, OpenAI's and OpenRouter's need one and are refused over
+plain `http://`. A request without a key carries the placeholder `"local"`, since the SDK would
+otherwise read `OPENAI_API_KEY` itself. The CLI also refuses a model name from another service:
+NTNU's and OpenRouter's models are named `organisation/model`, OpenAI's have no `/`, and OpenRouter
+names NTNU's default models differently.
 
 | Config key | Default | Role |
 |---|---|---|

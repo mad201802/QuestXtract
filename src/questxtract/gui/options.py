@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-Kind = Literal["text", "number", "choice", "bool", "tristate", "file", "path", "implicit"]
+Kind = Literal[
+    "text", "endpoint", "number", "choice", "bool", "tristate", "file", "path", "implicit"
+]
 
 OUTPUTS: dict[str, str] = {
     "questions": "process",
@@ -52,7 +54,7 @@ OPTIONS: tuple[Option, ...] = (
         choices=("rules", "llm"),
     ),
     Option(dest="llm_model", flag="--llm-model", kind="text", field="judge_model"),
-    Option(dest="llm_url", flag="--llm-url", kind="text", field="base_url"),
+    Option(dest="llm_url", flag="--llm-url", kind="endpoint", field="base_url"),
     Option(
         dest="llm_reasoning",
         flag="--llm-reasoning",

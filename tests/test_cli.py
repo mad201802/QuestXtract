@@ -319,7 +319,7 @@ def test_only_the_openai_key_with_the_default_endpoint_fails_before_transcriptio
 
     err = capsys.readouterr().err
     assert err.startswith("error: ") and err.count("\n") == 1 and fake_asr == []
-    assert "IDUN_API_KEY" in err and "--llm-url https://api.openai.com/v1" in err
+    assert "IDUN_API_KEY" in err and "--llm-url openai" in err
     assert "sk-openai" not in err
 
 
@@ -485,7 +485,7 @@ def test_all_three_commands_accept_an_explicit_config_path(tmp_path, monkeypatch
         ("min_confidence = nan", "between 0 and 1"),
         ('detector = "typo"', "detector must be rules or llm"),
         ('judge_reasoning_effort = "typo"', "reasoning_effort must be"),
-        ('api_key = "sk-do-not-echo"', "OPENAI_API_KEY"),
+        ('api_key = "sk-do-not-echo"', "secrets belong in the endpoint's key variable"),
         ("model_size = @", "invalid TOML at line 1"),
     ],
 )
@@ -1209,7 +1209,7 @@ def test_an_openai_model_on_ntnus_service_fails_before_transcription(
 
     err = capsys.readouterr().err
     assert "gpt-4o is not a model on NTNU's LLM service" in err and fake_asr == []
-    assert f"--llm-url https://api.openai.com/v1 {model_flag} gpt-4o" in err
+    assert f"--llm-url openai {model_flag} gpt-4o" in err
 
 
 def test_deepseek_on_openai_fails_before_transcription(
@@ -1245,4 +1245,123 @@ def test_with_vision_base_url_the_vision_hints_name_it(
 
     err = capsys.readouterr().err
     assert "IDUN_API_KEY" in err and "--llm-url" not in err
-    assert 'set vision_base_url = "https://api.openai.com/v1" in questxtract.toml' in err
+    assert 'set vision_base_url = "openai" in questxtract.toml' in err
+
+
+_KEEP = {
+    "reason": "",
+    "kind": "content",
+    "question": "",
+    "answer_sentence_ids": [],
+    "confidence": 1.0,
+}
+
+
+def test_openrouter_with_only_the_openai_key_fails_before_transcription(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    video = make_mp4(tmp_path / "lecture.mp4")
+    model = ["--llm-model", "deepseek/deepseek-v4.1-flash"]
+
+    assert (
+        main(["process", str(video), "--detector", "llm", "--llm-url", "openrouter", *model]) == 1
+    )
+
+    err = capsys.readouterr().err
+    assert err.startswith("error: ") and err.count("\n") == 1 and fake_asr == []
+    assert "goes to OpenRouter, so it needs OPENROUTER_API_KEY" in err
+    assert "OPENAI_API_KEY goes to OpenAI only" in err and "sk-openai" not in err
+
+
+@pytest.mark.parametrize(
+    ("flags", "model"),
+    [
+        (["--detector", "llm"], QWEN),
+        (["--detector", "llm", "--llm-model", "gpt-4o"], "gpt-4o"),
+        (["--vision", "--detector", "llm", "--llm-model", "qwen/qwen3-8b"], DEEPSEEK),
+    ],
+)
+def test_a_model_name_openrouter_does_not_use_fails_before_transcription(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    flags: list[str],
+    model: str,
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or")
+    video = make_mp4(tmp_path / "lecture.mp4", video=True)
+
+    assert main(["process", str(video), "--llm-url", "openrouter", *flags]) == 1
+
+    err = capsys.readouterr().err
+    assert f"{model} is not OpenRouter's name for a model" in err and fake_asr == []
+    assert "https://openrouter.ai/models" in err
+
+
+@pytest.mark.parametrize(
+    "url", ["ollama", "http://localhost:8000/v1", "https://llm.example.org/v1"]
+)
+def test_a_local_or_other_endpoint_runs_without_a_key(
+    tmp_path: Path, fake_llm: Callable[..., Any], monkeypatch: pytest.MonkeyPatch, url: str
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    for name in ("IDUN_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "QUESTXTRACT_LLM_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    source = _transcript_file(tmp_path)
+    (sentence,) = split_sentences(Transcript.from_file(source))
+    fake_llm({sentence.id: _KEEP})
+
+    args = ["process", str(source), "--detector", "llm", "--llm-model", "qwen3.5:9b"]
+    assert main([*args, "--llm-url", url]) == 0
+
+
+def test_a_short_name_in_the_settings_file_shares_the_cache_with_its_url(
+    tmp_path: Path, fake_llm: Callable[..., Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or")
+    Path("questxtract.toml").write_text('base_url = "OpenRouter"\n', encoding="utf-8")
+    source = _transcript_file(tmp_path)
+    (sentence,) = split_sentences(Transcript.from_file(source))
+    model = ["--llm-model", "qwen/qwen3-8b"]
+    first = fake_llm({sentence.id: _KEEP})
+    assert main(["process", str(source), "--detector", "llm", *model]) == 0
+    assert len(first.requests) == 1
+
+    Path("questxtract.toml").unlink()
+    again = fake_llm()
+    url = ["--llm-url", "https://openrouter.ai/api/v1"]
+    assert main(["process", str(source), "--detector", "llm", *model, *url]) == 0
+    assert again.requests == []
+
+    written = (tmp_path / "t.questions.json").read_text(encoding="utf-8")
+    assert json.loads(written)["config"]["judge_model"] == "qwen/qwen3-8b"
+    assert "openrouter" not in written.casefold() and "sk-or" not in written
+
+
+@pytest.mark.parametrize(
+    "url", ["http://openrouter.ai/api/v1", "http://llm.hpc.ntnu.no/v1", "http://api.openai.com/v1"]
+)
+def test_a_known_service_over_http_fails_before_transcription(
+    tmp_path: Path,
+    make_mp4: Callable[..., Path],
+    fake_asr: list[Config],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    url: str,
+) -> None:
+    for name in ("IDUN_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY"):
+        monkeypatch.setenv(name, "sk-test")
+    video = make_mp4(tmp_path / "lecture.mp4")
+
+    assert main(["process", str(video), "--detector", "llm", "--llm-url", url]) == 1
+
+    err = capsys.readouterr().err
+    assert f"{url} would send the key unencrypted; use https://" in err and fake_asr == []

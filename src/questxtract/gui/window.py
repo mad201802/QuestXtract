@@ -12,6 +12,7 @@ from tkinter import filedialog, ttk
 from typing import Any
 
 from ..cli import RunResult
+from ..config import ENDPOINTS
 from ..pipeline import Cancelled
 from . import i18n, state
 from . import run as gui_run
@@ -182,7 +183,7 @@ class QuestXtractWindow:
         self.open_button.grid(row=0, column=2, padx=(6, 0))
         actions.columnconfigure(3, weight=1)
         key_button = ttk.Button(actions, command=self._open_key_dialog)
-        self._text(key_button, "button.ntnu_key")
+        self._text(key_button, "button.api_key")
         key_button.grid(row=0, column=4, sticky="e", padx=(0, 6))
         self.advanced_button = ttk.Button(actions, command=self._toggle_advanced)
         self.advanced_button.grid(row=0, column=5, sticky="e")
@@ -219,6 +220,9 @@ class QuestXtractWindow:
             control = ttk.Combobox(
                 line, textvariable=var, values=option.choices, state="readonly", width=26
             )
+        elif option.kind == "endpoint":  # a short name from the list, or any URL typed in
+            var = tk.StringVar(master=line, value=state.start_text(option))
+            control = ttk.Combobox(line, textvariable=var, values=tuple(ENDPOINTS), width=34)
         else:
             initial = "" if option.kind in ("file", "path") else state.start_text(option)
             var = tk.StringVar(master=line, value=initial)
@@ -261,7 +265,7 @@ class QuestXtractWindow:
         self._refresh()
 
     def _open_key_dialog(self) -> None:
-        KeyDialog(self.root, on_change=self._refresh)
+        KeyDialog(self.root, url=state.key_endpoint(self._values()), on_change=self._refresh)
 
     def _toggle_advanced(self) -> None:
         self.advanced_open = not self.advanced_open

@@ -792,6 +792,36 @@ question it is given and invents a topic for a vague one.
 *Cost:* `quiz` needs the transcript (`--transcript` or the cache); without it, items are fewer and
 weaker.
 
+### D35: Any OpenAI-compatible endpoint, each with its own key
+
+*Chose:* an endpoint is a URL and an optional key, for the judge, the quiz and vision alike
+(#250, architecture.md 10.1). The URL's host picks the key: `IDUN_API_KEY` for NTNU's service,
+`OPENAI_API_KEY` for OpenAI, `OPENROUTER_API_KEY` for OpenRouter, and `QUESTXTRACT_LLM_API_KEY`
+(`QUESTXTRACT_VISION_API_KEY` for a `vision_base_url`) for any other host, a local server
+included, which may be unset. `ntnu`, `openrouter`, `openai` and `ollama` are short names that
+`Config` turns into URLs. The app's key window saves the key of the endpoint in its LLM endpoint
+field, and every variable is read from the key file. NTNU's service and its models stay the
+default (D22, D25).
+
+*Alternative:* `OPENAI_API_KEY` for every host but NTNU's, as before; one generic variable for every
+host but NTNU's and OpenAI's; a settings field naming the variable per endpoint, as
+[simonw/llm's `api_key_name`](https://llm.datasette.io/en/stable/other-models.html); short names
+that also bring default models.
+
+*Why:* a key belongs to one service; sending it to another is a disclosure (S3), and a local
+server should never get a hosted key. With `OPENAI_API_KEY` everywhere, a set OpenAI key went to
+OpenRouter and to any local server. One generic variable would make OpenRouter, the hosted service
+the team evaluates on, share its key with every other host. A settings field needs a new `Config`
+field, and the TOML secret check refuses any name holding `key`. Default models per name would
+each need keeping current, and the eval numbers are per model. A variable per provider is the
+usual pattern ([aider](https://aider.chat/docs/config/api-keys.html) reads `OPENROUTER_API_KEY`),
+and simonw/llm does not send the OpenAI key to a custom `api_base` either.
+
+*Cost:* breaking for anyone who kept an OpenRouter key in `OPENAI_API_KEY`; the CLI says so before
+transcription, and the CHANGELOG names the move. Another hosted service shares
+`QUESTXTRACT_LLM_API_KEY`. OpenRouter names NTNU's default models differently, so its runs need
+the model flags.
+
 ## 4. Requirements traceability (→ report ch. 6)
 
 | Requirement (general_requirements.md) | Where it lands | Status |
@@ -870,13 +900,15 @@ exerplaza credentials used by the uploader.
 - **Tampering**: an edited or hand-crafted results/transcript JSON is re-imported. Mitigated
   by schema validation (`SchemaError`); *not* mitigated: integrity or provenance of edits. Fine
   for a local tool; revisit if files travel between users.
-- **Information disclosure**: transcripts leaving the machine. Design choice: ASR runs
-  offline (customer brief: "offline speech-to-text, e.g. Whisper") and never over a hosted
-  transcribe endpoint. The optional LLM layer (architecture.md 6 and 10) is the one component that
-  *can* leave the machine, and only when the caller configures an endpoint: the default
-  `Config` makes zero outbound calls, and every result the pipeline produces is reachable
-  without one. Pointing `base_url` at a local OpenAI-compatible server keeps even that on the
-  device. The uploader (outside the package) is the only component that always talks out.
+- **Information disclosure**: transcripts and frames leaving the machine. Design choice: ASR runs
+  locally (customer brief: "offline speech-to-text, e.g. Whisper") and never over a hosted
+  transcribe endpoint; its one network use is the first-use download of the Whisper model from
+  Hugging Face, which sends no lecture data. The LLM layer (architecture.md 6 and 10) is the one
+  component that sends lecture content out, and only to the OpenAI-compatible endpoint the user
+  picks: hosted (NTNU's IDUN service, OpenRouter, OpenAI) or a local server (Ollama, llama.cpp,
+  vLLM, LM Studio), which keeps it on the device. The CLI default (rules detector, vision off)
+  makes no LLM call and writes a complete `questions.json`. The uploader (outside the package) is
+  the only component that always talks out.
 - **Denial of service / resource exhaustion**: hour-long inputs, temp files from decoding.
   #7 owns temp-file cleanup; #14 progress reporting is also the cancellation point.
 - **Elevation of privilege / spoofing**: none inside the package: no accounts, no privileges.
@@ -886,13 +918,19 @@ exerplaza credentials used by the uploader.
 fed to the CLI; (2) a lecturer uploading someone else's lecture; (3) a review UI user injecting
 LaTeX/HTML into a question that exerplaza renders.
 
-*Security requirements to state:* **S1 no network access unless the caller configures an
-endpoint**: the default `Config` makes zero outbound calls, the pipeline produces a complete
-result without one, and ASR is local always (this is the narrowed form; the original blanket
+*Security requirements to state:* **S1 lecture content leaves the machine only for the LLM
+endpoint the user picks**: ASR is always local, and downloading the Whisper model on first use is
+its only network access; transcripts and frames go only to the one OpenAI-compatible endpoint the
+run is set to, hosted or local; the CLI default makes no LLM call and still produces a complete
+`questions.json`. The GUI starts with the LLM detector and vision on NTNU's service, and its key
+check asks that service once; S6 makes that visible in the result. Any OpenAI-compatible endpoint
+works, each with its own key (D35). (This is the twice-narrowed form, #197. The original blanket
 "no network access in `questxtract` itself" was incompatible with the optional LLM layer the
-design needs for handwriting and board diagrams, and a blanket rule nobody can keep is worse
-than a precise one that holds); S2 all external JSON validated before use; S3 credentials never
-stored in the package or the result files; the API key is read from the environment at call
+design needs for handwriting and board diagrams; the next form, "the default `Config` makes zero
+outbound calls", did not count the Whisper download, the GUI's defaults or its key check. A
+blanket rule nobody can keep is worse than a precise one that holds.) S2 all external JSON
+validated before use; S3 credentials never stored in the package or the result files; the API key
+is read from the environment at call
 time and is not a `Config` field; S4 temporary media deleted after extraction; S5 test material
 is public or mock lectures only (the brief already promises "no student data"); **S6 when an
 endpoint is configured, the user must be able to tell**: the exported `config` block names the
