@@ -38,6 +38,8 @@ ENDPOINTS = {
     "openai": OPENAI_URL,
     "ollama": OLLAMA_URL,
 }
+EXERPLAZA_EMAIL_ENV = "QUESTXTRACT_EXERPLAZA_EMAIL"
+EXERPLAZA_PASSWORD_ENV = "QUESTXTRACT_EXERPLAZA_PASSWORD"  # noqa: S105
 DEEPSEEK = "deepseek-ai/DeepSeek-V4.1-Flash-1017"
 GUI_START_DETECTOR = "llm"
 GUI_START_VISION = True
@@ -289,6 +291,15 @@ def _read_key(name: str) -> str | None:
     if name in os.environ:
         return os.environ[name]
     return _dotenv_api_key(name)
+
+
+def exerplaza_credentials() -> tuple[str | None, str | None]:
+    """Read the ExerPlaza email and password from the environment or cwd's ``.env``.
+
+    Like the API keys: never a command-line argument, never stored in a ``Config``. The app's
+    key file holds API keys only, so it is not read here.
+    """
+    return _read_key(EXERPLAZA_EMAIL_ENV), _read_key(EXERPLAZA_PASSWORD_ENV)
 
 
 def user_env_path() -> Path:

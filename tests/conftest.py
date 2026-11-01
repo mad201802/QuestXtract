@@ -18,6 +18,8 @@ def _isolated_from_the_developer(
     monkeypatch.delenv("QUESTXTRACT_VISION_API_KEY", raising=False)
     monkeypatch.delenv("IDUN_API_KEY", raising=False)
     monkeypatch.delenv("QUESTXTRACT_NTNU_API_KEY", raising=False)
+    monkeypatch.delenv("QUESTXTRACT_EXERPLAZA_EMAIL", raising=False)
+    monkeypatch.delenv("QUESTXTRACT_EXERPLAZA_PASSWORD", raising=False)
     home = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))

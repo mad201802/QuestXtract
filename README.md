@@ -41,6 +41,7 @@ extracts questions that were spoken.
 | Quizzes | Multiple-choice items from the questions asked, with explanations; every generated text is marked and starts as pending review |
 | LMS export | `questxtract qti` writes a `quiz.json` as a QTI 3.0 or 2.1 package for an LMS to import |
 | ExerPlaza TeX | `questxtract tex` writes a `quiz.json` as a TeX file to upload to ExerPlaza |
+| Straight into ExerPlaza | `questxtract exerplaza` sends a `quiz.json` to an ExerPlaza course session, logged in as you; sending it again adds only the new items |
 
 What is built: [architecture.md 13.3](docs/architecture.md#133-status).
 
@@ -92,12 +93,17 @@ questxtract process lecture.mp4 --vision           # also read the slides or the
 questxtract process lecture.mp4 --vision --detector llm --quiz
 questxtract qti lecture.quiz.json -o lecture.qti.zip   # QTI 3.0 package for an LMS
 questxtract tex lecture.quiz.json -o lecture.tex --content-unit "Sorting"   # TeX for ExerPlaza
+questxtract exerplaza lecture.quiz.json --url https://exerplaza.example.org \
+    --course-session 42 --content-unit "Sorting"   # straight into an ExerPlaza course session
 ```
 
 Both run on NTNU's LLM service by default and need `IDUN_API_KEY` and the NTNU network or VPN.
 Any OpenAI-compatible endpoint works through `--llm-url`: `openrouter`, `openai`, `ollama` (local,
 no key) or a URL, each with its own key. The app's API key... button saves the key; a safer setup:
 [Setting up the API key](docs/cli.md#setting-up-the-api-key).
+
+`exerplaza` logs in with `QUESTXTRACT_EXERPLAZA_EMAIL` and `QUESTXTRACT_EXERPLAZA_PASSWORD` from
+the environment or `.env`; see [docs/cli.md](docs/cli.md#questxtract-exerplaza-quizjson).
 
 ## Documentation
 

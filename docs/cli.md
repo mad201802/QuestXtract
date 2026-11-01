@@ -161,6 +161,45 @@ same bytes. You upload the file yourself.
 | `--content-unit` | a name | required | An ExerPlaza content unit for every question; repeat for more. Spell it exactly as in ExerPlaza, or a new unlinked unit is created. No braces, one line. |
 | `-h`, `--help` | nothing | | Shows the options. |
 
+### `questxtract exerplaza <quiz.json>`
+
+Sends a quiz file straight to ExerPlaza, with no file to upload by hand. It logs in with your
+ExerPlaza email and password, from `QUESTXTRACT_EXERPLAZA_EMAIL` and
+`QUESTXTRACT_EXERPLAZA_PASSWORD` (see [API keys and .env](#api-keys-and-env)), and ExerPlaza
+saves the quiz in one go: a quiz in your course session, one multiple-choice question per item,
+with its options, a solution explaining every option, notes for the teachers on where the
+question was asked and which model wrote the text, and the mark that the text was generated.
+Accepted items are visible to everybody; rejected ones are not sent. A pending item becomes a
+question only you can see, and it stays out of the quiz, since ExerPlaza shows every question of
+a quiz to whoever opens it: accept it in the quiz file and send the quiz again to add it. Either
+every question is saved or none is.
+
+Sending the same quiz again adds to the course session's quiz with the same title instead of
+making a new one. ExerPlaza recognises a question by its text, as its TeX upload does: an item
+whose text, in the quiz's language, is already a question of that quiz or one of yours is not
+saved again but listed as skipped, and that question is in the quiz as it was. So new items are
+added, but an item you edited after the first import keeps its old version in ExerPlaza, options,
+solution and visibility included (a pending item you accept later joins the quiz, but its
+question stays marked as visible only to you): change it in ExerPlaza. Nothing is ever updated or
+deleted in ExerPlaza, so no question students have answered ever changes. A quiz renamed in
+ExerPlaza, or a new title, makes the next import a new quiz; if the course session has two
+quizzes with the title, ExerPlaza refuses the import.
+
+On success it prints `ExerPlaza quiz <id> (created): 3 created, 0 updated, 0 skipped`, then
+one line per skipped question with ExerPlaza's reason; the quiz is `(updated)` when it already
+existed. A pending item counts as created although it is not in the quiz; sent again while still
+pending, it is skipped with `pending: not added to the quiz` in its reason. The quiz is checked
+before anything is sent, and a broken item fails naming the field, as with `qti` and `tex`. The
+password is never shown. The ExerPlaza server needs the import endpoint; without it, the command
+fails with HTTP 404 and `tex` is the way in.
+
+| Option | Takes | Default | What it does |
+|---|---|---|---|
+| `--url` | an address | required | ExerPlaza's address, such as `https://exerplaza.example.org`. It must be `https`, because your password goes with the login; plain `http` only for `localhost`. |
+| `--course-session` | a number | required | The course session the quiz belongs to: the number at the end of its page's address in ExerPlaza, `/course/session/<number>`. You must be a teacher of it. |
+| `--content-unit` | a name | required | An ExerPlaza content unit for every question. Repeat it for more than one. Spell it exactly as in ExerPlaza: any other spelling creates a new, unlinked unit. One line. |
+| `-h`, `--help` | nothing | | Shows the options. |
+
 ### Everywhere
 
 | Option | What it does |
@@ -283,6 +322,14 @@ store, use [Setting up the API key](#setting-up-the-api-key).
 
 The `.env` reader does not run commands or expand variables. Load a key from a password store
 into the environment before running QuestXtract; the environment wins.
+
+**The ExerPlaza login.** `exerplaza` reads your ExerPlaza email and password from
+`QUESTXTRACT_EXERPLAZA_EMAIL` and `QUESTXTRACT_EXERPLAZA_PASSWORD`, in the environment or in
+`.env` in the working directory, the same way: never from the command line, where the shell
+history would keep it, and never from the app's key file. In `.env`, put the password in single
+quotes, `QUESTXTRACT_EXERPLAZA_PASSWORD='...'`: unquoted, a `#` starts a comment and a backslash
+is dropped, so ExerPlaza gets another password. A password containing `$`, a backtick or a `'`
+cannot go in `.env`; set it in the environment.
 
 ### Setting up the API key
 
@@ -416,6 +463,19 @@ questxtract tex lecture.quiz.json -o lecture.tex --content-unit "Improper integr
 Upload `lecture.tex` at `/questions/upload/tex`, check the preview and save. On a re-upload,
 ExerPlaza asks about every question it already has: choose Cancel, because Overwrite deletes the
 question and the students' answers to it.
+
+Send a quiz straight to ExerPlaza:
+
+```bash
+export QUESTXTRACT_EXERPLAZA_EMAIL=you@example.org
+read -rs QUESTXTRACT_EXERPLAZA_PASSWORD && export QUESTXTRACT_EXERPLAZA_PASSWORD
+questxtract exerplaza lecture.quiz.json --url https://exerplaza.example.org \
+    --course-session 42 --content-unit "Improper integrals"
+```
+
+The number 42 comes from the course session's page, `/course/session/42`. Pending items stay out
+of the quiz. Run it again after adding items or accepting pending ones: the new and the accepted
+ones join the quiz, and those ExerPlaza already has are skipped and left as they are.
 
 See which questions the threshold dropped (a development script):
 
@@ -639,6 +699,15 @@ and counted in `stats.vision_reused` ([architecture.md 6.5](architecture.md#65-c
 | `judge: <endpoint>: ... reasoning_effort` (HTTP 400) | The model has no reasoning setting (`gpt-4o`) or rejects `none` (Qwen). Pass `--llm-reasoning server`. |
 | `judge: <endpoint>: no answer within 120 s, twice` | The model did not answer in time, twice. DeepSeek: pass `--llm-reasoning none`. Another thinking model: pass a level, which allows 10 minutes. Otherwise the provider is overloaded. |
 | `judge: <model> did not return the expected JSON, twice` | Try a larger model, or rerun. |
+| `exerplaza: set QUESTXTRACT_EXERPLAZA_EMAIL ...` / `... PASSWORD ...` | Put your ExerPlaza email and password in the environment or `.env` (see [API keys and .env](#api-keys-and-env)). |
+| `exerplaza: url: http://... is not encrypted ...` | Use the `https://` address; plain `http` is for a local ExerPlaza only. |
+| `exerplaza: POST .../login: ExerPlaza refused the login ...` | Wrong email or password, or a disabled account: try them on ExerPlaza's login page. A password in `.env` with a `#` or a backslash needs single quotes ([API keys and .env](#api-keys-and-env)). |
+| `exerplaza: POST .../api/v1/quizzes/import: ... HTTP 403 ...` / `... HTTP 404 Not Found: course session ...` | You do not teach that course session, or the number is wrong: check it in the page's address. |
+| `exerplaza: ... HTTP 404, not a JSON answer ...` | This ExerPlaza has no import endpoint yet, or `--url` points elsewhere. Use `tex` meanwhile. |
+| `exerplaza: ... HTTP 409 Conflict: course session ... has 2 quizzes named ...` | ExerPlaza cannot tell which quiz to add to: rename all but one in ExerPlaza, or give the quiz another `title`. Nothing was saved. |
+| `exerplaza: ... HTTP 422 ...` with `questions[...]` lines | ExerPlaza refused the quiz; each line names the item and field, as ExerPlaza sent them. Nothing was saved. |
+| `exerplaza: ...: cannot reach ExerPlaza (...)` / `no answer within 30 s` | Check the address and your network or VPN; try again later. |
+| `exerplaza: POST .../api/v1/quizzes/import: no answer within 30 s. ExerPlaza may still have saved the quiz ...` | A big quiz can take ExerPlaza longer than the wait. Run the same command again: items ExerPlaza already has are skipped, so nothing is saved twice. |
 | `judge: <model> judged none of the N candidates; ...` | The endpoint answered in another shape. Check that the server supports `response_format`; try another model or server. |
 
 A missing file, a wrong file type, and `--detector llm` without a key or the extra are caught
