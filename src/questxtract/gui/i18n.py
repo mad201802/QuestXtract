@@ -13,10 +13,15 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "nb": "Slipp en .mp4-, .mp3- eller .json-fil her",
         "it": "Trascina qui un file .mp4, .mp3 o .json",
     },
-    "source.none": {
-        "en": "No file chosen.",
-        "nb": "Ingen fil valgt.",
-        "it": "Nessun file scelto.",
+    "drop.chosen": {
+        "en": "{name}\n(drop another file to replace it)",
+        "nb": "{name}\n(slipp en annen fil for å bytte den ut)",
+        "it": "{name}\n(trascina un altro file per sostituirlo)",
+    },
+    "error.title": {
+        "en": "The run did not finish",
+        "nb": "Kjøringen ble ikke fullført",
+        "it": "L'esecuzione non è stata completata",
     },
     "button.browse": {"en": "Browse...", "nb": "Bla gjennom...", "it": "Sfoglia..."},
     "group.source": {
@@ -53,6 +58,62 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "output.transcript": {"en": "Transcript", "nb": "Transkripsjon", "it": "Trascrizione"},
     "output.quiz": {"en": "Quiz", "nb": "Quiz", "it": "Quiz"},
     "output.qti": {"en": "QTI package", "nb": "QTI-pakke", "it": "Pacchetto QTI"},
+    "about.questions": {
+        "en": (
+            "A list of every question asked in the lecture, with when it was asked and the "
+            "lecturer's answer, if one was given."
+        ),
+        "nb": (
+            "En liste over alle spørsmål som ble stilt i forelesningen, med når de ble stilt og "
+            "foreleserens svar, hvis det ble gitt."
+        ),
+        "it": (
+            "Un elenco di tutte le domande poste durante la lezione, con il momento in cui sono "
+            "state poste e la risposta del docente, se è stata data."
+        ),
+    },
+    "about.transcript": {
+        "en": (
+            "Everything that was said in the lecture, written out with times, like subtitles. No "
+            "questions are picked out."
+        ),
+        "nb": (
+            "Alt som ble sagt i forelesningen, skrevet ut med tidspunkter, som undertekster. "
+            "Ingen spørsmål plukkes ut."
+        ),
+        "it": (
+            "Tutto ciò che è stato detto durante la lezione, trascritto con i tempi, come dei "
+            "sottotitoli. Non vengono estratte domande."
+        ),
+    },
+    "about.quiz": {
+        "en": (
+            "The questions from the lecture, plus multiple-choice questions to practise with. AI "
+            "writes the quiz from the questions that were asked."
+        ),
+        "nb": (
+            "Spørsmålene fra forelesningen, pluss flervalgsspørsmål å øve på. KI lager quizen ut "
+            "fra spørsmålene som ble stilt."
+        ),
+        "it": (
+            "Le domande della lezione, più domande a scelta multipla per esercitarsi. L'IA scrive "
+            "il quiz a partire dalle domande che sono state poste."
+        ),
+    },
+    "about.qti": {
+        "en": (
+            "Turns a quiz you have already made into a file you can import into Blackboard, "
+            "Canvas or another learning platform. Choose the quiz file (….quiz.json) above."
+        ),
+        "nb": (
+            "Gjør en quiz du allerede har laget om til en fil du kan importere i Blackboard, "
+            "Canvas eller en annen læringsplattform. Velg quizfilen (….quiz.json) ovenfor."
+        ),
+        "it": (
+            "Trasforma un quiz che hai già creato in un file da importare in Blackboard, Canvas o "
+            "un'altra piattaforma di apprendimento. Scegli sopra il file del quiz (….quiz.json)."
+        ),
+    },
     "button.run": {"en": "Run", "nb": "Kjør", "it": "Avvia"},
     "button.cancel": {"en": "Cancel", "nb": "Avbryt", "it": "Annulla"},
     "button.open_folder": {"en": "Open folder", "nb": "Åpne mappe", "it": "Apri cartella"},
