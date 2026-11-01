@@ -1,10 +1,4 @@
-"""QTI package: ``export_qti``, the version dispatch, the deterministic ZIP and the JSON sidecar.
-
-A QTI version is one writer module, which turns an assessment test into the package's XML
-entries, plus one entry in ``_WRITERS``. This module adds the sidecar and writes the ZIP. The
-package is deterministic: the same assessment and version give the same bytes, so every entry
-gets a fixed timestamp and fixed attributes instead of the clock and the platform's.
-"""
+"""QTI package: ``export_qti``, the version dispatch, the deterministic ZIP and the JSON sidecar."""
 
 from __future__ import annotations
 
@@ -25,9 +19,9 @@ _WRITERS: dict[str, Callable[[AssessmentTest], list[tuple[str, bytes]]]] = {
     "2.1": qti_v2.package_entries,
     "3.0": qti_v3.package_entries,
 }
-QTI_VERSIONS = tuple(_WRITERS)  # ("2.1", "3.0"), the choices of `questxtract qti --qti-version`
-DEFAULT_QTI_VERSION = "3.0"  # export_qti, write_qti_package and the CLI flag all default to it
-_ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)  # the earliest date a ZIP entry can carry
+QTI_VERSIONS = tuple(_WRITERS)
+DEFAULT_QTI_VERSION = "3.0"
+_ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
 
 
 def export_qti(
@@ -64,16 +58,7 @@ def export_qti(
 def write_qti_package(
     assessment: AssessmentTest, path: str | Path, *, version: str = DEFAULT_QTI_VERSION
 ) -> None:
-    """Write an assessment test as a QTI ZIP package of the given version.
-
-    For 2.1, items worth other than 1 point get a ``UserWarning``: an LMS that scores with the
-    ``match_correct`` template instead of the item's own rules gives them 1 point and no feedback
-    per option (architecture.md 12.4).
-
-    Raises:
-        QtiExportError: If ``version`` is not supported, or if the file cannot be written.
-
-    """
+    """Write an assessment test as a QTI ZIP package of the given version."""
     _check_version(version)
     if version == "2.1":
         _warn_template_points(assessment)

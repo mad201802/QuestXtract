@@ -1,5 +1,3 @@
-"""Tests for scripts/fetch_qti_xsd.py (issues #67, #163). No network: urlopen is replaced."""
-
 from __future__ import annotations
 
 import hashlib
@@ -19,14 +17,12 @@ from scripts.fetch_qti_xsd import (
 )
 
 _XML_XSD = "https://purl.imsglobal.org/spec/w3/2001/schema/xsd/xml.xsd"
-_MATHML2_XSD = "http://www.w3.org/Math/XMLSchema/mathml2/mathml2.xsd"  # a 2.1 file, over http
-_content = {url: url.encode() for url in PINNED}  # a stand-in body per file
-# The pinned URL of each address a file is downloaded from: always https.
+_MATHML2_XSD = "http://www.w3.org/Math/XMLSchema/mathml2/mathml2.xsd"
+_content = {url: url.encode() for url in PINNED}
 _pinned_at = {"https://" + url.split("://", 1)[1]: url for url in PINNED}
 
 
 def _serve(monkeypatch: pytest.MonkeyPatch, body: bytes | None = None) -> list[str]:
-    """Answer every download with ``body``, or else with that file's stand-in body."""
     requested: list[str] = []
 
     def urlopen(url: str, timeout: float) -> io.BytesIO:
@@ -55,7 +51,6 @@ def test_only_pinned_urls_are_mapped_to_local_files(tmp_path: Path) -> None:
     assert mapper(ASI_XSD) == local_path(ASI_XSD, tmp_path).resolve().as_uri()
     assert mapper(ASI_XSD_V2P1) == local_path(ASI_XSD_V2P1, tmp_path).resolve().as_uri()
     assert mapper("https://example.org/other.xsd") == "https://example.org/other.xsd"
-    # A 2.1 file is pinned under the http URL its schema names, not under its https twin.
     twin = ASI_XSD_V2P1.replace("http://", "https://", 1)
     assert mapper(twin) == twin
 

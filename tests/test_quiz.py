@@ -22,7 +22,6 @@ DATA = Path(__file__).parent / "data"
 def _answer(
     options: int = 3, *, stem: str = "Is sin(t) absolutely integrable?", **over: str
 ) -> dict[str, Any]:
-    """A usable model answer for an item with ``options`` options."""
     answer: dict[str, Any] = {
         "quiz_material": True,
         "stem": stem,
@@ -77,7 +76,6 @@ def _build(document: dict[str, Any], config: Config | None = None) -> Any:
 
 
 def _assert_valid(quiz: dict[str, Any], questions: dict[str, Any]) -> None:
-    """The quiz passes the shipped JSON Schema and every cross-field rule of ``validate_quiz``."""
     schema = json.loads(QUIZ_SCHEMA_PATH.read_text(encoding="utf-8"))
     errors = [e.message for e in Draft202012Validator(schema).iter_errors(quiz)]
     assert errors == []
@@ -86,12 +84,11 @@ def _assert_valid(quiz: dict[str, Any], questions: dict[str, Any]) -> None:
 
 @pytest.fixture
 def key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("IDUN_API_KEY", "ntnu-test")  # the default endpoint's key
+    monkeypatch.setenv("IDUN_API_KEY", "ntnu-test")
 
 
 @pytest.fixture
 def questions_file(tmp_path: Path) -> Path:
-    """A questions.json the real pipeline wrote from a committed transcript."""
     out = tmp_path / "lecture.questions.json"
     assert main(["process", str(DATA / "ttk4225_2026_09_14.transcript.json"), "-o", str(out)]) == 0
     return out
@@ -148,7 +145,7 @@ def test_strict_keeps_only_answered_questions_and_never_more_than_lenient(
     fake_llm(_answer())
 
     strict = _build(document, Config(quiz_strictness="strict")).quiz["questions"]
-    lenient = _build(document).quiz["questions"]  # lenient is the default
+    lenient = _build(document).quiz["questions"]
 
     assert [i["provenance"]["source_question_id"] for i in strict] == ["q_a", "q_c"]
     assert len(strict) <= len(lenient) == 3
@@ -203,7 +200,7 @@ def test_the_board_on_screen_goes_into_the_request(fake_llm: Callable[..., Any],
 
     with_board, without = (r["messages"][1]["content"] for r in client.requests)
     assert "x(t) = sin(t)" in with_board and r"\int |\sin t|\,dt" in with_board
-    assert "Board: nothing was linked" in without and "sin(t)" in without  # the question itself
+    assert "Board: nothing was linked" in without and "sin(t)" in without
 
 
 def test_generated_text_is_marked_and_every_item_is_pending(
@@ -236,8 +233,8 @@ def test_a_stem_that_only_lost_its_question_mark_is_generated(
     quiz = _build(document).quiz
     lost, case = quiz["questions"]
 
-    assert lost["prompt"]["origin"] == "generated"  # punctuation counts, as in validate_quiz
-    assert case["prompt"]["origin"] == "spoken"  # case and spacing do not
+    assert lost["prompt"]["origin"] == "generated"
+    assert case["prompt"]["origin"] == "spoken"
     _assert_valid(quiz, document)
 
 
@@ -249,16 +246,16 @@ def test_a_question_reworded_by_the_llm_detector_is_not_spoken(
 
     (item,) = _build(_document(question)).quiz["questions"]
 
-    assert item["prompt"]["origin"] == "generated"  # the spoken words were different
+    assert item["prompt"]["origin"] == "generated"
 
 
 @pytest.mark.parametrize(
     "bad",
     [
         "not json",
-        json.dumps(_answer(distractor_1="No, the integral diverges.")),  # same as the correct one
-        json.dumps({k: v for k, v in _answer().items() if k != "why_wrong_2"}),  # missing field
-        TimeoutError("no answer"),  # a stall, twice
+        json.dumps(_answer(distractor_1="No, the integral diverges.")),
+        json.dumps({k: v for k, v in _answer().items() if k != "why_wrong_2"}),
+        TimeoutError("no answer"),
     ],
 )
 def test_one_bad_answer_leaves_that_item_out_and_keeps_the_rest(
@@ -277,8 +274,6 @@ def test_one_bad_answer_leaves_that_item_out_and_keeps_the_rest(
 
 
 def _create_or_raise(llm: Any, request: dict[str, Any], seconds: float) -> Any:
-    """``endpoint._create`` without the deadline thread: a fake reply that is an exception is
-    raised as is, so a TimeoutError counts as a stall."""
     return llm.chat.completions.create(**request)
 
 
@@ -461,7 +456,7 @@ def test_a_question_the_model_turns_down_is_left_out_and_not_asked_again(
 
     assert [i["provenance"]["source_question_id"] for i in first.quiz["questions"]] == ["q_a"]
     assert "q_room" in first.skipped and first.failed == ()
-    assert len(client.requests) == 2 and second.quiz == first.quiz  # the decline is cached
+    assert len(client.requests) == 2 and second.quiz == first.quiz
 
 
 def test_an_answer_without_the_quiz_material_flag_is_not_usable(
@@ -667,11 +662,11 @@ def test_the_quiz_counts_and_prints_its_model_usage(
 
     result = _build(data)
     capsys.readouterr()
-    assert main(["quiz", str(questions_file)]) == 0  # every answer is cached by now
+    assert main(["quiz", str(questions_file)]) == 0
 
     assert result.usage["quiz_requests"] == len(client.requests) > 0
     err = capsys.readouterr().err
-    assert "left out" in err and "model requests" not in err  # cached answers cost nothing
+    assert "left out" in err and "model requests" not in err
 
 
 def test_the_quiz_run_prints_its_model_requests(
@@ -706,7 +701,6 @@ def test_a_bad_quiz_setting_does_not_stop_a_run_without_the_quiz(
 def test_by_default_the_quiz_asks_qwen_with_no_reasoning_setting(
     questions_file: Path, fake_llm: Callable[..., Any], key: None
 ) -> None:
-    """#179: the quiz follows the judge onto Qwen, which rejects "none"."""
     client = fake_llm(_answer())
 
     assert main(["quiz", str(questions_file)]) == 0
@@ -726,7 +720,6 @@ def test_a_reasoning_level_still_reaches_the_quiz_model(
 
 
 def test_options_that_differ_only_by_a_sign_are_different_options() -> None:
-    """-2 and 2 are two answers: the sameness check must not drop the minus sign."""
     usable = _usable(2)
     base = {
         "quiz_material": True,
@@ -741,11 +734,10 @@ def test_options_that_differ_only_by_a_sign_are_different_options() -> None:
     same = {**base, "correct_answer": "$-2$", "distractor_1": "-2.", "distractor_2": "$-1$"}
 
     assert usable(signed)
-    assert not usable(same)  # delimiters and a full stop do not make an option different
+    assert not usable(same)
 
 
 def test_a_decimal_point_or_comma_makes_a_different_option() -> None:
-    """1.5 and 15, 1 2 and 12 are different answers; case, spacing and a final full stop are not."""
     usable = _usable(2)
     base = {
         "quiz_material": True,
@@ -774,4 +766,4 @@ def test_a_decimal_point_or_comma_makes_a_different_option() -> None:
 
     assert usable(decimal) and usable(spaced) and usable(words)
     assert not usable(ending)
-    assert not usable(spacing)  # case and a run of spaces do not make an option different
+    assert not usable(spacing)

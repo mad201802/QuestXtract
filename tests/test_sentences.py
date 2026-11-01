@@ -32,7 +32,6 @@ def test_single_letter_initial_does_not_split():
 
 
 def test_lower_case_single_letter_splits():
-    """#78: "u." is a variable, not an initial."""
     words = "Unit step function, u. Is it absolutely integrable?".split()
     spec = [(t, i * 0.3, i * 0.3 + 0.25) for i, t in enumerate(words)]
     assert [s.text for s in split_sentences(_t(spec))] == [
@@ -54,7 +53,7 @@ def test_enumerated_number_still_splits():
 
 def test_force_splits_a_long_run_at_the_widest_gap():
     spec = [(f"w{i}", i * 0.1, i * 0.1 + 0.05) for i in range(8)]
-    spec[4] = ("w4", 3.0, 3.05)  # a 2.6 s hole after w3
+    spec[4] = ("w4", 3.0, 3.05)
     spec[5:] = [(f"w{i}", 3.0 + (i - 4) * 0.1, 3.05 + (i - 4) * 0.1) for i in range(5, 8)]
     out = split_sentences(_t(spec), max_words=5, min_gap=0.6)
     assert len(out) == 2
@@ -62,7 +61,6 @@ def test_force_splits_a_long_run_at_the_widest_gap():
 
 
 def test_splits_an_unpunctuated_run_at_a_pause():
-    # Short enough to clear max_words, so only the silence marks the boundary.
     spec = [(f"w{i}", i * 0.3, i * 0.3 + 0.25) for i in range(10)]
     spec[5:] = [(f"w{i}", 5.0 + (i - 5) * 0.3, 5.25 + (i - 5) * 0.3) for i in range(5, 10)]
     out = split_sentences(_t(spec), max_words=60, min_gap=0.6)
@@ -70,7 +68,6 @@ def test_splits_an_unpunctuated_run_at_a_pause():
 
 
 def test_caps_a_gapless_run_at_max_words():
-    # No gap qualifies, so _cap is the only thing that can break this up.
     spec = [(f"w{i}", i * 0.1, i * 0.1 + 0.05) for i in range(8)]
     out = split_sentences(_t(spec), max_words=5, min_gap=0.6)
     assert len(out) == 2 and all(len(s.text.split()) <= 5 for s in out)
@@ -87,7 +84,6 @@ def test_empty_transcript_yields_no_sentences():
 
 
 def test_stats_count_unpunctuated_sentences(context):
-    # The fixture's three sentences all end in punctuation; append a bare run-on.
     words = context.transcript.words
     tail = tuple(Word(text=f"w{i}", start=10.0 + i * 0.3, end=10.25 + i * 0.3) for i in range(4))
     context.transcript = Transcript(words=words + tail, duration=12.0)

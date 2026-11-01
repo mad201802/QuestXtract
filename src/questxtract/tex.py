@@ -1,16 +1,4 @@
-"""ExerPlaza TeX: a ``quiz.json`` as IndexedQuestion blocks for ExerPlaza's upload (12.5).
-
-The file is a transport format for ExerPlaza's parser (``exerplaza/backend/quiz/latex_parser.py``
-v2.1), not a document to compile. ExerPlaza stores every text as parsed and shows it with
-MathJax, so texts are written verbatim, without LaTeX escaping.
-
-The parser reports none of the mistakes that would break an item; it reads the item wrong
-instead. So this module guarantees what it needs: each answer on one line, balanced braces in
-every text, and no command of the format inside a text.
-
-The items come from :func:`questxtract.qti.quiz_to_qti`, so a quiz exports the same items as
-TeX and as QTI.
-"""
+"""ExerPlaza TeX: a ``quiz.json`` as IndexedQuestion blocks for ExerPlaza's upload (12.5)."""
 
 from __future__ import annotations
 
@@ -26,10 +14,9 @@ from .models import SchemaError
 from .qti import AssessmentItem, AssessmentTest, QtiExportError, quiz_to_qti
 from .quiz_schema import read_quiz
 
-_LANGUAGES = {"en": "english", "it": "italian"}  # the only two ExerPlaza's parser accepts
+_LANGUAGES = {"en": "english", "it": "italian"}
 _DISCLOSABILITY = {"pending": "only me", "accepted": "everybody"}
-# A prefix match on purpose: ``\\Questionable`` is refused too, since the parser would read it as
-# the start of a command.
+# A prefix match: the parser reads ``\\Questionable`` as a command too.
 _FORMAT_COMMAND = re.compile(
     r"\\(?:begin|end)\{Indexed|\\Question|\\Solution|\\(?:correct|penalizable)?answer"
 )
@@ -87,7 +74,6 @@ def export_tex(
 
 
 def _write_atomic(path: Path, data: bytes) -> None:
-    """Write beside ``path`` and rename, so a failed write leaves no partial file."""
     handle, name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     try:
         with os.fdopen(handle, "wb") as out:
@@ -99,17 +85,11 @@ def _write_atomic(path: Path, data: bytes) -> None:
 
 
 def quiz_to_tex(document: Mapping[str, Any], content_units: Sequence[str]) -> str:
-    """Convert a ``quiz.json`` document to ExerPlaza TeX, one block per item not rejected.
-
-    Raises:
-        TexExportError: Naming the field, as :func:`export_tex` describes.
-
-    """
+    """Convert a ``quiz.json`` document to ExerPlaza TeX, one block per item not rejected."""
     return _tex(document, _content_units(content_units))[0]
 
 
 def _tex(document: Mapping[str, Any], units: tuple[str, ...]) -> tuple[str, int]:
-    """Return the file's text and the number of blocks in it."""
     try:
         assessment = quiz_to_qti(document)
     except QtiExportError as exc:
@@ -123,8 +103,6 @@ def _tex(document: Mapping[str, Any], units: tuple[str, ...]) -> tuple[str, int]
     _check(assessment.title, "title", braces=False)
     by = _generated_by(assessment.metadata.get("generation"))
 
-    # Rejected items are not in the assessment, so an item's position there is not its index
-    # in the document; error paths need the index.
     index_of: dict[str, int] = {}
     for index, raw in enumerate(document["questions"]):
         identifier = raw.get("id") if isinstance(raw, Mapping) else None
@@ -155,7 +133,6 @@ def _block(
     language: str,
     by: str,
 ) -> str:
-    """One ``IndexedQuestion`` block, without a trailing newline."""
     status = item.metadata.get("review_status")
     if status not in _DISCLOSABILITY:
         raise TexExportError(
@@ -219,7 +196,6 @@ def _block(
 
 
 def _content_units(content_units: Sequence[str]) -> tuple[str, ...]:
-    """Return the units, stripped, each checked: non-empty, on one line, without braces."""
     if isinstance(content_units, str) or not content_units:
         raise TexExportError("content units: expected at least one name")
     units: list[str] = []
@@ -236,7 +212,6 @@ def _content_units(content_units: Sequence[str]) -> tuple[str, ...]:
 
 
 def _language(value: object) -> str:
-    """ExerPlaza's name for a language tag's primary subtag."""
     primary = value.split("-")[0].lower() if isinstance(value, str) else None
     if primary not in _LANGUAGES:
         raise TexExportError(
@@ -246,7 +221,6 @@ def _language(value: object) -> str:
 
 
 def _generated_by(generation: object) -> str:
-    """Who wrote the generated text, for the notes: the model and prompt, or the method."""
     if not isinstance(generation, Mapping):
         raise TexExportError("generation: expected an object")
     values: dict[str, str | None] = {}
@@ -266,7 +240,6 @@ def _generated_by(generation: object) -> str:
 
 
 def _check(text: str, path: str, *, braces: bool = True) -> None:
-    """Fail unless the parser would read ``text`` back whole: balanced, no format command."""
     command = _FORMAT_COMMAND.search(text)
     if command:
         raise TexExportError(
@@ -292,7 +265,6 @@ def _one_line(text: str) -> str:
 
 
 def _clock(seconds: float) -> str:
-    """Whole seconds, rounded down, as ``m:ss``, or ``h:mm:ss`` from one hour on."""
     hours, rest = divmod(math.floor(seconds), 3600)
     minutes, secs = divmod(rest, 60)
     return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"

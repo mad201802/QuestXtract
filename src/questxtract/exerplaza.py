@@ -39,6 +39,10 @@ _TIMEOUT_SECONDS = 30
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}  # where plain http is allowed
 _QUIZ_OUTCOMES = {"created", "updated"}
 _ITEM_OUTCOMES = {"created", "updated", "skipped"}
+_AGAIN = (
+    ". ExerPlaza may still have saved the quiz: run the command again, items it already has are"
+    " skipped"
+)
 
 
 class ExerPlazaExportError(SchemaError):
@@ -305,7 +309,7 @@ def _import(
         method="POST",
         headers={"Content-Type": "application/json", "Accept": "application/json"},
     )
-    reply = _send(opener, request, what)
+    reply = _send(opener, request, what, saves=True)
     if reply.status == 200:
         try:
             return _parse_import(json.loads(reply.body.decode("utf-8")))
@@ -360,9 +364,18 @@ def _uid(value: object, path: str) -> int:
 
 
 def _send(
-    opener: urllib.request.OpenerDirector, request: urllib.request.Request, what: str
+    opener: urllib.request.OpenerDirector,
+    request: urllib.request.Request,
+    what: str,
+    *,
+    saves: bool = False,
 ) -> _Reply:
-    """Send ``request`` and return the answer whatever its status; fail only without one."""
+    """Send ``request`` and return the answer whatever its status; fail only without one.
+
+    ``saves`` says the request may have been carried out although no answer came back (the
+    import), so the error for a timeout or a lost connection says to run it again.
+    """
+    again = _AGAIN if saves else ""
     try:
         with opener.open(request, timeout=_TIMEOUT_SECONDS) as response:
             return _Reply(status=response.status, headers=response.headers, body=response.read())
@@ -370,14 +383,18 @@ def _send(
         with error:
             return _Reply(status=error.code, headers=error.headers, body=error.read())
     except TimeoutError:
-        raise ExerPlazaExportError(f"{what}: no answer within {_TIMEOUT_SECONDS} s") from None
+        raise ExerPlazaExportError(
+            f"{what}: no answer within {_TIMEOUT_SECONDS} s{again}"
+        ) from None
     except urllib.error.URLError as exc:
         reason = exc.reason
         if isinstance(reason, TimeoutError):
-            raise ExerPlazaExportError(f"{what}: no answer within {_TIMEOUT_SECONDS} s") from None
+            raise ExerPlazaExportError(
+                f"{what}: no answer within {_TIMEOUT_SECONDS} s{again}"
+            ) from None
         raise ExerPlazaExportError(f"{what}: cannot reach ExerPlaza ({reason})") from None
     except (OSError, http.client.HTTPException) as exc:
-        raise ExerPlazaExportError(f"{what}: the connection failed ({exc!r})") from None
+        raise ExerPlazaExportError(f"{what}: the connection failed ({exc!r}){again}") from None
 
 
 def _said(reply: _Reply) -> str:

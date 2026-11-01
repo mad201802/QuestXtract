@@ -63,7 +63,6 @@ def document(ctx) -> dict:
 
 @pytest.fixture
 def searchable(document) -> dict:
-    """``document`` with a board state on screen during the first question, and texts to find."""
     document["visuals"] = [
         {
             "id": "v_board",
@@ -89,7 +88,6 @@ def searchable(document) -> dict:
 
 @pytest.fixture
 def board_ctx(tmp_path) -> Context:
-    """A finished run: one question asked under a board state, one in a later segment."""
     board = VisualContext(start=0.0, end=60.0, text="Eigenvalue of A", latex=r"\lambda_1 = 0")
     sentences = (
         Sentence(
@@ -275,9 +273,6 @@ def test_topic_matches_the_questions_segment_topic(document):
         warnings.simplefilter("error")
         window = filter_document(document, topic="sorting", end=1000)
     assert _starts_of_doc(window) == [450.0, 599.9, 600.0]
-
-
-# --- text search (#136) -------------------------------------------------------
 
 
 def test_a_word_on_the_linked_board_keeps_a_question_that_never_says_it(searchable, board_ctx):

@@ -67,7 +67,6 @@ def test_head_word_found_past_question_preambles():
     assert score_sentence("I'd like to ask is the policy stationary?")[1] == ("mark", "aux")
     assert score_sentence("I was wondering whether is it bounded?")[1] == ("mark", "aux")
     assert question_type("My question is what happens at zero?") == "what"
-    # A preamble alone gives no head: the statement stays under the gate.
     assert score_sentence("The question is important.") == (0.0, ())
 
 
@@ -75,7 +74,6 @@ def test_head_word_found_in_the_last_clause_of_a_question():
     reasons = score_sentence("If you have the data, does that mean it is better?")[1]
     assert reasons == ("mark", "aux")
     assert question_type("For AlphaTensor, is that fast?") == "yes_no"
-    # Without the question mark a trailing clause is a relative clause, not a question.
     assert score_sentence("We take the limit, which is zero.") == (0.0, ())
 
 
@@ -111,7 +109,6 @@ def test_a_curly_apostrophe_contracts_like_a_straight_one():
 
 def test_a_contraction_outside_a_question_is_decided_as_before(sentences):
     assert "wh" not in score_sentence("That's what I mean?")[1]
-    # Without the '?' a wh-contraction stays under the gate, like the bare wh-word.
     statement = type(sentences[0])(
         text="What's more, it is stable.", word_start=15, word_end=20, start=9.0, end=12.0
     )
@@ -138,7 +135,6 @@ def test_check_ins_score_below_content_questions():
     check_in, reasons = score_sentence("Is that clear?")
     content, _ = score_sentence("Is the state Markov?")
     assert "check_in" in reasons and check_in < content
-    # Still a candidate, but its unanswered confidence (0.55 x score) stays under 0.40.
     assert 0.45 <= check_in and 0.55 * check_in < 0.40
 
 
@@ -168,7 +164,6 @@ def test_comprehension_checks_do_not_swallow_content_questions():
 
 
 def test_checking_the_room_is_a_check_in():
-    """#70: seeing, clarity, following, being together, remembering, polls, a bare vocative."""
     for text in (
         "Do you see it?",
         "Okay, do you see the difference?",
@@ -189,7 +184,6 @@ def test_checking_the_room_is_a_check_in():
 
 
 def test_checking_the_room_leaves_content_alone():
-    """#70: content after the verb, a wh-word before it, or a vocative alone keep a question."""
     for text in (
         "Do you see why the area is finite?",
         "Do you see any pole on the imaginary axis?",
@@ -211,24 +205,20 @@ def test_scores_are_rounded():
 
 
 def test_head_word_found_past_a_preposition_before_a_wh_word():
-    """#78: "For which age ...?" opens on "which"."""
     sentence = "For which age are we guaranteed that starting here we end up here?"
     assert score_sentence(sentence) == (1.0, ("mark", "wh"))
     assert question_type("In what sense is it stable?") == "what"
-    assert score_sentence("In the limit it is stable?")[1] == ("mark",)  # no wh-word after it
+    assert score_sentence("In the limit it is stable?")[1] == ("mark",)
 
 
 def test_head_word_found_in_an_earlier_comma_clause():
-    """#78: an inverted auxiliary mid-sentence opens the question."""
     sentence = "This area here, is it going to be finite, infinite, or you do not know?"
     assert score_sentence(sentence) == (1.0, ("mark", "aux"))
     assert question_type(sentence) == "yes_no"
 
 
 def test_an_earlier_clause_needs_the_mark_and_an_auxiliary():
-    # without the '?' the clause walk stays off
     assert score_sentence("This area here, is it finite, or not.")[1] == ()
-    # a wh-word mid-sentence usually opens a relative clause, so only the last clause counts
     assert score_sentence("The answer here, what would you answer, people?")[1] == ("mark",)
 
 
@@ -303,7 +293,7 @@ def test_a_question_about_the_board_gets_the_delta_and_a_reason():
     (candidate,) = detect_questions(
         [_asked("The least upper bound, here?")], visual=(SUPREMUM,), board_delta=0.10
     )
-    assert candidate.score == 0.7  # 0.6 for the '?' alone
+    assert candidate.score == 0.7
     assert candidate.reasons == ("mark", "board_overlap")
 
 
@@ -320,9 +310,9 @@ def test_the_detect_stage_reads_the_board_and_the_delta_from_config():
 @pytest.mark.parametrize(
     ("text", "board", "delta"),
     [
-        ("Is that the one here?", SUPREMUM, 0.10),  # only stopwords in common ("the")
+        ("Is that the one here?", SUPREMUM, 0.10),
         ("The least upper bound, here?", VisualContext(start=20.0, end=30.0, text="bound"), 0.10),
-        ("The least upper bound, here?", SUPREMUM, 0.0),  # off
+        ("The least upper bound, here?", SUPREMUM, 0.0),
     ],
 )
 def test_no_delta_without_a_shared_content_word_on_screen(text, board, delta):
@@ -332,7 +322,6 @@ def test_no_delta_without_a_shared_content_word_on_screen(text, board, delta):
 
 
 def test_the_board_never_makes_a_candidate():
-    # A wh-word without a '?' scores 0.40, under the gate; the board does not lift it.
     assert detect_questions([_asked("What we call the upper bound")], visual=(SUPREMUM,)) == ()
     assert (
         detect_questions(

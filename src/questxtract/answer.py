@@ -1,11 +1,4 @@
-"""Stage 7: find the answer span for each question candidate.
-
-One rule, the adjacent seed (architecture.md 8). Answers further away come from the LLM
-detector (stage 8, ``--detector llm``), not from rules here.
-
-A question with no answer is still a result. architecture.md 9.2 is explicit: FR6 and FR7 ask
-for questions with timestamps, not for answered questions.
-"""
+"""Stage 7: find the answer span for each question candidate."""
 
 from __future__ import annotations
 
@@ -13,21 +6,13 @@ from collections.abc import Sequence
 
 from .models import Context, QAPair, QuestionCandidate, Sentence, stage
 
-# A confirmation tag, check-in or framing question is not asking for content, so whatever
-# follows it is the lecture carrying on, not its answer.
 _UNSEEDED = frozenset({"tag", "check_in", "framing"})
 
 
 def adjacent_seed(
     question: Sentence, following: Sentence | None, *, max_gap: float = 1.0
 ) -> Sentence | None:
-    """Return the sentence right after the question when it reads as its answer.
-
-    Distance 0: the Socratic case, and the highest-precision answer shape there is. Stage 3
-    splits *at* the ``?``, so the answer to "What is X? It is Y." is the next sentence, not
-    a tail of the question's own (issue #38). Taken only across a near-zero silence, and
-    never when that sentence is itself a question.
-    """
+    """Return the sentence right after the question when it reads as its answer."""
     if following is None or not following.text.strip():
         return None
     if following.start - question.end > max_gap:
@@ -60,7 +45,7 @@ def pair_answers(
                 question=candidate,
                 answer_sentence_ids=(seed.id,) if seed else (),
                 answer_text=seed.text.strip() if seed else "",
-                confidence=0.0,  # stage 9 fills this in
+                confidence=0.0,
                 start=sentence.start,
                 end=sentence.end,
                 reasons=("intra_sentence_qa",) if seed else ("no_answer_found",),

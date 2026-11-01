@@ -39,7 +39,6 @@ class LabelError:
 
 
 def _iter_jsonl_files(paths: Sequence[str], *, recursive: bool) -> Iterator[Path]:
-    """Expand a mix of files and directories into `.labels.jsonl` file paths."""
     for raw in paths:
         path = Path(raw)
         if path.is_dir():
@@ -48,16 +47,13 @@ def _iter_jsonl_files(paths: Sequence[str], *, recursive: bool) -> Iterator[Path
         elif path.is_file():
             yield path
         else:
-            yield path  # let validate_file report the missing-file error uniformly
+            yield path
 
 
 def validate_line(
     path: Path, line_number: int, raw_line: str
 ) -> tuple[dict | None, list[LabelError]]:
-    """Parse and validate one JSONL line.
-
-    Returns the parsed record (or ``None`` if parsing failed) and every error found on it.
-    """
+    """Parse and validate one JSONL line."""
     errors: list[LabelError] = []
     try:
         record = json.loads(raw_line)
@@ -111,12 +107,7 @@ def validate_line(
 
 
 def validate_file(path: Path) -> list[LabelError]:
-    """Validate every line of one `.labels.jsonl` file, plus cross-line invariants.
-
-    Raises no exceptions for a missing or unreadable file: that is reported as a `LabelError`
-    like any other problem, so a batch run over many files always finishes and reports
-    everything at once.
-    """
+    """Validate every line of one `.labels.jsonl` file, plus cross-line invariants."""
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
@@ -140,7 +131,6 @@ def validate_file(path: Path) -> list[LabelError]:
 
 
 def _check_no_overlaps(path: Path, records: list[tuple[int, dict]]) -> list[LabelError]:
-    """Flag entries whose time spans overlap - each labelled span should be one utterance."""
     errors: list[LabelError] = []
     by_start = sorted(records, key=lambda r: r[1]["start"])
     for (line_a, a), (line_b, b) in zip(by_start, by_start[1:], strict=False):
@@ -157,7 +147,7 @@ def _check_no_overlaps(path: Path, records: list[tuple[int, dict]]) -> list[Labe
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run validation over every path given. Returns the process exit code."""
+    """Run validation over every path given."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="+", help="`.labels.jsonl` files or directories")
     parser.add_argument("--recursive", action="store_true", help="search directories recursively")

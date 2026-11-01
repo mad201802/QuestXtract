@@ -1,8 +1,4 @@
-"""Core data types for QuestXtract (architecture.md section 5).
-
-``Context`` is the one mutable object in the system: the value every stage takes and
-returns. Everything else is a frozen, keyword-only dataclass.
-"""
+"""Core data types for QuestXtract (architecture.md section 5)."""
 
 from __future__ import annotations
 
@@ -15,10 +11,8 @@ from typing import Any, TypeVar
 
 from .config import Config  # imported for real: the cache resolves Context's annotations
 
-#: Stage name plus fraction complete (architecture.md 11.3).
 Progress = Callable[[str, float], None]
 
-#: Every stage has this signature. That sameness is the whole extension mechanism.
 Stage = Callable[["Context"], "Context"]
 
 _F = TypeVar("_F", bound=Stage)
@@ -66,7 +60,7 @@ class AsrSegment:
 
     Not a :class:`Segment`: that is a run of sentences (architecture.md 3.2). This is the
     engine's own chunking, kept only for its quality metrics, which are the cheapest
-    hallucination detector available and which the eval harness reads (architecture.md 2.2).
+    hallucination detector available; nothing reads them yet (architecture.md 2.2).
 
     Args:
         text: The transcribed text of the chunk.
@@ -188,7 +182,6 @@ class Transcript:
 
 
 def _chunk_words(raw: dict[str, Any], chunk: AsrSegment) -> tuple[Word, ...]:
-    """Words of one ASR chunk, synthesising evenly spaced ones when the engine gave none."""
     given = raw.get("words")
     if given:
         if not isinstance(given, list):
@@ -332,7 +325,7 @@ class QuestionCandidate:
         sentence_id: Id of the :class:`Sentence` it came from.
         text: The refined focus; may be a clause of the sentence rather than all of it.
         score: Detection score in ``[0, 1]``.
-        question_type: ``what``, ``why``, ``how``, ``yes_no``, ``definition`` or ``other``.
+        question_type: ``what``, ``why``, ``how``, ``yes_no`` or ``other``.
         reasons: Every rule that fired, positive and negative. Never dropped.
 
     """
@@ -392,12 +385,12 @@ class Context:
     transcript: Transcript | None = None
     sentences: tuple[Sentence, ...] = ()
     segments: tuple[Segment, ...] = ()
-    layout: Layout = field(default_factory=Layout)  # the full frame until the probe says else
-    visual: tuple[VisualContext, ...] = ()  # board states; joined to segments by attach_visual
+    layout: Layout = field(default_factory=Layout)
+    visual: tuple[VisualContext, ...] = ()
     candidates: tuple[QuestionCandidate, ...] = ()
     pairs: tuple[QAPair, ...] = ()
     stats: dict[str, int] = field(default_factory=dict)
-    progress: Progress | None = None  # section 11.3; mid-stage reporting
+    progress: Progress | None = None
     source_hash: str = ""
     duration: float = 0.0
 
@@ -412,20 +405,7 @@ class StageInfo:
 
 
 def stage(name: str, *, cache: str | None = None, uses: tuple[str, ...] = ()) -> Callable[[_F], _F]:
-    """Tag a function as a pipeline stage.
-
-    Lives here rather than in ``pipeline`` so the stage modules can import it without a
-    cycle; ``questxtract.pipeline`` re-exports it, which is where architecture.md 11.1 puts it.
-
-    Args:
-        name: The stage name, used for progress reporting and the cache file.
-        cache: The ``Context`` field this stage produces, cached as ``<name>.json``.
-            ``None`` means always recompute.
-        uses: ``Config`` field names whose values form the cache header (architecture.md 11.2).
-            Keep this next to the signature: a stage that gains a config field and forgets
-            to list it here is the one invalidation bug this design still has.
-
-    """
+    """Tag a function as a pipeline stage."""
 
     def decorate(fn: _F) -> _F:
         fn.stage = StageInfo(name=name, cache=cache, uses=uses)  # type: ignore[attr-defined]
@@ -435,12 +415,7 @@ def stage(name: str, *, cache: str | None = None, uses: tuple[str, ...] = ()) ->
 
 
 def stage_info(fn: Stage) -> StageInfo:
-    """Return a stage function's :class:`StageInfo`.
-
-    Raises:
-        TypeError: If ``fn`` is not decorated with ``@stage``.
-
-    """
+    """Return a stage function's :class:`StageInfo`."""
     info = getattr(fn, "stage", None)
     if not isinstance(info, StageInfo):
         raise TypeError(f"{getattr(fn, '__name__', fn)!r} is not decorated with @stage")

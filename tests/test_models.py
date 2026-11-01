@@ -25,12 +25,11 @@ def test_overlapping_uses_half_open_intervals():
     states = (VisualContext(start=0.0, end=5.0), VisualContext(start=5.0, end=20.0))
     assert overlapping(states, 1.0, 2.0) == (states[0],)
     assert overlapping(states, 4.0, 6.0) == states
-    assert overlapping(states, 5.0, 6.0) == (states[1],)  # touching at 5.0 is not overlapping
+    assert overlapping(states, 5.0, 6.0) == (states[1],)
     assert overlapping(states, 30.0, 40.0) == ()
 
 
 def test_transcript_to_dict_round_trips_through_from_dict(transcript):
-    """What `questxtract transcribe` writes, `questxtract process` reads back unchanged."""
     chunked = Transcript.from_dict(
         {"segments": [{"text": "What is it?", "start": 1.0, "end": 2.0, "avg_logprob": -0.3}]}
     )
@@ -120,7 +119,6 @@ def test_qapair_id_is_deterministic():
 
 
 def test_qapair_id_survives_a_rewording():
-    """#94: the LLM detector may reword a question; review edits are matched by its id."""
     spoken = QuestionCandidate(sentence_id="s_abc", text="So why is it, uh, finite?", score=0.6)
     reworded = QuestionCandidate(sentence_id="s_abc", text="Why is the area finite?", score=0.9)
     a = QAPair(question=spoken, confidence=0.5, start=1.5, end=2.0)

@@ -1,11 +1,11 @@
 <div align="center">
 
-# 🎓 QuestXtract
+# QuestXtract
 
 **Turn lecture recordings into timestamped questions and quizzes.**
 
-Feed it a lecture video, get back every question that was actually asked in it, with timestamps,
-confidence scores and a clean JSON export.
+A lecture recording in, every question asked in it out, with timestamps, confidence scores and a
+JSON export.
 
 [![Download](https://img.shields.io/github/v/release/mad201802/QuestXtract?label=Download&logo=github&style=for-the-badge&color=2ea44f)](https://github.com/mad201802/QuestXtract/releases/latest)
 
@@ -22,33 +22,31 @@ confidence scores and a clean JSON export.
 
 ## Why
 
-Lectures are full of questions the lecturer asks the room, and they are exactly the questions
-students should be able to answer afterwards. QuestXtract finds them, keeps their timestamps, and
-turns them into study material. It **extracts** questions, it never invents them.
+The questions a lecturer asks the room are the questions students should be able to answer
+afterwards. QuestXtract finds them, keeps their timestamps, and turns them into quizzes. It only
+extracts questions that were spoken.
 
 ## Features
 
 | | |
 |---|---|
-| 🎥 **Video or audio in** | `.mp4` or `.mp3` recordings, audio track extracted automatically (no system ffmpeg) |
-| 🗣️ **Transcription** | Speech-to-text with faster-whisper, or any ASR engine behind a small interface |
-| 🖼️ **Board and slides** | Optional: a vision model finds the slides or board in the frame, whatever the recording style, then reads each view into text, LaTeX and a description, linked to the questions asked while it was on screen |
-| ❓ **Question detection** | Fast offline rules, or an LLM you pick (local in Ollama, or hosted) that reads the transcript; a confidence score and the reasons for every question |
-| ⏱️ **Timestamps** | Every question carries its position in the recording |
-| 🔎 **Search** | Find the questions by words said or written on the board while they were asked, and by time |
-| ✏️ **Human in the loop** | A `review` block per question for teacher edits, never overwritten by the pipeline |
-| 📦 **JSON export** | `questions.json` with a fixed key set and a formal JSON Schema |
-| 🧩 **Quizzes** | Multiple-choice items from the questions asked, with explanations; every generated text is marked and starts as pending review |
-| 🎓 **LMS export** | `questxtract qti` writes a `quiz.json` as a QTI 3.0 or 2.1 package for an LMS to import |
-| 📝 **ExerPlaza TeX** | `questxtract tex` writes a `quiz.json` as a TeX file to upload to ExerPlaza |
-| 🔗 **Straight into ExerPlaza** | `questxtract exerplaza` sends a `quiz.json` to an ExerPlaza course session, logged in as you; sending it again adds only the new items |
+| Video or audio in | `.mp4` or `.mp3` recordings, audio track extracted automatically (no system ffmpeg) |
+| Transcription | Speech-to-text with faster-whisper, or any ASR engine behind a small interface |
+| Board and slides | Optional: a vision model finds the slides or board in the frame, whatever the recording style, then reads each view into text, LaTeX and a description, linked to the questions asked while it was on screen |
+| Question detection | Fast offline rules, or an LLM you pick (local in Ollama, or hosted) that reads the transcript; a confidence score and the reasons for every question |
+| Timestamps | Every question carries its position in the recording |
+| Search | Find the questions by words said or written on the board while they were asked, and by time |
+| Human in the loop | A `review` block per question for teacher edits, never overwritten by the pipeline |
+| JSON export | `questions.json` with a fixed key set and a formal JSON Schema |
+| Quizzes | Multiple-choice items from the questions asked, with explanations; every generated text is marked and starts as pending review |
+| LMS export | `questxtract qti` writes a `quiz.json` as a QTI 3.0 or 2.1 package for an LMS to import |
+| ExerPlaza TeX | `questxtract tex` writes a `quiz.json` as a TeX file to upload to ExerPlaza |
+| Straight into ExerPlaza | `questxtract exerplaza` sends a `quiz.json` to an ExerPlaza course session, logged in as you; sending it again adds only the new items |
 
-What is built today:
-[architecture.md 13.3](docs/architecture.md#133-status).
+What is built: [architecture.md 13.3](docs/architecture.md#133-status).
 
-**Not included:** animations of the board with [Manim](https://www.manim.community/). They would
-need Python 3.11 or newer, a LaTeX installation and a teacher's check of every clip, so they are
-not planned ([#185](https://github.com/mad201802/QuestXtract/issues/185),
+Not included: board animations with [Manim](https://www.manim.community/), which would need
+Python 3.11+, LaTeX and a teacher's check of every clip ([#185](https://github.com/mad201802/QuestXtract/issues/185),
 [D21](docs/design_decisions.md#d21-manim-animations-are-optional-outside-the-core-delivery)).
 
 ## Install
@@ -61,13 +59,11 @@ pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.
 uv add "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.3.0"
 ```
 
-Or click **Download** at the top, take the `.whl` file from the release, and install it from the
-folder you saved it in: `pip install "questxtract-0.3.0-py3-none-any.whl[gui]"`.
+Or take the `.whl` file from the release (Download, above) and install it: `pip install "questxtract-0.3.0-py3-none-any.whl[gui]"`.
 
-The extras: `[gui]` is the graphical app, with what the LLM detector and reading the board need;
-`[llm]` is only those, for the command line. Without an extra you get the command line with the
-offline rules. Drop the `@v0.3.0` for the latest `main`. Releases:
-[GitHub Releases](https://github.com/mad201802/QuestXtract/releases).
+`[gui]` adds the graphical app plus what the LLM detector and board reading need; `[llm]` adds
+only the latter. Without an extra you get the command line with the offline rules. Drop `@v0.3.0`
+for the latest `main`. Releases: [GitHub Releases](https://github.com/mad201802/QuestXtract/releases).
 
 Requires Python 3.10+ on Linux, macOS or Windows.
 
@@ -84,8 +80,8 @@ questxtract filter lecture.questions.json --text eigenvalue   # the questions ab
 An `.mp4` or `.mp3` goes through every stage; a `.json` transcript, from QuestXtract or
 [any other ASR engine](docs/cli.md#what-decides-how-much-runs), skips transcription.
 
-**Graphical app.** Install with the `[gui]` extra ([Install](#install)), then `questxtract gui`:
-drop a recording or transcript on the window and press Run ([details](docs/cli.md#graphical-app)).
+Graphical app: install with `[gui]`, run `questxtract gui`, drop a recording or transcript on the
+window and press Run ([details](docs/cli.md#graphical-app)).
 
 ### With an LLM and the board
 
@@ -95,16 +91,16 @@ questxtract process lecture.mp4 --vision           # also read the slides or the
 
 # everything in one run: board, LLM detector and quiz, then export the quiz
 questxtract process lecture.mp4 --vision --detector llm --quiz
-# -> lecture.questions.json, lecture.keyframes/ and lecture.quiz.json
-questxtract qti lecture.quiz.json -o lecture.qti.zip   # the quiz as a QTI 3.0 package for an LMS
-questxtract tex lecture.quiz.json -o lecture.tex --content-unit "Sorting"   # or as TeX for ExerPlaza
+questxtract qti lecture.quiz.json -o lecture.qti.zip   # QTI 3.0 package for an LMS
+questxtract tex lecture.quiz.json -o lecture.tex --content-unit "Sorting"   # TeX for ExerPlaza
 questxtract exerplaza lecture.quiz.json --url https://exerplaza.example.org \
-    --course-session 42 --content-unit "Sorting"   # or straight into an ExerPlaza course session
+    --course-session 42 --content-unit "Sorting"   # straight into an ExerPlaza course session
 ```
 
-By default both run on NTNU's LLM service: they need `IDUN_API_KEY` and the NTNU network or VPN.
-OpenAI or a local Ollama work through `--llm-url`. The app's **NTNU key...** button saves the key;
-to store it safely instead: [Setting up the API key](docs/cli.md#setting-up-the-api-key).
+Both run on NTNU's LLM service by default and need `IDUN_API_KEY` and the NTNU network or VPN.
+Any OpenAI-compatible endpoint works through `--llm-url`: `openrouter`, `openai`, `ollama` (local,
+no key) or a URL, each with its own key. The app's API key... button saves the key; a safer setup:
+[Setting up the API key](docs/cli.md#setting-up-the-api-key).
 
 `exerplaza` logs in with `QUESTXTRACT_EXERPLAZA_EMAIL` and `QUESTXTRACT_EXERPLAZA_PASSWORD` from
 the environment or `.env`; see [docs/cli.md](docs/cli.md#questxtract-exerplaza-quizjson).

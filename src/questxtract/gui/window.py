@@ -1,14 +1,4 @@
-"""The graphical app's window (issue #124): tkinter widgets over :mod:`.state` and :mod:`.run`.
-
-The window runs no pipeline itself. Run starts a worker thread that calls
-:func:`questxtract.gui.run.run`, which calls the CLI's own code. The worker only puts events on a
-queue; the main thread reads that queue with ``after()``, so Tk is used from one thread only.
-
-The words come from :mod:`.i18n`. A language switch re-labels every widget in place: texts
-that come from the window's state are kept as functions and evaluated again.
-
-The look is Tk's classic ttk theme. It approximates Windows XP; it is not the XP theme.
-"""
+"""The graphical app's window (issue #124): tkinter widgets over :mod:`.state` and :mod:`.run`."""
 
 from __future__ import annotations
 
@@ -22,6 +12,7 @@ from tkinter import filedialog, ttk
 from typing import Any
 
 from ..cli import RunResult
+from ..config import ENDPOINTS
 from ..pipeline import Cancelled
 from . import i18n, state
 from . import run as gui_run
@@ -32,17 +23,12 @@ from .options import OPTIONS, OUTPUTS, Option
 __all__ = ["run_app"]
 
 _POLL_MS = 100
-_TYPING_PAUSE_MS = 150  # how long the form must be still before its checks run
+_TYPING_PAUSE_MS = 150
 _OUTPUT_OPTION = next(option for option in OPTIONS if option.dest == "output")
 
 
 def run_app() -> int:
-    """Open the window and run it until it is closed.
-
-    Raises:
-        OSError: If no window can be opened here, for example with no display.
-
-    """
+    """Open the window and run it until it is closed."""
     try:
         root, drag_and_drop = _new_root()
     except tk.TclError as exc:
@@ -53,11 +39,6 @@ def run_app() -> int:
 
 
 def _new_root() -> tuple[tk.Tk, bool]:
-    """Return the window's root and whether drag and drop can work on this system.
-
-    tkinterdnd2 gives a root that accepts drops; where its binary will not load, the plain root
-    is used and the window says drop is not available.
-    """
     before = getattr(tk, "_default_root", None)
     try:
         from tkinterdnd2 import TkinterDnD
@@ -66,9 +47,7 @@ def _new_root() -> tuple[tk.Tk, bool]:
     except ImportError:
         pass
     except tk.TclError:
-        # TkinterDnD.Tk() creates the Tk root before it loads tkdnd, so a failed load leaves a
-        # half-built root behind as tkinter's default root. Remove it, or it becomes a second
-        # window and the variables of the real one bind to the wrong interpreter.
+        # A failed tkdnd load leaves a half-built default Tk root behind; remove it.
         orphan = getattr(tk, "_default_root", None)
         if orphan is not None and orphan is not before:
             orphan.destroy()
@@ -76,7 +55,6 @@ def _new_root() -> tuple[tk.Tk, bool]:
 
 
 def _file_stamp(path: Path | None) -> int | None:
-    """Return the modification time of ``path``, or ``None`` when there is no such file."""
     if path is None:
         return None
     try:
@@ -107,9 +85,8 @@ class QuestXtractWindow:
         self.tristate_combos: dict[str, ttk.Combobox] = {}
         self.output_buttons: dict[str, ttk.Radiobutton] = {}
         self.static_texts: list[tuple[Any, str]] = []
-        # Texts that depend on the window's state; evaluated again on a language switch.
         self.drop_unavailable = False
-        self.drop_extra: Callable[[], str] | None = None  # a note about the last drop only
+        self.drop_extra: Callable[[], str] | None = None
         self.run_output = "questions"
         self.status_text: Callable[[], str] = lambda: ""
         self.stage_text: Callable[[], str] = lambda: ""
@@ -126,15 +103,11 @@ class QuestXtractWindow:
         self._retranslate()
         root.after(_POLL_MS, self._poll)
 
-    # --- layout ------------------------------------------------------------------------
-
     def _text(self, widget: Any, key: str) -> None:
-        """Give ``widget`` the message ``key`` now, and again whenever the language changes."""
         self.static_texts.append((widget, key))
         widget.configure(text=tr(key))
 
     def _build(self) -> None:
-        """Lay out the groups top to bottom: language, file, output, options, Run and progress."""
         self.root.columnconfigure(0, weight=1)
         self.root.title("QuestXtract")
         frame = ttk.Frame(self.root, padding=8)
@@ -177,7 +150,6 @@ class QuestXtractWindow:
             button.grid(row=0, column=column, sticky="w", padx=(0, 18))
             self.output_buttons[name] = button
 
-        # Everything else is one click away: the options form starts hidden.
         options = ttk.LabelFrame(frame, padding=8)
         self.options_frame = options
         self._text(options, "group.options")
@@ -189,8 +161,6 @@ class QuestXtractWindow:
         row = 0
         for option in shown:
             if option.dest == "vision":
-                # Reading the board is the choice that changes the result most: it stays on the
-                # start view, under the output, not behind Advanced settings.
                 line = self._option_row(outputs, option)
                 line.grid(row=1, column=0, columnspan=len(state.OUTPUT_LABELS), sticky="w")
             else:
@@ -213,7 +183,7 @@ class QuestXtractWindow:
         self.open_button.grid(row=0, column=2, padx=(6, 0))
         actions.columnconfigure(3, weight=1)
         key_button = ttk.Button(actions, command=self._open_key_dialog)
-        self._text(key_button, "button.ntnu_key")
+        self._text(key_button, "button.api_key")
         key_button.grid(row=0, column=4, sticky="e", padx=(0, 6))
         self.advanced_button = ttk.Button(actions, command=self._toggle_advanced)
         self.advanced_button.grid(row=0, column=5, sticky="e")
@@ -230,7 +200,6 @@ class QuestXtractWindow:
         self.status.grid(row=8, sticky="w", pady=(4, 0))
 
     def _option_row(self, parent: tk.Misc, option: Option) -> ttk.Frame:
-        """One control with its label, built from the option table and its Config default."""
         line = ttk.Frame(parent)
         label = ttk.Label(line, width=46, anchor="w")
         label.grid(row=0, column=0, sticky="w")
@@ -251,6 +220,9 @@ class QuestXtractWindow:
             control = ttk.Combobox(
                 line, textvariable=var, values=option.choices, state="readonly", width=26
             )
+        elif option.kind == "endpoint":  # a short name from the list, or any URL typed in
+            var = tk.StringVar(master=line, value=state.start_text(option))
+            control = ttk.Combobox(line, textvariable=var, values=tuple(ENDPOINTS), width=34)
         else:
             initial = "" if option.kind in ("file", "path") else state.start_text(option)
             var = tk.StringVar(master=line, value=initial)
@@ -266,12 +238,10 @@ class QuestXtractWindow:
         return line
 
     def _set_tristate_values(self, dest: str) -> None:
-        """Give a tri-state control its choices in the current language."""
         labels = [tr(f"tristate.{name.lower()}") for name in state.TRISTATE_LABELS]
         self.tristate_combos[dest].configure(values=labels)
 
     def _enable_drop(self, drag_and_drop: bool) -> None:
-        """Register the drop box, or say on the window that drop is not available here."""
         if drag_and_drop:
             try:
                 from tkinterdnd2 import DND_FILES
@@ -284,24 +254,20 @@ class QuestXtractWindow:
                 pass
         self.drop_unavailable = True
 
-    # --- what the controls mean --------------------------------------------------------
-
     def choose_source(self, path: Path) -> None:
         """Use ``path`` as the recording or transcript, and show it."""
         self.source = path
         self.source_label.configure(text=str(path))
-        self.drop_extra = None  # the note of an earlier drop does not belong to this file
+        self.drop_extra = None
         self.drop_note.configure(text=self._drop_note())
         if not state.output_offered(self.output.get(), path):
             self.output.set("questions")
         self._refresh()
 
     def _open_key_dialog(self) -> None:
-        """Open the NTNU key window; a saved or removed key is part of the next check."""
-        KeyDialog(self.root, on_change=self._refresh)
+        KeyDialog(self.root, url=state.key_endpoint(self._values()), on_change=self._refresh)
 
     def _toggle_advanced(self) -> None:
-        """Show or hide the options form; the window grows or shrinks to fit."""
         self.advanced_open = not self.advanced_open
         if self.advanced_open:
             self.options_frame.grid()
@@ -310,18 +276,15 @@ class QuestXtractWindow:
         self._retranslate_advanced_button()
 
     def _retranslate_advanced_button(self) -> None:
-        """Label the Advanced settings button for what it will do, in the current language."""
         key = "button.advanced_hide" if self.advanced_open else "button.advanced_show"
         self.advanced_button.configure(text=tr(key))
 
     def _drop_note(self) -> str:
-        """Return the line under the drop box: the last drop's note, else drop being unavailable."""
         if self.drop_extra is not None:
             return self.drop_extra()
         return tr("drop.unavailable") if self.drop_unavailable else ""
 
     def _tristate_canonical(self, dest: str) -> str:
-        """Return the English name of a tri-state control's shown choice (its internal value)."""
         shown = self.fields[dest].get()
         for name in state.TRISTATE_LABELS:
             if tr(f"tristate.{name.lower()}") == shown:
@@ -329,14 +292,12 @@ class QuestXtractWindow:
         return state.TRISTATE_LABELS[0]
 
     def _values(self) -> dict[str, Any]:
-        """Return the form as the values the CLI takes."""
         raw: dict[str, Any] = {dest: var.get() for dest, var in self.fields.items()}
         for dest in self.tristate_combos:
             raw[dest] = self._tristate_canonical(dest)
         return state.form_values(raw)
 
     def _output_path(self) -> Path | None:
-        """Return the file to write: the output field where it is shown, else the default."""
         output = self.output.get()
         text = str(self.fields["output"].get()).strip()
         if text and gui_run.applies(_OUTPUT_OPTION, output):
@@ -344,18 +305,15 @@ class QuestXtractWindow:
         return state.default_output(self.source, output)
 
     def _output_changed(self) -> None:
-        """Forget the file typed for the last output, so a new output never writes over it."""
         field = self.fields["output"]
-        if isinstance(field, tk.StringVar):  # a path field, never a checkbox
+        if isinstance(field, tk.StringVar):
             field.set("")
         self._refresh()
 
     def _problem(self) -> str | None:
-        """Why Run is disabled now, or ``None``; checked again when the form or file changes."""
         values = self._values()
         output = self.output.get()
         output_path = self._output_path()
-        # The settings file and .env are part of the check, so an edit to them counts too.
         settings = Path(values.get("config") or "questxtract.toml")
         stamps = (_file_stamp(self.source), _file_stamp(settings), _file_stamp(Path(".env")))
         key = (self.source, output, tuple(sorted(values.items())), output_path, stamps)
@@ -364,13 +322,11 @@ class QuestXtractWindow:
         return self._problem_memo[1]
 
     def _schedule_refresh(self) -> None:
-        """Refresh once typing pauses, so a word typed quickly costs one check, not one per key."""
         if self._refresh_job is not None:
             self.root.after_cancel(self._refresh_job)
         self._refresh_job = self.root.after(_TYPING_PAUSE_MS, self._refresh)
 
     def _refresh(self) -> None:
-        """Bring every control in line with the form: shown rows, enabled buttons, the hint."""
         self._refresh_job = None
         output = self.output.get()
         for name, button in self.output_buttons.items():
@@ -383,8 +339,6 @@ class QuestXtractWindow:
                     row.grid()
                 else:
                     row.grid_remove()
-        # The judge's model only matters to the LLM detector; the URL and the reasoning setting
-        # also serve the quiz and vision, so they stay open whatever the detector is.
         judge_model = self.controls.get("llm_model")
         if judge_model is not None:
             judging = self.fields["detector"].get() == "llm"
@@ -395,10 +349,7 @@ class QuestXtractWindow:
         self.cancel_button.state(["!disabled"] if cancellable else ["disabled"])
         self.hint.configure(text=problem or "")
 
-    # --- language ----------------------------------------------------------------------
-
     def _switch_language(self) -> None:
-        """Show the window in the language the switch picked; the form keeps its values."""
         choices = {dest: self._tristate_canonical(dest) for dest in self.tristate_combos}
         i18n.set_language(self.language.get())
         for dest, name in choices.items():
@@ -408,7 +359,6 @@ class QuestXtractWindow:
         self._retranslate()
 
     def _retranslate(self) -> None:
-        """Put every text of the window in the current language."""
         self.root.title("QuestXtract")
         self._retranslate_advanced_button()
         for widget, key in self.static_texts:
@@ -424,10 +374,7 @@ class QuestXtractWindow:
         self.stage_label.configure(text=self.stage_text())
         self._refresh()
 
-    # --- actions -----------------------------------------------------------------------
-
     def _browse(self) -> None:
-        """Ask the system dialog for a recording or transcript."""
         name = filedialog.askopenfilename(
             parent=self.root,
             title=tr("dialog.source"),
@@ -440,7 +387,6 @@ class QuestXtractWindow:
             self.choose_source(Path(name))
 
     def _browse_into(self, option: Option, var: tk.Variable) -> None:
-        """Ask the system dialog for the file an option names, and put it in its control."""
         if option.dest == "output":
             kind = ("ZIP", ".zip") if OUTPUTS[self.output.get()] == "qti" else ("JSON", ".json")
             name = filedialog.asksaveasfilename(
@@ -459,7 +405,6 @@ class QuestXtractWindow:
             var.set(name)
 
     def _on_drop(self, event: Any) -> str:
-        """Take the first file of a drop; tkinterdnd2 passes the paths as one braced string."""
         paths = state.dropped_paths(str(event.data), self.root.tk.splitlist)
         if paths:
             self.choose_source(paths[0])
@@ -469,11 +414,10 @@ class QuestXtractWindow:
         return str(getattr(event, "action", "copy"))
 
     def _run(self) -> None:
-        """Start the run on a worker thread; the window keeps answering while it works."""
         source = self.source
         if source is None or self.busy:
             return
-        if self._problem() is not None:  # a value typed just now, before its check ran
+        if self._problem() is not None:
             self._refresh()
             return
         self.busy = True
@@ -494,7 +438,6 @@ class QuestXtractWindow:
         values: dict[str, Any],
         output_path: Path | None,
     ) -> None:
-        """Run the CLI's run and report only through the queue; never touch Tk here."""
 
         def report(stage: str, fraction: float) -> None:
             self.events.put(("progress", (stage, fraction)))
@@ -507,14 +450,13 @@ class QuestXtractWindow:
             self.events.put(("cancelled", None))
         except (OSError, ValueError) as exc:
             self.events.put(("error", state.one_line(str(exc))))
-        except Exception as exc:  # a bug, not a user error: one line here, the rest in the terminal
+        except Exception as exc:
             traceback.print_exc()
             self.events.put(("error", tr("status.unexpected", name=type(exc).__name__)))
         else:
             self.events.put(("done", result))
 
     def _close(self) -> None:
-        """Close the window; a run in progress is stopped first, so its temporary files go."""
         if not self.busy:
             self._destroy()
             return
@@ -523,13 +465,11 @@ class QuestXtractWindow:
         self._set_status(lambda: tr("status.closing"))
 
     def _cancel(self) -> None:
-        """Ask the run to stop before its next stage; a running stage finishes first."""
         self.cancel.set()
         self.cancel_button.state(["disabled"])
         self._set_status(lambda: tr("status.stopping"))
 
     def _open_folder(self) -> None:
-        """Show the folder of the written file in the system's file manager."""
         if self.result_path is None:
             return
         try:
@@ -539,24 +479,18 @@ class QuestXtractWindow:
             self._set_status(lambda: tr("status.open_failed", error=message))
 
     def _set_status(self, text: Callable[[], str]) -> None:
-        """Show ``text`` on the status line now, and again on a language switch."""
         self.status_text = text
         self.status.configure(text=text())
 
     def _set_stage(self, text: Callable[[], str]) -> None:
-        """Show ``text`` as the progress stage now, and again on a language switch."""
         self.stage_text = text
         self.stage_label.configure(text=text())
 
-    # --- events from the worker --------------------------------------------------------
-
     def _destroy(self) -> None:
-        """Destroy the window and stop polling the worker."""
         self.alive = False
         self.root.destroy()
 
     def _poll(self) -> None:
-        """Handle what the worker reported since the last look, then look again later."""
         if not self.alive:
             return
         while True:
@@ -568,14 +502,13 @@ class QuestXtractWindow:
         self.root.after(_POLL_MS, self._poll)
 
     def _handle(self, kind: str, payload: Any) -> None:
-        """Show one worker event: progress while running, the result or error when it ends."""
         if kind == "progress":
             stage, fraction = payload
             quiz_follows = self.run_output == "quiz"
             self.progress_var.set(
                 100 * state.overall_fraction(stage, fraction, quiz_follows=quiz_follows)
             )
-            if not (stage == "done" and quiz_follows):  # the quiz is still to come
+            if not (stage == "done" and quiz_follows):
                 self._set_stage(lambda: state.stage_label(stage))
             return
         self.busy = False
@@ -595,7 +528,6 @@ class QuestXtractWindow:
         self._refresh()
 
     def _show_result(self, result: RunResult) -> None:
-        """Show the written path, the count and any warnings, and enable Open folder."""
         self.result_path = result.path
         path = result.path
 

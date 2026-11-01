@@ -40,7 +40,6 @@ _KINDS = ("slides", "blackboard", "whiteboard", "tablet", "unknown")
 
 
 def _strict(schema: dict[str, Any]) -> dict[str, Any]:
-    """Return ``schema`` without the keywords OpenAI's strict mode rejects (checked locally)."""
     props = {
         name: {k: v for k, v in spec.items() if k not in ("minimum", "maximum")}
         for name, spec in schema["properties"].items()
@@ -49,7 +48,6 @@ def _strict(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def _check(answer: Any) -> str | None:
-    """Return why ``answer`` breaks the schema, or ``None`` when it fits."""
     if not isinstance(answer, dict):
         return "not a JSON object"
     for key, ok in (
@@ -67,7 +65,6 @@ def _check(answer: Any) -> str | None:
 
 
 def _frames(patterns: list[str]) -> list[Path]:
-    """Expand each argument here, so a quoted pattern works in any shell, PowerShell included."""
     frames: list[Path] = []
     for pattern in patterns:
         hits = sorted(glob.glob(pattern)) if any(c in pattern for c in "*?[") else [pattern]
@@ -78,7 +75,6 @@ def _frames(patterns: list[str]) -> list[Path]:
 
 
 def _speech(transcript: dict[str, Any], seconds: float, window: float) -> str:
-    """Return the words spoken within ``window`` seconds either side of ``seconds``."""
     words = [
         w["word"]
         for segment in transcript["segments"]
@@ -97,7 +93,6 @@ def _request(
     schema: Any,
     ocr: str | None = None,
 ) -> dict[str, Any]:
-    """Build the chat request for one frame: prompt v0 with the schema, or an OCR task prompt."""
     image: dict[str, Any] = {"url": "data:image/png;base64," + base64.b64encode(png).decode()}
     if detail:
         image["detail"] = detail
@@ -199,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
                 started = time.monotonic()
                 try:
                     response = client.chat.completions.create(**request)
-                except Exception as exc:  # record any failure and carry on with the next call
+                except Exception as exc:
                     row.update(ok=False, error=f"{type(exc).__name__}: {str(exc)[:300]}")
                 else:
                     row["seconds"] = round(time.monotonic() - started, 2)
@@ -227,7 +222,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _record(row: dict[str, Any], content: str) -> None:
-    """Store a prompt-v0 answer in ``row``: the parsed JSON when it fits the schema."""
     try:
         answer = json.loads(content)
     except json.JSONDecodeError:

@@ -19,12 +19,11 @@ Per arm: failed readings, mean character error rate of `text` (frames with text)
 erased content kept. A copied line is a line of the answer that is a line of the arm's previous
 reading but within a character error rate of 1/3 of no line of this frame's label, nor of two
 consecutive ones joined (line breaks are layout): gone from the board, or an old form of a line
-that has grown since. v0 never sees the previous reading,
-so its copied lines are the baseline: the same words on both boards. Erased content is what a
-label's optional `erased` list names: text of the previous frame that is no longer on this one
-(`tests/data/vision/sequence/`); it counts as kept when the answer's text or LaTeX holds it
-within one edit per four characters, ignoring case, spacing and LaTeX markup (a `geq` command
-reads as `≥`).
+that has grown since. v0 never sees the previous reading, so its copied lines are the baseline:
+the same words on both boards. Erased content is what a label's optional `erased` list names:
+text of the previous frame that is no longer on this one (`tests/data/vision/sequence/`); it
+counts as kept when the answer's text or LaTeX holds it within one edit per four characters,
+ignoring case, spacing and LaTeX markup (a `geq` command reads as `≥`).
 
 Calls the vision model: needs the `[llm]` extra and a key, as `eval --score-vision`. Answers are
 cached per request, so a second run makes no calls.
@@ -57,9 +56,9 @@ from questxtract.vision import (
     read_keyframe,
 )
 
-_COPY_MAX_ERROR = 1 / 3  # a line closer than this to a label line is on the board
-_COPY_MIN_CHARS = 8  # shorter lines ("a", "x = 0") are on many boards by chance
-_ERASED_MAX_ERROR = 1 / 4  # edits per character at which erased text still counts as kept
+_COPY_MAX_ERROR = 1 / 3
+_COPY_MIN_CHARS = 8
+_ERASED_MAX_ERROR = 1 / 4
 _ARMS = ("v0", "v2", "stage")
 _NOTATION = re.compile(r"\\(?:text|mathrm|left|right)\b|[\s{}_^\\]")
 _SYMBOLS = {r"\geq": "≥", r"\ge": "≥", r"\leq": "≤", r"\le": "≤", r"\cdot": "*", "∗": "*"}
@@ -70,16 +69,11 @@ def _plain(text: str) -> str:
 
 
 def _seconds(label: dict[str, Any]) -> float:
-    """Return when a frame was taken, from its name: ``<slug>_<seconds>.png``."""
     return float(str(label["frame"]).rsplit("_", 1)[1].removesuffix(".png"))
 
 
 def copied_lines(answer: str, previous: str, label: str) -> list[str]:
-    """Return the lines of ``answer`` copied from ``previous`` whose version is not on the board.
-
-    A line of ``previous`` that is on no line of ``label``, nor on two consecutive ones joined:
-    gone from the board, or an old, shorter form of a line that has grown since.
-    """
+    """Return the lines of ``answer`` copied from ``previous`` whose version is not on the board."""
     before = {_plain(line) for line in previous.splitlines()}
     lines = [_plain(line) for line in label.splitlines() if _plain(line)]
     board = lines + [f"{a} {b}" for a, b in pairwise(lines)]
@@ -113,18 +107,12 @@ def erased_kept(answer: dict[str, Any], erased: list[str]) -> list[str]:
 
 
 def compare(directory: Path, config: Config) -> list[dict[str, Any]]:
-    """Read every labelled frame that has an earlier one in its recording, three ways.
-
-    Returns one row per frame: its label, the stage's decision (``kept``: the share of the
-    earlier frame's ink still there; ``sent``: whether the stage sends the previous state), and
-    per arm the answer (``None`` when the reading failed), its copied lines and the erased text
-    it kept.
-    """
+    """Read every labelled frame that has an earlier one in its recording, three ways."""
     rows: list[dict[str, Any]] = []
     for labels_path in sorted(directory.glob("*.frames.jsonl")):
         lines = labels_path.read_text(encoding="utf-8").splitlines()
         labels = sorted((json.loads(line) for line in lines if line.strip()), key=_seconds)
-        was: Any = None  # the ink of the frame before
+        was: Any = None
         readings: dict[str, dict[str, Any] | None] = dict.fromkeys(_ARMS)
         previous_frame = None
         for label in labels:

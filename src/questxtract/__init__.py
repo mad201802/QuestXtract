@@ -1,8 +1,4 @@
-"""QuestXtract: extract spoken questions from lecture recordings.
-
-The pipeline is a list of ``Context -> Context`` functions (``STAGES``); ``process()`` runs
-it over one recording. See ``docs/architecture.md`` for what each stage does and why.
-"""
+"""QuestXtract: extract spoken questions from lecture recordings."""
 
 from importlib.metadata import PackageNotFoundError, version
 
@@ -33,8 +29,8 @@ from .schema import Question
 from .tex import TexExportError, export_tex
 
 try:
-    __version__ = version("questxtract")  # from pyproject.toml via the installed metadata
-except PackageNotFoundError:  # a source tree that was never installed
+    __version__ = version("questxtract")
+except PackageNotFoundError:
     __version__ = "0+unknown"
 
 __all__ = [

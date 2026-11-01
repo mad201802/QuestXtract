@@ -1,13 +1,4 @@
-"""Stage 1: validate the source, probe the container, hash it for the cache key.
-
-An ``.mp4`` or an ``.mp3`` is accepted; what the file holds decides the rest, not its name: a
-file with only an audio track is transcribed and has no board to read (the vision stage checks
-for a video track itself).
-
-PyAV bundles the FFmpeg libraries, so this is not a subprocess and there is nothing for
-the user to install. There is no separate audio-extraction stage: the ASR backend calls
-:func:`extract_audio` for a temporary WAV (architecture.md 2.1).
-"""
+"""Stage 1: validate the source, probe the container, hash it for the cache key."""
 
 from __future__ import annotations
 
@@ -22,7 +13,7 @@ import av
 
 from .models import Context, stage
 
-_HASH_BYTES = 8 * 1024 * 1024  # first and last 8 MiB; full-hashing a 2 GB lecture is wasted I/O
+_HASH_BYTES = 8 * 1024 * 1024
 _AUDIO_RATE = 16_000
 _SUFFIXES = (".mp4", ".mp3")
 
@@ -32,7 +23,6 @@ class MediaError(ValueError):
 
 
 def _validate_source(path: Path) -> None:
-    """Validate the source path and the supported container type."""
     if not path.is_file():
         raise FileNotFoundError(f"{path}: no such file")
     if path.suffix.lower() not in _SUFFIXES:
@@ -82,7 +72,6 @@ def _write_wav(
     output: Path,
     progress: Callable[[float], None] | None = None,
 ) -> None:
-    """Decode an audio stream and write resampled PCM samples to ``output``."""
     duration = float(container.duration / av.time_base) if container.duration else 0.0
     resampler = av.audio.resampler.AudioResampler(format="s16", layout="mono", rate=_AUDIO_RATE)
     with av.open(str(output), mode="w", format="wav") as destination:
@@ -102,10 +91,7 @@ def _write_wav(
 
 
 def source_hash(path: Path) -> str:
-    """Content hash of a media file: first and last 8 MiB plus the file size.
-
-    This is the cache key every later stage is filed under (architecture.md 2.1).
-    """
+    """Content hash of a media file: first and last 8 MiB plus the file size."""
     size = path.stat().st_size
     digest = hashlib.sha256(str(size).encode())
     with path.open("rb") as handle:
@@ -118,13 +104,7 @@ def source_hash(path: Path) -> str:
 
 @stage("ingest")
 def ingest(ctx: Context) -> Context:
-    """Validate the source and record its hash and duration.
-
-    Raises:
-        FileNotFoundError: If the source does not exist.
-        MediaError: If the source is not a readable MP4 or MP3 recording with audio.
-
-    """
+    """Validate the source and record its hash and duration."""
     _validate_source(ctx.source)
     ctx.source_hash = source_hash(ctx.source)
     try:

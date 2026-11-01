@@ -53,13 +53,7 @@ _VALID_KINDS = frozenset({"content", "rhetorical", "check_in", "procedural"})
 
 
 def parse_scratch_line(line_number: int, raw_line: str) -> dict | None:
-    """Parse one scratch-file line into a label record, or ``None`` for a blank line.
-
-    Raises:
-        ValueError: If the line is non-blank but doesn't have at least two ``|``-separated
-            fields, or the timestamp or kind can't be parsed. The message names the line.
-
-    """
+    """Parse one scratch-file line into a label record, or ``None`` for a blank line."""
     line = raw_line.rstrip("\n")
     if not line.strip() or line.strip().startswith("#"):
         return None
@@ -113,12 +107,7 @@ def _tokens(text: str) -> list[str]:
 
 
 def snap(records: list[dict], words: Sequence[Word]) -> list[dict]:
-    """Set each record's ``start``/``end`` from the transcript words its ``text`` quotes.
-
-    Raises:
-        ValueError: If a record's text does not occur in ``words``.
-
-    """
+    """Set each record's ``start``/``end`` from the transcript words its ``text`` quotes."""
     stream = [(tok, i) for i, w in enumerate(words) for tok in _tokens(w.text)]
     tokens = [tok for tok, _ in stream]
     for record in records:
@@ -139,7 +128,7 @@ def _in_any_window(start: float, windows: Sequence[tuple[float, float]]) -> bool
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the conversion. Returns the process exit code."""
+    """Run the conversion."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("scratch_file", help="the plain-text notes file")
     parser.add_argument("-o", "--output", required=True, help="where to write the .labels.jsonl")

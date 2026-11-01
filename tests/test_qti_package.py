@@ -1,9 +1,3 @@
-"""Tests for the QTI package: the version dispatch, the deterministic ZIP and the file (#163).
-
-What each version's XML holds, and its validation against the XSDs, is in test_qti_v2.py and
-test_qti_v3.py.
-"""
-
 from __future__ import annotations
 
 import json
@@ -68,7 +62,6 @@ def test_an_unknown_version_fails_naming_the_supported_ones_before_the_quiz_is_r
     tmp_path: Path, version: str
 ) -> None:
     output = tmp_path / "out.zip"
-    # The quiz file does not exist either: the version error comes first.
     with pytest.raises(QtiExportError, match=r"choose one of 2\.1, 3\.0$") as error:
         export_qti(tmp_path / "missing.json", output, version=version)
     assert f"QTI version {version!r} is not supported" in str(error.value)
@@ -135,8 +128,7 @@ def test_an_unreadable_or_invalid_quiz_fails_readably(tmp_path: Path, make_quiz:
 
 
 def test_a_2_1_item_worth_other_than_1_point_warns(tmp_path: Path, make_quiz: MakeQuiz) -> None:
-    """Review of #175: a template-only LMS would score it 1 and drop the per-option feedback."""
-    quiz = make_quiz("q_aaa", "q_bbb")  # the fixture's items are worth 2
+    quiz = make_quiz("q_aaa", "q_bbb")
     quiz["questions"][0]["points"] = 1
     with pytest.warns(
         UserWarning, match=r"1 item\(s\) are worth other than 1 point \(quiz_q_bbb\)"

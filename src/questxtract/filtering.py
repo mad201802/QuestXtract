@@ -1,29 +1,4 @@
-"""Filtering extracted questions by time range and text, and experimentally by topic.
-
-FR11 (#16) asks for time and topic; the text search (#136) queries what was said and what was
-on the board together (M3).
-
-Two entry points over the two shapes a finished run takes: :func:`filter_questions` on a
-``Context``, :func:`filter_document` on a ``questions.json`` document from
-``read_questions()``. Both keep the same rule and return a new value; the input is never
-touched.
-
-A question is in range when ``start <= question.start < end``. The question's start is the
-FR7 timestamp, and half-open ranges tile a recording without counting a question twice.
-Only the question list shrinks: segments, board states, source, config and stats are left
-as they are, so ``segment_id`` and ``visual_ids`` still resolve.
-
-``text=`` keeps a question when every word of the query appears somewhere in it, as a whole
-word and ignoring case: in its ``text``, ``original_text``, answer or ``review`` text, or in the
-``text``, ``latex`` or ``description`` of a board state in its ``visual_ids``. The words may come
-from different places, so "eigenvalue zero" finds a spoken "what if this is zero?" asked while
-the board says "eigenvalue".
-
-Topic filtering is **experimental**. Nothing produces topic labels yet: a ``Segment`` is a
-time unit, not a topic one (architecture.md 3.2), and every exported ``segments[].topic``
-is ``null``. ``topic=`` matches a question's segment topic exactly, and warns when the data
-carries no topic labels at all, since it then matches nothing.
-"""
+"""Filtering extracted questions by time range and text, and experimentally by topic."""
 
 from __future__ import annotations
 
@@ -70,14 +45,12 @@ def filter_questions(
     words = _query_words(text)
     pairs = tuple(p for p in ctx.pairs if _in_range(p.start, low, high))
     if words:
-        # The export links questions to board states; search what it would write.
         doc = result_to_dict(dataclasses.replace(ctx, pairs=pairs))
         visuals = _visuals_by_id(doc["visuals"])
         pairs = tuple(
             p for p, q in zip(pairs, doc["questions"], strict=True) if _matches(q, visuals, words)
         )
     if topic is not None:
-        # Segment has no topic field: a topic layer would sit over segments (3.2), not in them.
         _warn_no_topics()
         pairs = ()
     return dataclasses.replace(ctx, pairs=pairs, stats=dict(ctx.stats))
@@ -136,7 +109,6 @@ def filter_document(
 
 
 def _check_range(start: object, end: object) -> tuple[float, float]:
-    """Validate the bounds and return them with open sides as ``-inf`` / ``inf``."""
     low = -math.inf if start is None else _bound("start", start)
     high = math.inf if end is None else _bound("end", end)
     if low > high:
@@ -145,7 +117,6 @@ def _check_range(start: object, end: object) -> tuple[float, float]:
 
 
 def _bound(name: str, value: object) -> float:
-    """Return one bound as a float, or raise when it is not a finite, non-negative number."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{name} must be a number of seconds, got {value!r}")
     if not math.isfinite(value):
@@ -156,12 +127,10 @@ def _bound(name: str, value: object) -> float:
 
 
 def _in_range(when: float, low: float, high: float) -> bool:
-    """Half-open membership: ``low <= when < high``."""
     return low <= when < high
 
 
 def _question_start(question: object) -> float:
-    """Return a document question's ``start``, or raise when it has none a filter can use."""
     value = question.get("start") if isinstance(question, dict) else None
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise SchemaError(f"question without a numeric 'start': {question!r}")
@@ -169,7 +138,6 @@ def _question_start(question: object) -> float:
 
 
 def _query_words(text: object) -> frozenset[str]:
-    """Return the query's words, casefolded; empty for no query, an error for a wordless one."""
     if text is None:
         return frozenset()
     if not isinstance(text, str) or not (words := _words(text)):
@@ -178,16 +146,10 @@ def _query_words(text: object) -> frozenset[str]:
 
 
 def _words(*values: object) -> set[str]:
-    r"""Casefolded whole words of every string among ``values``; anything else adds none.
-
-    ``_`` separates words too: in LaTeX it starts a subscript, so ``\lambda_1`` holds
-    ``lambda``.
-    """
     return {w for v in values if isinstance(v, str) for w in re.findall(r"[^\W_]+", v.casefold())}
 
 
 def _visuals_by_id(visuals: object) -> dict[Any, dict[str, Any]]:
-    """Map each document board state's id to it."""
     if not isinstance(visuals, list):
         return {}
     return {v.get("id"): v for v in visuals if isinstance(v, dict)}
@@ -196,7 +158,6 @@ def _visuals_by_id(visuals: object) -> dict[Any, dict[str, Any]]:
 def _matches(
     question: dict[str, Any], visuals: dict[Any, dict[str, Any]], words: frozenset[str]
 ) -> bool:
-    """Whether every query word is somewhere in the question or its linked board states."""
     answer, review = question.get("answer"), question.get("review")
     found = _words(
         question.get("text"),
@@ -211,14 +172,12 @@ def _matches(
 
 
 def _segment_topics(segments: object) -> dict[Any, Any]:
-    """Map each document segment's id to its topic, ``None`` included."""
     if not isinstance(segments, list):
         return {}
     return {s.get("id"): s.get("topic") for s in segments if isinstance(s, dict)}
 
 
 def _warn_no_topics() -> None:
-    """Tell the caller that ``topic=`` cannot match, rather than silently returning nothing."""
     warnings.warn(
         "topic filtering is experimental and this data has no topic labels (every segment "
         "topic is null), so no question matches; see #16",

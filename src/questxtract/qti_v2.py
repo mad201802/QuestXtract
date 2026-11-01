@@ -1,12 +1,4 @@
-"""QTI 2.1 XML: the items, the test and the manifest of a package, from an assessment test.
-
-The same content as :mod:`questxtract.qti_v3`, in the ASI 2.1.2 binding: elements and attributes
-are camelCase, without the ``qti-`` prefix, and there is no content body, so modal feedback and
-the rubric block hold their paragraphs directly. Response processing also names the standard
-``match_correct`` template, for an engine that supports only templates. The manifest follows the
-QTI 2.1 profile of content packaging 1.2. :func:`package_entries` is the whole interface;
-:mod:`questxtract.qti_package` adds the JSON sidecar and writes the ZIP.
-"""
+"""QTI 2.1 XML: the items, the test and the manifest of a package, from an assessment test."""
 
 from __future__ import annotations
 
@@ -18,23 +10,16 @@ from .qti import METADATA_PATH, AssessmentItem, AssessmentTest
 QTI_NS = "http://www.imsglobal.org/xsd/imsqti_v2p1"
 CP_NS = "http://www.imsglobal.org/xsd/imscp_v1p1"
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
-_QTI_XSD = "http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1p2.xsd"  # ASI 2.1.2
+_QTI_XSD = "http://www.imsglobal.org/xsd/qti/qtiv2p1/imsqti_v2p1p2.xsd"
 _CP_XSD = "http://www.imsglobal.org/xsd/qti/qtiv2p1/qtiv2p1_imscpv1p2_v1p0.xsd"
-# The standard template that sets SCORE to 1 for the correct response, else 0 (info model 8.1.1).
 _MATCH_CORRECT = "http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"
-# The namespaces are literal attributes on unqualified tags: ElementTree's
-# tostring(default_namespace=...) rejects unqualified attributes, and register_namespace is
-# process-global. The official 1EdTech 2.1 examples use the default namespace too.
+# Literal xmlns attributes: ElementTree's default_namespace rejects unqualified attributes.
 _QTI_ROOT = {"xmlns": QTI_NS, "xmlns:xsi": XSI_NS, "xsi:schemaLocation": f"{QTI_NS} {_QTI_XSD}"}
 _CP_ROOT = {"xmlns": CP_NS, "xmlns:xsi": XSI_NS, "xsi:schemaLocation": f"{CP_NS} {_CP_XSD}"}
 
 
 def package_entries(assessment: AssessmentTest) -> list[tuple[str, bytes]]:
-    """Return the package's XML entries in ZIP order: the items, the test, then the manifest.
-
-    Each entry is a path in the package and the file's bytes. The sidecar the manifest lists,
-    :data:`questxtract.qti.METADATA_PATH`, is not among them.
-    """
+    """Return the package's XML entries in ZIP order: the items, the test, then the manifest."""
     item_paths = [f"items/{item.identifier}.xml" for item in assessment.items]
     entries = [
         (item_path, _xml_bytes(_item_xml(item)))
@@ -64,14 +49,13 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
     )
     correct = ElementTree.SubElement(response, "correctResponse")
     ElementTree.SubElement(correct, "value").text = item.correct_option
-    # FEEDBACK names the chosen option; it has no default.
     for identifier, base_type, default in (
         ("SCORE", "float", 0.0),
         ("MAXSCORE", "float", item.points),
         ("FEEDBACK", "identifier", None),
     ):
         attributes = {"identifier": identifier, "baseType": base_type, "cardinality": "single"}
-        if identifier == "SCORE" and item.points > 0:  # normalMaximum must be > 0
+        if identifier == "SCORE" and item.points > 0:
             attributes["normalMaximum"] = _float(item.points)
             attributes["normalMinimum"] = _float(0.0)
         outcome = ElementTree.SubElement(root, "outcomeDeclaration", attributes)
@@ -94,11 +78,6 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
             interaction, "simpleChoice", {"identifier": option.identifier}
         ).text = option.text
 
-    # Explicit response processing, so a correct answer scores the item's points and FEEDBACK
-    # names the chosen option. It also names the match_correct template: generalized response
-    # processing is optional in QTI 2.1 (info model 8.1), and an engine that supports only the
-    # standard templates, as Blackboard may, can score with the template instead. When an item
-    # gives both, its own rules are preferred (8.2). The template scores 1 and sets no FEEDBACK.
     processing = ElementTree.SubElement(root, "responseProcessing", {"template": _MATCH_CORRECT})
     condition = ElementTree.SubElement(processing, "responseCondition")
     response_if = ElementTree.SubElement(condition, "responseIf")
@@ -111,8 +90,6 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
     wrong = ElementTree.SubElement(response_else, "setOutcomeValue", {"identifier": "SCORE"})
     ElementTree.SubElement(wrong, "baseValue", {"baseType": "float"}).text = _float(0.0)
 
-    # FEEDBACK names the chosen option, which shows that option's modal feedback. No response
-    # leaves it NULL, and no feedback is shown.
     chosen = ElementTree.SubElement(processing, "setOutcomeValue", {"identifier": "FEEDBACK"})
     ElementTree.SubElement(chosen, "variable", {"identifier": "RESPONSE"})
     for option in item.options:
@@ -186,8 +163,6 @@ def _manifest_xml(assessment: AssessmentTest, item_paths: list[str]) -> ElementT
         )
         ElementTree.SubElement(resource, "file", {"href": path})
         ElementTree.SubElement(test, "dependency", {"identifierref": item.identifier})
-    # The sidecar is a resource like every other file. The profile has no extension resource
-    # type, so it is webcontent.
     sidecar = ElementTree.SubElement(
         resources,
         "resource",

@@ -1,8 +1,4 @@
-"""Stage 9: confidence and the threshold.
-
-One number the user can reason about (FR10), plus the judge's verdict. No parallel quality
-score, no risk band, no profile-scoped emission gates (architecture.md 9.2).
-"""
+"""Stage 9: confidence and the threshold."""
 
 from __future__ import annotations
 
@@ -23,17 +19,9 @@ def confidence_label(confidence: float) -> str:
 def score_pairs(
     pairs: Sequence[QAPair], *, min_confidence: float = 0.40, weigh_answers: bool = True
 ) -> tuple[QAPair, ...]:
-    """Assign each pair a confidence and drop those below ``min_confidence``.
-
-    A pair with no answer keeps ``0.55 * question_score`` and an empty answer span; it is
-    still emitted, because FR6 and FR7 ask for questions with timestamps, not for answered
-    questions. With ``weigh_answers=False`` the confidence is the question score as it is:
-    the LLM detector saw the answer when it scored the question, so weighing it again would
-    count it twice.
-    """
+    """Assign each pair a confidence and drop those below ``min_confidence``."""
     out: list[QAPair] = []
     for pair in pairs:
-        # An answer is not scored on its own (architecture.md 9.1).
         confidence = pair.question.score
         if weigh_answers and not pair.answer_text:
             confidence *= _QUESTION_WEIGHT
@@ -44,7 +32,6 @@ def score_pairs(
 
 
 def _rescored(pair: QAPair, confidence: float) -> QAPair:
-    """Return ``pair`` with its confidence set; it is frozen, so copy."""
     return QAPair(
         question=pair.question,
         answer_sentence_ids=pair.answer_sentence_ids,
@@ -60,7 +47,6 @@ def _rescored(pair: QAPair, confidence: float) -> QAPair:
 @stage("score")
 def score(ctx: Context) -> Context:
     """Score and filter ``ctx.pairs``."""
-    # No dedupe (architecture.md 9.3).
     ctx.pairs = score_pairs(
         ctx.pairs,
         min_confidence=ctx.config.min_confidence,

@@ -1,5 +1,3 @@
-"""Tests for scripts/extract_keyframes.py, whose defaults come from Config."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -9,7 +7,6 @@ from scripts.extract_keyframes import main
 
 
 def test_the_options_parse_with_the_current_config(capsys: pytest.CaptureFixture[str]) -> None:
-    """#130 review: the parser reads its defaults from Config before any argument is checked."""
     with pytest.raises(SystemExit) as stop:
         main(["--help"])
     assert stop.value.code == 0

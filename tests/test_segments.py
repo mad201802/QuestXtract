@@ -30,7 +30,6 @@ def test_char_budget_closes_before_it_is_blown():
 
 
 def test_gap_exactly_at_the_threshold_does_not_close():
-    # "over max_gap", strictly - the shared conftest fixture sits on this boundary.
     out = build_segments([_s("a.", 0.0, 1.0), _s("b.", 3.0, 4.0)], max_gap=2.0)
     assert len(out) == 1
 
@@ -54,7 +53,6 @@ def test_segment_index_counts_up_across_segments(context):
     from questxtract.segments import segments
     from questxtract.sentences import sentences as sentences_stage
 
-    # Under the default the fixture is one segment; 1.5 puts its 2.0 s gap over the line.
     context.config = context.config.replace(segment_max_gap_seconds=1.5)
     ctx = segments(sentences_stage(context))
     assert [s.segment_index for s in ctx.sentences] == [0, 0, 1]

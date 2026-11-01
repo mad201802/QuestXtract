@@ -164,6 +164,7 @@ class FakeExerPlaza(ThreadingHTTPServer):
         self.login_reply: tuple[int, dict[str, str], str] | None = None  # a canned answer
         self.import_reply: tuple[int, dict[str, str], str] | None = None  # a canned answer
         self.delay = 0.0
+        self.import_delay = 0.0  # only the import waits, so the login has already worked
         self.closing = threading.Event()  # ends a delay early, when the test is over
 
     @property
@@ -205,6 +206,8 @@ class _Handler(BaseHTTPRequestHandler):
             )
         )
         fake.closing.wait(fake.delay)
+        if split.path == "/api/v1/quizzes/import":
+            fake.closing.wait(fake.import_delay)
         cookie = SimpleCookie(self.headers.get("Cookie") or "")
         session_id = cookie["session"].value if "session" in cookie else ""
         session = fake.sessions.get(session_id)
@@ -786,6 +789,21 @@ def test_a_server_that_does_not_answer_times_out(
 
     with pytest.raises(ExerPlazaExportError, match="/login: no answer within 0.2 s"):
         _export(exerplaza.url, _file(tmp_path, _quiz(make_quiz)))
+
+
+def test_an_import_that_times_out_says_it_may_have_been_saved(
+    tmp_path: Path, make_quiz: MakeQuiz, exerplaza: FakeExerPlaza, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(exerplaza_module, "_TIMEOUT_SECONDS", 0.2)
+    exerplaza.import_delay = 1.0
+
+    with pytest.raises(ExerPlazaExportError) as caught:
+        _export(exerplaza.url, _file(tmp_path, _quiz(make_quiz)))
+
+    message = str(caught.value)
+    assert "/api/v1/quizzes/import: no answer within 0.2 s" in message
+    assert "may still have saved the quiz: run the command again" in message
+    assert PASSWORD not in message
 
 
 def test_sending_twice_skips_what_exerplaza_already_has(

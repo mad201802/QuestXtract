@@ -1,5 +1,3 @@
-"""The NTNU key window's logic (issue #189), headless: test, save, remove, where it is read from."""
-
 from __future__ import annotations
 
 import sys
@@ -15,7 +13,6 @@ MARKER = "sk-marker-4f9c1e"
 
 
 def _fake_openai(monkeypatch: pytest.MonkeyPatch, raises: type[Exception] | None = None) -> list:
-    """Install an ``openai`` that records its calls and raises ``raises`` on listing models."""
     calls: list[dict[str, object]] = []
 
     class APIError(Exception):
@@ -33,9 +30,13 @@ def _fake_openai(monkeypatch: pytest.MonkeyPatch, raises: type[Exception] | None
     class OpenAI:
         def __init__(self, **kwargs: object) -> None:
             calls.append(kwargs)
-            self.models = types.SimpleNamespace(list=self._list)
+            self.models = types.SimpleNamespace(list=lambda: self._list("models"))
 
-        def _list(self) -> list:
+        def get(self, path: str, *, cast_to: object) -> list:
+            return self._list(path)
+
+        def _list(self, path: str) -> list:
+            calls.append({"asked": path})
             if raises is not None:
                 raise {"auth": Auth, "denied": Denied, "connection": Connection}[raises]("x")
             return []
@@ -64,12 +65,13 @@ def test_the_check_tells_accepted_refused_and_unreachable(monkeypatch, raises, e
             "base_url": "https://llm.hpc.ntnu.no/v1",
             "timeout": 10.0,
             "max_retries": 0,
-        }
+        },
+        {"asked": "models"},
     ]
 
 
 def test_the_check_says_when_the_llm_extra_is_missing(monkeypatch):
-    monkeypatch.setitem(sys.modules, "openai", None)  # makes `import openai` fail
+    monkeypatch.setitem(sys.modules, "openai", None)
 
     assert keys.check_key(MARKER) == "no_llm_extra"
 
@@ -122,7 +124,7 @@ def test_the_source_follows_the_order_a_run_uses(monkeypatch):
     Path(".env").write_text("IDUN_API_KEY=d\n", encoding="utf-8")
     assert keys.key_source() == "dotenv"
     monkeypatch.setenv("QUESTXTRACT_NTNU_API_KEY", "old-name")
-    assert keys.key_source() == "dotenv"  # IDUN_API_KEY in .env wins over the old name
+    assert keys.key_source() == "dotenv"
     monkeypatch.setenv("IDUN_API_KEY", "e")
     assert keys.key_source() == "environment"
 
@@ -134,5 +136,79 @@ def test_the_saved_key_is_in_no_argument_the_app_builds_and_not_in_the_config(tm
     source = tmp_path / "lecture.json"
     argv = gui_run.to_argv(source, "quiz", {"detector": "llm"}, tmp_path / "out.json")
 
-    assert Config().api_key == MARKER  # a run does read it ...
-    assert MARKER not in " ".join(argv) + repr(Config())  # ... and it goes nowhere else
+    assert Config().api_key == MARKER
+    assert MARKER not in " ".join(argv) + repr(Config())
+
+
+@pytest.mark.parametrize(("raises", "expected"), [(None, "accepted"), ("auth", "refused")])
+def test_openrouter_is_asked_for_the_key_not_the_model_list(monkeypatch, raises, expected):
+    calls = _fake_openai(monkeypatch, raises)  # type: ignore[arg-type]
+
+    assert keys.check_key(MARKER, "https://openrouter.ai/api/v1") == expected
+
+    assert calls[0]["base_url"] == "https://openrouter.ai/api/v1"
+    assert calls[1] == {"asked": "/key"}
+
+
+def test_another_endpoint_is_asked_for_its_model_list(monkeypatch):
+    calls = _fake_openai(monkeypatch)
+
+    assert keys.check_key(MARKER, "http://localhost:8000/v1") == "accepted"
+
+    assert calls[1:] == [{"asked": "models"}]
+
+
+def test_each_endpoints_key_is_saved_under_its_own_name_and_the_others_kept(monkeypatch):
+    tested: list[tuple[str, str | None]] = []
+    monkeypatch.setattr(keys, "check_key", lambda key, url: tested.append((key, url)) or "accepted")
+    openrouter = "https://openrouter.ai/api/v1"
+    keys.save_key("ntnu-key")
+    assert keys.save_key("sk-or", openrouter) == "saved"
+
+    assert tested == [("ntnu-key", "https://llm.hpc.ntnu.no/v1"), ("sk-or", openrouter)]
+    lines = user_env_path().read_text(encoding="utf-8").splitlines()
+    assert lines == ['IDUN_API_KEY="ntnu-key"', 'OPENROUTER_API_KEY="sk-or"']
+    assert (Config().api_key, Config(base_url="openrouter").api_key) == ("ntnu-key", "sk-or")
+    assert keys.key_source(openrouter) == "file"
+
+    assert keys.remove_key(openrouter) is True
+    assert keys.key_source(openrouter) is None and keys.key_source() == "file"
+
+
+@pytest.mark.parametrize(
+    ("url", "name"),
+    [
+        ("https://llm.hpc.ntnu.no/v1", "NTNU"),
+        ("https://api.openai.com/v1", "OpenAI"),
+        ("https://openrouter.ai/api/v1", "OpenRouter"),
+        ("http://localhost:11434/v1", "localhost:11434"),
+        ("https://llm.example.org/v1", "llm.example.org"),
+    ],
+)
+def test_the_window_names_the_endpoint(url, name):
+    assert keys.endpoint_name(url) == name
+
+
+def test_a_key_for_another_host_is_saved_as_the_generic_key():
+    keys.save_key("vllm-key", "http://localhost:8000/v1", check=lambda key: "accepted")
+
+    assert 'QUESTXTRACT_LLM_API_KEY="vllm-key"' in user_env_path().read_text(encoding="utf-8")
+    assert Config(base_url="http://localhost:8000/v1").api_key == "vllm-key"
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["http://openrouter.ai/api/v1", "HTTP://llm.hpc.ntnu.no/v1", "http://api.openai.com/v1"],
+)
+def test_a_known_service_over_http_is_not_sent_the_key(monkeypatch, url):
+    calls = _fake_openai(monkeypatch)
+
+    assert keys.check_key(MARKER, url) == "insecure"
+    assert keys.save_key(MARKER, url) == "insecure"
+
+    assert calls == [] and not user_env_path().exists()
+
+
+def test_a_local_server_over_http_is_fine(monkeypatch):
+    _fake_openai(monkeypatch)
+    assert keys.check_key(MARKER, "http://localhost:11434/v1") == "accepted"

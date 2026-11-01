@@ -1,14 +1,4 @@
-"""Stage 2: decode the source into timed words through a pluggable ASR backend.
-
-The pipeline no longer imports a specific ASR engine here: this stage resolves
-``config.asr_backend`` through :mod:`questxtract.asr` and converts whatever raw segments
-the backend returns into a :class:`~questxtract.models.Transcript` via
-``Transcript.from_dict``, which already handles word synthesis when a backend gives none.
-
-Swapping the *engine* is a ``Config.asr_backend`` string plus one ``@register_backend``
-class in ``asr.py`` - no change here. Swapping the *checkpoint* (e.g. a different Whisper
-size) is already a ``Config.model_size`` string, unchanged by this issue.
-"""
+"""Stage 2: decode the source into timed words through a pluggable ASR backend."""
 
 from __future__ import annotations
 
@@ -31,13 +21,7 @@ from .models import Context, Transcript, stage
     ),
 )
 def transcribe(ctx: Context) -> Context:
-    """Decode ``ctx.source`` into a :class:`~questxtract.models.Transcript`.
-
-    Raises:
-        ValueError: If ``ctx.config.asr_backend`` names a backend that is not
-            registered (see :func:`questxtract.asr.resolve_backend`).
-
-    """
+    """Decode ``ctx.source`` into a :class:`~questxtract.models.Transcript`."""
 
     def report(fraction: float) -> None:
         if ctx.progress:

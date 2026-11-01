@@ -1,8 +1,4 @@
-"""QTI 3.0 XML: the items, the test and the manifest of a package, from an assessment test.
-
-:func:`package_entries` is the whole interface; :mod:`questxtract.qti_package` adds the JSON
-sidecar and writes the ZIP.
-"""
+"""QTI 3.0 XML: the items, the test and the manifest of a package, from an assessment test."""
 
 from __future__ import annotations
 
@@ -16,19 +12,13 @@ CP_NS = "http://www.imsglobal.org/xsd/qti/qtiv3p0/imscp_v1p1"
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
 _QTI_XSD = "https://purl.imsglobal.org/spec/qti/v3p0/schema/xsd/imsqti_asiv3p0p1_v1p0.xsd"
 _CP_XSD = "https://purl.imsglobal.org/spec/qti/v3p0/schema/xsd/imsqtiv3p0_imscpv1p2_v1p0.xsd"
-# The namespaces are literal attributes on unqualified tags: ElementTree's
-# tostring(default_namespace=...) rejects unqualified attributes, and register_namespace is
-# process-global. Every official 1EdTech example uses the default namespace.
+# Literal xmlns attributes: ElementTree's default_namespace rejects unqualified attributes.
 _QTI_ROOT = {"xmlns": QTI_NS, "xmlns:xsi": XSI_NS, "xsi:schemaLocation": f"{QTI_NS} {_QTI_XSD}"}
 _CP_ROOT = {"xmlns": CP_NS, "xmlns:xsi": XSI_NS, "xsi:schemaLocation": f"{CP_NS} {_CP_XSD}"}
 
 
 def package_entries(assessment: AssessmentTest) -> list[tuple[str, bytes]]:
-    """Return the package's XML entries in ZIP order: the items, the test, then the manifest.
-
-    Each entry is a path in the package and the file's bytes. The sidecar the manifest lists,
-    :data:`questxtract.qti.METADATA_PATH`, is not among them.
-    """
+    """Return the package's XML entries in ZIP order: the items, the test, then the manifest."""
     item_paths = [f"items/{item.identifier}.xml" for item in assessment.items]
     entries = [
         (item_path, _xml_bytes(_item_xml(item)))
@@ -58,14 +48,13 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
     )
     correct = ElementTree.SubElement(response, "qti-correct-response")
     ElementTree.SubElement(correct, "qti-value").text = item.correct_option
-    # FEEDBACK names the chosen option; it has no default.
     for identifier, base_type, default in (
         ("SCORE", "float", 0.0),
         ("MAXSCORE", "float", item.points),
         ("FEEDBACK", "identifier", None),
     ):
         attributes = {"identifier": identifier, "base-type": base_type, "cardinality": "single"}
-        if identifier == "SCORE" and item.points > 0:  # normal-maximum must be > 0
+        if identifier == "SCORE" and item.points > 0:
             attributes["normal-maximum"] = _float(item.points)
             attributes["normal-minimum"] = _float(0.0)
         outcome = ElementTree.SubElement(root, "qti-outcome-declaration", attributes)
@@ -88,8 +77,6 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
             interaction, "qti-simple-choice", {"identifier": option.identifier}
         ).text = option.text
 
-    # Explicit Core response processing (Implementation Guide 3.4.4), not the match_correct
-    # template: the template always scores 1, whatever the item is worth.
     processing = ElementTree.SubElement(root, "qti-response-processing")
     condition = ElementTree.SubElement(processing, "qti-response-condition")
     response_if = ElementTree.SubElement(condition, "qti-response-if")
@@ -102,8 +89,6 @@ def _item_xml(item: AssessmentItem) -> ElementTree.Element:
     wrong = ElementTree.SubElement(response_else, "qti-set-outcome-value", {"identifier": "SCORE"})
     ElementTree.SubElement(wrong, "qti-base-value", {"base-type": "float"}).text = _float(0.0)
 
-    # FEEDBACK names the chosen option, which shows that option's modal feedback. No response
-    # leaves it NULL, and no feedback is shown.
     chosen = ElementTree.SubElement(processing, "qti-set-outcome-value", {"identifier": "FEEDBACK"})
     ElementTree.SubElement(chosen, "qti-variable", {"identifier": "RESPONSE"})
     for option in item.options:
@@ -161,8 +146,7 @@ def _manifest_xml(assessment: AssessmentTest, item_paths: list[str]) -> ElementT
     root = ElementTree.Element("manifest", {**_CP_ROOT, "identifier": "questxtract-manifest"})
     metadata = ElementTree.SubElement(root, "metadata")
     ElementTree.SubElement(metadata, "schema").text = "QTI Package"
-    # Implementation Guide 6.1.1 and the binding (section 8) say schemaversion MUST be 3.0.0,
-    # and the 3.0.0 content-package XSD allows no other value.
+    # Implementation Guide 6.1.1: schemaversion must be 3.0.0.
     ElementTree.SubElement(metadata, "schemaversion").text = "3.0.0"
     ElementTree.SubElement(root, "organizations")
     resources = ElementTree.SubElement(root, "resources")
@@ -184,7 +168,6 @@ def _manifest_xml(assessment: AssessmentTest, item_paths: list[str]) -> ElementT
         )
         ElementTree.SubElement(resource, "file", {"href": path})
         ElementTree.SubElement(test, "dependency", {"identifierref": item.identifier})
-    # Every file but the manifest needs a resource (Implementation Guide 6.1).
     sidecar = ElementTree.SubElement(
         resources,
         "resource",

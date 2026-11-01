@@ -1,14 +1,4 @@
-"""Turn the questions of a lecture into multiple-choice quiz items (architecture.md 12.3).
-
-Not a stage, and deliberately not part of ``process``'s pipeline: this is the only part of the
-package that writes text that was not spoken (requirement 4.5). Every text it writes says where
-it came from (``origin``: ``spoken`` or ``generated``), and every item starts as pending teacher
-review. It reads a finished ``questions.json`` and asks the model once per question, through the
-same endpoint as the judge and vision (:mod:`questxtract.endpoint`), cached on the request.
-
-The keys of ``quiz.json`` are written in one place, :func:`_quiz_dict` and :func:`_item_dict`,
-so the agreed v1 schema only has to be followed there.
-"""
+"""Turn the questions of a lecture into multiple-choice quiz items (architecture.md 12.3)."""
 
 from __future__ import annotations
 
@@ -31,10 +21,10 @@ QUIZ_PROMPT_VERSION = "v1"
 STRICTNESS = ("strict", "lenient")
 MIN_OPTIONS, MAX_OPTIONS = 3, 5
 
-_REJECTED = ("deleted", "false_positive")  # review.status values a teacher set to drop a question
-_BOARD_CHARS = 1500  # board text sent with one question: the states on screen, kept short
-_SPOKEN_BEFORE, _SPOKEN_AFTER = 4, 2  # sentences of lecture sent around the question
-_SPOKEN_CHARS = 1500  # and at most this much of them
+_REJECTED = ("deleted", "false_positive")
+_BOARD_CHARS = 1500
+_SPOKEN_BEFORE, _SPOKEN_AFTER = 4, 2
+_SPOKEN_CHARS = 1500
 _IDS = "ABCDE"
 
 _PROMPT = """\
@@ -79,20 +69,7 @@ Write formulas as LaTeX between $ signs. Answer with one JSON object only."""
 
 @dataclass(frozen=True, kw_only=True)
 class QuizResult:
-    """What :func:`build_quiz` made: the ``quiz.json`` document and what it left out.
-
-    Args:
-        quiz: The ``quiz.json`` document, ready to write.
-        skipped: Ids of questions that are not quiz material: rejected, check-ins, unanswered
-            ones when strict, and those the model judged unusable (addressed to the room,
-            rhetorical, or too vague to answer on their own).
-        failed: ``(question id, reason)`` for each question the model could not turn into a
-            usable item; the rest of the quiz is unaffected.
-        usage: What the model calls cost, as :func:`endpoint.ask` counts it: ``quiz_requests``,
-            ``quiz_input_tokens``, ``quiz_output_tokens`` and ``quiz_ms``. Cached answers add
-            nothing.
-
-    """
+    """What :func:`build_quiz` made: the ``quiz.json`` document and what it left out."""
 
     quiz: dict[str, Any]
     skipped: tuple[str, ...] = ()
@@ -109,19 +86,7 @@ def build_quiz(
     sentences: Sequence[Sentence] = (),
     progress: Callable[[str, float], None] | None = None,
 ) -> QuizResult:
-    """Build ``quiz.json`` from a ``questions.json`` document (as :func:`read_questions` returns).
-
-    ``questions_name`` and ``questions_hash`` identify the source file in the output; the hash
-    is the SHA-256 of its bytes. ``sentences`` are the lecture's, from its transcript: the
-    ones around each question go with it as context, and without them the model sees only the
-    question, the answer and the board. A question the model fails on (a stall, or an answer that is
-    not a usable item, twice) is left out and listed in ``failed``.
-
-    Raises:
-        ValueError: If ``quiz_strictness`` or ``quiz_options`` is out of range.
-        ConnectionError: If the endpoint cannot be reached or refuses the key.
-
-    """
+    """Build ``quiz.json`` from a ``questions.json`` document."""
     if config.quiz_strictness not in STRICTNESS:
         raise ValueError("quiz_strictness must be strict or lenient")
     if not MIN_OPTIONS <= config.quiz_options <= MAX_OPTIONS:
@@ -169,11 +134,6 @@ def file_hash(path: str | Path) -> str:
 def _select(
     questions: Sequence[Mapping[str, Any]], strictness: str
 ) -> tuple[list[Mapping[str, Any]], list[str]]:
-    """Split questions into quiz material and the ids left out, in ``questions.json`` order.
-
-    Always left out: questions a reviewer rejected and classroom check-ins (they are not
-    quiz material). ``strict`` also leaves out questions the lecture did not answer.
-    """
     selected: list[Mapping[str, Any]] = []
     skipped: list[str] = []
     for question in questions:
@@ -195,7 +155,6 @@ def _request(
     boards: Mapping[str, Mapping[str, Any]],
     spoken: _Spoken,
 ) -> dict[str, Any]:
-    """Build the chat request for one question: the prompt, then the question in context."""
     distractors = config.quiz_options - 1
     answer = question.get("answer") or {}
     lines = [f"Question: {question['text']}"]
@@ -225,18 +184,11 @@ def _request(
 
 
 class _Spoken:
-    """The lecture's sentences, to look up what was said around a question."""
-
     def __init__(self, sentences: Sequence[Sentence]) -> None:
         self.sentences = tuple(sentences)
         self.index = {s.id: i for i, s in enumerate(self.sentences)}
 
     def around(self, sentence_id: str) -> str:
-        """Return the sentences around one, the question marked, or ``""`` when not found.
-
-        Over the length cap, whole sentences go, farthest first: those before the question,
-        then those after it. The question itself always stays.
-        """
         at = self.index.get(sentence_id)
         if at is None:
             return ""
@@ -256,7 +208,6 @@ class _Spoken:
 
 
 def _board_text(visual_ids: Sequence[str], boards: Mapping[str, Mapping[str, Any]]) -> str:
-    """Join the description, text and LaTeX of the linked board states, capped in length."""
     parts: list[str] = []
     for visual_id in visual_ids:
         state = boards.get(visual_id)
@@ -270,11 +221,10 @@ def _board_text(visual_ids: Sequence[str], boards: Mapping[str, Mapping[str, Any
 
 
 def _schema(distractors: int) -> dict[str, Any]:
-    """Build the response format: a named field per distractor, so a strict decoder fills each."""
     names = ["stem", "correct_answer", "correct_explanation", "explanation"]
     for number in range(1, distractors + 1):
         names += [f"distractor_{number}", f"why_wrong_{number}"]
-    properties: dict[str, Any] = {"quiz_material": {"type": "boolean"}}  # decided first
+    properties: dict[str, Any] = {"quiz_material": {"type": "boolean"}}
     properties |= {name: {"type": "string"} for name in names}
     return {
         "type": "json_schema",
@@ -292,14 +242,10 @@ def _schema(distractors: int) -> dict[str, Any]:
 
 
 def _usable(distractors: int) -> Callable[[dict[str, Any]], bool]:
-    """Whether an answer is usable: a decline, or every field filled and every option different.
-
-    Anything else is rejected, asked once more and never cached (:func:`endpoint.ask`).
-    """
 
     def usable(answer: dict[str, Any]) -> bool:
         if answer.get("quiz_material") is False:
-            return True  # a valid answer: the question is left out, and the answer is cached
+            return True
         if answer.get("quiz_material") is not True:
             return False
         keys = ["stem", "correct_answer", "correct_explanation", "explanation"]
@@ -321,11 +267,6 @@ _SENTENCE_END = " .,;:!?"
 
 
 def _normal(text: str) -> str:
-    """Options compared for sameness: case, math delimiters, runs of spaces and end punctuation.
-
-    Everything inside an option counts: ``-2`` and ``2``, ``1.5`` and ``15``, ``1 2`` and ``12``
-    are different options.
-    """
     text = " ".join(_MATH_DELIMITERS.sub("", text.casefold()).split())
     return text.strip(_SENTENCE_END)
 
@@ -333,15 +274,10 @@ def _normal(text: str) -> str:
 def _item_dict(
     question: Mapping[str, Any], answer: Mapping[str, Any], options: int
 ) -> dict[str, Any]:
-    """Build one ``quiz.json`` item.
-
-    The correct option's place follows from the question id, so it varies between items and is
-    the same on every run.
-    """
     source_id = str(question["id"])
     correct_at = int(hashlib.sha256(source_id.encode()).hexdigest(), 16) % options
     distractors = iter(range(1, options))
-    texts: list[tuple[str, str]] = []  # (option text, why it is right or wrong)
+    texts: list[tuple[str, str]] = []
     for position in range(options):
         if position == correct_at:
             texts.append((answer["correct_answer"], answer["correct_explanation"]))
@@ -371,11 +307,6 @@ def _item_dict(
 
 
 def _text(text: str, *, spoken: bool = False) -> dict[str, str]:
-    """Mark a text with its origin: ``spoken`` only when it is what was said, word for word.
-
-    Word for word as :func:`quiz_schema.normalise_spoken` compares it, so a stem that lost its
-    question mark is ``generated``.
-    """
     return {"text": text.strip(), "origin": "spoken" if spoken else "generated"}
 
 
@@ -386,7 +317,6 @@ def _quiz_dict(
     questions_name: str,
     questions_hash: str,
 ) -> dict[str, Any]:
-    """Build the ``quiz.json`` document around the items; nothing in it changes between runs."""
     base = questions_name.removesuffix(".json").removesuffix(".questions")
     language = (document.get("config") or {}).get("language") or config.language
     return {

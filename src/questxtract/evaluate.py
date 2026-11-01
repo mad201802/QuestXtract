@@ -1,20 +1,4 @@
-"""The evaluation harness: measure the pipeline against the labelled set.
-
-NFR2 gives a number to hit (recall >= 50% on the team's labelled set), so the metric runs
-in CI. Sections 6 through 9 of architecture.md are blind without it.
-
-A prediction matches a label when their time ranges overlap and the overlap covers at least
-half the shorter range. Time-based, not text-based, because ASR text will differ from what a
-human typed and the ASR is not what is being evaluated here. Matching is one-to-one, best
-overlap first, so one long sentence cannot satisfy two labels.
-
-The labelled *dataset* lives under ``tests/data/<name>.labels.jsonl``, next to the
-``<name>.transcript.json`` it is timed against and, for a recording whose board was read, the
-``<name>.visual.json`` board states; this module is the code that reads it.
-
-:func:`evaluate_vision` does the same for the vision model, against the labelled keyframes in
-``tests/data/vision/<name>.frames.jsonl`` (architecture.md 4.4).
-"""
+"""The evaluation harness: measure the pipeline against the labelled set."""
 
 from __future__ import annotations
 
@@ -32,19 +16,15 @@ from .pipeline import STAGES, run
 from .vision import read_keyframe
 
 _MIN_OVERLAP = 0.5
-_AFTER_TRANSCRIBE = 2  # stages 1 and 2 are skipped: the transcript is committed
+_AFTER_TRANSCRIBE = 2
 _SWEEP = tuple(round(i * 0.05, 2) for i in range(21))
 
 Span = tuple[float, float]
 
-# Lecture types a labelled frame can have: the layout probe's kinds (architecture.md 6.2) that
-# are a board or slides, so a label's kind goes into the prompt as the probe's would.
 KINDS = ("slides", "blackboard", "whiteboard", "handwriting")
-_FORMULA_MAX_ERROR = 0.25  # edits per token at which a labelled formula still counts as read
-_UNREADABLE = "[unreadable]"  # what prompt v0 asks for in place of a word it cannot read
-# A LaTeX token: a command (\frac, \{), a number, or any other single character.
+_FORMULA_MAX_ERROR = 0.25
+_UNREADABLE = "[unreadable]"
 _LATEX_TOKEN = re.compile(r"\\[a-zA-Z]+|\\.|\d+|\S")
-# Spacing and sizing LaTeX that changes how a formula looks, not what it says.
 _LATEX_NOISE = re.compile(r"\\(?:(?:left|right|displaystyle|q?quad)(?![a-zA-Z])|[,;:! ])|\$")
 
 
@@ -59,21 +39,13 @@ def overlap_ratio(prediction: Span, label: Span) -> float:
 
 
 def overlaps(prediction: Span, label: Span, *, minimum: float = _MIN_OVERLAP) -> bool:
-    """Whether a predicted span matches a labelled one.
-
-    They match when the overlap covers at least ``minimum`` of the shorter of the two.
-    """
+    """Whether a predicted span matches a labelled one."""
     ratio = overlap_ratio(prediction, label)
     return ratio > 0.0 and ratio >= minimum
 
 
 def match(predictions: Sequence[Span], labels: Sequence[Span]) -> dict[int, int]:
-    """Pair predictions with labels one-to-one, highest overlap first.
-
-    Returns:
-        Prediction index to label index, for every matched prediction.
-
-    """
+    """Pair predictions with labels one-to-one, highest overlap first."""
     scored = sorted(
         (
             (ratio, i, j)
@@ -93,25 +65,7 @@ def match(predictions: Sequence[Span], labels: Sequence[Span]) -> dict[int, int]
 def evaluate(
     paths: Sequence[str | Path], config: Config | None = None, *, board: bool = False
 ) -> dict[str, Any]:
-    """Score the pipeline against every labelled recording under ``paths``.
-
-    ``paths`` are ``*.labels.jsonl`` files or directories holding them. A label file with no
-    ``<name>.transcript.json`` beside it cannot be scored and is listed under ``skipped``.
-    ``config`` defaults to ``Config()``; pass one with ``detector="llm"`` to score the LLM
-    detector (its answers are cached, so a second run makes no calls). With ``board``, the
-    board states in ``<name>.visual.json`` beside a transcript go into the run, as if vision
-    had read them; a recording without that file runs without them.
-
-    Returns:
-        The report: the ``detector`` that ran, the gate ``threshold``, the recordings run
-        with ``board`` states, per-recording and pooled ``total`` metrics, and a pooled
-        ``sweep`` over the confidence threshold.
-
-    Raises:
-        FileNotFoundError: If a path does not exist.
-        ValueError: If no label file under ``paths`` has a transcript.
-
-    """
+    """Score the pipeline against every labelled recording under ``paths``."""
     config = config or Config()
     threshold = config.min_confidence
     runs: dict[str, tuple[list[dict[str, Any]], list[dict[str, Any]], tuple[Word, ...]]] = {}
@@ -209,13 +163,11 @@ def _read_labels(path: Path) -> list[dict[str, Any]]:
 
 
 def _read_visual(path: Path) -> tuple[VisualContext, ...]:
-    """Read the board states of a ``<name>.visual.json`` (``scripts/board_states.py``)."""
     data = json.loads(path.read_text(encoding="utf-8"))
     return tuple(VisualContext(**state) for state in data["board_states"])
 
 
 def _detector(config: Config) -> str:
-    """Name what found the questions, so a pasted report says which model and prompt."""
     if config.detector != "llm":
         return config.detector
     return f"llm {config.judge_model} (prompt {JUDGE_PROMPT_VERSION})"
@@ -224,11 +176,6 @@ def _detector(config: Config) -> str:
 def _predict(
     transcript: Transcript, config: Config, visual: tuple[VisualContext, ...] = ()
 ) -> list[dict[str, Any]]:
-    """Run stages 3 onward with the emission gate open, so the sweep sees every candidate.
-
-    ``visual`` stands in for what the vision stage would have read; that stage itself has no
-    video to read here and leaves it as it is.
-    """
     config = config.replace(min_confidence=0.0)
     ctx = Context(source=Path("eval"), config=config, transcript=transcript, visual=visual)
     ctx.duration = transcript.duration
@@ -245,7 +192,6 @@ def _counts(
     words: tuple[Word, ...],
     threshold: float,
 ) -> dict[str, Any]:
-    """Raw counts and failure cases for one recording at one threshold."""
     kept = [p for p in predictions if p["confidence"] >= threshold]
     pairs = match([(p["start"], p["end"]) for p in kept], [(x["start"], x["end"]) for x in labels])
     found = {j for j in pairs.values() if labels[j]["kind"] == "content"}
@@ -274,7 +220,6 @@ def _counts(
 
 
 def _has_mark(label: dict[str, Any], words: tuple[Word, ...]) -> bool:
-    """Whether the transcript words under ``label`` carry a '?' (architecture.md 4.2)."""
     return any("?" in w.text for w in words if w.start < label["end"] and w.end > label["start"])
 
 
@@ -315,12 +260,7 @@ def _ratio(numerator: float, denominator: float) -> float:
 
 
 def character_error_rate(predicted: str, reference: str) -> float:
-    """Edits per reference character to turn ``predicted`` into ``reference``, in ``[0, 1]``.
-
-    Both are casefolded and their whitespace collapsed first: line breaks and spacing on a board
-    are not something to read wrong. Capped at 1, so one answer full of invented text cannot
-    outweigh the rest of a mean. An empty reference scores 0 against an empty answer, else 1.
-    """
+    """Edits per reference character to turn ``predicted`` into ``reference``, in ``[0, 1]``."""
     predicted, reference = _plain(predicted), _plain(reference)
     if not reference:
         return 0.0 if not predicted else 1.0
@@ -328,15 +268,7 @@ def character_error_rate(predicted: str, reference: str) -> float:
 
 
 def formula_found(formula: str, latex: str | None) -> bool:
-    r"""Whether a labelled ``formula`` is in a model's ``latex`` answer.
-
-    Both are normalised (``\left``/``\right``, spacing commands and ``$`` removed, ``\dfrac``
-    and ``\tfrac`` read as ``\frac``) and split into tokens: a command, a number, or any other
-    single character. The formula counts as found when some run of whole tokens in the answer is
-    within one edit per four of its tokens: the answer may hold several formulas on one line, and
-    a brace more or less is not a misreading. A formula of three tokens or fewer must match
-    exactly, and never inside a longer token: a labelled ``x`` is not in ``\max``.
-    """
+    """Whether a labelled ``formula`` is in a model's ``latex`` answer."""
     needle, haystack = _latex(formula), _latex(latex or "")
     if not needle:
         return True
@@ -344,31 +276,7 @@ def formula_found(formula: str, latex: str | None) -> bool:
 
 
 def evaluate_vision(paths: Sequence[str | Path], config: Config | None = None) -> dict[str, Any]:
-    """Score the vision model against every labelled keyframe under ``paths``.
-
-    ``paths`` are ``*.frames.jsonl`` files or directories holding them; each line names a PNG
-    beside the file. Every frame is read with ``config.reading_model`` (the vision model, or the
-    OCR model with ``vision_reader = "ocr"``) through
-    :func:`~questxtract.vision.read_keyframe`, as the vision stage reads a keyframe when the
-    layout probe got the frame's kind right: the label's kind in the prompt, no speech. Answers
-    are cached per request, so a second run makes no calls. A frame the model could not read
-    counts as an empty answer, and a blank board it could not read as not read.
-
-    A frame labelled blank (no text) has no character error rate: any text at all would score 1,
-    the same as misreading a full board. It is counted as read when the answer's text is empty
-    or only ``[unreadable]``.
-
-    Returns:
-        The report: the ``model`` and ``prompt`` version, metrics per lecture type under
-        ``kinds`` and pooled under ``total`` (frames, failed readings, mean character error rate
-        over the frames with text, blank frames and how many were read as blank, formulas
-        labelled and found, formula recall), and the score of every frame.
-
-    Raises:
-        FileNotFoundError: If a path or a labelled frame does not exist.
-        ValueError: If a label line is malformed, or no frame is labelled under ``paths``.
-
-    """
+    """Score the vision model against every labelled keyframe under ``paths``."""
     config = config or Config()
     frames: list[dict[str, Any]] = []
     for labels_path in _label_files(paths, "*.frames.jsonl"):
@@ -399,7 +307,7 @@ def evaluate_vision(paths: Sequence[str | Path], config: Config | None = None) -
         raise ValueError(f"no labelled frame in a *.frames.jsonl under {paths}")
     return {
         "model": config.reading_model,
-        "prompt": "v0",  # what read_keyframe sends without a previous state (6.5)
+        "prompt": "v0",
         "kinds": {
             kind: _vision_metrics([f for f in frames if f["kind"] == kind])
             for kind in KINDS
@@ -440,14 +348,12 @@ def format_vision_report(report: dict[str, Any]) -> str:
 
 
 def _worst_first(frame: dict[str, Any]) -> float:
-    """Sort key: a blank board read as text first, then by character error rate."""
     if frame["blank"]:
         return 0.0 if frame["read_blank"] else -2.0
     return -float(frame["cer"])
 
 
 def _check_frame(label: Any, where: str) -> None:
-    """Raise ``ValueError`` naming ``where`` unless ``label`` is one well-formed frame label."""
     problem = None
     if not isinstance(label, dict):
         problem = "not a JSON object"
@@ -492,18 +398,12 @@ def _plain(text: str) -> str:
 
 
 def _latex(formula: str) -> list[str]:
-    """Normalise a formula and split it into tokens, before whitespace can join two of them."""
     formula = _LATEX_NOISE.sub("", formula)
     formula = re.sub(r"\\[dt]frac(?![a-zA-Z])", r"\\frac", formula)
     return _LATEX_TOKEN.findall(formula)
 
 
 def _distance(a: Sequence[str], b: Sequence[str], *, free_ends: bool = False) -> int:
-    """Count the edits (insert, delete, substitute) that turn ``b`` into ``a``.
-
-    With ``free_ends``, ``b`` is a haystack: count the fewest edits that turn some run of it
-    into ``a``, so a match may start and end anywhere in ``b`` at no cost.
-    """
     previous = [0] * (len(b) + 1) if free_ends else list(range(len(b) + 1))
     for i, x in enumerate(a, 1):
         current = [i]

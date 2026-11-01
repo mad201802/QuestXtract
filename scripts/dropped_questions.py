@@ -22,7 +22,7 @@ from questxtract.export import write_questions
 from questxtract.models import Context, SchemaError, Transcript
 from questxtract.pipeline import STAGES, run
 
-_AFTER_TRANSCRIBE = 2  # stages 1 and 2 are skipped: the transcript is already in hand
+_AFTER_TRANSCRIBE = 2
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -43,8 +43,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
-    # The real pipeline, with the emission gate wide open: score() then keeps every
-    # candidate and the split below is this script's own, not a second scoring path.
     config = Config().replace(min_confidence=0.0)
     ctx = Context(source=Path(args.transcript), config=config, transcript=transcript)
     ctx.duration = transcript.duration

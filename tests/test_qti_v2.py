@@ -1,11 +1,3 @@
-"""Tests for the QTI 2.1 package writer (issue #163).
-
-Every package written here is validated against the official 1EdTech XSDs, ASI 2.1.2 and the QTI
-2.1 content-package profile, from the local mirror `scripts/fetch_qti_xsd.py` downloads; the
-tests never reach the network. Without the mirror they skip, unless QUESTXTRACT_REQUIRE_QTI_XSD
-is set, as in CI, where they fail.
-"""
-
 from __future__ import annotations
 
 import io
@@ -44,7 +36,6 @@ Schemas = tuple[xmlschema.XMLSchema, xmlschema.XMLSchema]
 
 @pytest.fixture(scope="session")
 def schemas() -> Schemas:
-    """The 2.1 item-and-test schema and content-package schema, compiled once, offline."""
     root = xsd_dir()
     if missing(root):
         message = f"QTI XSDs not in {root}: run `uv run python scripts/fetch_qti_xsd.py`"
@@ -70,7 +61,6 @@ def _export(
 
 
 def _assert_conformant(package: dict[str, bytes], schemas: Schemas) -> None:
-    """Validate every XML entry against its XSD, then check what an XSD cannot express."""
     asi, cp = schemas
     for name, data in package.items():
         if name.endswith(".xml"):
@@ -113,8 +103,6 @@ def _assert_conformant(package: dict[str, bytes], schemas: Schemas) -> None:
             assert modal.get("outcomeIdentifier") in outcomes
 
 
-# Every shape the writer can produce: instructions absent and present, shuffles off and on,
-# feedback shown and hidden, points above zero and zero, rejected items, XML special characters.
 _SHAPES = (
     "two items",
     "no items",
@@ -168,7 +156,6 @@ def _default(outcome: ElementTree.Element) -> str | None:
     return outcome.findtext(f"{_Q}defaultValue/{_Q}value")
 
 
-# What _content reads, by version: the same element or attribute under its 2.1 and 3.0 names.
 _NAMESPACES = {"2.1": _Q, "3.0": _V3}
 _NAMES = {
     "2.1": {
@@ -213,7 +200,6 @@ _NAMES = {
 
 
 def _content(package: dict[str, bytes], version: str) -> dict[str, Any]:
-    """What a package tells the candidate and the LMS, in terms both versions share."""
     q, names = _NAMESPACES[version], _NAMES[version]
 
     def path(*keys: str) -> str:
@@ -276,7 +262,6 @@ def test_every_shape_gives_a_package_the_xsds_accept(
 def test_the_package_holds_what_the_3_0_package_holds(
     tmp_path: Path, make_quiz: MakeQuiz, shape: str
 ) -> None:
-    """The same items, ids, order, texts, key, points, feedback and instructions as in 3.0."""
     quiz = _shape(make_quiz, shape)
     v2 = _content(_export(tmp_path, quiz, "v2.zip"), "2.1")
     v3 = _content(_export(tmp_path, quiz, "v3.zip", version="3.0"), "3.0")
@@ -286,12 +271,6 @@ def test_the_package_holds_what_the_3_0_package_holds(
 def test_a_quiz_on_a_real_export_gives_a_conformant_package(
     tmp_path: Path, make_quiz: MakeQuiz, schemas: Schemas
 ) -> None:
-    """process on a committed transcript, a quiz on its questions, then qti, all through the CLI.
-
-    The quiz is what the quiz command (#79) is meant to write: one item per question, the stem
-    spoken as it was said, the question's own times. It passes the schema and read_quiz with
-    the questions file, so the rules on source questions and spoken stems run too.
-    """
     transcript = _DATA / "ttk4225_2026_09_14.transcript.json"
     assert main(["process", str(transcript), "-o", "lecture.questions.json"]) == 0
     questions = read_questions(tmp_path / "lecture.questions.json")
@@ -330,7 +309,6 @@ def test_the_validators_reject_a_broken_item_and_an_extension_sidecar(
     package = _export(tmp_path, make_quiz("q_aaa"))
     broken = package["items/quiz_q_aaa.xml"].replace(b'maxChoices="1"', b'maxChoices="one"')
     assert not schemas[0].is_valid(io.BytesIO(broken))
-    # The 2.1 profile has no extension resource type, which is why the sidecar is webcontent.
     extension = package["imsmanifest.xml"].replace(b'type="webcontent"', b'type="extension"')
     assert not schemas[1].is_valid(io.BytesIO(extension))
 
@@ -407,8 +385,6 @@ def test_a_correct_answer_scores_the_maximum_and_any_other_zero(
 ) -> None:
     processing = _item(_export(tmp_path, make_quiz("q_aaa"))).find(f"{_Q}responseProcessing")
     assert processing is not None
-    # The standard template is named for engines that support only templates; the item's own
-    # rules below are preferred by every engine that runs them.
     assert processing.get("template") == (
         "http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"
     )
@@ -444,7 +420,7 @@ def test_the_chosen_option_shows_its_explanation_then_the_general_one(
 ) -> None:
     root = _item(_export(tmp_path, make_quiz("q_aaa")))
     assert _outcome(root, "FEEDBACK").get("baseType") == "identifier"
-    assert _default(_outcome(root, "FEEDBACK")) is None  # no response, no feedback
+    assert _default(_outcome(root, "FEEDBACK")) is None
     processing = root.find(f"{_Q}responseProcessing")
     assert processing is not None
     chosen = processing.find(f"{_Q}setOutcomeValue[@identifier='FEEDBACK']")
@@ -458,7 +434,6 @@ def test_the_chosen_option_shows_its_explanation_then_the_general_one(
     assert [node.get("identifier") for node in modal] == ["a", "b", "c"]
     assert {node.get("outcomeIdentifier") for node in modal} == {"FEEDBACK"}
     assert {node.get("showHide") for node in modal} == {"show"}
-    # 2.1 has no content body: the paragraphs are the feedback's own children.
     assert [[child.tag for child in node] for node in modal] == [[f"{_Q}p", f"{_Q}p"]] * 3
     assert [node.text for node in modal[1]] == [
         "Partitioning can reorder equal keys.",
@@ -499,7 +474,6 @@ def test_the_test_follows_the_instructions(tmp_path: Path, make_quiz: MakeQuiz) 
     rubric = section.find(f"{_Q}rubricBlock")
     assert rubric is not None
     assert (rubric.get("view"), rubric.get("use")) == ("candidate", "instructions")
-    # No content body: the paragraph is the rubric block's own child.
     assert [(child.tag, child.text) for child in rubric] == [(f"{_Q}p", "Pick one answer.")]
     interaction = _item(package).find(f".//{_Q}choiceInteraction")
     assert interaction is not None

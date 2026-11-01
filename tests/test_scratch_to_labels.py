@@ -1,5 +1,3 @@
-"""Tests for scripts/scratch_to_labels.py's transcript snapping (issue #12)."""
-
 from __future__ import annotations
 
 import json
