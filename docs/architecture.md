@@ -1086,8 +1086,9 @@ list names each item's path, printed as ExerPlaza sent it.
 **Safety.** Every check that needs no network comes first: the URL, the course session, the
 content units, `read_quiz` and `quiz_to_qti`, then the credentials. Plain `http` is refused except
 for `localhost`, `127.0.0.1` and `::1`, because the password goes with the login, and an address
-with credentials, a query or a fragment is refused. Redirects are never followed. Each request
-times out after 30 s. The password is never printed, logged or stored, and the server's text is
+with credentials, a query or a fragment is refused. A local ExerPlaza is never reached through a
+proxy from the environment, so the login stays on the machine. Redirects are never followed. Each
+request times out after 30 s. The password is never printed, logged or stored, and the server's text is
 printed with its control characters replaced.
 
 The contract (requests, answer, errors, mapping) is in

@@ -127,10 +127,25 @@ def export_exerplaza(
     units = _content_units(content_units)
     body = _body(quiz_path)
     email, password = _credentials()
-    jar = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar), _NoRedirect())
+    opener = _opener(base)
     _login(opener, base, email, password)
     return _import(opener, base, session, units, body)
+
+
+def _opener(base: str) -> urllib.request.OpenerDirector:
+    """Build the opener: a cookie jar, no redirects, and no proxy for a local ExerPlaza.
+
+    ``urllib`` sends requests through ``http_proxy`` and the like. For ``https`` that is a tunnel
+    the password cannot be read through; for the plain ``http`` allowed on localhost, the proxy
+    would get the login in the clear, which is what that exception exists to avoid.
+    """
+    handlers: list[urllib.request.BaseHandler] = [
+        urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
+        _NoRedirect(),
+    ]
+    if (urllib.parse.urlsplit(base).hostname or "").lower() in _LOCAL_HOSTS:
+        handlers.append(urllib.request.ProxyHandler({}))
+    return urllib.request.build_opener(*handlers)
 
 
 def _base_url(url: str) -> str:
@@ -377,17 +392,17 @@ def _send(
     """
     again = _AGAIN if saves else ""
     try:
-        with opener.open(request, timeout=_TIMEOUT_SECONDS) as response:
-            return _Reply(status=response.status, headers=response.headers, body=response.read())
-    except urllib.error.HTTPError as error:  # a status >= 300 is an answer here, not a failure
-        with error:
-            return _Reply(status=error.code, headers=error.headers, body=error.read())
-    except TimeoutError:
-        raise ExerPlazaExportError(
-            f"{what}: no answer within {_TIMEOUT_SECONDS} s{again}"
-        ) from None
-    except urllib.error.URLError as exc:
-        reason = exc.reason
+        try:
+            with opener.open(request, timeout=_TIMEOUT_SECONDS) as response:
+                return _Reply(
+                    status=response.status, headers=response.headers, body=response.read()
+                )
+        except urllib.error.HTTPError as error:  # a status >= 300 is an answer, not a failure
+            with error:
+                # Read inside the outer try: a body that stalls or is cut off is a failure too.
+                return _Reply(status=error.code, headers=error.headers, body=error.read())
+    except (TimeoutError, urllib.error.URLError) as exc:
+        reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
         if isinstance(reason, TimeoutError):
             raise ExerPlazaExportError(
                 f"{what}: no answer within {_TIMEOUT_SECONDS} s{again}"

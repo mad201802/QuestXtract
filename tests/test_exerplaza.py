@@ -10,6 +10,7 @@ import sys
 import threading
 import traceback
 import urllib.parse
+import urllib.request
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from http.cookies import SimpleCookie
@@ -164,6 +165,7 @@ class FakeExerPlaza(ThreadingHTTPServer):
         self.login_reply: tuple[int, dict[str, str], str] | None = None  # a canned answer
         self.import_reply: tuple[int, dict[str, str], str] | None = None  # a canned answer
         self.delay = 0.0
+        self.stall_body = False  # promise 500 more bytes than are sent, then wait
         self.import_delay = 0.0  # only the import waits, so the login has already worked
         self.closing = threading.Event()  # ends a delay early, when the test is over
 
@@ -294,9 +296,13 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_header(name, value)
         if session:
             self.send_header("Set-Cookie", f"session={session}; HttpOnly; Path=/")
-        self.send_header("Content-Length", str(len(data)))
+        stall = self.server.stall_body and self.path.startswith("/api/v1/quizzes/import")
+        self.send_header("Content-Length", str(len(data) + (500 if stall else 0)))
         self.end_headers()
         self.wfile.write(data)
+        if stall:
+            self.wfile.flush()
+            self.server.closing.wait(5)
 
 
 @pytest.fixture(autouse=True)
@@ -759,7 +765,14 @@ class _HangUp(threading.Thread):
             connection.sendall(self.answer)
 
 
-@pytest.mark.parametrize("answer", [b"", b"HTTP/1.1 200 OK\r\nContent-Length: 999\r\n\r\n<html>"])
+@pytest.mark.parametrize(
+    "answer",
+    [
+        b"",
+        b"HTTP/1.1 200 OK\r\nContent-Length: 999\r\n\r\n<html>",
+        b"HTTP/1.1 500 Oops\r\nContent-Length: 999\r\n\r\n<html>",  # an error body cut off
+    ],
+)
 def test_a_connection_closed_mid_answer_exits_with_1(
     tmp_path: Path,
     make_quiz: MakeQuiz,
@@ -804,6 +817,46 @@ def test_an_import_that_times_out_says_it_may_have_been_saved(
     assert "/api/v1/quizzes/import: no answer within 0.2 s" in message
     assert "may still have saved the quiz: run the command again" in message
     assert PASSWORD not in message
+
+
+def test_an_error_whose_body_stalls_times_out_instead_of_escaping(
+    tmp_path: Path, make_quiz: MakeQuiz, exerplaza: FakeExerPlaza, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(exerplaza_module, "_TIMEOUT_SECONDS", 0.3)
+    exerplaza.import_reply = (500, {}, "")
+    exerplaza.stall_body = True
+
+    with pytest.raises(
+        ExerPlazaExportError, match="/api/v1/quizzes/import: no answer within 0.3 s"
+    ):
+        _export(exerplaza.url, _file(tmp_path, _quiz(make_quiz)))
+
+
+def test_a_local_exerplaza_is_not_reached_through_the_environment_proxy(
+    tmp_path: Path, make_quiz: MakeQuiz, exerplaza: FakeExerPlaza, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("http_proxy", "HTTP_PROXY", "no_proxy", "NO_PROXY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("http_proxy", "http://127.0.0.1:9")  # nothing listens there
+
+    result = _export(exerplaza.url, _file(tmp_path, _quiz(make_quiz)))
+
+    assert result.quiz_outcome == "created"
+    assert [seen.path for seen in exerplaza.seen][:2] == ["/login", "/login"]
+
+
+def test_only_a_local_exerplaza_skips_the_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("http_proxy", "http://proxy.example.org:3128")
+    monkeypatch.setenv("https_proxy", "http://proxy.example.org:3128")
+
+    def proxied(base: str) -> bool:
+        handlers = exerplaza_module._opener(base).handlers
+        return any(isinstance(h, urllib.request.ProxyHandler) for h in handlers)
+
+    assert not proxied("http://127.0.0.1:5000")
+    assert not proxied("http://localhost:5000")
+    assert not proxied("http://[::1]:5000")
+    assert proxied("https://exerplaza.example.org")  # a tunnel the password cannot be read in
 
 
 def test_sending_twice_skips_what_exerplaza_already_has(
