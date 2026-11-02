@@ -19,6 +19,8 @@
 - The app's NTNU key... button is now API key...: it tests and saves the key of the endpoint in
   the LLM endpoint field under that endpoint's variable, keeping the other endpoints' keys. Every
   key is read from the app's key file, not only the NTNU key. (#250)
+- README: switching the model and the server, one setting each for the text and the vision
+  model, with examples for NTNU's service, OpenAI and a local Ollama. (#253)
 
 ### Changed (breaking)
 
