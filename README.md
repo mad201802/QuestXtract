@@ -38,7 +38,7 @@ extracts questions that were spoken.
 | Search | Find the questions by words said or written on the board while they were asked, and by time |
 | Human in the loop | A `review` block per question for teacher edits, never overwritten by the pipeline |
 | JSON export | `questions.json` with a fixed key set and a formal JSON Schema |
-| Quizzes | Multiple-choice items from the questions asked, with explanations; every generated text is marked and starts as pending review |
+| Quizzes | Multiple-choice items from the questions asked, with explanations; every generated text is marked and starts as pending review; the items are drafts, so a teacher checks each one before students see it |
 | LMS export | `questxtract qti` writes a `quiz.json` as a QTI 3.0 or 2.1 package for an LMS to import |
 | ExerPlaza TeX | `questxtract tex` writes a `quiz.json` as a TeX file to upload to ExerPlaza |
 | Straight into ExerPlaza | `questxtract exerplaza` sends a `quiz.json` to an ExerPlaza course session, logged in as you; sending it again adds only the new items |
@@ -76,6 +76,11 @@ questxtract process lecture.transcript.json    # questions from an existing tran
 questxtract quiz lecture.questions.json        # multiple-choice quiz -> lecture.quiz.json
 questxtract filter lecture.questions.json --text eigenvalue   # the questions about a word
 ```
+
+**Review every quiz item before students see it.** A language model writes the quiz, and it can
+be wrong: a marked answer that is not correct, a distractor that is also right, an explanation
+that does not hold. Check each item and set its review status to `accepted` or `rejected`;
+`qti`, `tex` and `exerplaza` leave out rejected items but export pending ones.
 
 An `.mp4` or `.mp3` goes through every stage; a `.json` transcript, from QuestXtract or
 [any other ASR engine](docs/cli.md#what-decides-how-much-runs), skips transcription.

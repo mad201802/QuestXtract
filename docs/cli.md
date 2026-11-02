@@ -77,6 +77,12 @@ correct, an explanation, and why each option is right or wrong. It is the only c
 writes text that was not spoken: every text carries `origin` (`spoken` only for the question as
 asked), and every item starts as pending review.
 
+**The items are drafts: a teacher must review every item before students see it.** The model can
+mark a wrong answer as correct, write a distractor that is also right, or give an explanation that
+does not hold. Check each item's stem, correct option, distractors and explanation, then set its
+`review.status` to `accepted` or `rejected`. `qti`, `tex` and `exerplaza` leave out rejected
+items but export pending ones, so an unreviewed item reaches the export.
+
 The model sees the question, the lecture's answer, the sentences around it, and the board states
 on screen when vision ran. The speech comes from `--transcript`, else from the cached transcript
 of the recording; without either, a `note:` says so and items are fewer and weaker.
