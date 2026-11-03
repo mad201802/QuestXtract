@@ -1005,8 +1005,16 @@ outbound calls", did not count the Whisper download, the GUI's defaults or its k
 blanket rule nobody can keep is worse than a precise one that holds.) S2 all external JSON
 validated before use; S3 credentials never stored in the package or the result files; the API key
 and the ExerPlaza login are read from the environment at call time and are not `Config`
-fields; S4 temporary media deleted after extraction; S5 test material
-is public or mock lectures only (the brief already promises "no student data"); **S6 when an
+fields; S4 temporary media deleted after extraction; **S5 committed test material comes from
+a recording whose licence allows sharing derivatives, or is used with the lecturer's permission,
+and names no student**: each recording's licence or permission is in `tests/data/README.md` and
+`tests/data/vision/README.md`. (Restated in #198. The first form, "public or mock lectures only",
+did not hold: the `ttk4225_*` transcripts are a real NTNU lecture, committed with the
+permission of its lecturer, who is also the customer. A public YouTube upload alone is not
+enough.) The four committed transcripts were read for names on 2026-11-03: no student is named;
+the names that occur are the 18.100B lecturer's own, a former member of the 6.003 lecturer's
+lab credited for a picture, and in `ttk4225_2026_09_15` the first name of the lecturer's child
+from a family video, kept because the lecturer recorded and shared the lecture; **S6 when an
 endpoint is configured, the user must be able to tell**: the exported `config` block names the
 models used, so a result carries whether it went out.
 
