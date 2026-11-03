@@ -413,3 +413,10 @@ def test_read_quiz_prefixes_every_problem_with_the_file(tmp_path):
 def test_the_schema_ships_in_the_package():
     assert QUIZ_SCHEMA_PATH.is_file()
     assert files("questxtract").joinpath("quiz.schema.json").is_file()
+
+
+def test_read_quiz_rejects_deeply_nested_json(tmp_path):
+    nested = tmp_path / "quiz.json"
+    nested.write_text("[" * 100_000 + "]" * 100_000, encoding="utf-8")
+    with pytest.raises(SchemaError, match="not valid JSON"):
+        read_quiz(nested)

@@ -151,6 +151,6 @@ def _create(llm: Any, request: dict[str, Any], seconds: float) -> Any:
 def _parse(content: str | None) -> dict[str, Any] | None:
     try:
         data = json.loads(content or "")
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, RecursionError):
         return None
     return data if isinstance(data, dict) else None

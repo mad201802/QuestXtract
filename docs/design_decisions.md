@@ -979,8 +979,9 @@ ExerPlaza email and password, which `exerplaza` reads from the environment or `.
   makes no LLM call and writes a complete `questions.json`. The only components that always talk
   out are the uploader (outside the package) and `exerplaza` (D36), which sends the quiz, its
   spoken stems included, to the address its `--url` names, over HTTPS unless that is `localhost`.
-- **Denial of service / resource exhaustion**: hour-long inputs, temp files from decoding.
-  #7 owns temp-file cleanup; #14 progress reporting is also the cancellation point.
+- **Denial of service / resource exhaustion**: hour-long inputs, temp files from decoding,
+  oversized or deeply nested JSON. #7 owns temp-file cleanup; #14 progress reporting is also the
+  cancellation point; input size is an accepted risk (*Input size* below).
 - **Elevation of privilege / spoofing**: none inside the package: no accounts, no privileges.
   At the ExerPlaza boundary, `exerplaza` acts as the teacher whose password it holds: a stolen
   `.env` is a stolen ExerPlaza account. Mitigated: never a CLI argument, never printed, logged or
@@ -1040,6 +1041,17 @@ views were not traced. Escaping here does not fix it: LaTeX escaping breaks Math
 escaping is stored as parsed, so an escaping page shows `&lt;`. The fix is escaping in
 ExerPlaza's preview. Accepted as a residual risk until ExerPlaza escapes it: the preview runs
 only in the browser of the teacher uploading their own file, and a test pins the verbatim output.
+
+*Input size:* no cap on file size, recording length or JSON size (#202). Transcripts,
+`questions.json` and `quiz.json` are read whole, and a recording is decoded to its end. Accepted
+risk: the inputs are the user's own files on their own machine, so an oversized one only slows
+or stops the run of the user who chose it. Hour-long lectures are the normal input, so a length
+cap would reject real work, and a size limit would be a number with nothing to justify it. The
+ExerPlaza reply body is also read without a limit; it comes from the server the teacher names
+with `--url`, over HTTPS. What is bounded: each LLM request by `timeout_seconds`, the source
+hash by reading only the first and last 8 MiB. Deeply nested JSON is rejected, not crashed on:
+a transcript, `questions.json` or `quiz.json` nested past Python's recursion limit raises
+`SchemaError` ("not valid JSON"), and an LLM reply nested that deep counts as invalid JSON.
 
 Suggested exercise for the report: play Microsoft EoP over the figure in §2 with the
 information-flow arrows; the compendium asks for an architecture sketch with flows first.

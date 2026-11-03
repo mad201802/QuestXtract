@@ -92,7 +92,7 @@ def read_quiz(path: str | Path, questions: Mapping[str, Any] | None = None) -> d
     """
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeError) as exc:
+    except (json.JSONDecodeError, UnicodeError, RecursionError) as exc:
         raise SchemaError(f"{path}: not valid JSON ({exc})") from exc
     if not isinstance(data, dict):
         raise SchemaError(f"{path}: expected a JSON object")
