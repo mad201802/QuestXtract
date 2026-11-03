@@ -1365,3 +1365,13 @@ def test_a_known_service_over_http_fails_before_transcription(
 
     err = capsys.readouterr().err
     assert f"{url} would send the key unencrypted; use https://" in err and fake_asr == []
+
+
+def test_process_reports_deeply_nested_json_as_an_error_not_a_traceback(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    nested = tmp_path / "nested.json"
+    nested.write_text("[" * 100_000 + "]" * 100_000, encoding="utf-8")
+
+    assert main(["process", str(nested)]) == 1
+    assert "not valid JSON" in capsys.readouterr().err

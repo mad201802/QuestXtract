@@ -498,3 +498,10 @@ def test_cli_accepts_the_threshold_bounds(tmp_path, validator, threshold):
     out = tmp_path / "q.json"
     assert main(["process", str(_transcript_file(tmp_path)), "-t", threshold, "-o", str(out)]) == 0
     validator.validate(read_questions(out))
+
+
+def test_read_questions_rejects_deeply_nested_json(tmp_path):
+    nested = tmp_path / "q.json"
+    nested.write_text("[" * 100_000 + "]" * 100_000, encoding="utf-8")
+    with pytest.raises(SchemaError, match="not valid JSON"):
+        read_questions(nested)

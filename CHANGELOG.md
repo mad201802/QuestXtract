@@ -37,6 +37,12 @@
 - On Linux and macOS, the folder the app saves the NTNU key in (`questxtract/` in your user config
   folder) is now readable by you only, also when an earlier version created it. (#199)
 
+### Fixed
+
+- A transcript, `questions.json` or `quiz.json` nested thousands of levels deep now gives
+  `error: ... not valid JSON` and exit code 1 instead of a crash with a traceback. An LLM reply
+  nested that deep counts as invalid JSON. (#202)
+
 ## 0.3.0
 
 ### Changed

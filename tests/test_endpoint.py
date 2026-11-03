@@ -188,3 +188,7 @@ def test_the_vision_key_is_hidden_in_errors(monkeypatch: pytest.MonkeyPatch) -> 
         _ask(Config(), vision=True)
     assert "ntnu-secret" not in str(error.value) and "[REDACTED]" in str(error.value)
     assert NTNU_LLM_URL in str(error.value)
+
+
+def test_a_deeply_nested_reply_counts_as_invalid_json() -> None:
+    assert endpoint._parse("[" * 100_000 + "]" * 100_000) is None
