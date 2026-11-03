@@ -19,6 +19,7 @@ from . import run as gui_run
 from .i18n import tr
 from .key_dialog import KeyDialog
 from .options import OPTIONS, OUTPUTS, Option
+from .screen import fit_on_screen
 
 __all__ = ["run_app"]
 
@@ -37,6 +38,7 @@ def run_app() -> int:
     except tk.TclError as exc:
         raise OSError(f"cannot open a window: {exc}") from None
     QuestXtractWindow(root, drag_and_drop=drag_and_drop)
+    root.after_idle(fit_on_screen, root)  # on any screen size, the whole window shows
     root.mainloop()
     return 0
 
@@ -184,6 +186,9 @@ class QuestXtractWindow:
                 line = self._option_row(body, option)
                 line.grid(row=row, column=0, sticky="ew", pady=1)
             self.option_rows[option.dest] = line
+        self.no_settings = ttk.Label(body, wraplength=620, foreground="#444444")
+        self._text(self.no_settings, "options.none")
+        self.no_settings.grid(row=row + 1, column=0, sticky="w", pady=(6, 0))
         body.update_idletasks()  # every row is shown now: this is the tallest list
         self._options_full_height = body.winfo_reqheight()
         # the board line keeps its room for outputs that hide it, so the window never jumps
@@ -242,14 +247,16 @@ class QuestXtractWindow:
         def fit(_event: object = None) -> None:
             top = canvas.winfo_rooty() or _OPTIONS_TOP_PX  # 0 until the window is shown
             room = self.root.winfo_screenheight() - top - _SCREEN_MARGIN_PX
+            height = min(
+                max(body.winfo_reqheight(), self._options_full_height),
+                max(_MIN_OPTIONS_PX, room),
+            )
             canvas.configure(
-                scrollregion=canvas.bbox("all"),
+                # never shorter than the box, so a short list starts at the top (#259)
+                scrollregion=(0, 0, body.winfo_reqwidth(), max(body.winfo_reqheight(), height)),
                 width=body.winfo_reqwidth(),
                 # the same height for every output, so switching never resizes the window
-                height=min(
-                    max(body.winfo_reqheight(), self._options_full_height),
-                    max(_MIN_OPTIONS_PX, room),
-                ),
+                height=height,
             )
 
         def wheel(event: Any) -> None:
@@ -339,10 +346,15 @@ class QuestXtractWindow:
         self.advanced_open = not self.advanced_open
         if self.advanced_open:
             self.options_frame.grid()
-            self.root.after_idle(self._fit_options)  # its place on screen is known only now
+            self.root.after_idle(self._show_options)  # its place on screen is known only now
         else:
             self.options_frame.grid_remove()
+            self.root.after_idle(fit_on_screen, self.root)
         self._retranslate_advanced_button()
+
+    def _show_options(self) -> None:
+        self._fit_options()
+        fit_on_screen(self.root)  # the window grew: move it up if its bottom left the screen
 
     def _retranslate_advanced_button(self) -> None:
         key = "button.advanced_hide" if self.advanced_open else "button.advanced_show"
@@ -412,13 +424,20 @@ class QuestXtractWindow:
         for name, button in self.output_buttons.items():
             offered = state.output_offered(name, self.source)
             button.state(["!disabled"] if offered else ["disabled"])
+        any_setting = False
         for option in OPTIONS:
             row = self.option_rows.get(option.dest)
             if row is not None:
                 if gui_run.applies(option, output):
                     row.grid()
+                    any_setting = any_setting or option.dest != "vision"
                 else:
                     row.grid_remove()
+        # an output without settings says so, instead of showing an empty box (#259)
+        if any_setting:
+            self.no_settings.grid_remove()
+        else:
+            self.no_settings.grid()
         judge_model = self.controls.get("llm_model")
         if judge_model is not None:
             judging = self.fields["detector"].get() == "llm"
@@ -640,8 +659,19 @@ class _Tooltip:
         self.box.wm_overrideredirect(True)
         x = self.widget.winfo_rootx()
         y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+        screen_w = self.widget.winfo_screenwidth()
+        tk.Label(
+            self.box,
+            text=self.text,
+            bg="#ffffe0",
+            relief="solid",
+            bd=1,
+            padx=4,
+            wraplength=screen_w // 2,  # a long path wraps instead of running off the screen
+        ).pack()
+        self.box.update_idletasks()
+        x = max(0, min(x, screen_w - self.box.winfo_reqwidth()))
         self.box.wm_geometry(f"+{x}+{y}")
-        tk.Label(self.box, text=self.text, bg="#ffffe0", relief="solid", bd=1, padx=4).pack()
 
     def _hide(self, _event: object = None) -> None:
         if self.box is not None:

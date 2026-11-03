@@ -11,6 +11,7 @@ from tkinter import ttk
 from ..config import NTNU_LLM_URL, is_ntnu, key_names
 from . import keys
 from .i18n import tr
+from .screen import fit_on_screen
 
 __all__ = ["KeyDialog"]
 
@@ -69,6 +70,7 @@ class KeyDialog:
         frame.columnconfigure(1, weight=1)
         self._show_source()
         self.entry.focus_set()
+        fit_on_screen(self.top, over=parent)  # over the app, and never past the screen's edge
         self.top.after(_POLL_MS, self._poll)
 
     def test(self) -> None:

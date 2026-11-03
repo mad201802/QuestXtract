@@ -45,6 +45,11 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "nb": "Avanserte innstillinger <<",
         "it": "Impostazioni avanzate <<",
     },
+    "options.none": {
+        "en": "This output has no settings. It uses the quiz file exactly as it is.",
+        "nb": "Dette valget har ingen innstillinger. Det bruker quiz-filen akkurat slik den er.",
+        "it": "Questo output non ha impostazioni. Usa il file del quiz così com'è.",
+    },
     "output.files": {
         "en": "Files: <name>.questions.json, <name>.transcript.json, <name>.quiz.json "
         "(beside the questions) and <name>.qti.zip, next to the input unless given below.",

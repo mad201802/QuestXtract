@@ -679,6 +679,35 @@ def test_the_drop_area_shows_the_chosen_file_and_keeps_the_path_on_hover(window)
     assert window.drop_box.cget("text") == i18n.tr("drop.chosen", name=TRANSCRIPT.name)
 
 
+def test_the_window_and_the_key_window_stay_inside_the_screen(window, root):
+    """#259: with the settings open, the window ran past the bottom of a laptop screen."""
+    root.geometry(f"+0+{root.winfo_screenheight() - 200}")
+    window._toggle_advanced()
+    root.update()
+    window._show_options()
+    root.update()
+    for shown in (root, gui_window.KeyDialog(root).top):
+        shown.update()
+        assert shown.winfo_y() >= 0
+        assert shown.winfo_y() + shown.winfo_height() <= shown.winfo_screenheight()
+        assert shown.winfo_x() + shown.winfo_width() <= shown.winfo_screenwidth()
+
+
+def test_an_output_without_settings_says_so_at_the_top(window, root):
+    """#259: QTI showed an empty settings box with its content floating in the middle."""
+    window.choose_source(TRANSCRIPT)
+    window._toggle_advanced()
+    for name, empty in (("qti", True), ("questions", False)):
+        window.output.set(name)
+        window._refresh()
+        root.update()
+        window._fit_options()
+        root.update()
+        assert bool(window.no_settings.winfo_ismapped()) is empty
+        assert window.options_canvas.yview()[0] == 0.0
+        assert float(str(window.options_canvas.cget("scrollregion")).split()[1]) == 0.0
+
+
 def test_switching_the_output_never_resizes_the_window(window, root):
     """#259: each output's explanation and settings made the window jump."""
     window.choose_source(TRANSCRIPT)
