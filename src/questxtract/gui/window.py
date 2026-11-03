@@ -99,6 +99,7 @@ class QuestXtractWindow:
         self.alive = True
         self.advanced_open = False
         self._options_full_height = 0  # set once every settings row exists
+        self._options_full_width = 0
         root.protocol("WM_DELETE_WINDOW", self._close)
         style = ttk.Style(root)
         if "classic" in style.theme_names():
@@ -191,6 +192,7 @@ class QuestXtractWindow:
         self.no_settings.grid(row=row + 1, column=0, sticky="w", pady=(6, 0))
         body.update_idletasks()  # every row is shown now: this is the tallest list
         self._options_full_height = body.winfo_reqheight()
+        self._options_full_width = body.winfo_reqwidth()  # and the widest
         # the board line keeps its room for outputs that hide it, so the window never jumps
         outputs.rowconfigure(2, minsize=self.option_rows["vision"].winfo_reqheight())
         options.grid_remove()
@@ -254,8 +256,8 @@ class QuestXtractWindow:
             canvas.configure(
                 # never shorter than the box, so a short list starts at the top (#259)
                 scrollregion=(0, 0, body.winfo_reqwidth(), max(body.winfo_reqheight(), height)),
-                width=body.winfo_reqwidth(),
-                # the same height for every output, so switching never resizes the window
+                # the same size for every output, whatever line is widest (#259)
+                width=max(body.winfo_reqwidth(), self._options_full_width),
                 height=height,
             )
 
