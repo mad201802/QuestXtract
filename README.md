@@ -103,12 +103,43 @@ questxtract exerplaza lecture.quiz.json --url https://exerplaza.example.org \
 ```
 
 Both run on NTNU's LLM service by default and need `IDUN_API_KEY` and the NTNU network or VPN.
-Any OpenAI-compatible endpoint works through `--llm-url`: `openrouter`, `openai`, `ollama` (local,
-no key) or a URL, each with its own key. The app's API key... button saves the key; a safer setup:
-[Setting up the API key](docs/cli.md#setting-up-the-api-key).
 
 `exerplaza` logs in with `QUESTXTRACT_EXERPLAZA_EMAIL` and `QUESTXTRACT_EXERPLAZA_PASSWORD` from
 the environment or `.env`; see [docs/cli.md](docs/cli.md#questxtract-exerplaza-quizjson).
+
+### Switching the model and the server
+
+One setting for the model, one for the server, as a flag or in
+[`questxtract.toml`](docs/cli.md#configuration-files):
+
+| | Model | Server |
+|---|---|---|
+| Text: LLM detector | `--llm-model` / `judge_model` | `--llm-url` / `base_url` |
+| Text: quiz | `--quiz-model` / `quiz_model` | `--llm-url` / `base_url` |
+| Vision: the board | `--vision-model` / `vision_model` | `vision_base_url`, else `--llm-url` |
+
+A server is `ntnu` (the default), `openai`, `openrouter`, `ollama` (local, no key) or any
+OpenAI-compatible URL, each with [its own key](docs/cli.md#api-keys-and-env). The app's API key...
+button saves the key; a safer setup: [Setting up the API key](docs/cli.md#setting-up-the-api-key).
+
+```bash
+# NTNU's LLM service (the default), IDUN_API_KEY
+questxtract process lecture.mp4 --detector llm --vision
+
+# OpenAI, OPENAI_API_KEY
+questxtract process lecture.mp4 --detector llm --vision --llm-url openai \
+    --llm-model gpt-4o --llm-reasoning server --vision-model gpt-4o
+
+# Ollama on this machine, no key
+ollama pull qwen3.5:9b && ollama pull qwen3-vl:2b-instruct    # once
+questxtract process lecture.mp4 --detector llm --vision --llm-url ollama \
+    --llm-model qwen3.5:9b --llm-reasoning low --vision-model qwen3-vl:2b-instruct
+```
+
+For vision on OpenAI or Ollama, also put `vision_reasoning_effort = ""` in `questxtract.toml`:
+their vision models take no reasoning setting. More models, OpenRouter and other servers:
+[Finding questions with an LLM](docs/cli.md#finding-questions-with-an-llm) and
+[Reading the board](docs/cli.md#reading-the-board).
 
 ## Documentation
 
