@@ -52,7 +52,7 @@ Finds the questions in a recording or transcript and writes a questions file.
 | `-t`, `--threshold` | a number, 0 to 1 | `0.4` | Keeps questions with at least this confidence. |
 | `-m`, `--model` | a model name | `turbo` | The Whisper model. Only for `.mp4` or `.mp3` input. See [Choosing a model](#choosing-a-model). |
 | `--from-scratch` | nothing | off | Ignores cached results, transcription included. |
-| `--detector` | `rules` or `llm` | `rules` | Offline rules, or a language model. See [Finding questions with an LLM](#finding-questions-with-an-llm). |
+| `--detector` | `rules` or `llm` | `rules` | Offline rules, or a language model. The default is the [offline fallback](../README.md#offline-fallback). See [Finding questions with an LLM](#finding-questions-with-an-llm). |
 | `--llm-model` | a model name | `Qwen/Qwen3.8-27B-FP8` | The model for `--detector llm`, as the endpoint names it (`qwen3.5:9b` in Ollama). |
 | `--llm-url` | a URL, or `ntnu`, `openrouter`, `openai`, `ollama` | `ntnu` | OpenAI-compatible endpoint for the LLM detector, the quiz and vision: any URL, or a short name for NTNU's LLM service (`https://llm.hpc.ntnu.no/v1`, NTNU network or VPN), OpenRouter, OpenAI or Ollama on this computer (`http://localhost:11434/v1`). The key goes with the endpoint ([API keys](#api-keys-and-env)). Vision goes there too unless `vision_base_url` is set. |
 | `--llm-reasoning` | `none`, `low`, `medium`, `high`, `server` | `server` | How long the judge and the quiz model may think. `server` sends no setting (Qwen rejects `none`; `gpt-4o` has no setting); DeepSeek needs `none`; `qwen3.5:9b` judges better with `low`. A level allows each request 10 minutes instead of 2. Vision uses `vision_reasoning_effort` from the settings file (default `"none"`). |
