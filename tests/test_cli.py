@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import socket
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
@@ -112,6 +113,45 @@ def test_process_closes_the_bar_line_before_an_error_propagates(
 
 def _questions(path: Path) -> list[str]:
     return [q["text"] for q in json.loads(path.read_text(encoding="utf-8"))["questions"]]
+
+
+def _block_the_network(monkeypatch: pytest.MonkeyPatch) -> list[object]:
+    """Make every way of opening a connection fail, and return what was tried."""
+    attempts: list[object] = []
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        attempts.append(args[:2])
+        raise OSError("network access is blocked in this test")
+
+    for name in ("connect", "connect_ex"):
+        monkeypatch.setattr(socket.socket, name, refuse)
+    monkeypatch.setattr(socket, "create_connection", refuse)
+    monkeypatch.setattr(socket, "getaddrinfo", refuse)
+    return attempts
+
+
+def test_the_network_block_refuses_a_connection(monkeypatch: pytest.MonkeyPatch) -> None:
+    attempts = _block_the_network(monkeypatch)
+
+    with pytest.raises(OSError, match="blocked"):
+        socket.create_connection(("example.org", 443))
+
+    assert len(attempts) == 1
+
+
+def test_the_default_run_makes_no_network_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#254: the default Config is the offline fallback; a transcript needs no network at all."""
+    transcript = Path(__file__).parent / "data" / "mit_18_100b_l1.transcript.json"
+    output = tmp_path / "questions.json"
+    attempts = _block_the_network(monkeypatch)
+
+    assert Config().detector == "rules" and not Config().vision_enabled
+    assert main(["process", str(transcript), "-o", str(output)]) == 0
+
+    assert attempts == []
+    assert len(_questions(output)) > 0
 
 
 def test_process_runs_every_stage_on_a_recording_and_writes_next_to_it(
