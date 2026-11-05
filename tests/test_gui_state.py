@@ -230,3 +230,11 @@ def test_the_key_window_follows_the_endpoint_a_run_would_use(
     assert state.key_endpoint({"llm_url": None, "config": None}) == "https://api.openai.com/v1"
     missing = str(tmp_path / "missing.toml")
     assert state.key_endpoint({"llm_url": None, "config": missing}) == ntnu
+
+
+def test_no_reasoning_setting_shows_as_server_and_is_not_passed(tmp_path, monkeypatch):
+    """#259: the Reasoning box was empty; "server" is the default and passes no flag."""
+    monkeypatch.chdir(tmp_path)
+    option = next(o for o in OPTIONS if o.dest == "llm_reasoning")
+    assert state.start_text(option) == "server"
+    assert state.form_values({"llm_reasoning": "server"})["llm_reasoning"] is None

@@ -8,7 +8,7 @@ import tkinter as tk
 import traceback
 from collections.abc import Callable
 from pathlib import Path
-from tkinter import filedialog, ttk
+from tkinter import filedialog, messagebox, ttk
 from typing import Any
 
 from ..cli import RunResult
@@ -19,11 +19,15 @@ from . import run as gui_run
 from .i18n import tr
 from .key_dialog import KeyDialog
 from .options import OPTIONS, OUTPUTS, Option
+from .screen import fit_on_screen
 
 __all__ = ["run_app"]
 
 _POLL_MS = 100
 _TYPING_PAUSE_MS = 150
+_OPTIONS_TOP_PX = 420  # where the settings start, until the window is on screen
+_MIN_OPTIONS_PX = 160  # the settings box never gets shorter than this
+_SCREEN_MARGIN_PX = 90  # room for the taskbar and the window's border
 _OUTPUT_OPTION = next(option for option in OPTIONS if option.dest == "output")
 
 
@@ -34,6 +38,7 @@ def run_app() -> int:
     except tk.TclError as exc:
         raise OSError(f"cannot open a window: {exc}") from None
     QuestXtractWindow(root, drag_and_drop=drag_and_drop)
+    root.after_idle(fit_on_screen, root)  # on any screen size, the whole window shows
     root.mainloop()
     return 0
 
@@ -93,6 +98,8 @@ class QuestXtractWindow:
         self.closing = False
         self.alive = True
         self.advanced_open = False
+        self._options_full_height = 0  # set once every settings row exists
+        self._options_full_width = 0
         root.protocol("WM_DELETE_WINDOW", self._close)
         style = ttk.Style(root)
         if "classic" in style.theme_names():
@@ -128,16 +135,15 @@ class QuestXtractWindow:
         source = ttk.LabelFrame(frame, padding=8)
         self._text(source, "group.source")
         source.grid(row=1, sticky="ew")
-        self.drop_box = tk.Label(source, relief="sunken", bd=2, bg="white", height=2, width=54)
-        self._text(self.drop_box, "drop.help")
-        self.drop_box.grid(row=0, column=0, columnspan=2, sticky="ew")
-        self.source_label = ttk.Label(source, wraplength=440)
-        self.source_label.grid(row=1, column=0, sticky="w", pady=(6, 0))
+        # The drop area, Browse and the chosen file on one row, to save room (#259)
+        self.drop_box = tk.Label(source, relief="sunken", bd=2, bg="white", height=2, width=36)
+        self.drop_box.grid(row=0, column=0, sticky="ew")
         browse = ttk.Button(source, command=self._browse)
         self._text(browse, "button.browse")
-        browse.grid(row=1, column=1, pady=(6, 0))
+        browse.grid(row=0, column=1, padx=(8, 0))
+        self.source_tip = _Tooltip(self.drop_box)  # the full path, on hover
         self.drop_note = ttk.Label(source, text="", wraplength=440)
-        self.drop_note.grid(row=2, column=0, columnspan=2, sticky="w")
+        self.drop_note.grid(row=1, column=0, columnspan=3, sticky="w")
 
         outputs = ttk.LabelFrame(frame, padding=8)
         self._text(outputs, "group.output")
@@ -149,12 +155,25 @@ class QuestXtractWindow:
             self._text(button, f"output.{name}")
             button.grid(row=0, column=column, sticky="w", padx=(0, 18))
             self.output_buttons[name] = button
+        self.output_about = tk.Label(  # a fixed box, so the window keeps its size (#259)
+            outputs,
+            height=3,
+            width=90,
+            wraplength=620,
+            anchor="nw",
+            justify="left",
+            foreground="#444444",
+        )
+        self.output_about.grid(  # what the chosen output makes, in plain words (#259)
+            row=1, column=0, columnspan=len(state.OUTPUT_LABELS), sticky="w", pady=(4, 6)
+        )
 
         options = ttk.LabelFrame(frame, padding=8)
         self.options_frame = options
         self._text(options, "group.options")
-        options.grid(row=3, sticky="ew", pady=(8, 0))
-        files = ttk.Label(options, wraplength=620)
+        options.grid(row=9, sticky="ew", pady=(8, 0))  # below Run, so it never hides it (#259)
+        body = self._scrolling(options)  # scrolls instead of growing past the screen (#259)
+        files = ttk.Label(body, wraplength=620)
         self._text(files, "output.files")
         files.grid(row=0, column=0, sticky="w", pady=(0, 6))
         shown = [option for option in OPTIONS if option.kind != "implicit"]
@@ -162,16 +181,24 @@ class QuestXtractWindow:
         for option in shown:
             if option.dest == "vision":
                 line = self._option_row(outputs, option)
-                line.grid(row=1, column=0, columnspan=len(state.OUTPUT_LABELS), sticky="w")
+                line.grid(row=2, column=0, columnspan=len(state.OUTPUT_LABELS), sticky="w")
             else:
                 row += 1
-                line = self._option_row(options, option)
+                line = self._option_row(body, option)
                 line.grid(row=row, column=0, sticky="ew", pady=1)
             self.option_rows[option.dest] = line
+        self.no_settings = ttk.Label(body, wraplength=620, foreground="#444444")
+        self._text(self.no_settings, "options.none")
+        self.no_settings.grid(row=row + 1, column=0, sticky="w", pady=(6, 0))
+        body.update_idletasks()  # every row is shown now: this is the tallest list
+        self._options_full_height = body.winfo_reqheight()
+        self._options_full_width = body.winfo_reqwidth()  # and the widest
+        # the board line keeps its room for outputs that hide it, so the window never jumps
+        outputs.rowconfigure(2, minsize=self.option_rows["vision"].winfo_reqheight())
         options.grid_remove()
 
         actions = ttk.Frame(frame)
-        actions.grid(row=4, sticky="ew", pady=(8, 0))
+        actions.grid(row=3, sticky="ew", pady=(8, 0))
         self.run_button = ttk.Button(actions, command=self._run, width=10)
         self._text(self.run_button, "button.run")
         self.run_button.grid(row=0, column=0)
@@ -194,14 +221,58 @@ class QuestXtractWindow:
         )
         self.stage_label = ttk.Label(frame, text="")
         self.stage_label.grid(row=6, sticky="w")
-        self.hint = ttk.Label(frame, text="", wraplength=460, foreground="#444444")
+        self.hint = tk.Label(  # two lines' room, so a longer hint never resizes the window (#259)
+            frame,
+            text="",
+            height=2,
+            wraplength=460,
+            anchor="nw",
+            justify="left",
+            foreground="#444444",
+        )
         self.hint.grid(row=7, sticky="w", pady=(4, 0))
         self.status = ttk.Label(frame, text="", wraplength=460)
         self.status.grid(row=8, sticky="w", pady=(4, 0))
 
+    def _scrolling(self, box: ttk.LabelFrame) -> ttk.Frame:
+        """Return a frame in ``box`` that scrolls once it is taller than the screen allows."""
+        canvas = tk.Canvas(box, highlightthickness=0, borderwidth=0)
+        bar = ttk.Scrollbar(box, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=bar.set)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        bar.grid(row=0, column=1, sticky="ns")
+        box.columnconfigure(0, weight=1)
+        body = ttk.Frame(canvas)
+        canvas.create_window((0, 0), window=body, anchor="nw")
+        self.options_canvas = canvas
+
+        def fit(_event: object = None) -> None:
+            top = canvas.winfo_rooty() or _OPTIONS_TOP_PX  # 0 until the window is shown
+            room = self.root.winfo_screenheight() - top - _SCREEN_MARGIN_PX
+            height = min(
+                max(body.winfo_reqheight(), self._options_full_height),
+                max(_MIN_OPTIONS_PX, room),
+            )
+            canvas.configure(
+                # never shorter than the box, so a short list starts at the top (#259)
+                scrollregion=(0, 0, body.winfo_reqwidth(), max(body.winfo_reqheight(), height)),
+                # the same size for every output, whatever line is widest (#259)
+                width=max(body.winfo_reqwidth(), self._options_full_width),
+                height=height,
+            )
+
+        def wheel(event: Any) -> None:
+            canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+
+        body.bind("<Configure>", fit)
+        canvas.bind("<Enter>", lambda _e: canvas.bind_all("<MouseWheel>", wheel))
+        canvas.bind("<Leave>", lambda _e: canvas.unbind_all("<MouseWheel>"))
+        self._fit_options = fit
+        return body
+
     def _option_row(self, parent: tk.Misc, option: Option) -> ttk.Frame:
         line = ttk.Frame(parent)
-        label = ttk.Label(line, width=46, anchor="w")
+        label = ttk.Label(line, width=46, anchor="w", wraplength=330)  # wraps, never cut off
         label.grid(row=0, column=0, sticky="w")
         self.option_labels[option.dest] = (label, option)
         var: tk.StringVar | tk.BooleanVar
@@ -219,6 +290,11 @@ class QuestXtractWindow:
             var = tk.StringVar(master=line, value=state.start_text(option))
             control = ttk.Combobox(
                 line, textvariable=var, values=option.choices, state="readonly", width=26
+            )
+        elif option.menu:  # a list to pick from, so a name cannot be mistyped (#259)
+            var = tk.StringVar(master=line, value=state.start_text(option))
+            control = ttk.Combobox(
+                line, textvariable=var, values=option.menu, state="readonly", width=26
             )
         elif option.kind == "endpoint":  # a short name from the list, or any URL typed in
             var = tk.StringVar(master=line, value=state.start_text(option))
@@ -257,7 +333,8 @@ class QuestXtractWindow:
     def choose_source(self, path: Path) -> None:
         """Use ``path`` as the recording or transcript, and show it."""
         self.source = path
-        self.source_label.configure(text=str(path))
+        self.drop_box.configure(text=self._drop_text())  # the box shows the file it holds
+        self.source_tip.text = str(path)
         self.drop_extra = None
         self.drop_note.configure(text=self._drop_note())
         if not state.output_offered(self.output.get(), path):
@@ -271,13 +348,29 @@ class QuestXtractWindow:
         self.advanced_open = not self.advanced_open
         if self.advanced_open:
             self.options_frame.grid()
+            self.root.after_idle(self._show_options)  # its place on screen is known only now
         else:
             self.options_frame.grid_remove()
+            self.root.after_idle(fit_on_screen, self.root)
         self._retranslate_advanced_button()
+
+    def _show_options(self) -> None:
+        self._fit_options()
+        fit_on_screen(self.root)  # the window grew: move it up if its bottom left the screen
 
     def _retranslate_advanced_button(self) -> None:
         key = "button.advanced_hide" if self.advanced_open else "button.advanced_show"
         self.advanced_button.configure(text=tr(key))
+
+    def _drop_text(self) -> str:
+        """Return what the drop area says: what to do, or the file it holds."""
+        if self.source is None:
+            return tr("drop.help")
+        return tr("drop.chosen", name=self.source.name)
+
+    def _show_error(self, message: str) -> None:
+        """Show a failed run in a pop-up the user closes, not as text at the bottom (#259)."""
+        messagebox.showerror(tr("error.title"), message, parent=self.root)
 
     def _drop_note(self) -> str:
         if self.drop_extra is not None:
@@ -329,16 +422,24 @@ class QuestXtractWindow:
     def _refresh(self) -> None:
         self._refresh_job = None
         output = self.output.get()
+        self.output_about.configure(text=tr(f"about.{output}"))
         for name, button in self.output_buttons.items():
             offered = state.output_offered(name, self.source)
             button.state(["!disabled"] if offered else ["disabled"])
+        any_setting = False
         for option in OPTIONS:
             row = self.option_rows.get(option.dest)
             if row is not None:
                 if gui_run.applies(option, output):
                     row.grid()
+                    any_setting = any_setting or option.dest != "vision"
                 else:
                     row.grid_remove()
+        # an output without settings says so, instead of showing an empty box (#259)
+        if any_setting:
+            self.no_settings.grid_remove()
+        else:
+            self.no_settings.grid()
         judge_model = self.controls.get("llm_model")
         if judge_model is not None:
             judging = self.fields["detector"].get() == "llm"
@@ -366,9 +467,7 @@ class QuestXtractWindow:
         for dest, (label, option) in self.option_labels.items():
             text = tr("opt." + dest)
             label.configure(text=tr("control.label", label=text, default=state.hint(option)))
-        self.source_label.configure(
-            text=tr("source.none") if self.source is None else str(self.source)
-        )
+        self.drop_box.configure(text=self._drop_text())
         self.drop_note.configure(text=self._drop_note())
         self.status.configure(text=self.status_text())
         self.stage_label.configure(text=self.stage_text())
@@ -523,8 +622,9 @@ class QuestXtractWindow:
             self._set_status(lambda: tr("status.cancelled"))
             self._set_stage(lambda: tr("stage.cancelled"))
         else:
-            self._set_status(lambda: payload)
+            self._set_status(lambda: "")
             self._set_stage(lambda: tr("stage.failed"))
+            self._show_error(payload)
         self._refresh()
 
     def _show_result(self, result: RunResult) -> None:
@@ -542,3 +642,40 @@ class QuestXtractWindow:
         self.open_button.state(["!disabled"] if path is not None else ["disabled"])
         self.progress_var.set(100.0)
         self._set_stage(lambda: tr("stage.done"))
+
+
+class _Tooltip:
+    """A small box with ``text`` that appears while the pointer is over ``widget``."""
+
+    def __init__(self, widget: tk.Widget) -> None:
+        self.widget = widget
+        self.text = ""
+        self.box: tk.Toplevel | None = None
+        widget.bind("<Enter>", self._show)
+        widget.bind("<Leave>", self._hide)
+
+    def _show(self, _event: object = None) -> None:
+        if not self.text or self.box is not None:
+            return
+        self.box = tk.Toplevel(self.widget)
+        self.box.wm_overrideredirect(True)
+        x = self.widget.winfo_rootx()
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+        screen_w = self.widget.winfo_screenwidth()
+        tk.Label(
+            self.box,
+            text=self.text,
+            bg="#ffffe0",
+            relief="solid",
+            bd=1,
+            padx=4,
+            wraplength=screen_w // 2,  # a long path wraps instead of running off the screen
+        ).pack()
+        self.box.update_idletasks()
+        x = max(0, min(x, screen_w - self.box.winfo_reqwidth()))
+        self.box.wm_geometry(f"+{x}+{y}")
+
+    def _hide(self, _event: object = None) -> None:
+        if self.box is not None:
+            self.box.destroy()
+            self.box = None

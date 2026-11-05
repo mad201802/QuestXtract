@@ -235,7 +235,8 @@ includes what the LLM detector and reading the board need, since the window star
 - The output: Questions (`process`), Transcript (`transcribe`), Quiz (`process --quiz`) or QTI
   package (`qti`, from a `quiz.json`), named `<name>.questions.json`, `<name>.transcript.json`,
   `<name>.quiz.json` and `<name>.qti.zip`, next to the input unless an output file is given.
-- The options are behind Advanced settings. Each control is one option of `process` or
+- The options are behind Advanced settings, below Run; the list scrolls when the screen is too
+  small for it, and an output without options (QTI package) says so. Each control is one option of `process` or
   `transcribe`, with its starting value in the label. Without a `questxtract.toml`
   ([Configuration files](#configuration-files)) the window starts with the LLM detector and
   reading the board on; with one, it starts from the file. A control left at the CLI's default is
@@ -243,7 +244,7 @@ includes what the LLM detector and reading the board need, since the window star
   them. Changing the output clears the output file. Run stays disabled, with the reason beside it,
   while a value is refused or the file is the wrong kind.
 - Run, Cancel, progress: the bar follows the pipeline's stages. Cancel stops before the next
-  stage, and no partial file is written. Errors show as the CLI's one line.
+  stage, and no partial file is written. An error opens in a pop-up as the CLI's one line.
 - Open folder opens the folder of the file written.
 - Keys: read as the CLI reads them ([API keys](#api-keys-and-env)). The API key... button opens
   a window for the key of the endpoint in LLM endpoint (Advanced settings; a URL, or `ntnu`,

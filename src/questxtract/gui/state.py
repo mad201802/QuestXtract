@@ -48,8 +48,16 @@ def default_text(option: Option) -> str:
     """Return the text a control starts with: the ``Config`` default, or "" for no setting."""
     if option.field is None:
         return ""
-    value = getattr(Config(), option.field)
-    return "" if value is None else str(value)
+    return _shown(option, getattr(Config(), option.field))
+
+
+def _shown(option: Option, value: Any) -> str:
+    """Return the text a control shows for ``value``; no reasoning setting is "server"."""
+    if value is None:
+        return ""
+    if option.dest == "llm_reasoning" and value == "":
+        return "server"
+    return str(value)
 
 
 START_VALUES: dict[str, str] = {
@@ -70,7 +78,7 @@ def start_text(option: Option) -> str:
             value = getattr(load_config(), option.field)
         except (OSError, ValueError):
             return default_text(option)
-        return "" if value is None else str(value)
+        return _shown(option, value)
     return START_VALUES.get(option.dest, default_text(option))
 
 
@@ -89,10 +97,7 @@ def hint(option: Option) -> str:
         return tr("hint.on") if start_tristate(option) == "On" else tr("hint.off")
     if option.kind in ("bool", "tristate"):
         return tr("hint.on") if default_text(option) == "True" else tr("hint.off")
-    text = start_text(option)
-    if option.dest == "llm_reasoning" and not text:
-        return "server"
-    return text or tr("hint.unset")
+    return start_text(option) or tr("hint.unset")
 
 
 def form_values(raw: Mapping[str, Any]) -> dict[str, Any]:

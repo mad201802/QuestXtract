@@ -34,6 +34,11 @@
 
 ### Changed
 
+- The app is easier to use: each output is explained in plain words; the drop area shows the
+  chosen file (full path on hover); the Whisper model is picked from a list; Reasoning shows
+  "server" instead of an empty box; a failed run opens an error pop-up. Advanced settings open
+  below Run and scroll, an output without settings says so, and every window stays inside the
+  screen. (#259)
 - On Linux and macOS, the folder the app saves the NTNU key in (`questxtract/` in your user config
   folder) is now readable by you only, also when an earlier version created it. (#199)
 

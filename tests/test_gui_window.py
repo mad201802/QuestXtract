@@ -15,7 +15,7 @@ import pytest
 from questxtract.cli import main
 from questxtract.gui import i18n, state
 from questxtract.gui import run as gui_run
-from questxtract.gui.options import OPTIONS
+from questxtract.gui.options import OPTIONS, WHISPER_MODELS
 from questxtract.pipeline import Cancelled
 
 gui_window = pytest.importorskip("questxtract.gui.window")
@@ -40,6 +40,18 @@ def english() -> Iterator[None]:
     i18n.set_language("en")
     yield
     i18n.set_language("en")
+
+
+@pytest.fixture(autouse=True)
+def errors(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
+    """Record the error pop-ups instead of opening them, so no test waits for a click."""
+    shown: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        gui_window.messagebox,
+        "showerror",
+        lambda title, message, **_: shown.append((title, message)),
+    )
+    return shown
 
 
 @pytest.fixture
@@ -175,7 +187,7 @@ def test_cancel_stops_the_run_between_stages_and_says_so(
 
 
 def test_an_error_is_one_line_and_the_run_can_be_fixed_and_run_again(
-    window, root, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    window, root, errors, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     window.choose_source(TRANSCRIPT)
@@ -185,8 +197,9 @@ def test_an_error_is_one_line_and_the_run_can_be_fixed_and_run_again(
     window._run()
     _pump(root, lambda: not window.busy)
 
-    status = window.status.cget("text")
-    assert "API_KEY" in status and "\n" not in status and "Traceback" not in status
+    ((title, message),) = errors  # #259: a pop-up, not text at the bottom
+    assert title == i18n.tr("error.title")
+    assert "API_KEY" in message and "\n" not in message and "Traceback" not in message
     window.fields["detector"].set("rules")
     window._run()
     _pump(root, lambda: not window.busy)
@@ -616,3 +629,97 @@ def test_remove_in_the_key_window_removes_the_saved_key(root, monkeypatch):
     assert Config().api_key is None
     dialog.remove()
     assert dialog.message.cget("text") == i18n.tr("key.nothing_to_remove")
+
+
+def test_the_settings_open_below_run_so_run_stays_in_view(window):
+    """#259: opening the settings pushed Run off a small screen."""
+    window._toggle_advanced()
+    run_row = window.run_button.master.grid_info()["row"]
+    assert int(run_row) < int(window.options_frame.grid_info()["row"])
+
+
+def test_the_window_never_grows_past_the_screen_with_the_settings_open(window, root):
+    """#259: the longest list of settings (the quiz's) scrolls instead."""
+    window.output.set("quiz")
+    window._toggle_advanced()
+    root.update()
+    window._fit_options()
+    root.update()
+    assert root.winfo_reqheight() <= root.winfo_screenheight()
+
+
+def test_the_whisper_model_is_picked_from_a_list(window):
+    """#259: a typed name was only checked once transcription started."""
+    control = window.controls["model"]
+    assert str(control.cget("state")) == "readonly"
+    assert tuple(str(v) for v in control.cget("values")) == WHISPER_MODELS
+
+
+def test_each_output_is_explained_in_plain_words_and_in_each_language(window):
+    """#259: the outputs were four bare names."""
+    shown = set()
+    for name in state.OUTPUT_LABELS:
+        window.output.set(name)
+        window._refresh()
+        shown.add(window.output_about.cget("text"))
+    assert len(shown) == len(state.OUTPUT_LABELS) and "" not in shown
+    window.language.set("nb")
+    window._switch_language()
+    assert window.output_about.cget("text") == i18n.tr(f"about.{window.output.get()}")
+
+
+def test_the_drop_area_shows_the_chosen_file_and_keeps_the_path_on_hover(window):
+    """#259: the drop area kept saying "Drop a file" after a file was chosen."""
+    assert window.drop_box.cget("text") == i18n.tr("drop.help")
+    window.choose_source(TRANSCRIPT)
+    assert TRANSCRIPT.name in window.drop_box.cget("text")
+    assert window.source_tip.text == str(TRANSCRIPT)
+    window.language.set("it")
+    window._switch_language()
+    assert window.drop_box.cget("text") == i18n.tr("drop.chosen", name=TRANSCRIPT.name)
+
+
+def test_the_window_and_the_key_window_stay_inside_the_screen(window, root):
+    """#259: with the settings open, the window ran past the bottom of a laptop screen."""
+    root.geometry(f"+0+{root.winfo_screenheight() - 200}")
+    window._toggle_advanced()
+    root.update()
+    window._show_options()
+    root.update()
+    for shown in (root, gui_window.KeyDialog(root).top):
+        shown.update()
+        assert shown.winfo_y() >= 0
+        assert shown.winfo_y() + shown.winfo_height() <= shown.winfo_screenheight()
+        assert shown.winfo_x() + shown.winfo_width() <= shown.winfo_screenwidth()
+
+
+def test_an_output_without_settings_says_so_at_the_top(window, root):
+    """#259: QTI showed an empty settings box with its content floating in the middle."""
+    window.choose_source(TRANSCRIPT)
+    window._toggle_advanced()
+    for name, empty in (("qti", True), ("questions", False)):
+        window.output.set(name)
+        window._refresh()
+        root.update()
+        window._fit_options()
+        root.update()
+        assert bool(window.no_settings.winfo_ismapped()) is empty
+        assert window.options_canvas.yview()[0] == 0.0
+        assert float(str(window.options_canvas.cget("scrollregion")).split()[1]) == 0.0
+
+
+def test_switching_the_output_never_resizes_the_window(window, root):
+    """#259: each output's explanation and settings made the window jump."""
+    window.choose_source(TRANSCRIPT)
+    for advanced in (False, True):
+        if advanced:
+            window._toggle_advanced()
+        sizes = set()
+        for name in state.OUTPUT_LABELS:
+            window.output.set(name)
+            window._refresh()
+            root.update()
+            window._fit_options()
+            root.update()
+            sizes.add((root.winfo_reqwidth(), root.winfo_reqheight()))
+        assert len(sizes) == 1, sizes

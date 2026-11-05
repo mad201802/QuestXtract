@@ -16,6 +16,8 @@ OUTPUTS: dict[str, str] = {
     "qti": "qti",
 }
 TRANSCRIBE_DESTS: frozenset[str] = frozenset({"config", "output", "model", "from_scratch"})
+#: The Whisper models the app offers: a list to pick from, not a name to type (#259).
+WHISPER_MODELS: tuple[str, ...] = ("tiny", "base", "small", "medium", "large-v3", "turbo")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -27,13 +29,14 @@ class Option:
     kind: Kind
     field: str | None = None
     choices: tuple[str, ...] = ()
+    menu: tuple[str, ...] = ()  # a text option the app offers as a list (the CLI takes any)
     outputs: tuple[str, ...] = ()
 
 
 OPTIONS: tuple[Option, ...] = (
     Option(dest="config", flag="--config", kind="file"),
     Option(dest="output", flag="-o, --output", kind="path"),
-    Option(dest="model", flag="-m, --model", kind="text", field="model_size"),
+    Option(dest="model", flag="-m, --model", kind="text", field="model_size", menu=WHISPER_MODELS),
     Option(
         dest="from_scratch",
         flag="--from-scratch",
