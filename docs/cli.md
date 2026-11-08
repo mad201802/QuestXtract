@@ -227,7 +227,7 @@ blank boards read as blank and formula recall per lecture type, then every frame
 
 `questxtract gui` opens a window that runs the CLI's own code, so a run writes the same file as the
 command with the same options. Install with the extra:
-`pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.3.0"`; it
+`pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.4.0"`; it
 includes what the LLM detector and reading the board need, since the window starts with both on.
 
 - The file: drop an `.mp4`, `.mp3` or `.json` on the box, or click Browse. One file at a time.
