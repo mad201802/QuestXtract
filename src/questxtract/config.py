@@ -23,6 +23,7 @@ _PUNCTUATION_PROMPT = (
 )
 
 NTNU_LLM_URL = "https://llm.hpc.ntnu.no/v1"
+NTNU_KEY_PAGE = "https://ai.hpc.ntnu.no/api-key/login"  # where a teacher asks for the key
 OPENAI_URL = "https://api.openai.com/v1"
 NTNU_KEY_ENV = "IDUN_API_KEY"
 OLD_NTNU_KEY_ENV = "QUESTXTRACT_NTNU_API_KEY"

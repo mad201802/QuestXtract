@@ -4,6 +4,9 @@
 
 ### Added
 
+- The app's API key window lists, for NTNU's service, the steps to get a key: request it at
+  ai.hpc.ntnu.no (the link opens the browser), copy it from the email with its `sk-`, paste,
+  Test, Save. A pasted key without `sk-` gets a note that the copy may be partial. (#289)
 - README: what leaves your computer with each setting, and where it ends up. (#257)
 
 ### Fixed

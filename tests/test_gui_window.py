@@ -555,6 +555,41 @@ def test_with_the_field_at_its_default_the_key_window_follows_the_settings_file(
     assert opened[0]["url"] == "https://openrouter.ai/api/v1"
 
 
+def test_the_ntnu_key_window_lists_the_steps_and_opens_the_request_page(root, monkeypatch):
+    from questxtract.config import NTNU_KEY_PAGE
+    from questxtract.gui import key_dialog
+
+    opened: list[str] = []
+    dialog = _key_dialog(root, monkeypatch, "accepted")
+    monkeypatch.setattr(key_dialog.webbrowser, "open", opened.append)
+
+    assert dialog.steps is not None and dialog.link.cget("text") == NTNU_KEY_PAGE
+    texts = [
+        child.cget("text") for child in dialog.steps.winfo_children() if "text" in child.keys()
+    ]
+    assert texts[0] == i18n.tr("key.steps_title")
+    assert any("sk-" in text for text in texts)
+    dialog.open_key_page()
+    assert opened == [NTNU_KEY_PAGE]
+
+
+def test_a_pasted_ntnu_key_without_sk_gets_a_note(root, monkeypatch):
+    dialog = _key_dialog(root, monkeypatch, "accepted")
+
+    dialog.key.set("abc123")
+    assert dialog.prefix_note.cget("text") == i18n.tr("key.prefix_hint")
+    dialog.key.set("  sk-abc123 ")
+    assert dialog.prefix_note.cget("text") == ""
+
+
+def test_another_endpoint_gets_no_ntnu_steps(root, monkeypatch):
+    dialog = _key_dialog(root, monkeypatch, "accepted", url="https://openrouter.ai/api/v1")
+
+    assert dialog.steps is None
+    dialog.key.set("abc123")
+    assert dialog.prefix_note.cget("text") == ""
+
+
 def test_the_key_window_saves_openrouters_key_as_its_own(root, monkeypatch):
     from questxtract.config import Config, save_user_key, user_env_path
 
