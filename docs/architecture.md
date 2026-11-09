@@ -133,6 +133,11 @@ Default `model_size` is `turbo` (`large-v3-turbo`), usable on an `int8` CPU; `ba
 runs. `batch_size` is 4. Each `AsrSegment` keeps `avg_logprob`, `no_speech_prob` and
 `compression_ratio`; nothing reads them yet.
 
+The model loads with `device="auto"`, which picks CUDA whenever a GPU is visible. Many PCs with
+an NVIDIA card lack the CUDA libraries, and ctranslate2 only notices at the first encode
+(`Library ... is not found or cannot be loaded`). The backend then warns, swaps the cached
+model for a CPU one and decodes again.
+
 The ASR engine is a class implementing `AsrBackend` (`transcribe(source, config, on_progress)`),
 registered with `@register_backend` in `asr.py` and picked by `Config.asr_backend` (15.3).
 `transcribe.py` never imports an engine.
