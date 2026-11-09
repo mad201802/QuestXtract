@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import sys
+import types
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
@@ -149,6 +152,20 @@ def test_transcribe_stage_rejects_an_unconfigured_backend(tmp_path: Path) -> Non
     ctx = Context(source=source, config=config)
     with pytest.raises(ValueError, match="unknown ASR backend"):
         transcribe(ctx)
+
+
+def test_load_model_allows_a_second_openmp_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KMP_DUPLICATE_LIB_OK", "")
+    monkeypatch.delenv("KMP_DUPLICATE_LIB_OK")
+    fake = types.ModuleType("faster_whisper")
+    fake.WhisperModel = lambda *a, **k: object()  # type: ignore[attr-defined]
+    fake.BatchedInferencePipeline = lambda model: model  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "faster_whisper", fake)
+    monkeypatch.setattr(asr, "_MODEL_CACHE", {})
+
+    asr._load_model("tiny", "int8")
+
+    assert os.environ["KMP_DUPLICATE_LIB_OK"] == "TRUE"
 
 
 def test_config_asr_backend_defaults_to_faster_whisper() -> None:
