@@ -14,7 +14,10 @@ OUTPUTS: dict[str, str] = {
     "transcript": "transcribe",
     "quiz": "process",
     "qti": "qti",
+    "tex": "tex",
 }
+#: Outputs that export a quiz. From a recording or transcript they make the quiz first (#283).
+EXPORTS: frozenset[str] = frozenset({"qti", "tex"})
 TRANSCRIBE_DESTS: frozenset[str] = frozenset({"config", "output", "model", "from_scratch"})
 #: The Whisper models the app offers: a list to pick from, not a name to type (#259).
 WHISPER_MODELS: tuple[str, ...] = ("tiny", "base", "small", "medium", "large-v3", "turbo")
@@ -112,9 +115,12 @@ OPTIONS: tuple[Option, ...] = (
         field="quiz_model",
         outputs=("quiz",),
     ),
+    # ``tex`` takes one --content-unit per unit; the app's field holds them separated by ";".
+    Option(dest="content_units", flag="--content-unit", kind="text", outputs=("tex",)),
 )
 
 EXCLUDED: dict[str, str] = {
     "input": "the recording or transcript is chosen with the drop box, not a flag",
     "recording": "the recording is chosen with the drop box, not a flag",
+    "qti_version": "the app writes QTI 3.0, which Canvas imports; 2.1 is a command-line choice",
 }

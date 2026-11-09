@@ -1193,7 +1193,7 @@ What the code does today, and the open issue for each missing piece.
 | `tex.py` | not a stage | done: the ExerPlaza TeX of a `quiz.json` (12.5) | |
 | `exerplaza.py` | not a stage | done: a `quiz.json` sent to ExerPlaza's import endpoint (12.6); the endpoint itself is ExerPlaza's work | |
 | `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz`, `qti`, `tex` and `exerplaza` work ([cli.md](cli.md)); `process --vision --detector llm --quiz` runs every stage and the quiz in one run, tested offline | |
-| `gui/` | not a stage | done: the window, its run launcher and the NTNU key window (`questxtract gui`, 13.1); it runs the CLI's code and does not review or edit questions (14) | |
+| `gui/` | not a stage | done: the window, its run launcher and the API key window (`questxtract gui`, 13.1); QTI and TeX run from a recording to the export file in one run; it runs the CLI's code and does not review or edit questions (14) | |
 
 What lands when: [GitHub milestones](https://github.com/mad201802/QuestXtract/milestones).
 

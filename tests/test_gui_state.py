@@ -87,6 +87,13 @@ def test_qti_needs_a_default_file_next_to_the_quiz_and_the_others_do_not():
     assert state.default_output(None, "qti") is None
 
 
+def test_an_export_is_named_after_the_lecture_whatever_the_source():
+    for source in ("lecture.mp4", "lecture.transcript.json", "lecture.quiz.json"):
+        path = Path("out") / source
+        assert state.default_output(path, "qti") == Path("out") / "lecture.qti.zip"
+        assert state.default_output(path, "tex") == Path("out") / "lecture.tex"
+
+
 def test_run_is_disabled_until_a_source_is_chosen():
     problem = state.run_problem(None, "questions", {}, None)
 
