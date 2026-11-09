@@ -88,6 +88,25 @@ An `.mp4` or `.mp3` goes through every stage; a `.json` transcript, from QuestXt
 Graphical app: install with `[gui]`, run `questxtract gui`, drop a recording or transcript on the
 window and press Run ([details](docs/cli.md#graphical-app)).
 
+### Offline fallback
+
+The default run needs no network and no language model: local Whisper transcription, the rules
+detector, no vision. Use it when no language model is available (no key, off the NTNU network or
+VPN, a model retired). It is offline, not model-free, since Whisper is a local model. It gives up:
+
+- **Precision.** The rules find questions by wording; the LLM detector also judges whether a
+  question is about the content.
+- **The board.** No slide or board text, so no link from a question to what was on screen.
+- **The quiz.** `quiz` writes its items with a language model.
+
+Whisper downloads its model the first time a recording is transcribed. A `.json` transcript needs
+no download, and a recording runs offline once the model is on the machine.
+
+For the board without the full vision model, `--vision-reader ocr` reads it with GLM-OCR
+(`zai-org/GLM-OCR`, as served on IDUN, NTNU's service, or from a local Ollama). That is not part of
+the offline default: it still calls a model server, and a vision model finds the board first
+([details](docs/cli.md#reading-the-board)).
+
 ### With an LLM and the board
 
 ```bash
