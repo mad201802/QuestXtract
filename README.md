@@ -53,16 +53,16 @@ Python 3.11+, LaTeX and a teacher's check of every clip ([#185](https://github.c
 
 ```bash
 # with pip, the graphical app included
-pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.3.0"
+pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.4.0"
 
 # or with uv
-uv add "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.3.0"
+uv add "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.4.0"
 ```
 
-Or take the `.whl` file from the release (Download, above) and install it: `pip install "questxtract-0.3.0-py3-none-any.whl[gui]"`.
+Or take the `.whl` file from the release (Download, above) and install it: `pip install "questxtract-0.4.0-py3-none-any.whl[gui]"`.
 
 `[gui]` adds the graphical app plus what the LLM detector and board reading need; `[llm]` adds
-only the latter. Without an extra you get the command line with the offline rules. Drop `@v0.3.0`
+only the latter. Without an extra you get the command line with the offline rules. Drop `@v0.4.0`
 for the latest `main`. Releases: [GitHub Releases](https://github.com/mad201802/QuestXtract/releases).
 
 Requires Python 3.10+ on Linux, macOS or Windows.
