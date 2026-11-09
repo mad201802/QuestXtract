@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+import types
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
@@ -97,6 +99,83 @@ def test_faster_whisper_backend_reports_word_end_over_duration(
 
     assert seen == pytest.approx([0.05, 0.19, 0.28, 0.99])
     assert len(result) == 2
+
+
+def _fake_faster_whisper(monkeypatch: pytest.MonkeyPatch, gpu_error: Exception | None) -> list[str]:
+    """Install a fake faster_whisper whose ``auto`` model raises ``gpu_error`` at the first
+    encode, and return the devices models get built for."""
+    devices: list[str] = []
+    info = type("Info", (), {"duration": 2.0})()
+
+    class WhisperModel:
+        def __init__(self, size: str, *, device: str, compute_type: str) -> None:
+            devices.append(device)
+            self.device = device
+
+    class BatchedInferencePipeline:
+        def __init__(self, model: WhisperModel) -> None:
+            self.device = model.device
+
+        def transcribe(self, *args: Any, **kwargs: Any) -> Any:
+            def segments() -> Any:
+                if gpu_error and self.device == "auto":
+                    raise gpu_error
+                yield _FakeSegment(f"on {self.device}", 0.0, 2.0, words=None)
+
+            return segments(), info
+
+    module = types.ModuleType("faster_whisper")
+    module.__dict__.update(
+        WhisperModel=WhisperModel, BatchedInferencePipeline=BatchedInferencePipeline
+    )
+    monkeypatch.setitem(sys.modules, "faster_whisper", module)
+    monkeypatch.setattr(asr, "_MODEL_CACHE", {})
+
+    @contextmanager
+    def _fake_extract_audio(path: Path, progress: Any = None) -> Any:
+        yield path
+
+    monkeypatch.setattr(asr, "extract_audio", _fake_extract_audio)
+    return devices
+
+
+def test_missing_cuda_library_falls_back_to_the_cpu(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cublas = RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+    devices = _fake_faster_whisper(monkeypatch, cublas)
+    source = tmp_path / "lecture.mp4"
+    seen: list[float] = []
+
+    with pytest.warns(UserWarning, match=r"cublas64_12\.dll .* transcribing on the CPU"):
+        result = FasterWhisperBackend().transcribe(source, Config(), on_progress=seen.append)
+    again = FasterWhisperBackend().transcribe(source, Config())
+
+    assert [s["text"] for s in result] == ["on cpu"]
+    assert seen == pytest.approx([0.99])
+    assert [s["text"] for s in again] == ["on cpu"]
+    assert devices == ["auto", "cpu"]
+
+
+def test_a_working_gpu_is_still_used(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    devices = _fake_faster_whisper(monkeypatch, gpu_error=None)
+
+    result = FasterWhisperBackend().transcribe(tmp_path / "lecture.mp4", Config())
+
+    assert [s["text"] for s in result] == ["on auto"]
+    assert devices == ["auto"]
+
+
+@pytest.mark.parametrize("error", [RuntimeError("out of memory"), ValueError("bad audio")])
+def test_other_errors_are_raised_without_a_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    devices = _fake_faster_whisper(monkeypatch, error)
+
+    with pytest.raises(type(error), match=str(error)):
+        FasterWhisperBackend().transcribe(tmp_path / "lecture.mp4", Config())
+
+    assert devices == ["auto"]
 
 
 def test_transcribe_stage_uses_the_configured_backend(tmp_path: Path) -> None:

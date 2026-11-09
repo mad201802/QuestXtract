@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -100,18 +101,49 @@ def _segment_to_dict(segment: Any) -> dict[str, Any]:
 
 _EXTRACT_SHARE = 0.1
 
+# ctranslate2's error when a CUDA library such as cublas64_12.dll cannot load. It is raised
+# at the first encode, not when the model loads.
+_CUDA_LIBRARY_MISSING = "is not found or cannot be loaded"
+
 _MODEL_CACHE: dict[tuple[str, str], Any] = {}
 
 
-def _load_model(model_size: str, compute_type: str) -> Any:
+def _load_model(model_size: str, compute_type: str, *, cpu: bool = False) -> Any:
+    """Return the cached model; ``cpu=True`` replaces it with one that runs on the CPU."""
     from faster_whisper import BatchedInferencePipeline, WhisperModel  # noqa: PLC0415
 
     key = (model_size, compute_type)
-    if key not in _MODEL_CACHE:
+    if cpu or key not in _MODEL_CACHE:
         _MODEL_CACHE[key] = BatchedInferencePipeline(
-            WhisperModel(model_size, compute_type=compute_type)
+            WhisperModel(model_size, device="cpu" if cpu else "auto", compute_type=compute_type)
         )
     return _MODEL_CACHE[key]
+
+
+def _decode(
+    model: Any,
+    audio_path: Path,
+    config: Config,
+    on_progress: Callable[[float], None] | None,
+) -> list[dict[str, Any]]:
+    segments, info = model.transcribe(
+        str(audio_path),
+        beam_size=config.beam_size,
+        language=config.language,
+        vad_filter=config.vad_filter,
+        word_timestamps=True,
+        batch_size=config.batch_size,
+        initial_prompt=config.initial_prompt,
+    )
+    collected: list[dict[str, Any]] = []
+    for s in segments:
+        collected.append(_segment_to_dict(s))
+        if on_progress and info.duration > 0:
+            words = s.words or ()
+            ends = (w.end for w in words) if words else (s.end,)
+            for end in ends:
+                on_progress(min(0.99, _EXTRACT_SHARE + (1 - _EXTRACT_SHARE) * end / info.duration))
+    return collected
 
 
 @register_backend("faster_whisper")
@@ -137,23 +169,13 @@ class FasterWhisperBackend:
                 on_progress(_EXTRACT_SHARE * min(fraction, 0.99))
 
         with extract_audio(source, progress=extracted) as audio_path:
-            segments, info = model.transcribe(
-                str(audio_path),
-                beam_size=config.beam_size,
-                language=config.language,
-                vad_filter=config.vad_filter,
-                word_timestamps=True,
-                batch_size=config.batch_size,
-                initial_prompt=config.initial_prompt,
-            )
-            collected: list[dict[str, Any]] = []
-            for s in segments:
-                collected.append(_segment_to_dict(s))
-                if on_progress and info.duration > 0:
-                    words = s.words or ()
-                    ends = (w.end for w in words) if words else (s.end,)
-                    for end in ends:
-                        on_progress(
-                            min(0.99, _EXTRACT_SHARE + (1 - _EXTRACT_SHARE) * end / info.duration)
-                        )
-            return collected
+            try:
+                return _decode(model, audio_path, config, on_progress)
+            except RuntimeError as exc:
+                if _CUDA_LIBRARY_MISSING not in str(exc):
+                    raise
+                warnings.warn(
+                    f"transcribe: {exc}, transcribing on the CPU", UserWarning, stacklevel=2
+                )
+                model = _load_model(config.model_size, config.compute_type, cpu=True)
+                return _decode(model, audio_path, config, on_progress)
