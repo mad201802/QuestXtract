@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- README: what leaves your computer with each setting, and where it ends up. (#257)
+
 ## 0.4.0
 
 ### Added
