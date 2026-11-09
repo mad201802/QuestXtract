@@ -30,7 +30,7 @@ _MIN_OPTIONS_PX = 160  # the settings box never gets shorter than this
 _SCREEN_MARGIN_PX = 90  # room for the taskbar and the window's border
 _OUTPUT_OPTION = next(option for option in OPTIONS if option.dest == "output")
 # Controls on the start view, by their row under the output buttons; the rest is Advanced.
-_START_VIEW: dict[str, int] = {"vision": 2, "content_units": 3}
+_START_VIEW: dict[str, int] = {"vision": 3, "content_units": 4}
 # Controls an export of a finished quiz.json still takes.
 _EXPORT_CONTROLS: frozenset[str] = frozenset({"content_units"})
 # What the save dialog offers for an output's file, by command.
@@ -88,6 +88,7 @@ class QuestXtractWindow:
         self.cancel = threading.Event()
         self.events: queue.Queue[tuple[str, Any]] = queue.Queue()
         self.output = tk.StringVar(master=root, value="questions")
+        self.questions_tex = tk.BooleanVar(master=root, value=False)
         self.language = tk.StringVar(master=root, value=i18n.language())
         self.fields: dict[str, tk.StringVar | tk.BooleanVar] = {}
         self.option_rows: dict[str, ttk.Frame] = {}
@@ -161,6 +162,12 @@ class QuestXtractWindow:
             self._text(button, f"output.{name}")
             button.grid(row=0, column=column, sticky="w", padx=(0, 18))
             self.output_buttons[name] = button
+        # below Questions: also write the questions as a LaTeX document (#284)
+        self.questions_tex_box = ttk.Checkbutton(
+            outputs, variable=self.questions_tex, command=self._refresh
+        )
+        self._text(self.questions_tex_box, "output.questions_tex")
+        self.questions_tex_box.grid(row=1, column=0, sticky="w", padx=(18, 0))
         self.output_about = tk.Label(  # a fixed box, so the window keeps its size (#259)
             outputs,
             height=3,
@@ -171,7 +178,7 @@ class QuestXtractWindow:
             foreground="#444444",
         )
         self.output_about.grid(  # what the chosen output makes, in plain words (#259)
-            row=1, column=0, columnspan=len(state.OUTPUT_LABELS), sticky="w", pady=(4, 6)
+            row=2, column=0, columnspan=len(state.OUTPUT_LABELS), sticky="w", pady=(4, 6)
         )
 
         options = ttk.LabelFrame(frame, padding=8)
@@ -398,7 +405,9 @@ class QuestXtractWindow:
         raw: dict[str, Any] = {dest: var.get() for dest, var in self.fields.items()}
         for dest in self.tristate_combos:
             raw[dest] = self._tristate_canonical(dest)
-        return state.form_values(raw)
+        values = state.form_values(raw)
+        values["questions_tex"] = self.output.get() == "questions" and self.questions_tex.get()
+        return values
 
     def _output_path(self) -> Path | None:
         output = self.output.get()
@@ -436,6 +445,7 @@ class QuestXtractWindow:
         for name, button in self.output_buttons.items():
             offered = state.output_offered(name, self.source)
             button.state(["!disabled"] if offered else ["disabled"])
+        self.questions_tex_box.state(["!disabled"] if output == "questions" else ["disabled"])
         any_setting = False
         # an export of a finished quiz makes no quiz, so the quiz settings do not apply (#283)
         quiz_source = (
