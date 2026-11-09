@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import types
 from collections.abc import Callable
@@ -228,6 +229,16 @@ def test_transcribe_stage_rejects_an_unconfigured_backend(tmp_path: Path) -> Non
     ctx = Context(source=source, config=config)
     with pytest.raises(ValueError, match="unknown ASR backend"):
         transcribe(ctx)
+
+
+def test_load_model_allows_a_second_openmp_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KMP_DUPLICATE_LIB_OK", "")
+    monkeypatch.delenv("KMP_DUPLICATE_LIB_OK")
+    _fake_faster_whisper(monkeypatch, gpu_error=None)
+
+    asr._load_model("tiny", "int8")
+
+    assert os.environ["KMP_DUPLICATE_LIB_OK"] == "TRUE"
 
 
 def test_config_asr_backend_defaults_to_faster_whisper() -> None:

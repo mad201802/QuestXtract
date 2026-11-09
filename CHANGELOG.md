@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- README: what leaves your computer with each setting, and where it ends up. (#257)
+
+### Fixed
+
+- Transcribing, in the app or with `process` and `transcribe`, no longer aborts with
+  `OMP: Error #15 ... libiomp5md.dll already initialized` on Windows when numpy comes from
+  Anaconda.
+
 ## 0.4.0
 
 ### Added

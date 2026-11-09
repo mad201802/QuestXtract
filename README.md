@@ -160,6 +160,26 @@ their vision models take no reasoning setting. More models, OpenRouter and other
 [Finding questions with an LLM](docs/cli.md#finding-questions-with-an-llm) and
 [Reading the board](docs/cli.md#reading-the-board).
 
+### What leaves your computer
+
+| Setting | What leaves the computer | Where it goes |
+|---|---|---|
+| Command line default (rules detector, no vision) | No lecture content. Whisper downloads its model on first use | Hugging Face |
+| `--detector llm` | Transcript excerpts around each candidate question | The LLM server (`--llm-url`) |
+| `--quiz` | Each question, what was said around it and the board text linked to it | The LLM server (`--llm-url`) |
+| `--vision` | Images of the slides or board, with what was said while each was shown | The vision server (`vision_base_url`, else `--llm-url`) |
+| The app, with no `questxtract.toml` in the folder it starts in | It starts with the LLM detector and board reading on: transcript excerpts, images and speech | NTNU's service |
+
+Where it ends up:
+
+- `ntnu` (the default): NTNU's own servers.
+- `openai`: OpenAI, a company outside NTNU.
+- `ollama` or another server on this computer: it stays on the computer.
+
+Recordings can contain students' voices and names. Process only recordings you have the rights
+to, and check with your university before you send a real lecture to a hosted service. Details:
+[design decisions, section 6](docs/design_decisions.md#6-security-at-the-design-level--report-ch-9-compendium-touchpoints-2-5-6).
+
 ## Documentation
 
 - [docs/cli.md](docs/cli.md): every command and option, configuration files, LLM and vision setup, troubleshooting

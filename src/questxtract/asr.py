@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import warnings
 from collections.abc import Callable
 from pathlib import Path
@@ -110,6 +111,9 @@ _MODEL_CACHE: dict[tuple[str, str], Any] = {}
 
 def _load_model(model_size: str, compute_type: str, *, cpu: bool = False) -> Any:
     """Return the cached model; ``cpu=True`` replaces it with one that runs on the CPU."""
+    # ctranslate2's Windows wheel loads its own Intel OpenMP; Anaconda's MKL numpy loads another,
+    # and OpenMP aborts the process on finding two (OMP: Error #15). A user's own value wins.
+    os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
     from faster_whisper import BatchedInferencePipeline, WhisperModel  # noqa: PLC0415
 
     key = (model_size, compute_type)
