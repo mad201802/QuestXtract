@@ -7,7 +7,7 @@
 A lecture recording in, every question asked in it out, with timestamps, confidence scores and a
 JSON export.
 
-[![Download](https://img.shields.io/github/v/release/mad201802/QuestXtract?label=Download&logo=github&style=for-the-badge&color=2ea44f)](https://github.com/mad201802/QuestXtract/releases/latest)
+[![Download](https://img.shields.io/github/v/release/mad201802/QuestXtract?label=Latest%20release&logo=github&style=for-the-badge&color=2ea44f)](https://github.com/mad201802/QuestXtract/releases/latest)
 
 [![CI](https://github.com/mad201802/QuestXtract/actions/workflows/ci.yml/badge.svg)](https://github.com/mad201802/QuestXtract/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12%20|%203.13-blue?logo=python&logoColor=white)](https://www.python.org/)
@@ -51,21 +51,39 @@ Python 3.11+, LaTeX and a teacher's check of every clip ([#185](https://github.c
 
 ## Install
 
-```bash
-# with pip, the graphical app included
-pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.4.0"
+Requires Python 3.10+ on Linux, macOS or Windows. Pick one of three ways.
 
-# or with uv
-uv add "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.4.0"
+**1. pip, from GitHub (the usual way).** The graphical app is included:
+
+```bash
+pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.4.0"
 ```
 
-Or take the `.whl` file from the release (Download, above) and install it: `pip install "questxtract-0.4.0-py3-none-any.whl[gui]"`.
+With uv, use `uv add` instead of `pip install`. Drop `@v0.4.0` for the latest `main`.
+
+**2. The `.whl` file, without git.** Open the [latest release](https://github.com/mad201802/QuestXtract/releases/latest),
+and under Assets take the one file that ends in `.whl`. Ignore the `.tar.gz` and the two
+"Source code" archives. Then, in the folder you saved it to:
+
+```bash
+pip install "questxtract-0.4.0-py3-none-any.whl[gui]"
+```
+
+**3. From a clone,** to try the newest code or to work on it. It needs [uv](https://docs.astral.sh/uv/):
+
+```bash
+git clone https://github.com/mad201802/QuestXtract.git
+cd QuestXtract
+uv sync --extra gui
+uv run questxtract process tests/data/mit_18_100b_l1.transcript.json -o check.questions.json
+```
+
+The last line runs the offline rules on a committed transcript, with no model and no download. It
+should print its stages and write `check.questions.json`. From here on, put `uv run` in front of
+every `questxtract` command in this README.
 
 `[gui]` adds the graphical app plus what the LLM detector and board reading need; `[llm]` adds
-only the latter. Without an extra you get the command line with the offline rules. Drop `@v0.4.0`
-for the latest `main`. Releases: [GitHub Releases](https://github.com/mad201802/QuestXtract/releases).
-
-Requires Python 3.10+ on Linux, macOS or Windows.
+only the latter. Without an extra you get the command line with the offline rules.
 
 ## Quickstart
 

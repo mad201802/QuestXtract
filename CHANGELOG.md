@@ -6,6 +6,12 @@
 
 - README: what leaves your computer with each setting, and where it ends up. (#257)
 
+### Changed
+
+- README: the Install section lists three ways (pip from GitHub, the `.whl` from a release, a
+  clone with a first run on a committed transcript), says which release file to take, and the
+  badge reads "Latest release" instead of "Download".
+
 ### Fixed
 
 - Transcribing, in the app or with `process` and `transcribe`, no longer aborts with
