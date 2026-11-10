@@ -4,6 +4,14 @@
 
 ### Added
 
+- `questxtract questions-tex questions.json` (and `export_questions_tex()`) writes the questions
+  as a LaTeX document that compiles: each with its time, confidence, answer and board text,
+  rejected ones left out, texts escaped. In the app, the Questions (.tex) box below Questions
+  writes it after a Questions run. (#284)
+- The app's QTI package output, and a new TeX (ExerPlaza) output, start from a recording or a
+  transcript as well as from a `quiz.json`: one run makes the quiz, writing `<name>.questions.json`
+  and `<name>.quiz.json` beside the input, and exports it as `<name>.qti.zip` or `<name>.tex`.
+  TeX asks for the ExerPlaza content units, separated by `;`. (#283)
 - The app's API key window lists, for NTNU's service, the steps to get a key: request it at
   ai.hpc.ntnu.no (the link opens the browser), copy it from the email with its `sk-`, paste,
   Test, Save. A pasted key without `sk-` gets a note that the copy may be partial. (#289)
@@ -62,6 +70,9 @@
 - A transcript, `questions.json` or `quiz.json` nested thousands of levels deep now gives
   `error: ... not valid JSON` and exit code 1 instead of a crash with a traceback. An LLM reply
   nested that deep counts as invalid JSON. (#202)
+- On a PC with an NVIDIA card but no CUDA libraries, transcription no longer stops at the first
+  run with `Library cublas64_12.dll is not found or cannot be loaded`: it warns and transcribes on
+  the CPU. A working GPU is still used. (#279)
 
 ## 0.3.0
 

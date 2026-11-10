@@ -52,17 +52,25 @@ _MESSAGES: dict[str, dict[str, str]] = {
     },
     "output.files": {
         "en": "Files: <name>.questions.json, <name>.transcript.json, <name>.quiz.json "
-        "(beside the questions) and <name>.qti.zip, next to the input unless given below.",
+        "(beside the questions), <name>.qti.zip and <name>.tex, next to the input unless given "
+        "below.",
         "nb": "Filer: <navn>.questions.json, <navn>.transcript.json, <navn>.quiz.json "
-        "(ved siden av spørsmålene) og <navn>.qti.zip, ved siden av inndatafilen med mindre "
-        "et annet er valgt under.",
+        "(ved siden av spørsmålene), <navn>.qti.zip og <navn>.tex, ved siden av inndatafilen med "
+        "mindre et annet er valgt under.",
         "it": "File: <nome>.questions.json, <nome>.transcript.json, <nome>.quiz.json "
-        "(accanto alle domande) e <nome>.qti.zip, accanto al file di input se non indicato sotto.",
+        "(accanto alle domande), <nome>.qti.zip e <nome>.tex, accanto al file di input se non "
+        "indicato sotto.",
     },
     "output.questions": {"en": "Questions", "nb": "Spørsmål", "it": "Domande"},
     "output.transcript": {"en": "Transcript", "nb": "Transkripsjon", "it": "Trascrizione"},
     "output.quiz": {"en": "Quiz", "nb": "Quiz", "it": "Quiz"},
     "output.qti": {"en": "QTI package", "nb": "QTI-pakke", "it": "Pacchetto QTI"},
+    "output.tex": {"en": "TeX (ExerPlaza)", "nb": "TeX (ExerPlaza)", "it": "TeX (ExerPlaza)"},
+    "output.questions_tex": {
+        "en": "Questions (.tex)",
+        "nb": "Spørsmål (.tex)",
+        "it": "Domande (.tex)",
+    },
     "about.questions": {
         "en": (
             "A list of every question asked in the lecture, with when it was asked and the "
@@ -107,16 +115,35 @@ _MESSAGES: dict[str, dict[str, str]] = {
     },
     "about.qti": {
         "en": (
-            "Turns a quiz you have already made into a file you can import into Blackboard, "
-            "Canvas or another learning platform. Choose the quiz file (….quiz.json) above."
+            "A file to import into Canvas or another learning platform. From a recording or "
+            "transcript, AI writes the quiz first; a quiz file (….quiz.json) is used as it is."
         ),
         "nb": (
-            "Gjør en quiz du allerede har laget om til en fil du kan importere i Blackboard, "
-            "Canvas eller en annen læringsplattform. Velg quizfilen (….quiz.json) ovenfor."
+            "En fil du kan importere i Canvas eller en annen læringsplattform. Fra et opptak "
+            "eller en transkripsjon lager KI quizen først; en quizfil (….quiz.json) brukes som "
+            "den er."
         ),
         "it": (
-            "Trasforma un quiz che hai già creato in un file da importare in Blackboard, Canvas o "
-            "un'altra piattaforma di apprendimento. Scegli sopra il file del quiz (….quiz.json)."
+            "Un file da importare in Canvas o in un'altra piattaforma di apprendimento. Da una "
+            "registrazione o trascrizione l'IA crea prima il quiz; un file del quiz "
+            "(….quiz.json) si usa così com'è."
+        ),
+    },
+    "about.tex": {
+        "en": (
+            "A file to upload in ExerPlaza (/questions/upload/tex). From a recording or "
+            "transcript, AI writes the quiz first; a quiz file (….quiz.json) is used as it is. "
+            "Name its content units below."
+        ),
+        "nb": (
+            "En fil du laster opp i ExerPlaza (/questions/upload/tex). Fra et opptak eller en "
+            "transkripsjon lager KI quizen først; en quizfil (….quiz.json) brukes som den er. "
+            "Skriv inn innholdsenhetene under."
+        ),
+        "it": (
+            "Un file da caricare in ExerPlaza (/questions/upload/tex). Da una registrazione o "
+            "trascrizione l'IA crea prima il quiz; un file del quiz (….quiz.json) si usa così "
+            "com'è. Indica sotto le unità di contenuto."
         ),
     },
     "button.run": {"en": "Run", "nb": "Kjør", "it": "Avvia"},
@@ -169,6 +196,11 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "it": "Opzioni per domanda del quiz (da 3 a 5)",
     },
     "opt.quiz_model": {"en": "Quiz model", "nb": "Quiz-modell", "it": "Modello del quiz"},
+    "opt.content_units": {
+        "en": "ExerPlaza content units (separate with ;)",
+        "nb": "Innholdsenheter i ExerPlaza (skill med ;)",
+        "it": "Unità di contenuto ExerPlaza (separa con ;)",
+    },
     "drop.unavailable": {
         "en": "Drag and drop is not available on this system: use Browse.",
         "nb": "Dra og slipp er ikke tilgjengelig på dette systemet: bruk Bla gjennom.",

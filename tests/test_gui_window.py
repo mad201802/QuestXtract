@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import shutil
 import sys
@@ -139,7 +140,11 @@ def test_the_output_choice_shows_only_the_options_that_output_takes(window):
 
     window.output.set("qti")
     window._refresh()
-    assert not any(shown(dest) for dest in window.option_rows)
+    assert shown("strictness") and shown("threshold") and not shown("content_units")
+
+    window.output.set("tex")
+    window._refresh()
+    assert shown("strictness") and shown("content_units")
 
 
 def test_a_run_writes_the_file_the_cli_writes_and_shows_its_path(
@@ -461,6 +466,45 @@ def test_a_new_output_does_not_reuse_the_file_typed_for_the_last(window, tmp_pat
     assert window._output_path() != questions
 
 
+def test_the_tex_output_waits_for_a_content_unit_and_offers_a_tex_file(
+    window, monkeypatch, tmp_path, make_quiz
+):
+    quiz = tmp_path / "lecture.quiz.json"
+    quiz.write_text(json.dumps(make_quiz("q_aaa")), encoding="utf-8")
+    window.choose_source(quiz)
+    window.output.set("tex")
+    window._refresh()
+
+    assert not _enabled(window.run_button)
+    assert "content unit" in window.hint.cget("text")
+    assert window._output_path() == tmp_path / "lecture.tex"
+
+    window.fields["content_units"].set("Sorting; Stability")
+    window._refresh()
+    assert _enabled(window.run_button)
+
+    asked: dict[str, Any] = {}
+    monkeypatch.setattr(
+        gui_window.filedialog, "asksaveasfilename", lambda **kwargs: asked.update(kwargs) or ""
+    )
+    output = next(option for option in OPTIONS if option.dest == "output")
+    window._browse_into(output, window.fields["output"])
+    assert asked["defaultextension"] == ".tex"
+
+
+def test_the_questions_tex_box_is_for_the_questions_output_only(window):
+    window.choose_source(TRANSCRIPT)
+    window.questions_tex.set(True)
+
+    window.output.set("questions")
+    window._refresh()
+    assert _enabled(window.questions_tex_box) and window._values()["questions_tex"] is True
+
+    window.output.set("quiz")
+    window._refresh()
+    assert not _enabled(window.questions_tex_box) and window._values()["questions_tex"] is False
+
+
 def test_browse_for_the_qti_package_suggests_a_zip(window, monkeypatch):
     asked: dict[str, Any] = {}
     monkeypatch.setattr(
@@ -728,9 +772,11 @@ def test_the_window_and_the_key_window_stay_inside_the_screen(window, root):
         assert shown.winfo_x() + shown.winfo_width() <= shown.winfo_screenwidth()
 
 
-def test_an_output_without_settings_says_so_at_the_top(window, root):
+def test_an_output_without_settings_says_so_at_the_top(window, root, tmp_path, make_quiz):
     """#259: QTI showed an empty settings box with its content floating in the middle."""
-    window.choose_source(TRANSCRIPT)
+    quiz = tmp_path / "lecture.quiz.json"
+    quiz.write_text(json.dumps(make_quiz("q_aaa")), encoding="utf-8")
+    window.choose_source(quiz)  # a finished quiz: the export makes no quiz, so no settings
     window._toggle_advanced()
     for name, empty in (("qti", True), ("questions", False)):
         window.output.set(name)

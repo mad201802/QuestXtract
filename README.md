@@ -41,6 +41,7 @@ extracts questions that were spoken.
 | Quizzes | Multiple-choice items from the questions asked, with explanations; every generated text is marked and starts as pending review; the items are drafts, so a teacher checks each one before students see it |
 | LMS export | `questxtract qti` writes a `quiz.json` as a QTI 3.0 or 2.1 package for an LMS to import |
 | ExerPlaza TeX | `questxtract tex` writes a `quiz.json` as a TeX file to upload to ExerPlaza |
+| Questions as LaTeX | `questxtract questions-tex` writes the questions as a document that compiles, to read or print |
 | Straight into ExerPlaza | `questxtract exerplaza` sends a `quiz.json` to an ExerPlaza course session, logged in as you; sending it again adds only the new items |
 
 What is built: [architecture.md 13.3](docs/architecture.md#133-status).
@@ -86,7 +87,8 @@ An `.mp4` or `.mp3` goes through every stage; a `.json` transcript, from QuestXt
 [any other ASR engine](docs/cli.md#what-decides-how-much-runs), skips transcription.
 
 Graphical app: install with `[gui]`, run `questxtract gui`, drop a recording or transcript on the
-window and press Run ([details](docs/cli.md#graphical-app)).
+window and press Run ([details](docs/cli.md#graphical-app)). Its QTI package and TeX (ExerPlaza)
+outputs go from a recording to the export file in one run.
 
 ### Offline fallback
 

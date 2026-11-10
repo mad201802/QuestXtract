@@ -38,6 +38,7 @@ from .models import Context, Progress, Sentence, Stage, Transcript
 from .pipeline import STAGES, Cancelled, cached_transcript, run
 from .qti import QtiExportError
 from .qti_package import DEFAULT_QTI_VERSION, QTI_VERSIONS, export_qti
+from .questions_tex import QuestionsTexError, export_questions_tex
 from .quiz import (
     MAX_OPTIONS,
     MIN_OPTIONS,
@@ -569,7 +570,7 @@ def execute(
     progress: Progress | None = None,
     stop: Callable[[], bool] | None = None,
 ) -> RunResult:
-    """Run ``process``, ``transcribe`` or ``qti`` from its command-line arguments, unprinted."""
+    """Run ``process``, ``transcribe`` or an export from its arguments, unprinted."""
     args = parse_arguments(argv)
     if args.command == "process":
         return _process_run(args, progress, stop)
@@ -581,7 +582,24 @@ def execute(
         except QtiExportError as exc:
             raise ValueError(f"qti: {exc}") from None
         return RunResult(path=Path(args.output), summary="QTI 3.0 package")
-    raise ValueError(f"the app runs process, transcribe or qti, not {args.command}")
+    if args.command == "tex":
+        try:
+            count = export_tex(args.quiz, args.output, content_units=args.content_units)
+        except TexExportError as exc:
+            raise ValueError(f"tex: {exc}") from None
+        noun = "question" if count == 1 else "questions"
+        return RunResult(path=Path(args.output), summary=f"ExerPlaza TeX, {count} {noun}")
+    if args.command == "questions-tex":
+        output = _questions_tex_path(args.output, Path(args.questions))
+        try:
+            count = export_questions_tex(args.questions, output)
+        except QuestionsTexError as exc:
+            raise ValueError(f"questions-tex: {exc}") from None
+        noun = "question" if count == 1 else "questions"
+        return RunResult(path=output, summary=f"Questions TeX, {count} {noun}")
+    raise ValueError(
+        f"the app runs process, transcribe, qti, tex or questions-tex, not {args.command}"
+    )
 
 
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
@@ -714,6 +732,27 @@ def _tex(args: argparse.Namespace) -> int:
         return 1
     noun = "question" if count == 1 else "questions"
     print(f"ExerPlaza TeX, {count} {noun} -> {args.output}", file=sys.stderr)
+    return 0
+
+
+def _questions_tex_path(output: str | None, questions: Path) -> Path:
+    if output:
+        return Path(output)
+    name = questions.name
+    return questions.with_name(
+        f"{name.removesuffix('.json')}.tex" if name.endswith(".json") else f"{name}.tex"
+    )
+
+
+def _questions_tex(args: argparse.Namespace) -> int:
+    output = _questions_tex_path(args.output, Path(args.questions))
+    try:
+        count = export_questions_tex(args.questions, output)
+    except QuestionsTexError as exc:
+        print(f"error: questions-tex: {exc}", file=sys.stderr)
+        return 1
+    noun = "question" if count == 1 else "questions"
+    print(f"Questions TeX, {count} {noun} -> {output}", file=sys.stderr)
     return 0
 
 
@@ -1054,6 +1093,21 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         "in ExerPlaza: any other spelling creates a new, unlinked unit",
     )
     tex.set_defaults(handler=_tex)
+
+    questions_tex = subs.add_parser(
+        "questions-tex",
+        help="write questions.json as a LaTeX document that compiles",
+        description="Write the questions of a questions.json as a LaTeX document: each "
+        "question with its time, confidence, the lecturer's answer and the board text. "
+        "Rejected questions are left out; texts are escaped; compile it with pdflatex.",
+    )
+    questions_tex.add_argument("questions", help="a questions.json")
+    questions_tex.add_argument(
+        "-o",
+        "--output",
+        help="write the .tex file here (default: next to the input, <name>.questions.tex)",
+    )
+    questions_tex.set_defaults(handler=_questions_tex)
 
     exerplaza = subs.add_parser(
         "exerplaza",
