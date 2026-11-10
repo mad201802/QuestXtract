@@ -1229,6 +1229,35 @@ def test_qti_2_1_prints_a_warning_line_for_items_not_worth_1_point(
     assert err[1] == "QTI 2.1 package -> lecture.zip" and len(err) == 2
 
 
+def test_qti_and_tex_write_next_to_the_quiz_without_an_output(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(make_quiz("q_aaa")), encoding="utf-8")
+
+    assert main(["qti", "lecture.quiz.json"]) == 0
+    assert main(["tex", "lecture.quiz.json", "--content-unit", "Sorting"]) == 0
+
+    assert capsys.readouterr().err.splitlines() == [
+        "QTI 3.0 package -> lecture.qti.zip",
+        "ExerPlaza TeX, 1 question -> lecture.tex",
+    ]
+    assert (tmp_path / "lecture.qti.zip").is_file() and (tmp_path / "lecture.tex").is_file()
+
+
+def test_the_app_path_takes_the_qti_version_and_keeps_its_warnings(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]]
+) -> None:
+    quiz = make_quiz("q_aaa")
+    quiz["questions"][0]["points"] = 2
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(quiz), encoding="utf-8")
+
+    result = cli.execute(["qti", "lecture.quiz.json", "-o", "lecture.zip", "--qti-version", "2.1"])
+
+    assert result.summary == "QTI 2.1 package"
+    assert len(result.warnings) == 1
+    assert result.warnings[0].startswith("qti: QTI 2.1: 1 item(s) are worth other than 1 point")
+
+
 @pytest.mark.parametrize("value", ["2.2", "3", "1.2"])
 def test_qti_version_outside_the_choices_names_them_and_writes_nothing(
     tmp_path: Path,

@@ -601,30 +601,61 @@ def _execute(
         return _process_run(args, progress, stop)
     if args.command == "transcribe":
         return _transcribe_run(args, progress, stop)
-    if args.command == "qti":
-        try:
-            export_qti(args.quiz, args.output)
-        except QtiExportError as exc:
-            raise ValueError(f"qti: {exc}") from None
-        return RunResult(path=Path(args.output), summary="QTI 3.0 package")
-    if args.command == "tex":
-        try:
-            count = export_tex(args.quiz, args.output, content_units=args.content_units)
-        except TexExportError as exc:
-            raise ValueError(f"tex: {exc}") from None
-        noun = "question" if count == 1 else "questions"
-        return RunResult(path=Path(args.output), summary=f"ExerPlaza TeX, {count} {noun}")
-    if args.command == "questions-tex":
-        output = _questions_tex_path(args.output, Path(args.questions))
-        try:
-            count = export_questions_tex(args.questions, output)
-        except QuestionsTexError as exc:
-            raise ValueError(f"questions-tex: {exc}") from None
-        noun = "question" if count == 1 else "questions"
-        return RunResult(path=output, summary=f"Questions TeX, {count} {noun}")
+    if args.command in ("qti", "tex", "questions-tex"):
+        return _export(args)
     raise ValueError(
         f"the app runs process, transcribe, qti, tex or questions-tex, not {args.command}"
     )
+
+
+def _export(args: argparse.Namespace) -> RunResult:
+    """Run ``qti``, ``tex`` or ``questions-tex``; QTI's warnings come back in the result."""
+    if args.command == "qti":
+        output = _export_path(args.output, Path(args.quiz), ".qti.zip")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                export_qti(args.quiz, output, version=args.qti_version)
+            except QtiExportError as exc:
+                raise ValueError(f"qti: {exc}") from None
+        notes = tuple(f"qti: {warning.message}" for warning in caught)
+        return RunResult(path=output, summary=f"QTI {args.qti_version} package", warnings=notes)
+    if args.command == "tex":
+        output = _export_path(args.output, Path(args.quiz), ".tex")
+        try:
+            count = export_tex(args.quiz, output, content_units=args.content_units)
+        except TexExportError as exc:
+            raise ValueError(f"tex: {exc}") from None
+        return RunResult(path=output, summary=f"ExerPlaza TeX, {_questions_count(count)}")
+    output = _questions_tex_path(args.output, Path(args.questions))
+    try:
+        count = export_questions_tex(args.questions, output)
+    except QuestionsTexError as exc:
+        raise ValueError(f"questions-tex: {exc}") from None
+    return RunResult(path=output, summary=f"Questions TeX, {_questions_count(count)}")
+
+
+def _questions_count(count: int) -> str:
+    return f"{count} question" if count == 1 else f"{count} questions"
+
+
+def _export_path(output: str | None, quiz: Path, suffix: str) -> Path:
+    """Return ``-o``, else the file next to the quiz: ``lecture.quiz.json`` -> ``lecture<suffix>``.
+
+    The app names its export files by the same rule (``gui.state.default_output``).
+    """
+    if output:
+        return Path(output)
+    base = quiz.name.removesuffix(".quiz.json")
+    return quiz.with_name((quiz.stem if base == quiz.name else base) + suffix)
+
+
+def _exported(args: argparse.Namespace) -> int:
+    result = _export(args)
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    print(f"{result.summary} -> {result.path}", file=sys.stderr)
+    return 0
 
 
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
@@ -735,31 +766,6 @@ def _quiz(args: argparse.Namespace) -> int:
     return 0
 
 
-def _qti(args: argparse.Namespace) -> int:
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        try:
-            export_qti(args.quiz, args.output, version=args.qti_version)
-        except QtiExportError as exc:
-            print(f"error: qti: {exc}", file=sys.stderr)
-            return 1
-    for warning in caught:
-        print(f"warning: qti: {warning.message}", file=sys.stderr)
-    print(f"QTI {args.qti_version} package -> {args.output}", file=sys.stderr)
-    return 0
-
-
-def _tex(args: argparse.Namespace) -> int:
-    try:
-        count = export_tex(args.quiz, args.output, content_units=args.content_units)
-    except TexExportError as exc:
-        print(f"error: tex: {exc}", file=sys.stderr)
-        return 1
-    noun = "question" if count == 1 else "questions"
-    print(f"ExerPlaza TeX, {count} {noun} -> {args.output}", file=sys.stderr)
-    return 0
-
-
 def _questions_tex_path(output: str | None, questions: Path) -> Path:
     if output:
         return Path(output)
@@ -767,18 +773,6 @@ def _questions_tex_path(output: str | None, questions: Path) -> Path:
     return questions.with_name(
         f"{name.removesuffix('.json')}.tex" if name.endswith(".json") else f"{name}.tex"
     )
-
-
-def _questions_tex(args: argparse.Namespace) -> int:
-    output = _questions_tex_path(args.output, Path(args.questions))
-    try:
-        count = export_questions_tex(args.questions, output)
-    except QuestionsTexError as exc:
-        print(f"error: questions-tex: {exc}", file=sys.stderr)
-        return 1
-    noun = "question" if count == 1 else "questions"
-    print(f"Questions TeX, {count} {noun} -> {output}", file=sys.stderr)
-    return 0
 
 
 def _exerplaza(args: argparse.Namespace) -> int:
@@ -1089,14 +1083,18 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
 
     qti = subs.add_parser("qti", help="export quiz.json as a QTI 2.1 or 3.0 package")
     qti.add_argument("quiz", help="a quiz.json")
-    qti.add_argument("-o", "--output", required=True, help="write the QTI ZIP package here")
+    qti.add_argument(
+        "-o",
+        "--output",
+        help="write the QTI ZIP package here (default: next to the quiz, lecture.qti.zip)",
+    )
     qti.add_argument(
         "--qti-version",
         choices=QTI_VERSIONS,
         default=DEFAULT_QTI_VERSION,
         help=f"QTI version of the package: 2.1 or 3.0 (default: {DEFAULT_QTI_VERSION})",
     )
-    qti.set_defaults(handler=_qti)
+    qti.set_defaults(handler=_exported)
 
     gui = subs.add_parser(
         "gui",
@@ -1107,7 +1105,9 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         "tex", help="export quiz.json as TeX for ExerPlaza's upload at /questions/upload/tex"
     )
     tex.add_argument("quiz", help="a quiz.json")
-    tex.add_argument("-o", "--output", required=True, help="write the .tex file here")
+    tex.add_argument(
+        "-o", "--output", help="write the .tex file here (default: next to the quiz, lecture.tex)"
+    )
     tex.add_argument(
         "--content-unit",
         action="append",
@@ -1117,7 +1117,7 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         help="an ExerPlaza content unit for every question; repeat for more. Spell it exactly as "
         "in ExerPlaza: any other spelling creates a new, unlinked unit",
     )
-    tex.set_defaults(handler=_tex)
+    tex.set_defaults(handler=_exported)
 
     questions_tex = subs.add_parser(
         "questions-tex",
@@ -1133,7 +1133,7 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         "--output",
         help="write the .tex file here (default: next to the input, <name>.questions.tex)",
     )
-    questions_tex.set_defaults(handler=_questions_tex)
+    questions_tex.set_defaults(handler=_exported)
 
     exerplaza = subs.add_parser(
         "exerplaza",

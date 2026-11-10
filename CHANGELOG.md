@@ -22,6 +22,8 @@
 - The app's Cancel, and closing the app during a run, stop inside the running step (transcribing,
   reading the board, the LLM detector, the quiz) instead of waiting for it to finish. In Python,
   `run(stop=...)` asks `stop` at every progress report too, not only between stages.
+- `qti` and `tex` write next to the quiz when `-o` is left out, as the other commands do:
+  `lecture.quiz.json` gives `lecture.qti.zip` or `lecture.tex`.
 - README: the Install section lists three ways (pip from GitHub, the `.whl` from a release, a
   clone with a first run on a committed transcript), says which release file to take, and the
   badge reads "Latest release" instead of "Download".
