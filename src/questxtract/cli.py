@@ -35,7 +35,7 @@ from .exerplaza import ExerPlazaExportError, export_exerplaza
 from .export import read_questions, result_to_json, write_questions
 from .filtering import filter_document
 from .models import Context, Progress, Sentence, Stage, Transcript
-from .pipeline import STAGES, Cancelled, cached_transcript, run, stoppable
+from .pipeline import STAGES, Cancelled, cached_transcript, run, stage_info, stoppable
 from .qti import QtiExportError
 from .qti_package import DEFAULT_QTI_VERSION, QTI_VERSIONS, export_qti
 from .questions_tex import QuestionsTexError, export_questions_tex
@@ -413,6 +413,18 @@ def _with_vision(config: Config, source: Path) -> Config:
     return config
 
 
+def _switched_on(stages: Sequence[Stage], config: Config) -> tuple[Stage, ...]:
+    """Leave out the optional stages this run turns off, so the bar shows only real steps.
+
+    Each stage still checks its own flag; this only keeps an offline run from listing
+    "Reading the board" and "LLM detection".
+    """
+    off = set() if config.vision_enabled else {"layout", "vision", "attach_visual"}
+    if config.detector != "llm":
+        off.add("judge")
+    return tuple(fn for fn in stages if stage_info(fn).name not in off)
+
+
 def _run(
     ctx: Context,
     stages: Sequence[Stage],
@@ -478,9 +490,11 @@ def _process_core(
         transcript = Transcript.from_file(source)
         ctx = Context(source=source, config=config, transcript=transcript)
         ctx.duration = transcript.duration
-        ctx = _run(ctx, STAGES[_AFTER_TRANSCRIBE:], progress, stop)
+        ctx = _run(ctx, _switched_on(STAGES[_AFTER_TRANSCRIBE:], config), progress, stop)
     else:
-        ctx = _run(Context(source=source, config=config), STAGES, progress, stop)
+        ctx = _run(
+            Context(source=source, config=config), _switched_on(STAGES, config), progress, stop
+        )
 
     if stop is not None and stop():
         raise Cancelled("stopped before writing the questions")

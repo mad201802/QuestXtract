@@ -24,6 +24,8 @@
   `run(stop=...)` asks `stop` at every progress report too, not only between stages.
 - `qti` and `tex` write next to the quiz when `-o` is left out, as the other commands do:
   `lecture.quiz.json` gives `lecture.qti.zip` or `lecture.tex`.
+- The progress lists only the steps that run: an offline run no longer shows "Reading the
+  board" or "LLM detection", which read as if the lecture left the computer.
 - README: the Install section lists three ways (pip from GitHub, the `.whl` from a release, a
   clone with a first run on a committed transcript), says which release file to take, and the
   badge reads "Latest release" instead of "Download".

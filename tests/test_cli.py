@@ -108,7 +108,7 @@ def test_process_closes_the_bar_line_before_an_error_propagates(
         main(["process", str(_transcript_file(tmp_path))])
 
     err = capsys.readouterr().err
-    assert f"[1/{len(STAGES) - 2}]" in err and "Splitting sentences" in err
+    assert "[1/5]" in err and "Splitting sentences" in err
     assert err.endswith("\n")
 
 
@@ -150,6 +150,16 @@ def test_the_app_gets_at_most_five_warnings_and_how_many_more(
 
     assert result.warnings[0] == "vision: keyframe 0 left out"
     assert result.warnings[5:] == ("... and 3 more warnings",)
+
+
+def test_an_offline_run_shows_no_board_or_llm_step(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["process", str(_transcript_file(tmp_path)), "-o", str(tmp_path / "q.json")]) == 0
+
+    err = capsys.readouterr().err
+    assert "Reading the board" not in err and "LLM detection" not in err
+    assert "[5/5] Scoring" in err
 
 
 def _questions(path: Path) -> list[str]:
@@ -195,7 +205,7 @@ def test_the_default_run_makes_no_network_call(
     assert len(_questions(output)) > 0
 
 
-def test_process_runs_every_stage_on_a_recording_and_writes_next_to_it(
+def test_process_runs_every_switched_on_stage_on_a_recording_and_writes_next_to_it(
     tmp_path: Path,
     make_mp4: Callable[..., Path],
     fake_asr: list[Config],
@@ -209,7 +219,8 @@ def test_process_runs_every_stage_on_a_recording_and_writes_next_to_it(
     assert _questions(output) == ["What is a stable sort?"]
     assert json.loads(output.read_text(encoding="utf-8"))["source"]["hash"]
     err = capsys.readouterr().err
-    assert f"[{len(STAGES)}/{len(STAGES)}]" in err and "Transcribing" in err
+    ran = len(STAGES) - 4  # no vision (layout, vision, attach_visual), rules detector (judge)
+    assert f"[{ran}/{ran}]" in err and "Transcribing" in err
 
 
 def test_transcribe_writes_a_transcript_that_process_reads_back(
