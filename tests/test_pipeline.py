@@ -8,7 +8,7 @@ import pytest
 
 from questxtract import STAGES, Config, Context, Transcript, Word, run, stage
 from questxtract.export import result_to_dict
-from questxtract.pipeline import cached_transcript, stage_info
+from questxtract.pipeline import Cancelled, cached_transcript, stage_info
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "questxtract"
 
@@ -153,6 +153,28 @@ def test_from_scratch_bypasses_the_cache(tmp_path, context):
     run(context, [counted2])
     run(context, [counted2])
     assert calls == [1, 1]
+
+
+def test_a_stop_takes_effect_at_the_next_progress_report_inside_a_stage(tmp_path, context):
+    flags = {"stop": False, "finished": False}
+
+    @stage("long", cache="visual", uses=())
+    def long(ctx: Context) -> Context:
+        assert ctx.progress is not None
+        ctx.progress("long", 0.5)
+        flags["stop"] = True  # the user presses Cancel halfway through
+        ctx.progress("long", 0.9)
+        flags["finished"] = True
+        ctx.visual = ()
+        return ctx
+
+    context.source_hash = "abc123"
+    context.config = context.config.replace(cache_dir=str(tmp_path))
+    with pytest.raises(Cancelled, match="during long"):
+        run(context, [long], stop=lambda: flags["stop"])
+
+    assert not flags["finished"]
+    assert not list(tmp_path.rglob("*.json")), "a cancelled stage writes no cache entry"
 
 
 def test_cache_roundtrips_dataclasses(tmp_path, context):

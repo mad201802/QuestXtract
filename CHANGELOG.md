@@ -19,6 +19,9 @@
 
 ### Changed
 
+- The app's Cancel, and closing the app during a run, stop inside the running step (transcribing,
+  reading the board, the LLM detector, the quiz) instead of waiting for it to finish. In Python,
+  `run(stop=...)` asks `stop` at every progress report too, not only between stages.
 - README: the Install section lists three ways (pip from GitHub, the `.whl` from a release, a
   clone with a first run on a committed transcript), says which release file to take, and the
   badge reads "Latest release" instead of "Download".

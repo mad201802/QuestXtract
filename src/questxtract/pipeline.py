@@ -32,6 +32,7 @@ __all__ = [
     "run",
     "stage",
     "stage_info",
+    "stoppable",
 ]
 
 
@@ -121,7 +122,23 @@ STAGES: tuple[Stage, ...] = (
 
 
 class Cancelled(Exception):
-    """A run was stopped between two stages, on request (the graphical app's Cancel, #124)."""
+    """A run was stopped on request (the graphical app's Cancel, #124)."""
+
+
+def stoppable(progress: Progress | None, stop: Callable[[], bool]) -> Progress:
+    """Return a progress callback that raises :class:`Cancelled` once ``stop`` returns true.
+
+    Stages report progress as they go, so a stop takes effect inside a long stage
+    (transcribing, reading the board), not only after it.
+    """
+
+    def report(name: str, fraction: float) -> None:
+        if stop():
+            raise Cancelled(f"stopped during {name}")
+        if progress is not None:
+            progress(name, fraction)
+
+    return report
 
 
 def run(
@@ -134,14 +151,17 @@ def run(
 
     List order is execution order. There is no DAG resolver: a stage that needs something
     an earlier stage did not produce fails on the spot with a ``None``. ``stop``, when given, is
-    asked before each stage; once it returns true, :class:`Cancelled` is raised and no later
-    stage runs.
+    asked before each stage and at each progress report a stage makes; once it returns true,
+    :class:`Cancelled` is raised, the running stage writes no cache entry and no later stage
+    runs.
 
     Raises:
-        Cancelled: If ``stop`` asked for it before a stage.
+        Cancelled: If ``stop`` asked for it before or during a stage.
 
     """
     progress = progress or ctx.progress
+    if stop is not None:
+        progress = stoppable(progress, stop)
     ctx.progress = progress
     for fn in stages:
         info = stage_info(fn)

@@ -35,7 +35,7 @@ from .exerplaza import ExerPlazaExportError, export_exerplaza
 from .export import read_questions, result_to_json, write_questions
 from .filtering import filter_document
 from .models import Context, Progress, Sentence, Stage, Transcript
-from .pipeline import STAGES, Cancelled, cached_transcript, run
+from .pipeline import STAGES, Cancelled, cached_transcript, run, stoppable
 from .qti import QtiExportError
 from .qti_package import DEFAULT_QTI_VERSION, QTI_VERSIONS, export_qti
 from .questions_tex import QuestionsTexError, export_questions_tex
@@ -510,8 +510,10 @@ def _process_run(
         return RunResult(path=None, summary=summary, text=result_to_json(ctx))
     if not args.quiz:
         return RunResult(path=output, summary=summary)
-    if stop is not None and stop():
-        raise Cancelled("stopped before the quiz")
+    if stop is not None:
+        progress = stoppable(progress, stop)  # also stops between two quiz items
+        if stop():
+            raise Cancelled("stopped before the quiz")
     result = _quiz_result(output, config, ctx.sentences, progress)
     quiz_path = _output_path(None, output, "quiz")
     assert quiz_path is not None  # noqa: S101 - a file name is given, never stdout
