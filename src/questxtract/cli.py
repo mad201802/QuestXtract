@@ -9,9 +9,9 @@ import os
 import sys
 import warnings
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import NoReturn
+from typing import NoReturn, TextIO
 
 from . import __version__
 from .config import (
@@ -71,6 +71,7 @@ FLAG_FIELDS: tuple[tuple[str, str], ...] = (
 )
 
 _AFTER_TRANSCRIBE = 2
+_MAX_WARNINGS = 5
 
 _BAR_WIDTH = 10
 _THINKING_TIMEOUT_SECONDS = 600
@@ -572,8 +573,30 @@ def execute(
     progress: Progress | None = None,
     stop: Callable[[], bool] | None = None,
 ) -> RunResult:
-    """Run ``process``, ``transcribe`` or an export from its arguments, unprinted."""
+    """Run ``process``, ``transcribe`` or an export from its arguments, unprinted.
+
+    Warnings the run raises, such as keyframes vision could not read, come back in
+    :attr:`RunResult.warnings` instead of going to stderr.
+    """
     args = parse_arguments(argv)
+    # catch_warnings swaps process-wide state: fine, as one thread at a time runs a pipeline.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = _execute(args, progress, stop)
+    noted = tuple(dict.fromkeys(str(warning.message) for warning in caught))
+    if not noted:
+        return result
+    if len(noted) > _MAX_WARNINGS:  # the app shows them under the result, one per line
+        more = len(noted) - _MAX_WARNINGS
+        noted = (*noted[:_MAX_WARNINGS], f"... and {more} more warning{'s' * (more > 1)}")
+    return replace(result, warnings=(*result.warnings, *noted))
+
+
+def _execute(
+    args: argparse.Namespace,
+    progress: Progress | None,
+    stop: Callable[[], bool] | None,
+) -> RunResult:
     if args.command == "process":
         return _process_run(args, progress, stop)
     if args.command == "transcribe":
@@ -1152,13 +1175,28 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
     return parser
 
 
+def _print_warning(
+    message: Warning | str,
+    category: type[Warning],
+    filename: str,
+    lineno: int,
+    file: TextIO | None = None,
+    line: str | None = None,
+) -> None:
+    """Show a warning as one ``warning:`` line of its own, not inside the progress bar's line."""
+    del category, filename, lineno, file, line
+    print(f"\nwarning: {message}", file=sys.stderr)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI."""
     args = build_parser().parse_args(argv)
     handler: object = args.handler
     assert callable(handler)  # noqa: S101 - set_defaults guarantees it
     try:
-        return int(handler(args))
+        with warnings.catch_warnings():
+            warnings.showwarning = _print_warning
+            return int(handler(args))
     except KeyboardInterrupt:
         print("interrupted", file=sys.stderr)
         return 130

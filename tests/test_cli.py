@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import socket
+import warnings
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
@@ -109,6 +110,46 @@ def test_process_closes_the_bar_line_before_an_error_propagates(
     err = capsys.readouterr().err
     assert f"[1/{len(STAGES) - 2}]" in err and "Splitting sentences" in err
     assert err.endswith("\n")
+
+
+def test_a_pipeline_warning_reaches_the_app_and_prints_as_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_run = cli.run
+
+    def warning_run(ctx: Any, stages: Any, progress: Any = None, stop: Any = None) -> Any:
+        warnings.warn("vision: keyframe left out: no answer", UserWarning, stacklevel=1)
+        return real_run(ctx, stages, progress=progress, stop=stop)
+
+    monkeypatch.setattr(cli, "run", warning_run)
+    source = _transcript_file(tmp_path)
+
+    result = cli.execute(["process", str(source), "-o", str(tmp_path / "q.json")])
+    assert result.warnings == ("vision: keyframe left out: no answer",)
+
+    assert main(["process", str(source), "-o", str(tmp_path / "q2.json")]) == 0
+    err = capsys.readouterr().err
+    assert "\nwarning: vision: keyframe left out: no answer\n" in err
+    assert "UserWarning" not in err
+
+
+def test_the_app_gets_at_most_five_warnings_and_how_many_more(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_run = cli.run
+
+    def warning_run(ctx: Any, stages: Any, progress: Any = None, stop: Any = None) -> Any:
+        for number in range(8):
+            warnings.warn(f"vision: keyframe {number} left out", UserWarning, stacklevel=1)
+        return real_run(ctx, stages, progress=progress, stop=stop)
+
+    monkeypatch.setattr(cli, "run", warning_run)
+    source = _transcript_file(tmp_path)
+
+    result = cli.execute(["process", str(source), "-o", str(tmp_path / "q.json")])
+
+    assert result.warnings[0] == "vision: keyframe 0 left out"
+    assert result.warnings[5:] == ("... and 3 more warnings",)
 
 
 def _questions(path: Path) -> list[str]:

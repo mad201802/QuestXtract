@@ -28,6 +28,10 @@
 
 ### Fixed
 
+- Warnings during a run, such as keyframes vision could not read or a layout probe that failed,
+  now show in the app under the result (the first five, then how many more). Before, the app
+  said nothing and the run looked complete without the board. The command line prints each as
+  one `warning: ...` line instead of Python's `UserWarning` report inside the progress bar.
 - Transcribing, in the app or with `process` and `transcribe`, no longer aborts with
   `OMP: Error #15 ... libiomp5md.dll already initialized` on Windows when numpy comes from
   Anaconda.
