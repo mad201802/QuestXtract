@@ -162,6 +162,23 @@ def test_an_offline_run_shows_no_board_or_llm_step(
     assert "[5/5] Scoring" in err
 
 
+def test_a_questions_json_given_as_input_says_what_to_run_instead(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    questions = tmp_path / "lecture.questions.json"
+    assert main(["process", str(_transcript_file(tmp_path)), "-o", str(questions)]) == 0
+    capsys.readouterr()
+
+    assert main(["process", str(questions), "-o", "-"]) == 1
+    err = capsys.readouterr().err.splitlines()[-1]
+    assert err.startswith(f"error: {questions}: a questions.json or quiz.json, not a transcript")
+
+    assert main(["qti", str(questions)]) == 1
+    err = capsys.readouterr().err
+    assert f"{questions}: a questions.json, not a quiz.json" in err
+    assert f"questxtract quiz {questions}" in err
+
+
 def _questions(path: Path) -> list[str]:
     return [q["text"] for q in json.loads(path.read_text(encoding="utf-8"))["questions"]]
 

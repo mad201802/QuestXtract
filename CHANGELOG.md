@@ -32,6 +32,9 @@
 
 ### Fixed
 
+- A `questions.json` given to `process` (or to the app) fails with "a questions.json or
+  quiz.json, not a transcript" and its file name, not "invalid asr segment: 'text'"; given to
+  `qti`, `tex` or `exerplaza`, it says to make the quiz first with `questxtract quiz`.
 - Warnings during a run, such as keyframes vision could not read or a layout probe that failed,
   now show in the app under the result (the first five, then how many more). Before, the app
   said nothing and the run looked complete without the board. The command line prints each as
