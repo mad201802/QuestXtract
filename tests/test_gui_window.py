@@ -492,6 +492,19 @@ def test_the_tex_output_waits_for_a_content_unit_and_offers_a_tex_file(
     assert asked["defaultextension"] == ".tex"
 
 
+def test_the_questions_tex_box_is_for_the_questions_output_only(window):
+    window.choose_source(TRANSCRIPT)
+    window.questions_tex.set(True)
+
+    window.output.set("questions")
+    window._refresh()
+    assert _enabled(window.questions_tex_box) and window._values()["questions_tex"] is True
+
+    window.output.set("quiz")
+    window._refresh()
+    assert not _enabled(window.questions_tex_box) and window._values()["questions_tex"] is False
+
+
 def test_browse_for_the_qti_package_suggests_a_zip(window, monkeypatch):
     asked: dict[str, Any] = {}
     monkeypatch.setattr(

@@ -320,6 +320,25 @@ def test_an_export_without_a_key_stops_before_transcription_and_writes_nothing(
     assert sorted(path.name for path in tmp_path.iterdir()) == [source.name]
 
 
+def test_the_questions_tex_box_writes_the_tex_beside_the_questions(tmp_path: Path) -> None:
+    questions = tmp_path / "lecture.questions.json"
+
+    result = gui.run(TRANSCRIPT, "questions", {"questions_tex": True}, questions)
+
+    tex = tmp_path / "lecture.questions.tex"
+    assert result.path == questions and questions.is_file() and tex.is_file()
+    assert "Questions TeX" in result.summary
+    assert tex.read_text(encoding="utf-8").startswith("\\documentclass")
+
+
+def test_without_the_box_no_tex_is_written(tmp_path: Path) -> None:
+    questions = tmp_path / "lecture.questions.json"
+
+    gui.run(TRANSCRIPT, "questions", {"questions_tex": False}, questions)
+
+    assert questions.is_file() and not (tmp_path / "lecture.questions.tex").exists()
+
+
 def test_a_stop_during_the_last_stage_writes_no_file(tmp_path: Path):
     output = tmp_path / "q.json"
     calls = {"n": 0}

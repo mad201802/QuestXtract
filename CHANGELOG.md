@@ -4,6 +4,10 @@
 
 ### Added
 
+- `questxtract questions-tex questions.json` (and `export_questions_tex()`) writes the questions
+  as a LaTeX document that compiles: each with its time, confidence, answer and board text,
+  rejected ones left out, texts escaped. In the app, the Questions (.tex) box below Questions
+  writes it after a Questions run. (#284)
 - The app's QTI package output, and a new TeX (ExerPlaza) output, start from a recording or a
   transcript as well as from a `quiz.json`: one run makes the quiz, writing `<name>.questions.json`
   and `<name>.quiz.json` beside the input, and exports it as `<name>.qti.zip` or `<name>.tex`.

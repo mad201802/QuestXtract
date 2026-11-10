@@ -24,6 +24,7 @@ from .models import (
 from .pipeline import STAGES, process, run, stage
 from .qti import QtiExportError
 from .qti_package import export_qti
+from .questions_tex import QuestionsTexError, export_questions_tex
 from .quiz_schema import read_quiz, validate_quiz
 from .schema import Question
 from .tex import TexExportError, export_tex
@@ -45,6 +46,7 @@ __all__ = [
     "Layout",
     "MediaError",
     "QAPair",
+    "QuestionsTexError",
     "QtiExportError",
     "Question",
     "QuestionCandidate",
@@ -59,6 +61,7 @@ __all__ = [
     "export_exerplaza",
     "extract_audio",
     "export_qti",
+    "export_questions_tex",
     "export_tex",
     "filter_document",
     "filter_questions",

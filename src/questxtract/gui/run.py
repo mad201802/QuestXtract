@@ -170,13 +170,16 @@ def run(
 
     An export from a recording or transcript is one run of two commands: ``process --quiz``,
     then ``qti`` or ``tex`` on the quiz it wrote. A stop between them leaves the quiz and no
-    export file.
+    export file. The Questions output with ``questions_tex`` set also runs ``questions-tex``
+    on the ``questions.json`` it wrote (#284).
 
     Raises:
         Cancelled: If ``stop`` asked for it before a stage or before the export.
 
     """
     argv = to_argv(source, output, values, output_path)
+    if output == "questions" and values.get("questions_tex"):
+        return _with_questions_tex(execute(argv, progress=progress, stop=stop), stop)
     if OUTPUTS[output] not in EXPORTS or argv[0] != "process":
         return execute(argv, progress=progress, stop=stop)
     made = execute(argv, progress=progress, stop=stop)
@@ -189,4 +192,17 @@ def run(
         path=exported.path,
         summary=f"{made.summary}; {exported.summary}",
         warnings=made.warnings,
+    )
+
+
+def _with_questions_tex(made: RunResult, stop: Callable[[], bool] | None) -> RunResult:
+    """Write the ``.tex`` of the questions file ``made`` wrote, beside it."""
+    if made.path is None:  # pragma: no cover - the app always names a file
+        return made
+    if stop is not None and stop():
+        raise Cancelled("stopped before the .tex")
+    tex = made.path.with_name(f"{made.path.name.removesuffix('.json')}.tex")
+    written = execute(["questions-tex", str(made.path), "--output", str(tex)])
+    return RunResult(
+        path=made.path, summary=f"{made.summary}; {written.summary}", warnings=made.warnings
     )

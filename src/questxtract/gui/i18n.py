@@ -66,6 +66,11 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "output.quiz": {"en": "Quiz", "nb": "Quiz", "it": "Quiz"},
     "output.qti": {"en": "QTI package", "nb": "QTI-pakke", "it": "Pacchetto QTI"},
     "output.tex": {"en": "TeX (ExerPlaza)", "nb": "TeX (ExerPlaza)", "it": "TeX (ExerPlaza)"},
+    "output.questions_tex": {
+        "en": "Questions (.tex)",
+        "nb": "Spørsmål (.tex)",
+        "it": "Domande (.tex)",
+    },
     "about.questions": {
         "en": (
             "A list of every question asked in the lecture, with when it was asked and the "

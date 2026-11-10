@@ -206,6 +206,20 @@ fails with HTTP 404 and `tex` is the way in.
 | `--content-unit` | a name | required | An ExerPlaza content unit for every question. Repeat it for more than one. Spell it exactly as in ExerPlaza: any other spelling creates a new, unlinked unit. One line. |
 | `-h`, `--help` | nothing | | Shows the options. |
 
+### `questxtract questions-tex <questions.json>`
+
+Writes the questions of a `questions.json` as a LaTeX document that compiles with `pdflatex`, to
+read or print. Each question gets its time, its confidence, the question (your reviewed text if
+you edited it, with the spoken wording in a note), the lecturer's answer, and the text on the
+board when it was asked. Rejected questions are left out. Texts are escaped; symbols from the
+board such as Greek letters and arrows are set as math, and the board's own LaTeX is shown as it
+was read, not typeset. Prints `Questions TeX, <n> questions -> <file>`.
+
+| Option | Takes | Default | What it does |
+|---|---|---|---|
+| `-o`, `--output` | a path | `<name>.questions.tex` next to the input | Where to write the `.tex` file. |
+| `-h`, `--help` | nothing | | Shows the options. |
+
 ### Everywhere
 
 | Option | What it does |
@@ -245,7 +259,9 @@ includes what the LLM detector and reading the board need, since the window star
   writes QTI 3.0; `--qti-version 2.1` is on the command line.
 - The options are behind Advanced settings, below Run; the list scrolls when the screen is too
   small for it, and an export of a finished `quiz.json` says it has no options. Each control is
-  one option of `process`, `transcribe` or `tex`, with its starting value in the label. Without a `questxtract.toml`
+  one option of `process`, `transcribe` or `tex`, with its starting value in the label.
+- Questions (.tex), the box below Questions, also writes `<name>.questions.tex` beside the
+  questions file (`questions-tex`). Without a `questxtract.toml`
   ([Configuration files](#configuration-files)) the window starts with the LLM detector and
   reading the board on; with one, it starts from the file. A control left at the CLI's default is
   not passed, so the file still applies. LLM and quiz controls appear only for outputs that use
@@ -478,6 +494,13 @@ questxtract tex lecture.quiz.json -o lecture.tex --content-unit "Improper integr
 Upload `lecture.tex` at `/questions/upload/tex`, check the preview and save. On a re-upload,
 ExerPlaza asks about every question it already has: choose Cancel, because Overwrite deletes the
 question and the students' answers to it.
+
+The questions as a document to read or print:
+
+```bash
+questxtract questions-tex lecture.questions.json   # -> lecture.questions.tex
+pdflatex lecture.questions.tex
+```
 
 Send a quiz straight to ExerPlaza:
 

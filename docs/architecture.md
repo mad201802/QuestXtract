@@ -1101,6 +1101,23 @@ The contract (requests, answer, errors, mapping) is in
 the example request and answer, and ExerPlaza's tests hold a copy. The endpoint is ExerPlaza's;
 until a server has it, `exerplaza` fails with HTTP 404 there and `tex` is the way in.
 
+### 12.7 The questions as a LaTeX document
+
+`questxtract questions-tex questions.json` writes the questions of a `questions.json` (12.1) as a
+standalone `article` that compiles with pdfLaTeX, for reading or printing; it is a view of the
+file, not a format anything reads back. One entry per question, in document order: its time, its
+confidence, the question as reviewed (`review.text`, else `text`), the spoken wording when that
+differs (`original_text`, or `text` under a teacher's edit), the lecturer's answer with its time,
+and the text and description of the board states it points to. Rejected questions are left out,
+as in the quiz exports; no question left is an error.
+
+Every text is escaped. Characters beyond Latin-1, common on a math board, become LaTeX commands
+where one exists (Greek letters, arrows, relations, subscripts, circled numbers) and `?`
+otherwise, so `inputenc` never meets one it cannot set. The board's `latex` field goes into a
+verbatim block, not typeset: a formula the vision model got wrong cannot break the compile. The
+same file gives the same bytes. The app's Questions (.tex) box runs this command after a
+Questions run.
+
 ---
 
 ## 13. Module layout and dependencies
@@ -1134,12 +1151,14 @@ src/questxtract/
   qti_v3.py        QTI 3.0 XML
   tex.py           ExerPlaza TeX from the QTI model
   exerplaza.py     export_exerplaza(): ExerPlaza's login form, then quiz.json to its import
+  questions_tex.py export_questions_tex(): questions.json as a LaTeX document that compiles
   filtering.py     time and text filters, experimental topic filter
   evaluate.py      labelled-set metrics
   schema.py        Question, a standalone shape the pipeline does not produce
   pipeline.py      STAGES, run(), process(), cache, progress
   quiz.py          quiz.json from questions.json: selection, one request per question
-  cli.py           process / transcribe / filter / eval / quiz / qti / tex / exerplaza / gui
+  cli.py           process / transcribe / filter / eval / quiz / qti / tex / exerplaza /
+                   questions-tex / gui
   gui/             the graphical app, a run launcher over cli.execute (14):
     options.py     one table of the CLI options the app shows, checked against the CLI
     run.py         form values -> the CLI's argv -> cli.execute
@@ -1196,6 +1215,7 @@ What the code does today, and the open issue for each missing piece.
 | `evaluate.py` | not a stage | done; NFR2 gated in pytest; the vision model scored with `eval --score-vision` (4.4) | |
 | `qti.py`, `qti_package.py`, `qti_v2.py`, `qti_v3.py` | not a stage | done: the QTI 3.0 and 2.1 packages of a `quiz.json` (12.4) | |
 | `tex.py` | not a stage | done: the ExerPlaza TeX of a `quiz.json` (12.5) | |
+| `questions_tex.py` | not a stage | done: a `questions.json` as a LaTeX document (12.7) | |
 | `exerplaza.py` | not a stage | done: a `quiz.json` sent to ExerPlaza's import endpoint (12.6); the endpoint itself is ExerPlaza's work | |
 | `cli.py` | not a stage | `process` (with `--quiz`), `transcribe`, `filter`, `eval`, `quiz`, `qti`, `tex` and `exerplaza` work ([cli.md](cli.md)); `process --vision --detector llm --quiz` runs every stage and the quiz in one run, tested offline | |
 | `gui/` | not a stage | done: the window, its run launcher and the API key window (`questxtract gui`, 13.1); QTI and TeX run from a recording to the export file in one run; it runs the CLI's code and does not review or edit questions (14) | |
