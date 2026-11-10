@@ -796,6 +796,12 @@ The runner emits one call per stage. Transcription reports `word.end / info.dura
 through the backend's `on_progress`, capped at 0.99. Vision reports sampling as its first half
 and keyframe reading as its second.
 
+Progress is also where a run stops. `run(ctx, stages, stop=...)` asks `stop` before each stage
+and, through `pipeline.stoppable`, at every progress report, so a stop takes effect inside a long
+stage once its request in flight returns; it raises `Cancelled`, and the stage writes no cache
+entry. The CLI and the app list only the stages a run turns on, so an offline run shows no
+board reading or LLM detection.
+
 ---
 
 ## 12. Output
@@ -1108,8 +1114,8 @@ standalone `article` that compiles with pdfLaTeX, for reading or printing; it is
 file, not a format anything reads back. One entry per question, in document order: its time, its
 confidence, the question as reviewed (`review.text`, else `text`), the spoken wording when that
 differs (`original_text`, or `text` under a teacher's edit), the lecturer's answer with its time,
-and the text and description of the board states it points to. Rejected questions are left out,
-as in the quiz exports; no question left is an error.
+and the text and description of the board states it points to. Questions reviewed as `deleted` or
+`false_positive` are left out, as in the quiz (`export.REJECTED`); no question left is an error.
 
 Every text is escaped. Characters beyond Latin-1, common on a math board, become LaTeX commands
 where one exists (Greek letters, arrows, relations, subscripts, circled numbers) and `?`
