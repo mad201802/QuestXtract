@@ -132,6 +132,11 @@ class Transcript:
             data = {"segments": data}
         if not isinstance(data, dict):
             raise SchemaError("expected a list of segments or an object")
+        if isinstance(data.get("questions"), list):  # its "segments" are not ASR chunks
+            raise SchemaError(
+                "a questions.json or quiz.json, not a transcript; give the recording or its "
+                ".transcript.json"
+            )
         raw = data.get("asr_segments", data.get("segments"))
         if raw is None:
             raise SchemaError("expected a list of segments or a 'segments' key holding one")
@@ -159,14 +164,18 @@ class Transcript:
         """Read a transcript JSON file, in any shape :meth:`from_dict` accepts.
 
         Raises:
-            SchemaError: If the file is not JSON or is not a recognised transcript shape.
+            SchemaError: If the file is not JSON or is not a recognised transcript shape; the
+                message starts with ``path``.
 
         """
         try:
             data = json.loads(Path(path).read_text(encoding="utf-8"))
         except (json.JSONDecodeError, UnicodeError, RecursionError) as exc:
             raise SchemaError(f"{path}: not valid JSON ({exc})") from exc
-        return cls.from_dict(data)
+        try:
+            return cls.from_dict(data)
+        except SchemaError as exc:
+            raise SchemaError(f"{path}: {exc}") from exc
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to plain JSON types, in the shape :meth:`from_dict` reads back unchanged.

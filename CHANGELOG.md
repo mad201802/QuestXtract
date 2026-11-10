@@ -6,8 +6,8 @@
 
 - `questxtract questions-tex questions.json` (and `export_questions_tex()`) writes the questions
   as a LaTeX document that compiles: each with its time, confidence, answer and board text,
-  rejected ones left out, texts escaped. In the app, the Questions (.tex) box below Questions
-  writes it after a Questions run. (#284)
+  those reviewed as `deleted` or `false_positive` left out, texts escaped. In the app, the
+  Questions (.tex) box below Questions writes it after a Questions run. (#284)
 - The app's QTI package output, and a new TeX (ExerPlaza) output, start from a recording or a
   transcript as well as from a `quiz.json`: one run makes the quiz, writing `<name>.questions.json`
   and `<name>.quiz.json` beside the input, and exports it as `<name>.qti.zip` or `<name>.tex`.
@@ -19,12 +19,30 @@
 
 ### Changed
 
+- The app's Cancel, and closing the app during a run, stop inside the running step (transcribing,
+  reading the board, the LLM detector, the quiz) instead of waiting for it to finish. In Python,
+  `run(stop=...)` asks `stop` at every progress report too, not only between stages.
+- `qti` and `tex` write next to the quiz when `-o` is left out, as the other commands do:
+  `lecture.quiz.json` gives `lecture.qti.zip` or `lecture.tex`.
+- The progress lists only the steps that run: an offline run no longer shows "Reading the
+  board" or "LLM detection", which read as if the lecture left the computer.
 - README: the Install section lists three ways (pip from GitHub, the `.whl` from a release, a
   clone with a first run on a committed transcript), says which release file to take, and the
   badge reads "Latest release" instead of "Download".
 
 ### Fixed
 
+- The app's hint for an emptied LLM model field names a model to type, instead of saying to
+  leave the (already empty) field empty.
+- `process --help` names DeepSeek, the default vision model, not Qwen; `questxtract --help`
+  links `docs/cli.md` on GitHub, since a pip install has no `docs/` folder.
+- A `questions.json` given to `process` (or to the app) fails with "a questions.json or
+  quiz.json, not a transcript" and its file name, not "invalid asr segment: 'text'"; given to
+  `qti`, `tex` or `exerplaza`, it says to make the quiz first with `questxtract quiz`.
+- Warnings during a run, such as keyframes vision could not read or a layout probe that failed,
+  now show in the app under the result (the first five, then how many more). Before, the app
+  said nothing and the run looked complete without the board. The command line prints each as
+  one `warning: ...` line instead of Python's `UserWarning` report inside the progress bar.
 - Transcribing, in the app or with `process` and `transcribe`, no longer aborts with
   `OMP: Error #15 ... libiomp5md.dll already initialized` on Windows when numpy comes from
   Anaconda.

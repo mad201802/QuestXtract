@@ -13,6 +13,7 @@ from typing import Any
 
 from . import endpoint
 from .config import Config
+from .export import REJECTED
 from .models import Sentence
 from .quiz_schema import QUIZ_SCHEMA_VERSION, normalise_spoken
 
@@ -21,7 +22,6 @@ QUIZ_PROMPT_VERSION = "v1"
 STRICTNESS = ("strict", "lenient")
 MIN_OPTIONS, MAX_OPTIONS = 3, 5
 
-_REJECTED = ("deleted", "false_positive")
 _BOARD_CHARS = 1500
 _SPOKEN_BEFORE, _SPOKEN_AFTER = 4, 2
 _SPOKEN_CHARS = 1500
@@ -139,7 +139,7 @@ def _select(
     for question in questions:
         review = question.get("review") or {}
         if (
-            review.get("status") in _REJECTED
+            review.get("status") in REJECTED
             or "check_in" in (question.get("reasons") or ())
             or (strictness == "strict" and not question.get("answer"))
         ):

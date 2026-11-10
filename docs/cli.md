@@ -146,7 +146,7 @@ questions whose response processing they do not support, so check that every que
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|
-| `-o`, `--output` | a path | required | Where to write the ZIP. Its folder must exist. |
+| `-o`, `--output` | a path | `<name>.qti.zip` next to the quiz | Where to write the ZIP. Its folder must exist. |
 | `--qti-version` | `2.1` or `3.0` | `3.0` | The QTI version. |
 | `-h`, `--help` | nothing | | Shows the options. |
 
@@ -163,7 +163,7 @@ same bytes. You upload the file yourself.
 
 | Option | Takes | Default | What it does |
 |---|---|---|---|
-| `-o`, `--output` | a path | required | Where to write the `.tex` file. Its folder must exist. |
+| `-o`, `--output` | a path | `<name>.tex` next to the quiz | Where to write the `.tex` file. Its folder must exist. |
 | `--content-unit` | a name | required | An ExerPlaza content unit for every question; repeat for more. Spell it exactly as in ExerPlaza, or a new unlinked unit is created. No braces, one line. |
 | `-h`, `--help` | nothing | | Shows the options. |
 
@@ -211,7 +211,7 @@ fails with HTTP 404 and `tex` is the way in.
 Writes the questions of a `questions.json` as a LaTeX document that compiles with `pdflatex`, to
 read or print. Each question gets its time, its confidence, the question (your reviewed text if
 you edited it, with the spoken wording in a note), the lecturer's answer, and the text on the
-board when it was asked. Rejected questions are left out. Texts are escaped; symbols from the
+board when it was asked. Questions you marked `deleted` or `false_positive` are left out. Texts are escaped; symbols from the
 board such as Greek letters and arrows are set as math, and the board's own LaTeX is shown as it
 was read, not typeset. Prints `Questions TeX, <n> questions -> <file>`.
 
@@ -267,8 +267,11 @@ includes what the LLM detector and reading the board need, since the window star
   not passed, so the file still applies. LLM and quiz controls appear only for outputs that use
   them. Changing the output clears the output file. Run stays disabled, with the reason beside it,
   while a value is refused or the file is the wrong kind.
-- Run, Cancel, progress: the bar follows the pipeline's stages. Cancel stops before the next
-  stage, and no partial file is written. An error opens in a pop-up as the CLI's one line.
+- Run, Cancel, progress: the bar lists only the steps the run takes. Cancel stops inside the
+  running step (transcribing, reading the board, the LLM detector, the quiz) once the request in
+  flight has its answer, and no partial file is written. Warnings, such as keyframes the board
+  reader could not read, show under the result: the first five, then how many more. An error
+  opens in a pop-up as the CLI's one line.
 - Open folder opens the folder of the file written.
 - Keys: read as the CLI reads them ([API keys](#api-keys-and-env)). The API key... button opens
   a window for the key of the endpoint in LLM endpoint (Advanced settings; a URL, or `ntnu`,
@@ -735,6 +738,9 @@ and counted in `stats.vision_reused` ([architecture.md 6.5](architecture.md#65-c
 | `...: <model> is not a model on NTNU's LLM service ...` / `...: <model> is not an OpenAI model ...` / `...: <model> is not OpenRouter's name for a model ...` | The model belongs to another service (NTNU's and OpenRouter's are `organisation/model`, OpenAI's have no `/`, OpenRouter names NTNU's defaults differently). Change the model or the endpoint as the message says. |
 | `--vision / vision_enabled needs the LLM extra: ...` | Install `questxtract[llm]`, or use `--no-vision`. |
 | `note: <file> has no video, so the board is not read` | Not an error: no video means no board. |
+| `warning: ...` | Not an error: the run went on without that part, for example a keyframe the board reader could not read. The app shows these under the result. |
+| `<file>: a questions.json or quiz.json, not a transcript; ...` | `process` takes a recording or a transcript. Give the recording or its `.transcript.json`; for a quiz from a `questions.json`, run `questxtract quiz`. |
+| `<file>: a questions.json, not a quiz.json; make the quiz first with ...` | `qti`, `tex` and `exerplaza` take a `quiz.json`. Run the `questxtract quiz` command the message names, then export its file. |
 | `judge: <endpoint>: ...` | The endpoint failed: not running, wrong key, or unknown model; the rest of the message says which. |
 | `judge: <endpoint>: ... reasoning_effort` (HTTP 400) | The model has no reasoning setting (`gpt-4o`) or rejects `none` (Qwen). Pass `--llm-reasoning server`. |
 | `judge: <endpoint>: no answer within 120 s, twice` | The model did not answer in time, twice. DeepSeek: pass `--llm-reasoning none`. Another thinking model: pass a level, which allows 10 minutes. Otherwise the provider is overloaded. |

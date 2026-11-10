@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import socket
+import warnings
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
@@ -107,8 +108,111 @@ def test_process_closes_the_bar_line_before_an_error_propagates(
         main(["process", str(_transcript_file(tmp_path))])
 
     err = capsys.readouterr().err
-    assert f"[1/{len(STAGES) - 2}]" in err and "Splitting sentences" in err
+    assert "[1/5]" in err and "Splitting sentences" in err
     assert err.endswith("\n")
+
+
+_OURS = str(Path(cli.__file__).with_name("vision.py"))
+_THEIRS = "/site-packages/huggingface_hub/file_download.py"
+
+
+def _warning_run(*messages: tuple[str, type[Warning], str]) -> Callable[..., Any]:
+    real_run = cli.run
+
+    def warning_run(ctx: Any, stages: Any, progress: Any = None, stop: Any = None) -> Any:
+        for message, category, filename in messages:
+            warnings.warn_explicit(message, category, filename, 1)
+        return real_run(ctx, stages, progress=progress, stop=stop)
+
+    return warning_run
+
+
+def test_a_pipeline_warning_reaches_the_app_and_prints_as_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        cli, "run", _warning_run(("vision: keyframe left out: no answer", UserWarning, _OURS))
+    )
+    source = _transcript_file(tmp_path)
+
+    result = cli.execute(["process", str(source), "-o", str(tmp_path / "q.json")])
+    assert result.warnings == ("vision: keyframe left out: no answer",)
+
+    assert main(["process", str(source), "-o", str(tmp_path / "q2.json")]) == 0
+    err = capsys.readouterr().err
+    assert "\nwarning: vision: keyframe left out: no answer\n" in err
+    assert "UserWarning" not in err
+
+
+def test_a_library_warning_stays_out_of_the_app_result_and_prints_as_python_does(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        cli,
+        "run",
+        _warning_run(
+            ("resume_download is deprecated", FutureWarning, _THEIRS),
+            ("a library's own note", UserWarning, _THEIRS),
+        ),
+    )
+    source = _transcript_file(tmp_path)
+
+    assert cli.execute(["process", str(source), "-o", str(tmp_path / "q.json")]).warnings == ()
+    assert main(["process", str(source), "-o", str(tmp_path / "q2.json")]) == 0
+    err = capsys.readouterr().err
+    assert "warning: a library's own note" not in err
+
+
+def test_the_app_gets_at_most_five_warnings_and_how_many_more(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    notes = [(f"vision: keyframe {n} left out", UserWarning, _OURS) for n in range(8)]
+    monkeypatch.setattr(cli, "run", _warning_run(*notes))
+    source = _transcript_file(tmp_path)
+
+    result = cli.execute(["process", str(source), "-o", str(tmp_path / "q.json")])
+
+    assert result.warnings[0] == "vision: keyframe 0 left out"
+    assert result.warnings[5:] == ("... and 3 more warnings",)
+
+
+def test_an_offline_run_shows_no_board_or_llm_step(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["process", str(_transcript_file(tmp_path)), "-o", str(tmp_path / "q.json")]) == 0
+
+    err = capsys.readouterr().err
+    assert "Reading the board" not in err and "LLM detection" not in err
+    assert "[5/5] Scoring" in err
+
+
+def test_a_questions_json_given_as_input_says_what_to_run_instead(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    questions = tmp_path / "lecture.questions.json"
+    assert main(["process", str(_transcript_file(tmp_path)), "-o", str(questions)]) == 0
+    capsys.readouterr()
+
+    assert main(["process", str(questions), "-o", "-"]) == 1
+    err = capsys.readouterr().err.splitlines()[-1]
+    assert err.startswith(f"error: {questions}: a questions.json or quiz.json, not a transcript")
+
+    assert main(["qti", str(questions)]) == 1
+    err = capsys.readouterr().err
+    assert f"{questions}: a questions.json, not a quiz.json" in err
+    assert f"questxtract quiz {questions}" in err
+
+
+def test_help_names_the_real_vision_model_and_a_link_that_works_after_pip_install(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    for command in ([], ["process"]):
+        with pytest.raises(SystemExit):
+            main([*command, "--help"])
+    out = capsys.readouterr().out
+    assert "https://github.com/mad201802/QuestXtract/blob/main/docs/cli.md" in out
+    assert "(DeepSeek on NTNU's LLM service)" in out and "Qwen on" not in out
+    assert "Reading layout" in cli._render(1, 1, "layout", 0.0)
 
 
 def _questions(path: Path) -> list[str]:
@@ -154,7 +258,7 @@ def test_the_default_run_makes_no_network_call(
     assert len(_questions(output)) > 0
 
 
-def test_process_runs_every_stage_on_a_recording_and_writes_next_to_it(
+def test_process_runs_every_switched_on_stage_on_a_recording_and_writes_next_to_it(
     tmp_path: Path,
     make_mp4: Callable[..., Path],
     fake_asr: list[Config],
@@ -168,7 +272,8 @@ def test_process_runs_every_stage_on_a_recording_and_writes_next_to_it(
     assert _questions(output) == ["What is a stable sort?"]
     assert json.loads(output.read_text(encoding="utf-8"))["source"]["hash"]
     err = capsys.readouterr().err
-    assert f"[{len(STAGES)}/{len(STAGES)}]" in err and "Transcribing" in err
+    ran = len(STAGES) - 4  # no vision (layout, vision, attach_visual), rules detector (judge)
+    assert f"[{ran}/{ran}]" in err and "Transcribing" in err
 
 
 def test_transcribe_writes_a_transcript_that_process_reads_back(
@@ -1186,6 +1291,35 @@ def test_qti_2_1_prints_a_warning_line_for_items_not_worth_1_point(
     err = capsys.readouterr().err.splitlines()
     assert err[0].startswith("warning: qti: QTI 2.1: 1 item(s) are worth other than 1 point")
     assert err[1] == "QTI 2.1 package -> lecture.zip" and len(err) == 2
+
+
+def test_qti_and_tex_write_next_to_the_quiz_without_an_output(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(make_quiz("q_aaa")), encoding="utf-8")
+
+    assert main(["qti", "lecture.quiz.json"]) == 0
+    assert main(["tex", "lecture.quiz.json", "--content-unit", "Sorting"]) == 0
+
+    assert capsys.readouterr().err.splitlines() == [
+        "QTI 3.0 package -> lecture.qti.zip",
+        "ExerPlaza TeX, 1 question -> lecture.tex",
+    ]
+    assert (tmp_path / "lecture.qti.zip").is_file() and (tmp_path / "lecture.tex").is_file()
+
+
+def test_the_app_path_takes_the_qti_version_and_keeps_its_warnings(
+    tmp_path: Path, make_quiz: Callable[..., dict[str, Any]]
+) -> None:
+    quiz = make_quiz("q_aaa")
+    quiz["questions"][0]["points"] = 2
+    (tmp_path / "lecture.quiz.json").write_text(json.dumps(quiz), encoding="utf-8")
+
+    result = cli.execute(["qti", "lecture.quiz.json", "-o", "lecture.zip", "--qti-version", "2.1"])
+
+    assert result.summary == "QTI 2.1 package"
+    assert len(result.warnings) == 1
+    assert result.warnings[0].startswith("qti: QTI 2.1: 1 item(s) are worth other than 1 point")
 
 
 @pytest.mark.parametrize("value", ["2.2", "3", "1.2"])

@@ -9,9 +9,9 @@ import os
 import sys
 import warnings
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import NoReturn
+from typing import NoReturn, TextIO
 
 from . import __version__
 from .config import (
@@ -35,7 +35,7 @@ from .exerplaza import ExerPlazaExportError, export_exerplaza
 from .export import read_questions, result_to_json, write_questions
 from .filtering import filter_document
 from .models import Context, Progress, Sentence, Stage, Transcript
-from .pipeline import STAGES, Cancelled, cached_transcript, run
+from .pipeline import STAGES, Cancelled, cached_transcript, run, stage_info, stoppable
 from .qti import QtiExportError
 from .qti_package import DEFAULT_QTI_VERSION, QTI_VERSIONS, export_qti
 from .questions_tex import QuestionsTexError, export_questions_tex
@@ -71,6 +71,7 @@ FLAG_FIELDS: tuple[tuple[str, str], ...] = (
 )
 
 _AFTER_TRANSCRIBE = 2
+_MAX_WARNINGS = 5
 
 _BAR_WIDTH = 10
 _THINKING_TIMEOUT_SECONDS = 600
@@ -81,6 +82,7 @@ _STAGE_LABELS = {
     "transcribe": "Transcribing",
     "sentences": "Splitting sentences",
     "segments": "Grouping segments",
+    "layout": "Reading layout",
     "vision": "Reading the board",
     "attach_visual": "Joining visuals",
     "detect": "Detecting questions",
@@ -105,7 +107,8 @@ examples:
   questxtract filter lecture.questions.json --text eigenvalue
                                                 the questions about a word, said or on the board
 
-every command and option, with recipes: docs/cli.md
+every command and option, with recipes:
+  https://github.com/mad201802/QuestXtract/blob/main/docs/cli.md
 """
 
 _PROCESS_EXAMPLES = """\
@@ -119,7 +122,7 @@ examples:
   questxtract process lecture.mp4 --detector llm         a local model in Ollama:
       --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b --llm-reasoning low
   questxtract process lecture.mp4 --vision               also read the slides or the board
-                                                         (Qwen on NTNU's LLM service)
+                                                         (DeepSeek on NTNU's LLM service)
 """
 
 _QUIZ_EXAMPLES = """\
@@ -412,6 +415,18 @@ def _with_vision(config: Config, source: Path) -> Config:
     return config
 
 
+def _switched_on(stages: Sequence[Stage], config: Config) -> tuple[Stage, ...]:
+    """Leave out the optional stages this run turns off, so the bar shows only real steps.
+
+    Each stage still checks its own flag; this only keeps an offline run from listing
+    "Reading the board" and "LLM detection".
+    """
+    off = set() if config.vision_enabled else {"layout", "vision", "attach_visual"}
+    if config.detector != "llm":
+        off.add("judge")
+    return tuple(fn for fn in stages if stage_info(fn).name not in off)
+
+
 def _run(
     ctx: Context,
     stages: Sequence[Stage],
@@ -477,9 +492,11 @@ def _process_core(
         transcript = Transcript.from_file(source)
         ctx = Context(source=source, config=config, transcript=transcript)
         ctx.duration = transcript.duration
-        ctx = _run(ctx, STAGES[_AFTER_TRANSCRIBE:], progress, stop)
+        ctx = _run(ctx, _switched_on(STAGES[_AFTER_TRANSCRIBE:], config), progress, stop)
     else:
-        ctx = _run(Context(source=source, config=config), STAGES, progress, stop)
+        ctx = _run(
+            Context(source=source, config=config), _switched_on(STAGES, config), progress, stop
+        )
 
     if stop is not None and stop():
         raise Cancelled("stopped before writing the questions")
@@ -510,8 +527,10 @@ def _process_run(
         return RunResult(path=None, summary=summary, text=result_to_json(ctx))
     if not args.quiz:
         return RunResult(path=output, summary=summary)
-    if stop is not None and stop():
-        raise Cancelled("stopped before the quiz")
+    if stop is not None:
+        progress = stoppable(progress, stop)  # also stops between two quiz items
+        if stop():
+            raise Cancelled("stopped before the quiz")
     result = _quiz_result(output, config, ctx.sentences, progress)
     quiz_path = _output_path(None, output, "quiz")
     assert quiz_path is not None  # noqa: S101 - a file name is given, never stdout
@@ -570,36 +589,93 @@ def execute(
     progress: Progress | None = None,
     stop: Callable[[], bool] | None = None,
 ) -> RunResult:
-    """Run ``process``, ``transcribe`` or an export from its arguments, unprinted."""
+    """Run ``process``, ``transcribe`` or an export from its arguments, unprinted.
+
+    Warnings the run raises, such as keyframes vision could not read, come back in
+    :attr:`RunResult.warnings` instead of going to stderr.
+    """
     args = parse_arguments(argv)
+    # catch_warnings swaps process-wide state: fine, as one thread at a time runs a pipeline.
+    with warnings.catch_warnings(record=True) as caught:
+        result = _execute(args, progress, stop)
+    for warning in caught:
+        if not _ours(warning.filename):  # a library's own: to stderr, as Python shows it
+            warnings.showwarning(
+                warning.message, warning.category, warning.filename, warning.lineno
+            )
+    noted = tuple(dict.fromkeys(str(w.message) for w in caught if _ours(w.filename)))
+    if not noted:
+        return result
+    if len(noted) > _MAX_WARNINGS:  # the app shows them under the result, one per line
+        more = len(noted) - _MAX_WARNINGS
+        noted = (*noted[:_MAX_WARNINGS], f"... and {more} more warning{'s' * (more > 1)}")
+    return replace(result, warnings=(*result.warnings, *noted))
+
+
+def _execute(
+    args: argparse.Namespace,
+    progress: Progress | None,
+    stop: Callable[[], bool] | None,
+) -> RunResult:
     if args.command == "process":
         return _process_run(args, progress, stop)
     if args.command == "transcribe":
         return _transcribe_run(args, progress, stop)
-    if args.command == "qti":
-        try:
-            export_qti(args.quiz, args.output)
-        except QtiExportError as exc:
-            raise ValueError(f"qti: {exc}") from None
-        return RunResult(path=Path(args.output), summary="QTI 3.0 package")
-    if args.command == "tex":
-        try:
-            count = export_tex(args.quiz, args.output, content_units=args.content_units)
-        except TexExportError as exc:
-            raise ValueError(f"tex: {exc}") from None
-        noun = "question" if count == 1 else "questions"
-        return RunResult(path=Path(args.output), summary=f"ExerPlaza TeX, {count} {noun}")
-    if args.command == "questions-tex":
-        output = _questions_tex_path(args.output, Path(args.questions))
-        try:
-            count = export_questions_tex(args.questions, output)
-        except QuestionsTexError as exc:
-            raise ValueError(f"questions-tex: {exc}") from None
-        noun = "question" if count == 1 else "questions"
-        return RunResult(path=output, summary=f"Questions TeX, {count} {noun}")
+    if args.command in ("qti", "tex", "questions-tex"):
+        return _export(args)
     raise ValueError(
         f"the app runs process, transcribe, qti, tex or questions-tex, not {args.command}"
     )
+
+
+def _export(args: argparse.Namespace) -> RunResult:
+    """Run ``qti``, ``tex`` or ``questions-tex``; QTI's warnings come back in the result."""
+    if args.command == "qti":
+        output = _export_path(args.output, Path(args.quiz), ".qti.zip")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            try:
+                export_qti(args.quiz, output, version=args.qti_version)
+            except QtiExportError as exc:
+                raise ValueError(f"qti: {exc}") from None
+        notes = tuple(f"qti: {warning.message}" for warning in caught)
+        return RunResult(path=output, summary=f"QTI {args.qti_version} package", warnings=notes)
+    if args.command == "tex":
+        output = _export_path(args.output, Path(args.quiz), ".tex")
+        try:
+            count = export_tex(args.quiz, output, content_units=args.content_units)
+        except TexExportError as exc:
+            raise ValueError(f"tex: {exc}") from None
+        return RunResult(path=output, summary=f"ExerPlaza TeX, {_questions_count(count)}")
+    output = _questions_tex_path(args.output, Path(args.questions))
+    try:
+        count = export_questions_tex(args.questions, output)
+    except QuestionsTexError as exc:
+        raise ValueError(f"questions-tex: {exc}") from None
+    return RunResult(path=output, summary=f"Questions TeX, {_questions_count(count)}")
+
+
+def _questions_count(count: int) -> str:
+    return f"{count} question" if count == 1 else f"{count} questions"
+
+
+def _export_path(output: str | None, quiz: Path, suffix: str) -> Path:
+    """Return ``-o``, else the file next to the quiz: ``lecture.quiz.json`` -> ``lecture<suffix>``.
+
+    The app names its export files by the same rule (``gui.state.default_output``).
+    """
+    if output:
+        return Path(output)
+    base = quiz.name.removesuffix(".quiz.json")
+    return quiz.with_name((quiz.stem if base == quiz.name else base) + suffix)
+
+
+def _exported(args: argparse.Namespace) -> int:
+    result = _export(args)
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+    print(f"{result.summary} -> {result.path}", file=sys.stderr)
+    return 0
 
 
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
@@ -710,31 +786,6 @@ def _quiz(args: argparse.Namespace) -> int:
     return 0
 
 
-def _qti(args: argparse.Namespace) -> int:
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        try:
-            export_qti(args.quiz, args.output, version=args.qti_version)
-        except QtiExportError as exc:
-            print(f"error: qti: {exc}", file=sys.stderr)
-            return 1
-    for warning in caught:
-        print(f"warning: qti: {warning.message}", file=sys.stderr)
-    print(f"QTI {args.qti_version} package -> {args.output}", file=sys.stderr)
-    return 0
-
-
-def _tex(args: argparse.Namespace) -> int:
-    try:
-        count = export_tex(args.quiz, args.output, content_units=args.content_units)
-    except TexExportError as exc:
-        print(f"error: tex: {exc}", file=sys.stderr)
-        return 1
-    noun = "question" if count == 1 else "questions"
-    print(f"ExerPlaza TeX, {count} {noun} -> {args.output}", file=sys.stderr)
-    return 0
-
-
 def _questions_tex_path(output: str | None, questions: Path) -> Path:
     if output:
         return Path(output)
@@ -742,18 +793,6 @@ def _questions_tex_path(output: str | None, questions: Path) -> Path:
     return questions.with_name(
         f"{name.removesuffix('.json')}.tex" if name.endswith(".json") else f"{name}.tex"
     )
-
-
-def _questions_tex(args: argparse.Namespace) -> int:
-    output = _questions_tex_path(args.output, Path(args.questions))
-    try:
-        count = export_questions_tex(args.questions, output)
-    except QuestionsTexError as exc:
-        print(f"error: questions-tex: {exc}", file=sys.stderr)
-        return 1
-    noun = "question" if count == 1 else "questions"
-    print(f"Questions TeX, {count} {noun} -> {output}", file=sys.stderr)
-    return 0
 
 
 def _exerplaza(args: argparse.Namespace) -> int:
@@ -844,14 +883,15 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         help="the model for --detector llm, e.g. qwen3.5:9b in Ollama "
         f"(default: {defaults.judge_model})",
     )
-    llm.add_argument(
+    endpoint = argparse.ArgumentParser(add_help=False)
+    endpoint.add_argument(
         "--llm-url",
         metavar="URL",
-        help="an OpenAI-compatible endpoint for --detector llm, --vision and the quiz: a URL, "
+        help="the OpenAI-compatible endpoint of the LLM detector, vision and the quiz: a URL, "
         f"or ntnu (key from {NTNU_KEY_ENV}), openrouter (key from {OPENROUTER_KEY_ENV}), "
         f"openai (key from {OPENAI_KEY_ENV}) or ollama (no key) (default: ntnu)",
     )
-    llm.add_argument(
+    endpoint.add_argument(
         "--llm-reasoning",
         choices=("none", "low", "medium", "high", "server"),
         default=None,
@@ -909,7 +949,7 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
 
     process = subs.add_parser(
         "process",
-        parents=[configured, shared, llm, vision_model, quizzing],
+        parents=[configured, shared, llm, endpoint, vision_model, quizzing],
         help="extract questions from a recording or a transcript",
         description="Extract the questions asked in a recording, or in an existing transcript.",
         epilog=_PROCESS_EXAMPLES,
@@ -996,7 +1036,9 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
     filtering.set_defaults(handler=_filter)
 
     evaluation = subs.add_parser(
-        "eval", parents=[configured, llm, vision_model], help="score against the labelled set"
+        "eval",
+        parents=[configured, llm, endpoint, vision_model],
+        help="score against the labelled set",
     )
     evaluation.add_argument(
         "paths",
@@ -1022,7 +1064,7 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
 
     quiz = subs.add_parser(
         "quiz",
-        parents=[configured, quizzing],
+        parents=[configured, quizzing, endpoint],
         help="write a multiple-choice quiz from a questions.json",
         description="Write multiple-choice quiz items from the questions of a lecture. The only "
         "command that writes text that was not spoken: every generated text is marked, and every "
@@ -1045,33 +1087,22 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         help="the lecture's transcript, so the quiz sees what was said around each question "
         "(default: the cached transcript of the recording, when there is one)",
     )
-    quiz.add_argument(
-        "--llm-url",
-        metavar="URL",
-        help=f"an OpenAI-compatible endpoint: a URL, or ntnu (key from {NTNU_KEY_ENV}), "
-        f"openrouter (key from {OPENROUTER_KEY_ENV}), openai (key from {OPENAI_KEY_ENV}) or "
-        "ollama (no key) (default: ntnu)",
-    )
-    quiz.add_argument(
-        "--llm-reasoning",
-        choices=("none", "low", "medium", "high", "server"),
-        default=None,
-        metavar="LEVEL",
-        help="how long a thinking model may think before it answers: none, low, medium or high, "
-        f"or server to send no setting (default: {defaults.reasoning_effort or 'server'})",
-    )
     quiz.set_defaults(handler=_quiz)
 
     qti = subs.add_parser("qti", help="export quiz.json as a QTI 2.1 or 3.0 package")
     qti.add_argument("quiz", help="a quiz.json")
-    qti.add_argument("-o", "--output", required=True, help="write the QTI ZIP package here")
+    qti.add_argument(
+        "-o",
+        "--output",
+        help="write the QTI ZIP package here (default: next to the quiz, lecture.qti.zip)",
+    )
     qti.add_argument(
         "--qti-version",
         choices=QTI_VERSIONS,
         default=DEFAULT_QTI_VERSION,
         help=f"QTI version of the package: 2.1 or 3.0 (default: {DEFAULT_QTI_VERSION})",
     )
-    qti.set_defaults(handler=_qti)
+    qti.set_defaults(handler=_exported)
 
     gui = subs.add_parser(
         "gui",
@@ -1082,7 +1113,9 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         "tex", help="export quiz.json as TeX for ExerPlaza's upload at /questions/upload/tex"
     )
     tex.add_argument("quiz", help="a quiz.json")
-    tex.add_argument("-o", "--output", required=True, help="write the .tex file here")
+    tex.add_argument(
+        "-o", "--output", help="write the .tex file here (default: next to the quiz, lecture.tex)"
+    )
     tex.add_argument(
         "--content-unit",
         action="append",
@@ -1092,14 +1125,15 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         help="an ExerPlaza content unit for every question; repeat for more. Spell it exactly as "
         "in ExerPlaza: any other spelling creates a new, unlinked unit",
     )
-    tex.set_defaults(handler=_tex)
+    tex.set_defaults(handler=_exported)
 
     questions_tex = subs.add_parser(
         "questions-tex",
         help="write questions.json as a LaTeX document that compiles",
         description="Write the questions of a questions.json as a LaTeX document: each "
         "question with its time, confidence, the lecturer's answer and the board text. "
-        "Rejected questions are left out; texts are escaped; compile it with pdflatex.",
+        "Questions reviewed as deleted or false_positive are left out; texts are escaped; "
+        "compile it with pdflatex.",
     )
     questions_tex.add_argument("questions", help="a questions.json")
     questions_tex.add_argument(
@@ -1107,7 +1141,7 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         "--output",
         help="write the .tex file here (default: next to the input, <name>.questions.tex)",
     )
-    questions_tex.set_defaults(handler=_questions_tex)
+    questions_tex.set_defaults(handler=_exported)
 
     exerplaza = subs.add_parser(
         "exerplaza",
@@ -1150,13 +1184,48 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
     return parser
 
 
+_PACKAGE = Path(__file__).resolve().parent
+
+
+def _ours(filename: str) -> bool:
+    """Whether a warning was raised in questxtract's own code, not in a library it uses."""
+    try:
+        return Path(filename).resolve().is_relative_to(_PACKAGE)
+    except (OSError, ValueError):
+        return False
+
+
+def _warning_printer(show: Callable[..., None]) -> Callable[..., None]:
+    """Show questxtract's warnings as one ``warning:`` line of their own, not inside the bar.
+
+    A library's warnings go to ``show``, Python's own way of showing them.
+    """
+
+    def print_warning(
+        message: Warning | str,
+        category: type[Warning],
+        filename: str,
+        lineno: int,
+        file: TextIO | None = None,
+        line: str | None = None,
+    ) -> None:
+        if _ours(filename):
+            print(f"\nwarning: {message}", file=sys.stderr)
+        else:
+            show(message, category, filename, lineno, file, line)
+
+    return print_warning
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI."""
     args = build_parser().parse_args(argv)
     handler: object = args.handler
     assert callable(handler)  # noqa: S101 - set_defaults guarantees it
     try:
-        return int(handler(args))
+        with warnings.catch_warnings():
+            warnings.showwarning = _warning_printer(warnings.showwarning)
+            return int(handler(args))
     except KeyboardInterrupt:
         print("interrupted", file=sys.stderr)
         return 130

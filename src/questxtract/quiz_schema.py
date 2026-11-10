@@ -96,6 +96,11 @@ def read_quiz(path: str | Path, questions: Mapping[str, Any] | None = None) -> d
         raise SchemaError(f"{path}: not valid JSON ({exc})") from exc
     if not isinstance(data, dict):
         raise SchemaError(f"{path}: expected a JSON object")
+    if isinstance(data.get("visuals"), list):  # only questions.json has board states
+        raise SchemaError(
+            f"{path}: a questions.json, not a quiz.json; make the quiz first with "
+            f"`questxtract quiz {path}`"
+        )
     version = str(data.get("schema_version", ""))
     major = QUIZ_SCHEMA_VERSION.split(".")[0]
     if version.split(".")[0] != major:
