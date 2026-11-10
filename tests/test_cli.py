@@ -179,6 +179,18 @@ def test_a_questions_json_given_as_input_says_what_to_run_instead(
     assert f"questxtract quiz {questions}" in err
 
 
+def test_help_names_the_real_vision_model_and_a_link_that_works_after_pip_install(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    for command in ([], ["process"]):
+        with pytest.raises(SystemExit):
+            main([*command, "--help"])
+    out = capsys.readouterr().out
+    assert "https://github.com/mad201802/QuestXtract/blob/main/docs/cli.md" in out
+    assert "(DeepSeek on NTNU's LLM service)" in out and "Qwen on" not in out
+    assert "Reading layout" in cli._render(1, 1, "layout", 0.0)
+
+
 def _questions(path: Path) -> list[str]:
     return [q["text"] for q in json.loads(path.read_text(encoding="utf-8"))["questions"]]
 

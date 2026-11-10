@@ -82,6 +82,7 @@ _STAGE_LABELS = {
     "transcribe": "Transcribing",
     "sentences": "Splitting sentences",
     "segments": "Grouping segments",
+    "layout": "Reading layout",
     "vision": "Reading the board",
     "attach_visual": "Joining visuals",
     "detect": "Detecting questions",
@@ -106,7 +107,8 @@ examples:
   questxtract filter lecture.questions.json --text eigenvalue
                                                 the questions about a word, said or on the board
 
-every command and option, with recipes: docs/cli.md
+every command and option, with recipes:
+  https://github.com/mad201802/QuestXtract/blob/main/docs/cli.md
 """
 
 _PROCESS_EXAMPLES = """\
@@ -120,7 +122,7 @@ examples:
   questxtract process lecture.mp4 --detector llm         a local model in Ollama:
       --llm-url http://localhost:11434/v1 --llm-model qwen3.5:9b --llm-reasoning low
   questxtract process lecture.mp4 --vision               also read the slides or the board
-                                                         (Qwen on NTNU's LLM service)
+                                                         (DeepSeek on NTNU's LLM service)
 """
 
 _QUIZ_EXAMPLES = """\

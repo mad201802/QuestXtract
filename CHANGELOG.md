@@ -32,6 +32,8 @@
 
 ### Fixed
 
+- `process --help` names DeepSeek, the default vision model, not Qwen; `questxtract --help`
+  links `docs/cli.md` on GitHub, since a pip install has no `docs/` folder.
 - A `questions.json` given to `process` (or to the app) fails with "a questions.json or
   quiz.json, not a transcript" and its file name, not "invalid asr segment: 'text'"; given to
   `qti`, `tex` or `exerplaza`, it says to make the quiz first with `questxtract quiz`.
