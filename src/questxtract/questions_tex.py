@@ -2,7 +2,8 @@
 
 One entry per question in document order: its time, its confidence, the question as a teacher
 would read it (the reviewed text when there is one), the spoken wording when that differs, the
-lecturer's answer, and what was on the board. Questions a reviewer rejected are left out.
+lecturer's answer, and what was on the board. Questions a reviewer marked ``deleted`` or
+``false_positive`` are left out.
 
 Every text is escaped, since spoken words hold ``%``, ``&`` and ``_``. Characters outside
 Latin-1 that pdfLaTeX cannot typeset with ``inputenc`` (Greek letters and math symbols read off
@@ -17,7 +18,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .export import read_questions
+from .export import REJECTED, read_questions
 from .models import SchemaError
 from .tex import _write_atomic
 
@@ -75,8 +76,9 @@ class QuestionsTexError(SchemaError):
 def export_questions_tex(questions_path: str | Path, output_path: str | Path) -> int:
     """Read a ``questions.json`` and write its questions as a LaTeX document that compiles.
 
-    Questions a reviewer marked ``rejected`` are left out. The file is UTF-8 with LF line
-    endings, the same input gives the same bytes, and nothing is written if a check fails.
+    Questions a reviewer marked ``deleted`` or ``false_positive`` are left out. The file is
+    UTF-8 with LF line endings, the same input gives the same bytes, and nothing is written if a
+    check fails.
 
     Args:
         questions_path: A ``questions.json`` from ``process``, edited or not.
@@ -87,7 +89,8 @@ def export_questions_tex(questions_path: str | Path, output_path: str | Path) ->
 
     Raises:
         QuestionsTexError: If the file cannot be read or is not a ``questions.json``, if no
-            question is left after the rejected ones, or if the file cannot be written.
+            question is left after the deleted and false positive ones, or if the file cannot
+            be written.
 
     """
     try:
@@ -115,11 +118,11 @@ def _document(document: Mapping[str, Any]) -> tuple[str, int]:
     questions = [
         question
         for question in document.get("questions") or []
-        if isinstance(question, Mapping) and _review(question).get("status") != "rejected"
+        if isinstance(question, Mapping) and _review(question).get("status") not in REJECTED
     ]
     if not questions:
         raise QuestionsTexError(
-            "no question to write: every question is rejected or none was found"
+            "no question to write: every question is deleted or a false positive, or none was found"
         )
     visuals = {
         visual["id"]: visual

@@ -1124,7 +1124,8 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         help="write questions.json as a LaTeX document that compiles",
         description="Write the questions of a questions.json as a LaTeX document: each "
         "question with its time, confidence, the lecturer's answer and the board text. "
-        "Rejected questions are left out; texts are escaped; compile it with pdflatex.",
+        "Questions reviewed as deleted or false_positive are left out; texts are escaped; "
+        "compile it with pdflatex.",
     )
     questions_tex.add_argument("questions", help="a questions.json")
     questions_tex.add_argument(

@@ -42,16 +42,17 @@ def _document(*questions: dict[str, Any], visuals: list[dict[str, Any]] | None =
     }
 
 
-def _rejected(question: dict[str, Any]) -> dict[str, Any]:
-    question["review"]["status"] = "rejected"
+def _rejected(question: dict[str, Any], status: str = "deleted") -> dict[str, Any]:
+    question["review"]["status"] = status
     return question
 
 
-def test_rejected_questions_are_left_out_and_the_rest_keep_their_order():
+@pytest.mark.parametrize("status", ["deleted", "false_positive"])
+def test_rejected_questions_are_left_out_and_the_rest_keep_their_order(status: str):
     tex = questions_to_tex(
         _document(
             _question("q1", "First question?"),
-            _rejected(_question("q2", "Rejected question?")),
+            _rejected(_question("q2", "Rejected question?"), status),
             _question("q3", "Third question?"),
         )
     )

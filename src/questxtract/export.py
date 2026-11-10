@@ -24,6 +24,8 @@ SCHEMA_VERSION = "2.4"
 SCHEMA_PATH = Path(__file__).with_name("questions.schema.json")
 
 _CONFIG_KEYS = ("model_size", "language", "min_confidence")
+#: The review statuses that take a question out of every export (questions.schema.json).
+REJECTED = ("deleted", "false_positive")
 
 
 def result_to_dict(ctx: Context, keyframes: Mapping[str, str] | None = None) -> dict[str, Any]:
