@@ -32,6 +32,8 @@
 
 ### Fixed
 
+- The app's hint for an emptied LLM model field names a model to type, instead of saying to
+  leave the (already empty) field empty.
 - `process --help` names DeepSeek, the default vision model, not Qwen; `questxtract --help`
   links `docs/cli.md` on GitHub, since a pip install has no `docs/` folder.
 - A `questions.json` given to `process` (or to the app) fails with "a questions.json or

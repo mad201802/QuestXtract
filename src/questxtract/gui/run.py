@@ -112,7 +112,7 @@ def to_argv(
         raise ValueError(f"unknown output {output!r}")
     if values.get("detector") == "llm" and values.get("llm_model") == "":
         raise ValueError(
-            "the LLM detector needs a model name, or leave the field empty for the default"
+            f"the LLM detector needs a model name; type one, such as {Config().judge_model}"
         )
     command = OUTPUTS[output]
     if command in EXPORTS:

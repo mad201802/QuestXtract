@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 
 from questxtract.cli import build_parser, main
+from questxtract.config import Config
 from questxtract.gui import run as gui
 from questxtract.pipeline import Cancelled
 
@@ -71,8 +72,10 @@ def test_the_transcript_output_takes_only_transcribe_options():
 
 
 def test_an_llm_detector_without_a_model_is_refused_before_running():
-    with pytest.raises(ValueError, match="needs a model name"):
+    with pytest.raises(ValueError, match="needs a model name") as refused:
         gui.to_argv(Path("lecture.mp4"), "questions", {"detector": "llm", "llm_model": ""})
+    assert "leave the field empty" not in str(refused.value)  # it is empty already
+    assert Config().judge_model in str(refused.value)
 
 
 def test_only_recordings_for_a_transcript_and_recordings_or_transcripts_for_questions():
