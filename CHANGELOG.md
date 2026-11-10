@@ -67,6 +67,9 @@
 - A transcript, `questions.json` or `quiz.json` nested thousands of levels deep now gives
   `error: ... not valid JSON` and exit code 1 instead of a crash with a traceback. An LLM reply
   nested that deep counts as invalid JSON. (#202)
+- On a PC with an NVIDIA card but no CUDA libraries, transcription no longer stops at the first
+  run with `Library cublas64_12.dll is not found or cannot be loaded`: it warns and transcribes on
+  the CPU. A working GPU is still used. (#279)
 
 ## 0.3.0
 
