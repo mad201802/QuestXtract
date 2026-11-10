@@ -879,14 +879,15 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         help="the model for --detector llm, e.g. qwen3.5:9b in Ollama "
         f"(default: {defaults.judge_model})",
     )
-    llm.add_argument(
+    endpoint = argparse.ArgumentParser(add_help=False)
+    endpoint.add_argument(
         "--llm-url",
         metavar="URL",
-        help="an OpenAI-compatible endpoint for --detector llm, --vision and the quiz: a URL, "
+        help="the OpenAI-compatible endpoint of the LLM detector, vision and the quiz: a URL, "
         f"or ntnu (key from {NTNU_KEY_ENV}), openrouter (key from {OPENROUTER_KEY_ENV}), "
         f"openai (key from {OPENAI_KEY_ENV}) or ollama (no key) (default: ntnu)",
     )
-    llm.add_argument(
+    endpoint.add_argument(
         "--llm-reasoning",
         choices=("none", "low", "medium", "high", "server"),
         default=None,
@@ -944,7 +945,7 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
 
     process = subs.add_parser(
         "process",
-        parents=[configured, shared, llm, vision_model, quizzing],
+        parents=[configured, shared, llm, endpoint, vision_model, quizzing],
         help="extract questions from a recording or a transcript",
         description="Extract the questions asked in a recording, or in an existing transcript.",
         epilog=_PROCESS_EXAMPLES,
@@ -1031,7 +1032,9 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
     filtering.set_defaults(handler=_filter)
 
     evaluation = subs.add_parser(
-        "eval", parents=[configured, llm, vision_model], help="score against the labelled set"
+        "eval",
+        parents=[configured, llm, endpoint, vision_model],
+        help="score against the labelled set",
     )
     evaluation.add_argument(
         "paths",
@@ -1057,7 +1060,7 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
 
     quiz = subs.add_parser(
         "quiz",
-        parents=[configured, quizzing],
+        parents=[configured, quizzing, endpoint],
         help="write a multiple-choice quiz from a questions.json",
         description="Write multiple-choice quiz items from the questions of a lecture. The only "
         "command that writes text that was not spoken: every generated text is marked, and every "
@@ -1079,21 +1082,6 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
         metavar="PATH",
         help="the lecture's transcript, so the quiz sees what was said around each question "
         "(default: the cached transcript of the recording, when there is one)",
-    )
-    quiz.add_argument(
-        "--llm-url",
-        metavar="URL",
-        help=f"an OpenAI-compatible endpoint: a URL, or ntnu (key from {NTNU_KEY_ENV}), "
-        f"openrouter (key from {OPENROUTER_KEY_ENV}), openai (key from {OPENAI_KEY_ENV}) or "
-        "ollama (no key) (default: ntnu)",
-    )
-    quiz.add_argument(
-        "--llm-reasoning",
-        choices=("none", "low", "medium", "high", "server"),
-        default=None,
-        metavar="LEVEL",
-        help="how long a thinking model may think before it answers: none, low, medium or high, "
-        f"or server to send no setting (default: {defaults.reasoning_effort or 'server'})",
     )
     quiz.set_defaults(handler=_quiz)
 
