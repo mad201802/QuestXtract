@@ -112,16 +112,27 @@ def test_process_closes_the_bar_line_before_an_error_propagates(
     assert err.endswith("\n")
 
 
-def test_a_pipeline_warning_reaches_the_app_and_prints_as_one_line(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
+_OURS = str(Path(cli.__file__).with_name("vision.py"))
+_THEIRS = "/site-packages/huggingface_hub/file_download.py"
+
+
+def _warning_run(*messages: tuple[str, type[Warning], str]) -> Callable[..., Any]:
     real_run = cli.run
 
     def warning_run(ctx: Any, stages: Any, progress: Any = None, stop: Any = None) -> Any:
-        warnings.warn("vision: keyframe left out: no answer", UserWarning, stacklevel=1)
+        for message, category, filename in messages:
+            warnings.warn_explicit(message, category, filename, 1)
         return real_run(ctx, stages, progress=progress, stop=stop)
 
-    monkeypatch.setattr(cli, "run", warning_run)
+    return warning_run
+
+
+def test_a_pipeline_warning_reaches_the_app_and_prints_as_one_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        cli, "run", _warning_run(("vision: keyframe left out: no answer", UserWarning, _OURS))
+    )
     source = _transcript_file(tmp_path)
 
     result = cli.execute(["process", str(source), "-o", str(tmp_path / "q.json")])
@@ -133,17 +144,30 @@ def test_a_pipeline_warning_reaches_the_app_and_prints_as_one_line(
     assert "UserWarning" not in err
 
 
+def test_a_library_warning_stays_out_of_the_app_result_and_prints_as_python_does(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        cli,
+        "run",
+        _warning_run(
+            ("resume_download is deprecated", FutureWarning, _THEIRS),
+            ("a library's own note", UserWarning, _THEIRS),
+        ),
+    )
+    source = _transcript_file(tmp_path)
+
+    assert cli.execute(["process", str(source), "-o", str(tmp_path / "q.json")]).warnings == ()
+    assert main(["process", str(source), "-o", str(tmp_path / "q2.json")]) == 0
+    err = capsys.readouterr().err
+    assert "warning: a library's own note" not in err
+
+
 def test_the_app_gets_at_most_five_warnings_and_how_many_more(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    real_run = cli.run
-
-    def warning_run(ctx: Any, stages: Any, progress: Any = None, stop: Any = None) -> Any:
-        for number in range(8):
-            warnings.warn(f"vision: keyframe {number} left out", UserWarning, stacklevel=1)
-        return real_run(ctx, stages, progress=progress, stop=stop)
-
-    monkeypatch.setattr(cli, "run", warning_run)
+    notes = [(f"vision: keyframe {n} left out", UserWarning, _OURS) for n in range(8)]
+    monkeypatch.setattr(cli, "run", _warning_run(*notes))
     source = _transcript_file(tmp_path)
 
     result = cli.execute(["process", str(source), "-o", str(tmp_path / "q.json")])

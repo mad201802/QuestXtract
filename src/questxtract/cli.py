@@ -597,9 +597,13 @@ def execute(
     args = parse_arguments(argv)
     # catch_warnings swaps process-wide state: fine, as one thread at a time runs a pipeline.
     with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
         result = _execute(args, progress, stop)
-    noted = tuple(dict.fromkeys(str(warning.message) for warning in caught))
+    for warning in caught:
+        if not _ours(warning.filename):  # a library's own: to stderr, as Python shows it
+            warnings.showwarning(
+                warning.message, warning.category, warning.filename, warning.lineno
+            )
+    noted = tuple(dict.fromkeys(str(w.message) for w in caught if _ours(w.filename)))
     if not noted:
         return result
     if len(noted) > _MAX_WARNINGS:  # the app shows them under the result, one per line
@@ -1180,17 +1184,37 @@ def build_parser(*, quiet: bool = False) -> argparse.ArgumentParser:
     return parser
 
 
-def _print_warning(
-    message: Warning | str,
-    category: type[Warning],
-    filename: str,
-    lineno: int,
-    file: TextIO | None = None,
-    line: str | None = None,
-) -> None:
-    """Show a warning as one ``warning:`` line of its own, not inside the progress bar's line."""
-    del category, filename, lineno, file, line
-    print(f"\nwarning: {message}", file=sys.stderr)
+_PACKAGE = Path(__file__).resolve().parent
+
+
+def _ours(filename: str) -> bool:
+    """Whether a warning was raised in questxtract's own code, not in a library it uses."""
+    try:
+        return Path(filename).resolve().is_relative_to(_PACKAGE)
+    except (OSError, ValueError):
+        return False
+
+
+def _warning_printer(show: Callable[..., None]) -> Callable[..., None]:
+    """Show questxtract's warnings as one ``warning:`` line of their own, not inside the bar.
+
+    A library's warnings go to ``show``, Python's own way of showing them.
+    """
+
+    def print_warning(
+        message: Warning | str,
+        category: type[Warning],
+        filename: str,
+        lineno: int,
+        file: TextIO | None = None,
+        line: str | None = None,
+    ) -> None:
+        if _ours(filename):
+            print(f"\nwarning: {message}", file=sys.stderr)
+        else:
+            show(message, category, filename, lineno, file, line)
+
+    return print_warning
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1200,7 +1224,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     assert callable(handler)  # noqa: S101 - set_defaults guarantees it
     try:
         with warnings.catch_warnings():
-            warnings.showwarning = _print_warning
+            warnings.showwarning = _warning_printer(warnings.showwarning)
             return int(handler(args))
     except KeyboardInterrupt:
         print("interrupted", file=sys.stderr)
