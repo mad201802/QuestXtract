@@ -86,7 +86,8 @@ An `.mp4` or `.mp3` goes through every stage; a `.json` transcript, from QuestXt
 [any other ASR engine](docs/cli.md#what-decides-how-much-runs), skips transcription.
 
 Graphical app: install with `[gui]`, run `questxtract gui`, drop a recording or transcript on the
-window and press Run ([details](docs/cli.md#graphical-app)).
+window and press Run ([details](docs/cli.md#graphical-app)). Its QTI package and TeX (ExerPlaza)
+outputs go from a recording to the export file in one run.
 
 ### Offline fallback
 

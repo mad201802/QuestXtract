@@ -18,7 +18,7 @@ from . import i18n, state
 from . import run as gui_run
 from .i18n import tr
 from .key_dialog import KeyDialog
-from .options import OPTIONS, OUTPUTS, Option
+from .options import EXPORTS, OPTIONS, OUTPUTS, Option
 from .screen import fit_on_screen
 
 __all__ = ["run_app"]
@@ -29,6 +29,12 @@ _OPTIONS_TOP_PX = 420  # where the settings start, until the window is on screen
 _MIN_OPTIONS_PX = 160  # the settings box never gets shorter than this
 _SCREEN_MARGIN_PX = 90  # room for the taskbar and the window's border
 _OUTPUT_OPTION = next(option for option in OPTIONS if option.dest == "output")
+# Controls on the start view, by their row under the output buttons; the rest is Advanced.
+_START_VIEW: dict[str, int] = {"vision": 2, "content_units": 3}
+# Controls an export of a finished quiz.json still takes.
+_EXPORT_CONTROLS: frozenset[str] = frozenset({"content_units"})
+# What the save dialog offers for an output's file, by command.
+_SAVE_KINDS: dict[str, tuple[str, str]] = {"qti": ("ZIP", ".zip"), "tex": ("TeX", ".tex")}
 
 
 def run_app() -> int:
@@ -179,9 +185,14 @@ class QuestXtractWindow:
         shown = [option for option in OPTIONS if option.kind != "implicit"]
         row = 0
         for option in shown:
-            if option.dest == "vision":
+            if option.dest in _START_VIEW:  # on the start view, under the outputs
                 line = self._option_row(outputs, option)
-                line.grid(row=2, column=0, columnspan=len(state.OUTPUT_LABELS), sticky="w")
+                line.grid(
+                    row=_START_VIEW[option.dest],
+                    column=0,
+                    columnspan=len(state.OUTPUT_LABELS),
+                    sticky="w",
+                )
             else:
                 row += 1
                 line = self._option_row(body, option)
@@ -193,8 +204,7 @@ class QuestXtractWindow:
         body.update_idletasks()  # every row is shown now: this is the tallest list
         self._options_full_height = body.winfo_reqheight()
         self._options_full_width = body.winfo_reqwidth()  # and the widest
-        # the board line keeps its room for outputs that hide it, so the window never jumps
-        outputs.rowconfigure(2, minsize=self.option_rows["vision"].winfo_reqheight())
+        self.outputs_frame = outputs
         options.grid_remove()
 
         actions = ttk.Frame(frame)
@@ -427,12 +437,19 @@ class QuestXtractWindow:
             offered = state.output_offered(name, self.source)
             button.state(["!disabled"] if offered else ["disabled"])
         any_setting = False
+        # an export of a finished quiz makes no quiz, so the quiz settings do not apply (#283)
+        quiz_source = (
+            OUTPUTS[output] in EXPORTS and self.source is not None and gui_run.is_quiz(self.source)
+        )
         for option in OPTIONS:
             row = self.option_rows.get(option.dest)
             if row is not None:
-                if gui_run.applies(option, output):
+                shown = gui_run.applies(option, output)
+                if quiz_source and option.dest not in _EXPORT_CONTROLS:
+                    shown = False
+                if shown:
                     row.grid()
-                    any_setting = any_setting or option.dest != "vision"
+                    any_setting = any_setting or option.dest not in _START_VIEW
                 else:
                     row.grid_remove()
         # an output without settings says so, instead of showing an empty box (#259)
@@ -467,11 +484,22 @@ class QuestXtractWindow:
         for dest, (label, option) in self.option_labels.items():
             text = tr("opt." + dest)
             label.configure(text=tr("control.label", label=text, default=state.hint(option)))
+        self._keep_start_view_room()
         self.drop_box.configure(text=self._drop_text())
         self.drop_note.configure(text=self._drop_note())
         self.status.configure(text=self.status_text())
         self.stage_label.configure(text=self.stage_text())
         self._refresh()
+
+    def _keep_start_view_room(self) -> None:
+        """Keep each start-view line's room for outputs that hide it, so the window never jumps.
+
+        Measured after the labels have their words, since a long label wraps to two lines.
+        """
+        self.root.update_idletasks()
+        for dest, line_row in _START_VIEW.items():
+            height = self.option_rows[dest].winfo_reqheight()
+            self.outputs_frame.rowconfigure(line_row, minsize=height)
 
     def _browse(self) -> None:
         name = filedialog.askopenfilename(
@@ -487,7 +515,7 @@ class QuestXtractWindow:
 
     def _browse_into(self, option: Option, var: tk.Variable) -> None:
         if option.dest == "output":
-            kind = ("ZIP", ".zip") if OUTPUTS[self.output.get()] == "qti" else ("JSON", ".json")
+            kind = _SAVE_KINDS.get(OUTPUTS[self.output.get()], ("JSON", ".json"))
             name = filedialog.asksaveasfilename(
                 parent=self.root,
                 title=tr("dialog.output"),
@@ -603,7 +631,7 @@ class QuestXtractWindow:
     def _handle(self, kind: str, payload: Any) -> None:
         if kind == "progress":
             stage, fraction = payload
-            quiz_follows = self.run_output == "quiz"
+            quiz_follows = self.run_output == "quiz" or OUTPUTS[self.run_output] in EXPORTS
             self.progress_var.set(
                 100 * state.overall_fraction(stage, fraction, quiz_follows=quiz_follows)
             )

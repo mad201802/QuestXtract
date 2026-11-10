@@ -4,6 +4,10 @@
 
 ### Added
 
+- The app's QTI package output, and a new TeX (ExerPlaza) output, start from a recording or a
+  transcript as well as from a `quiz.json`: one run makes the quiz, writing `<name>.questions.json`
+  and `<name>.quiz.json` beside the input, and exports it as `<name>.qti.zip` or `<name>.tex`.
+  TeX asks for the ExerPlaza content units, separated by `;`. (#283)
 - README: what leaves your computer with each setting, and where it ends up. (#257)
 
 ### Fixed

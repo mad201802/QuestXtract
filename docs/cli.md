@@ -232,12 +232,20 @@ includes what the LLM detector and reading the board need, since the window star
 
 - The file: drop an `.mp4`, `.mp3` or `.json` on the box, or click Browse. One file at a time.
   A `.json` transcript does not offer the Transcript output.
-- The output: Questions (`process`), Transcript (`transcribe`), Quiz (`process --quiz`) or QTI
-  package (`qti`, from a `quiz.json`), named `<name>.questions.json`, `<name>.transcript.json`,
-  `<name>.quiz.json` and `<name>.qti.zip`, next to the input unless an output file is given.
+- The output: Questions (`process`), Transcript (`transcribe`), Quiz (`process --quiz`), QTI
+  package (`qti`) or TeX (ExerPlaza) (`tex`), named `<name>.questions.json`,
+  `<name>.transcript.json`, `<name>.quiz.json`, `<name>.qti.zip` and `<name>.tex`, next to the
+  input unless an output file is given.
+- QTI package and TeX (ExerPlaza) take a finished `quiz.json`, or a recording or transcript: then
+  one run makes the quiz (`process --quiz`, writing `<name>.questions.json` and `<name>.quiz.json`
+  beside the input) and exports it. Cancel between the two keeps the quiz and writes no export.
+  The quiz is not reviewed first: its items are pending, which `tex` writes as "only me" in
+  ExerPlaza, and a QTI import lands in the platform's question bank for review. TeX asks for the
+  ExerPlaza content units on the start view, separated by `;`, and Run waits for one. The app
+  writes QTI 3.0; `--qti-version 2.1` is on the command line.
 - The options are behind Advanced settings, below Run; the list scrolls when the screen is too
-  small for it, and an output without options (QTI package) says so. Each control is one option of `process` or
-  `transcribe`, with its starting value in the label. Without a `questxtract.toml`
+  small for it, and an export of a finished `quiz.json` says it has no options. Each control is
+  one option of `process`, `transcribe` or `tex`, with its starting value in the label. Without a `questxtract.toml`
   ([Configuration files](#configuration-files)) the window starts with the LLM detector and
   reading the board on; with one, it starts from the file. A control left at the CLI's default is
   not passed, so the file still applies. LLM and quiz controls appear only for outputs that use

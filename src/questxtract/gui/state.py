@@ -12,7 +12,7 @@ from typing import Any
 from ..config import GUI_START_DETECTOR, GUI_START_VISION, Config, endpoint_url, load_config
 from ..pipeline import STAGES, stage_info
 from .i18n import has, tr
-from .options import OPTIONS, OUTPUTS, Option
+from .options import EXPORTS, OPTIONS, OUTPUTS, Option
 from .run import check, source_problem
 
 __all__ = [
@@ -38,6 +38,7 @@ OUTPUT_LABELS: dict[str, str] = {
     "transcript": "Transcript",
     "quiz": "Quiz",
     "qti": "QTI package",
+    "tex": "TeX (ExerPlaza)",
 }
 TRISTATE_LABELS: tuple[str, ...] = ("Default", "On", "Off")
 _TRISTATE_VALUES: dict[str, bool | None] = {"Default": None, "On": True, "Off": False}
@@ -137,10 +138,21 @@ def output_offered(output: str, source: Path | None) -> bool:
 
 
 def default_output(source: Path | None, output: str) -> Path | None:
-    """Return the file a run writes when the output field is empty; ``None`` lets the CLI choose."""
-    if source is None or OUTPUTS[output] != "qti":
+    """Return the file a run writes when the output field is empty; ``None`` lets the CLI choose.
+
+    An export goes next to its source, named after the lecture: ``lecture.mp4``,
+    ``lecture.transcript.json`` and ``lecture.quiz.json`` all give ``lecture.qti.zip`` or
+    ``lecture.tex``.
+    """
+    if source is None or OUTPUTS[output] not in EXPORTS:
         return None
-    return source.with_name(f"{source.stem.removesuffix('.quiz')}.qti.zip")
+    base = source.name
+    for suffix in (".quiz.json", ".transcript.json", ".questions.json"):
+        base = base.removesuffix(suffix)
+    if base == source.name:
+        base = source.stem
+    extension = ".qti.zip" if OUTPUTS[output] == "qti" else ".tex"
+    return source.with_name(base + extension)
 
 
 def run_problem(

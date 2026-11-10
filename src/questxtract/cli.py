@@ -569,7 +569,7 @@ def execute(
     progress: Progress | None = None,
     stop: Callable[[], bool] | None = None,
 ) -> RunResult:
-    """Run ``process``, ``transcribe`` or ``qti`` from its command-line arguments, unprinted."""
+    """Run ``process``, ``transcribe``, ``qti`` or ``tex`` from its arguments, unprinted."""
     args = parse_arguments(argv)
     if args.command == "process":
         return _process_run(args, progress, stop)
@@ -581,7 +581,14 @@ def execute(
         except QtiExportError as exc:
             raise ValueError(f"qti: {exc}") from None
         return RunResult(path=Path(args.output), summary="QTI 3.0 package")
-    raise ValueError(f"the app runs process, transcribe or qti, not {args.command}")
+    if args.command == "tex":
+        try:
+            count = export_tex(args.quiz, args.output, content_units=args.content_units)
+        except TexExportError as exc:
+            raise ValueError(f"tex: {exc}") from None
+        noun = "question" if count == 1 else "questions"
+        return RunResult(path=Path(args.output), summary=f"ExerPlaza TeX, {count} {noun}")
+    raise ValueError(f"the app runs process, transcribe, qti or tex, not {args.command}")
 
 
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:

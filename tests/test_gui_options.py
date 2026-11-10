@@ -14,13 +14,15 @@ from questxtract.gui.options import EXCLUDED, OPTIONS
 def _commands() -> dict[str, dict[str, argparse.Action]]:
     parser = build_parser()
     (subs,) = [a for a in parser._actions if isinstance(a, argparse._SubParsersAction)]
+    # The exports' quiz.json is the drop box's file, like the inputs of process and transcribe.
     return {
         name: {
             action.dest: action
             for action in subs.choices[name]._actions
             if not isinstance(action, argparse._HelpAction)
+            and (name in ("process", "transcribe") or action.option_strings)
         }
-        for name in ("process", "transcribe")
+        for name in ("process", "transcribe", "qti", "tex")
     }
 
 
