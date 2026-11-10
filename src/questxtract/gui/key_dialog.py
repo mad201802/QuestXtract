@@ -5,10 +5,11 @@ from __future__ import annotations
 import queue
 import threading
 import tkinter as tk
+import webbrowser
 from collections.abc import Callable
 from tkinter import ttk
 
-from ..config import NTNU_LLM_URL, is_ntnu, key_names
+from ..config import NTNU_KEY_PAGE, NTNU_LLM_URL, is_ntnu, key_names
 from . import keys
 from .i18n import tr
 from .screen import fit_on_screen
@@ -48,19 +49,27 @@ class KeyDialog:
         ttk.Label(frame, text=explain, wraplength=420).grid(
             row=0, column=0, columnspan=2, sticky="w"
         )
-        ttk.Label(frame, text=tr("key.label")).grid(row=1, column=0, sticky="w", pady=(8, 0))
+        self.steps: ttk.Frame | None = None
+        if is_ntnu(url):  # how a teacher gets the key, step by step
+            self.steps = self._steps(frame)
+            self.steps.grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        ttk.Label(frame, text=tr("key.label")).grid(row=2, column=0, sticky="w", pady=(8, 0))
         self.key = tk.StringVar(master=self.top, value="")
         self.entry = ttk.Entry(frame, textvariable=self.key, show="*", width=48)
-        self.entry.grid(row=1, column=1, sticky="ew", pady=(8, 0))
+        self.entry.grid(row=2, column=1, sticky="ew", pady=(8, 0))
+        self.prefix_note = ttk.Label(frame, text="", wraplength=420, foreground="#8a5a00")
+        self.prefix_note.grid(row=3, column=0, columnspan=2, sticky="w")
+        if is_ntnu(url):
+            self.key.trace_add("write", lambda *_: self._check_prefix())
         ttk.Label(frame, text=tr("key.file", path=keys.key_file()), wraplength=420).grid(
-            row=2, column=0, columnspan=2, sticky="w", pady=(4, 0)
+            row=4, column=0, columnspan=2, sticky="w", pady=(4, 0)
         )
         self.source = ttk.Label(frame, text="", wraplength=420)
-        self.source.grid(row=3, column=0, columnspan=2, sticky="w")
+        self.source.grid(row=5, column=0, columnspan=2, sticky="w")
         self.message = ttk.Label(frame, text="", wraplength=420)
-        self.message.grid(row=4, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        self.message.grid(row=6, column=0, columnspan=2, sticky="w", pady=(4, 0))
         buttons = ttk.Frame(frame)
-        buttons.grid(row=5, column=0, columnspan=2, sticky="e", pady=(8, 0))
+        buttons.grid(row=7, column=0, columnspan=2, sticky="e", pady=(8, 0))
         self.test_button = ttk.Button(buttons, text=tr("button.key_test"), command=self.test)
         self.save_button = ttk.Button(buttons, text=tr("button.key_save"), command=self.save)
         remove = ttk.Button(buttons, text=tr("button.key_remove"), command=self.remove)
@@ -139,6 +148,32 @@ class KeyDialog:
                 self.key.set("")
                 self._changed()
         self.top.after(_POLL_MS, self._poll)
+
+    def _steps(self, parent: tk.Misc) -> ttk.Frame:
+        """Build the numbered steps for NTNU's key; the first opens the request page."""
+        steps = ttk.Frame(parent)
+        ttk.Label(steps, text=tr("key.steps_title")).grid(row=0, column=0, sticky="w")
+        first = ttk.Frame(steps)
+        first.grid(row=1, column=0, sticky="w")
+        ttk.Label(first, text="1. " + tr("key.step_open")).grid(row=0, column=0, sticky="w")
+        self.link = tk.Label(first, text=NTNU_KEY_PAGE, fg="#1a5fb4", cursor="hand2")
+        self.link.grid(row=0, column=1, sticky="w", padx=(4, 0))
+        self.link.bind("<Button-1>", lambda _event: self.open_key_page())
+        for number, key in enumerate(("key.step_copy", "key.step_paste", "key.step_test"), 2):
+            ttk.Label(steps, text=f"{number}. {tr(key)}", wraplength=420).grid(
+                row=number, column=0, sticky="w"
+            )
+        return steps
+
+    def open_key_page(self) -> None:
+        """Open the page where NTNU hands out LLM keys, in the system's browser."""
+        webbrowser.open(NTNU_KEY_PAGE)
+
+    def _check_prefix(self) -> None:
+        """Say so when a pasted NTNU key does not start with sk-: often a partial copy."""
+        text = self.key.get().strip()
+        wrong = bool(text) and not text.startswith("sk-")
+        self.prefix_note.configure(text=tr("key.prefix_hint") if wrong else "")
 
     def _changed(self) -> None:
         self._show_source()

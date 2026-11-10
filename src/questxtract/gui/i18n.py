@@ -227,6 +227,36 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "questo computer, come testo semplice, come {variable}, e usata a ogni esecuzione con "
         "questo endpoint.",
     },
+    "key.steps_title": {
+        "en": "To get the key:",
+        "nb": "Slik får du nøkkelen:",
+        "it": "Per ottenere la chiave:",
+    },
+    "key.step_open": {
+        "en": "Open this page and request an LLM key:",
+        "nb": "Åpne denne siden og be om en LLM-nøkkel:",
+        "it": "Apri questa pagina e richiedi una chiave LLM:",
+    },
+    "key.step_copy": {
+        "en": "Copy the key from the email you get, all of it, including the sk- at the start.",
+        "nb": "Kopier nøkkelen fra e-posten du får, hele, også sk- i begynnelsen.",
+        "it": "Copia la chiave dall'e-mail che ricevi, tutta, compreso sk- all'inizio.",
+    },
+    "key.step_paste": {
+        "en": "Paste it in the Key field below.",
+        "nb": "Lim den inn i Nøkkel-feltet under.",
+        "it": "Incollala nel campo Chiave qui sotto.",
+    },
+    "key.step_test": {
+        "en": "Press Test (on the NTNU network or VPN), then Save.",
+        "nb": "Trykk Test (på NTNU-nettverket eller VPN), og så Lagre.",
+        "it": "Premi Prova (sulla rete NTNU o con la VPN), poi Salva.",
+    },
+    "key.prefix_hint": {
+        "en": "An NTNU key starts with sk-: check that you copied all of it.",
+        "nb": "En NTNU-nøkkel begynner med sk-: sjekk at du kopierte hele.",
+        "it": "Una chiave NTNU inizia con sk-: controlla di averla copiata tutta.",
+    },
     "key.explain_ntnu": {
         "en": "NTNU's service needs the NTNU network or VPN.",
         "nb": "NTNUs tjeneste krever NTNU-nettverket eller VPN.",

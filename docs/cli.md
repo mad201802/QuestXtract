@@ -272,7 +272,9 @@ includes what the LLM detector and reading the board need, since the window star
 - Open folder opens the folder of the file written.
 - Keys: read as the CLI reads them ([API keys](#api-keys-and-env)). The API key... button opens
   a window for the key of the endpoint in LLM endpoint (Advanced settings; a URL, or `ntnu`,
-  `openrouter`, `openai` or `ollama` from its list): Test asks that endpoint once, Save tests and
+  `openrouter`, `openai` or `ollama` from its list). For NTNU's service the window lists the steps:
+  request a key at <https://ai.hpc.ntnu.no/api-key/login> (the link opens the browser), copy it
+  from the email including its `sk-`, paste, Test, Save; a key without `sk-` gets a note. Test asks that endpoint once, Save tests and
   saves (a refused key is not saved; an untested one is saved with a note), Remove deletes it. The
   key is stored as plain text in the file named in the window, under the endpoint's variable,
   beside the other endpoints' keys, and is never shown, logged or put on a command line.
