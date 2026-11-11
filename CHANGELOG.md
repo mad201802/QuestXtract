@@ -32,6 +32,10 @@
 
 ### Fixed
 
+- The app's Advanced settings scroll with the mouse wheel on Linux too. Enter starts a run and
+  Esc closes Advanced settings. (#259)
+- The app shows the warnings of both commands of a two-command run (an export from a recording
+  or transcript, or Questions with the .tex box), not only the first command's.
 - The app's hint for an emptied LLM model field names a model to type, instead of saying to
   leave the (already empty) field empty.
 - `process --help` names DeepSeek, the default vision model, not Qwen; `questxtract --help`
