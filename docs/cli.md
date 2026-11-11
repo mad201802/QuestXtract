@@ -270,8 +270,9 @@ includes what the LLM detector and reading the board need, since the window star
 - Run, Cancel, progress: the bar lists only the steps the run takes. Cancel stops inside the
   running step (transcribing, reading the board, the LLM detector, the quiz) once the request in
   flight has its answer, and no partial file is written. Warnings, such as keyframes the board
-  reader could not read, show under the result: the first five, then how many more. An error
-  opens in a pop-up as the CLI's one line.
+  reader could not read, show under the result: the first five, then how many more, from both
+  commands of a two-command run. An error opens in a pop-up as the CLI's one line. Enter starts a
+  run, Esc closes Advanced settings.
 - Open folder opens the folder of the file written.
 - Keys: read as the CLI reads them ([API keys](#api-keys-and-env)). The API key... button opens
   a window for the key of the endpoint in LLM endpoint (Advanced settings; a URL, or `ntnu`,

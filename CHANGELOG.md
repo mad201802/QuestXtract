@@ -48,6 +48,10 @@
 - Transcribing, in the app or with `process` and `transcribe`, no longer aborts with
   `OMP: Error #15 ... libiomp5md.dll already initialized` on Windows when numpy comes from
   Anaconda.
+- The app's Advanced settings scroll with the mouse wheel on Linux too. Enter starts a run and
+  Esc closes Advanced settings. (#259)
+- The app shows the warnings of both commands of a two-command run (an export from a recording
+  or transcript, or Questions with the .tex box), not only the first command's.
 
 ## 0.4.0
 
