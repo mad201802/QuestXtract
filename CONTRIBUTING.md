@@ -15,8 +15,7 @@ uv run pytest tests/test_detect.py -q   # the inner loop
 `.cache/qti-xsd/`). Offline, it skips the XSD tests with a warning; CI always runs them.
 
 Pipeline and stages: [docs/architecture.md](docs/architecture.md). Decisions:
-[docs/design_decisions.md](docs/design_decisions.md). Conventions for people and coding agents:
-[CLAUDE.md](CLAUDE.md).
+[docs/design_decisions.md](docs/design_decisions.md).
 
 CI runs on Linux with Python 3.10 for every pull request, and installs the built wheel into a fresh
 environment on Python 3.10 and 3.13 to run it on a committed transcript. Merging into `main` needs
@@ -29,7 +28,7 @@ issue. Public API functions need docstrings, type hints and tests.
 
 An issue enters a sprint only with acceptance criteria, an owner and a milestone. At most two
 issues per person are "In progress" on the project board. At the end of each sprint and before
-each release, run `/doc-drift` (Claude Code) and fix what it finds.
+each release, review the docs against the code and fix what is out of date.
 
 ## API keys
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
 ### Added
 
@@ -15,7 +15,6 @@
 - The app's API key window lists, for NTNU's service, the steps to get a key: request it at
   ai.hpc.ntnu.no (the link opens the browser), copy it from the email with its `sk-`, paste,
   Test, Save. A pasted key without `sk-` gets a note that the copy may be partial. (#289)
-- README: what leaves your computer with each setting, and where it ends up. (#257)
 
 ### Changed
 
@@ -45,9 +44,6 @@
   now show in the app under the result (the first five, then how many more). Before, the app
   said nothing and the run looked complete without the board. The command line prints each as
   one `warning: ...` line instead of Python's `UserWarning` report inside the progress bar.
-- Transcribing, in the app or with `process` and `transcribe`, no longer aborts with
-  `OMP: Error #15 ... libiomp5md.dll already initialized` on Windows when numpy comes from
-  Anaconda.
 - The app's Advanced settings scroll with the mouse wheel on Linux too. Enter starts a run and
   Esc closes Advanced settings. (#259)
 - The app shows the warnings of both commands of a two-command run (an export from a recording
@@ -74,6 +70,7 @@
   key is read from the app's key file, not only the NTNU key. (#250)
 - README: switching the model and the server, one setting each for the text and the vision
   model, with examples for NTNU's service, OpenAI and a local Ollama. (#253)
+- README: what leaves your computer with each setting, and where it ends up. (#257)
 
 ### Changed (breaking)
 
@@ -103,6 +100,9 @@
 - On a PC with an NVIDIA card but no CUDA libraries, transcription no longer stops at the first
   run with `Library cublas64_12.dll is not found or cannot be loaded`: it warns and transcribes on
   the CPU. A working GPU is still used. (#279)
+- Transcribing, in the app or with `process` and `transcribe`, no longer aborts with
+  `OMP: Error #15 ... libiomp5md.dll already initialized` on Windows when numpy comes from
+  Anaconda.
 
 ## 0.3.0
 
