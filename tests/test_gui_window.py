@@ -804,3 +804,30 @@ def test_switching_the_output_never_resizes_the_window(window, root):
             root.update()
             sizes.add((root.winfo_reqwidth(), root.winfo_reqheight()))
         assert len(sizes) == 1, sizes
+
+
+def test_enter_starts_a_run_and_escape_closes_the_settings(window, root, monkeypatch):
+    """#259: the keyboard could not start a run or close the settings."""
+    runs: list[None] = []
+    monkeypatch.setattr(window, "_run", lambda: runs.append(None))
+    window._toggle_advanced()
+    window.run_button.focus_force()
+    root.update()
+
+    window.run_button.event_generate("<Return>", when="now")
+    window.run_button.event_generate("<Escape>", when="now")
+
+    assert runs == [None]
+    assert not window.advanced_open
+
+
+def test_the_settings_scroll_with_the_wheel_on_linux_too(window, root):
+    """#259: on Linux the wheel sends Button-4 and Button-5, which nothing was bound to."""
+    window._toggle_advanced()
+    root.update()
+    canvas = window.options_canvas
+
+    canvas.event_generate("<Enter>", when="now")
+    assert all(canvas.bind_all(name) for name in ("<MouseWheel>", "<Button-4>", "<Button-5>"))
+    canvas.event_generate("<Leave>", when="now")
+    assert not canvas.bind_all("<Button-5>")

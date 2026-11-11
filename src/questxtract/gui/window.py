@@ -28,6 +28,7 @@ _TYPING_PAUSE_MS = 150
 _OPTIONS_TOP_PX = 420  # where the settings start, until the window is on screen
 _MIN_OPTIONS_PX = 160  # the settings box never gets shorter than this
 _SCREEN_MARGIN_PX = 90  # room for the taskbar and the window's border
+_WHEEL_EVENTS = ("<MouseWheel>", "<Button-4>", "<Button-5>")  # Windows and macOS, then X11
 _OUTPUT_OPTION = next(option for option in OPTIONS if option.dest == "output")
 # Controls on the start view, by their row under the output buttons; the rest is Advanced.
 _START_VIEW: dict[str, int] = {"vision": 3, "content_units": 4}
@@ -108,6 +109,8 @@ class QuestXtractWindow:
         self._options_full_height = 0  # set once every settings row exists
         self._options_full_width = 0
         root.protocol("WM_DELETE_WINDOW", self._close)
+        root.bind("<Return>", lambda _e: self._run())  # _run checks busy and the inputs itself
+        root.bind("<Escape>", self._escape)
         style = ttk.Style(root)
         if "classic" in style.theme_names():
             style.theme_use("classic")
@@ -279,11 +282,20 @@ class QuestXtractWindow:
             )
 
         def wheel(event: Any) -> None:
-            canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+            up = event.num == 4 or event.delta > 0  # Linux sends Button-4 up, Button-5 down
+            canvas.yview_scroll(-1 if up else 1, "units")
+
+        def grab(_event: object) -> None:
+            for name in _WHEEL_EVENTS:
+                canvas.bind_all(name, wheel)
+
+        def release(_event: object) -> None:
+            for name in _WHEEL_EVENTS:
+                canvas.unbind_all(name)
 
         body.bind("<Configure>", fit)
-        canvas.bind("<Enter>", lambda _e: canvas.bind_all("<MouseWheel>", wheel))
-        canvas.bind("<Leave>", lambda _e: canvas.unbind_all("<MouseWheel>"))
+        canvas.bind("<Enter>", grab)
+        canvas.bind("<Leave>", release)
         self._fit_options = fit
         return body
 
@@ -370,6 +382,10 @@ class QuestXtractWindow:
             self.options_frame.grid_remove()
             self.root.after_idle(fit_on_screen, self.root)
         self._retranslate_advanced_button()
+
+    def _escape(self, _event: object = None) -> None:
+        if self.advanced_open:
+            self._toggle_advanced()
 
     def _show_options(self) -> None:
         self._fit_options()
