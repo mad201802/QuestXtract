@@ -191,7 +191,7 @@ def run(
     return RunResult(
         path=exported.path,
         summary=f"{made.summary}; {exported.summary}",
-        warnings=made.warnings,
+        warnings=(*made.warnings, *exported.warnings),
     )
 
 
@@ -204,5 +204,7 @@ def _with_questions_tex(made: RunResult, stop: Callable[[], bool] | None) -> Run
     tex = made.path.with_name(f"{made.path.name.removesuffix('.json')}.tex")
     written = execute(["questions-tex", str(made.path), "--output", str(tex)])
     return RunResult(
-        path=made.path, summary=f"{made.summary}; {written.summary}", warnings=made.warnings
+        path=made.path,
+        summary=f"{made.summary}; {written.summary}",
+        warnings=(*made.warnings, *written.warnings),
     )

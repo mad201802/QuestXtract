@@ -372,3 +372,22 @@ def test_the_judge_model_is_passed_only_with_the_llm_detector() -> None:
 
     assert "--llm-model" not in rules
     assert judged[judged.index("--llm-model") + 1] == "some/model"
+
+
+@pytest.mark.parametrize(
+    ("output", "made"), [("qti", "lecture.quiz.json"), ("questions", "q.json")]
+)
+def test_a_run_of_two_commands_keeps_the_warnings_of_both(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output: str, made: str
+) -> None:
+    warnings = iter([("from the first",), ("from the second",)])
+
+    def execute(argv: list[str], **_: Any) -> gui.RunResult:
+        return gui.RunResult(path=tmp_path / made, summary=argv[0], warnings=next(warnings))
+
+    monkeypatch.setattr(gui, "execute", execute)
+    values = {**_LOCAL, "questions_tex": True}
+
+    result = gui.run(_lecture(tmp_path), output, values, tmp_path / "out")
+
+    assert result.warnings == ("from the first", "from the second")
