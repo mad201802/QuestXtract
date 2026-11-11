@@ -60,7 +60,14 @@ Requires Python 3.10+ on Linux, macOS or Windows. Pick one of three ways.
 pip install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.4.0"
 ```
 
-With uv, use `uv add` instead of `pip install`. Drop `@v0.4.0` for the latest `main`.
+With uv, this puts the `questxtract` command on your PATH:
+
+```bash
+uv tool install "questxtract[gui] @ git+https://github.com/mad201802/QuestXtract@v0.4.0"
+```
+
+`uv add` is only for adding QuestXtract to your own uv project. Drop `@v0.4.0` for the latest
+`main`.
 
 **2. The `.whl` file, without git.** Open the [latest release](https://github.com/mad201802/QuestXtract/releases/latest),
 and under Assets take the one file that ends in `.whl`. Ignore the `.tar.gz` and the two

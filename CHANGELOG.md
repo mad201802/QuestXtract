@@ -32,6 +32,8 @@
 
 ### Fixed
 
+- README: the uv install line uses `uv tool install`, which puts the `questxtract` command on the
+  PATH. `uv add` failed outside a uv project with "No pyproject.toml found". (#291)
 - The app's hint for an emptied LLM model field names a model to type, instead of saying to
   leave the (already empty) field empty.
 - `process --help` names DeepSeek, the default vision model, not Qwen; `questxtract --help`
