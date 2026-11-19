@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- README: a link to four tutorial videos: what QuestXtract does, installing it, setting up the
+  NTNU LLM key and running the app. (#296)
+
 ## 0.5.0
 
 ### Added
