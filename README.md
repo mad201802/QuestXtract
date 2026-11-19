@@ -52,6 +52,9 @@ Python 3.11+, LaTeX and a teacher's check of every clip ([#185](https://github.c
 
 ## Install
 
+Prefer to watch? [Four short videos](https://www.youtube.com/playlist?list=PLNUGouP4cHhQ) show
+what QuestXtract does, installing it on Windows, setting up the NTNU LLM key and running the app.
+
 Requires Python 3.10+ on Linux, macOS or Windows. Pick one of three ways.
 
 **1. pip, from GitHub (the usual way).** The graphical app is included:
